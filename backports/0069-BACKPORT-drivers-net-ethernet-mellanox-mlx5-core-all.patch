@@ -1,0 +1,45 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+
+Change-Id: Ifc6ef36db45171103562cc604f12ebffbdda1224
+---
+ drivers/net/ethernet/mellanox/mlx5/core/alloc.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+@@ -61,11 +61,20 @@ static void *mlx5_dma_zalloc_coherent_no
+ 	int original_node;
+ 	void *cpu_handle;
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++	/* WA for kernels that don't use numa_mem_id in alloc_pages_node */
++	if (node == NUMA_NO_NODE)
++		node = numa_mem_id();
++#endif
++
+ 	mutex_lock(&priv->alloc_mutex);
+ 	original_node = dev_to_node(device);
+ 	set_dev_node(device, node);
+-	cpu_handle = dma_alloc_coherent(device, size, dma_handle,
+-					GFP_KERNEL);
++#ifdef HAVE_DMA_ZALLOC_COHERENT
++	cpu_handle = dma_zalloc_coherent(device, size, dma_handle, GFP_KERNEL);
++#else
++	cpu_handle = dma_alloc_coherent(device, size, dma_handle, GFP_KERNEL);
++#endif
+ 	set_dev_node(device, original_node);
+ 	mutex_unlock(&priv->alloc_mutex);
+ 	return cpu_handle;
+@@ -140,7 +149,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_
+ 	if (!pgdir)
+ 		return NULL;
+ 
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	pgdir->bitmap = bitmap_zalloc_node(db_per_page, GFP_KERNEL, node);
++#else
++	pgdir->bitmap = bitmap_zalloc(db_per_page, GFP_KERNEL);
++#endif
+ 	if (!pgdir->bitmap) {
+ 		kfree(pgdir);
+ 		return NULL;

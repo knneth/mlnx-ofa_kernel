@@ -32,8 +32,7 @@ int mlx5_devlink_sf_port_fn_state_set(struct devlink_port *dl_port,
 				      enum devlink_port_fn_state state,
 				      struct netlink_ext_ack *extack);
 #if IS_ENABLED(CONFIG_MLXDEVM)
-int mlx5_sf_index_to_hw_id(struct devlink *devlink, u16 *hw_fn_id, unsigned int port_index,
-			   struct netlink_ext_ack *extack);
+void mlx5_sf_index_to_hw_id(struct devlink *devlink, u16 *hw_fn_id, struct devlink_port *dl_port);
 #endif
 #else
 

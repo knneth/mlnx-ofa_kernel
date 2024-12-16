@@ -1,36 +1,68 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
 
+Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c | 5 +++--
- 1 file changed, 3 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c   | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-@@ -35,6 +35,9 @@
- #include "en.h"
- #include "en/rx_res.h"
- #include "en/rss.h"
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include "linux/namei.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
+@@ -446,7 +446,8 @@ static int flow_get_tirn(struct mlx5e_pr
+ 			return err;
+ 		eth_rule->rss = rss;
+ 		mlx5e_rss_refcnt_inc(eth_rule->rss);
+-	} else {
++	} else
++	{
+ 		*tirn = mlx5e_rx_res_get_tirn_direct(priv->rx_res, fs->ring_cookie);
+ 	}
+ 
+@@ -461,7 +462,7 @@ add_ethtool_flow_rule(struct mlx5e_priv
+ {
+ 	struct mlx5_flow_act flow_act = { .flags = FLOW_ACT_NO_APPEND };
+ 	struct mlx5_flow_destination *dst = NULL;
+-	struct mlx5_flow_handle *rule;
++	struct mlx5_flow_handle *rule = NULL;
+ 	struct mlx5_flow_spec *spec;
+ 	int err = 0;
+ 
+@@ -646,7 +647,6 @@ static int validate_tcpudp6(struct ethto
+ 	/* Flow is TCP/UDP */
+ 	return ++ntuples;
+ }
+-
+ static int validate_vlan(struct ethtool_rx_flow_spec *fs)
+ {
+ 	if (fs->m_ext.vlan_etype ||
+@@ -659,7 +659,6 @@ static int validate_vlan(struct ethtool_
+ 
+ 	return 1;
+ }
+-
+ static int validate_flow(struct mlx5e_priv *priv,
+ 			 struct ethtool_rx_flow_spec *fs)
+ {
+@@ -973,6 +972,7 @@ static int mlx5e_get_rss_hash_opt(struct
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_MLX5_EN_RXNFC
+ int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd)
+ {
+ 	int err = 0;
+@@ -980,6 +980,7 @@ int mlx5e_ethtool_set_rxnfc(struct mlx5e
+ 	switch (cmd->cmd) {
+ 	case ETHTOOL_SRXCLSRLINS:
+ 		err = mlx5e_ethtool_flow_replace(priv, &cmd->fs, cmd->rss_context);
++
+ 		break;
+ 	case ETHTOOL_SRXCLSRLDEL:
+ 		err = mlx5e_ethtool_flow_remove(priv, cmd->fs.location);
+@@ -1021,4 +1022,4 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e
+ 
+ 	return err;
+ }
+-
 +#endif
- 
- /* For non-default namespaces, add suffix in format "@<pci_id>" */
- /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
-@@ -180,7 +183,6 @@ void mlx5e_debugs_free_recursive_private
- 
- 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
--
- 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
- 		if (dent && dent->d_inode && dent->d_inode->i_private)
- 			kvfree(dent->d_inode->i_private);
-@@ -188,7 +190,6 @@ void mlx5e_debugs_free_recursive_private
- 
- 	for (i = 0; i < priv->max_nch; i++) {
- 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
--
- 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
- 		if (dent && dent->d_inode && dent->d_inode->i_private)
- 			kvfree(dent->d_inode->i_private);

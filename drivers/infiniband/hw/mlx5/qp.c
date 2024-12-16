@@ -1258,8 +1258,6 @@ static int _create_kernel_qp(struct mlx5_ib_dev *dev,
 
 	if (init_attr->qp_type == MLX5_IB_QPT_REG_UMR)
 		qp->bf.bfreg = &dev->fp_bfreg;
-	else if (qp->flags & MLX5_IB_QP_CREATE_WC_TEST)
-		qp->bf.bfreg = &dev->wc_bfreg;
 	else
 		qp->bf.bfreg = &dev->bfreg;
 
@@ -3117,14 +3115,6 @@ static void process_create_flag(struct mlx5_ib_dev *dev, int *flags, int flag,
 		return;
 	}
 
-	if (flag == MLX5_IB_QP_CREATE_WC_TEST) {
-		/*
-		 * Special case, if condition didn't meet, it won't be error,
-		 * just different in-kernel flow.
-		 */
-		*flags &= ~MLX5_IB_QP_CREATE_WC_TEST;
-		return;
-	}
 	mlx5_ib_dbg(dev, "Verbs create QP flag 0x%X is not supported\n", flag);
 }
 
@@ -3185,8 +3175,6 @@ static int process_create_flags(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 			    IB_QP_CREATE_PCI_WRITE_END_PADDING,
 			    MLX5_CAP_GEN(mdev, end_pad), qp);
 
-	process_create_flag(dev, &create_flags, MLX5_IB_QP_CREATE_WC_TEST,
-			    qp_type != MLX5_IB_QPT_REG_UMR, qp);
 	process_create_flag(dev, &create_flags, MLX5_IB_QP_CREATE_SQPN_QP1,
 			    true, qp);
 	process_create_flag(dev, &create_flags, IB_QP_CREATE_SIGNATURE_PIPELINE,
@@ -3407,6 +3395,10 @@ int mlx5_ib_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 	enum ib_qp_type type;
 	int err;
 
+	err = mlx5_ib_dev_res_srq_init(dev);
+	if (err)
+		return err;
+
 	err = check_qp_type(dev, attr, &type);
 	if (err)
 		return err;
@@ -3596,7 +3588,7 @@ static int ib_rate_to_mlx5(struct mlx5_ib_dev *dev, u8 rate)
 	if (rate == IB_RATE_PORT_CURRENT)
 		return 0;
 
-	if (rate < IB_RATE_2_5_GBPS || rate > IB_RATE_600_GBPS)
+	if (rate < IB_RATE_2_5_GBPS || rate > IB_RATE_800_GBPS)
 		return -EINVAL;
 
 	stat_rate_support = MLX5_CAP_GEN(dev->mdev, stat_rate_support);
@@ -4827,10 +4819,6 @@ static bool mlx5_ib_modify_qp_allowed(struct mlx5_ib_dev *dev,
 		return true;
 
 	if (qp->type == IB_QPT_RAW_PACKET || qp->type == MLX5_IB_QPT_REG_UMR)
-		return true;
-
-	/* Internal QP used for wc testing, with NOPs in wq */
-	if (qp->flags & MLX5_IB_QP_CREATE_WC_TEST)
 		return true;
 
 	return false;

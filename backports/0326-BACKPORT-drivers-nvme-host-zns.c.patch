@@ -1,0 +1,50 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
+
+---
+ drivers/nvme/host/zns.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/nvme/host/zns.c
++++ b/drivers/nvme/host/zns.c
+@@ -3,6 +3,8 @@
+  * Copyright (C) 2020 Western Digital Corporation or its affiliates.
+  */
+ 
++#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
++
+ #include <linux/blkdev.h>
+ #include <linux/vmalloc.h>
+ #include "nvme.h"
+@@ -108,6 +110,8 @@ free_data:
+ void nvme_update_zone_info(struct nvme_ns *ns, struct queue_limits *lim,
+ 		struct nvme_zone_info *zi)
+ {
++
++#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
+ 	lim->zoned = 1;
+ 	lim->max_open_zones = zi->max_open_zones;
+ 	lim->max_active_zones = zi->max_active_zones;
+@@ -115,6 +119,17 @@ void nvme_update_zone_info(struct nvme_n
+ 	lim->chunk_sectors = ns->head->zsze =
+ 		nvme_lba_to_sect(ns->head, zi->zone_size);
+ 	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
++#elif defined(HAVE_DISK_SET_ZONED)
++	disk_set_zoned(ns->disk, BLK_ZONED_HM);
++	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
++	disk_set_max_open_zones(ns->disk, zi->max_open_zones);
++	disk_set_max_active_zones(ns->disk, zi->max_active_zones);
++#else
++	blk_queue_set_zoned(ns->disk, BLK_ZONED_HM);
++	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
++	blk_queue_max_open_zones(ns->queue, zi->max_open_zones);
++	blk_queue_max_active_zones(ns->queue, zi->max_active_zones);
++#endif
+ }
+ 
+ static void *nvme_zns_alloc_report_buffer(struct nvme_ns *ns,
+@@ -249,3 +264,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+ 
+ 	return BLK_STS_OK;
+ }
++#endif /* HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES */

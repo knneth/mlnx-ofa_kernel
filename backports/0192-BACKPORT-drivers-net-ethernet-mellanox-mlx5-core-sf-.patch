@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
+
+Change-Id: Ica2e1f44767c259e5b91731a75f16b339f4c386a
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
+@@ -93,7 +93,9 @@ mlx5_vhca_event_notify(struct mlx5_core_
+ 					 vhca_state_context.vhca_state);
+ 
+ 	mlx5_vhca_event_arm(dev, event->function_id);
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_mlx5_sf_vhca_event(dev, event);
++#endif
+ 
+ 	blocking_notifier_call_chain(&dev->priv.vhca_state_notifier->n_head, 0, event);
+ }

@@ -74,7 +74,8 @@ cat "$TMP_CONFIG" | "$SCRIPTS_DIR/handle_config_h.sh" > "$TMP_DEF"
 if [ "$IS_DIR" -eq 0 ];then
 	cat "$TMP_DEF" >> "$FINAL_CONFIG"
 else
-	cat "$TMP_CONFIGURE" | "$SCRIPTS_DIR/handle_configure_ac.sh" > "$TMP_CONFIGURE.bck"
+	cat "$TMP_CONFIGURE" | "$SCRIPTS_DIR/handle_configure_ac.sh" > "$TMP_CONFIGURE.bck1"
+	cat "$TMP_CONFIGURE.bck1" | "$SCRIPTS_DIR/handle_config_h.sh" > "$TMP_CONFIGURE.bck"
 	mv -f "$TMP_CONFIGURE.bck" "$TMP_CONFIGURE"
 
 	echo "/*-----------------------*/" > $FINAL_CONFIG

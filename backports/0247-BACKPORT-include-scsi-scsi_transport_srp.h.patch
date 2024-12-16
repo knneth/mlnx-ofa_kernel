@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/scsi/scsi_transport_srp.h
+
+Change-Id: I7476cc8819ab207544fbac2af006d342d4f91cbf
+---
+ include/scsi/scsi_transport_srp.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/include/scsi/scsi_transport_srp.h
++++ b/include/scsi/scsi_transport_srp.h
+@@ -2,6 +2,8 @@
+ #ifndef SCSI_TRANSPORT_SRP_H
+ #define SCSI_TRANSPORT_SRP_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/transport_class.h>
+ #include <linux/types.h>
+ #include <linux/mutex.h>
+@@ -118,7 +120,11 @@ extern int srp_reconnect_rport(struct sr
+ extern void srp_start_tl_fail_timers(struct srp_rport *rport);
+ extern void srp_remove_host(struct Scsi_Host *);
+ extern void srp_stop_rport_timers(struct srp_rport *rport);
++#ifdef HAVE_SCSI_TIMEOUT_ACTION
+ enum scsi_timeout_action srp_timed_out(struct scsi_cmnd *scmd);
++#else
++enum blk_eh_timer_return srp_timed_out(struct scsi_cmnd *scmd);
++#endif
+ 
+ /**
+  * srp_chkready() - evaluate the transport layer state before I/O

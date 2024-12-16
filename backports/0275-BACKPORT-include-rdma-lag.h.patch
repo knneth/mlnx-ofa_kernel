@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/lag.h
+
+Change-Id: If2980e6a02e531e5b148150409df8910f246df8b
+---
+ include/rdma/lag.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/rdma/lag.h
++++ b/include/rdma/lag.h
+@@ -6,7 +6,11 @@
+ #ifndef _RDMA_LAG_H_
+ #define _RDMA_LAG_H_
+ 
++#include "../../compat/config.h"
++
++#ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
++#endif
+ 
+ struct ib_device;
+ struct rdma_ah_attr;

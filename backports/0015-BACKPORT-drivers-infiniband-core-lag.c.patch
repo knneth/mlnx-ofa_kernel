@@ -1,0 +1,42 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/lag.c
+
+Change-Id: I4d66061847d47ff08ed741201d00c83be9f5732b
+---
+ drivers/infiniband/core/lag.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/lag.c
++++ b/drivers/infiniband/core/lag.c
+@@ -90,9 +90,13 @@ static struct net_device *rdma_get_xmit_
+ 		return ERR_PTR(-ENOMEM);
+ 
+ 	rcu_read_lock();
++#ifdef HAVE_NETDEV_GET_XMIT_SLAVE
+ 	slave = netdev_get_xmit_slave(master, skb,
+ 				      !!(device->lag_flags &
+ 					 RDMA_LAG_FLAGS_HASH_ALL_SLAVES));
++#else
++	slave = NULL;
++#endif
+ 	if (slave)
+ 		dev_hold(slave);
+ 	rcu_read_unlock();
+@@ -102,6 +106,9 @@ static struct net_device *rdma_get_xmit_
+ 
+ void rdma_lag_put_ah_roce_slave(struct net_device *xmit_slave)
+ {
++#ifndef HAVE_NETDEV_PUT
++	if (xmit_slave)
++#endif
+ 	dev_put(xmit_slave);
+ }
+ 
+@@ -128,7 +135,6 @@ struct net_device *rdma_lag_get_ah_roce_
+ 
+ 	if (!netif_is_bond_master(master))
+ 		goto put;
+-
+ 	slave = rdma_get_xmit_slave_udp(device, master, ah_attr, flags);
+ put:
+ 	dev_put(master);

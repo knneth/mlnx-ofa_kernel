@@ -1,0 +1,83 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+
+Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
+---
+ drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 24 +++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+@@ -1410,6 +1410,9 @@ static struct mlx5_cmd_mailbox *alloc_cm
+ 		kfree(mailbox);
+ 		return ERR_PTR(-ENOMEM);
+ 	}
++#if !defined(HAVE_PCI_POOL_ZALLOC)
++	memset(mailbox->buf, 0, sizeof(struct mlx5_cmd_prot_block));
++#endif
+ 	mailbox->next = NULL;
+ 
+ 	return mailbox;
+@@ -1746,7 +1749,6 @@ static void mlx5_cmd_comp_handler(struct
+ 				set_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state);
+ 				cmd_ent_put(ent);
+ 			}
+-
+ 			ent->ts2 = ktime_get_ns();
+ 			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
+ 			dump_command(dev, ent, 0);
+@@ -2318,7 +2320,11 @@ static void create_msg_cache(struct mlx5
+ 
+ static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
+ {
+-	cmd->cmd_alloc_buf = dma_alloc_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE,
++#ifdef HAVE_DMA_ZALLOC_COHERENT
++	cmd->cmd_alloc_buf = dma_zalloc_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE,
++#else
++       cmd->cmd_alloc_buf = dma_alloc_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE,
++#endif
+ 						&cmd->alloc_dma, GFP_KERNEL);
+ 	if (!cmd->cmd_alloc_buf)
+ 		return -ENOMEM;
+@@ -2333,7 +2339,11 @@ static int alloc_cmd_page(struct mlx5_co
+ 
+ 	dma_free_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
+ 			  cmd->alloc_dma);
++#ifdef HAVE_DMA_ZALLOC_COHERENT
++	cmd->cmd_alloc_buf = dma_zalloc_coherent(mlx5_core_dma_dev(dev),
++#else
+ 	cmd->cmd_alloc_buf = dma_alloc_coherent(mlx5_core_dma_dev(dev),
++#endif
+ 						2 * MLX5_ADAPTER_PAGE_SIZE - 1,
+ 						&cmd->alloc_dma, GFP_KERNEL);
+ 	if (!cmd->cmd_alloc_buf)
+@@ -2685,7 +2695,11 @@ static ssize_t real_miss_store(struct de
+ 	return count;
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
+ static const struct sysfs_ops cmd_cache_sysfs_ops = {
++#else
++static struct sysfs_ops cmd_cache_sysfs_ops = {
++#endif
+ 	.show = cmd_cache_attr_show,
+ 	.store = cmd_cache_attr_store,
+ };
+@@ -2714,11 +2728,17 @@ static struct attribute *cmd_cache_defau
+ 	NULL
+ };
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(cmd_cache_default);
++#endif
+ 
+ static struct kobj_type cmd_cache_type = {
+ 	.sysfs_ops     = &cmd_cache_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = cmd_cache_default_groups
++#else
++	.default_attrs = cmd_cache_default_attrs
++#endif
+ };
+ 
+ static DEVICE_ATTR(real_miss, 0600, real_miss_show, real_miss_store);

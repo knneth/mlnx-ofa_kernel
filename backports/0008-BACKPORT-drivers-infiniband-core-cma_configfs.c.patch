@@ -1,0 +1,153 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
+
+Change-Id: I1194c393a404d2070c2e8e6e0d98fb7ffde51c21
+---
+ drivers/infiniband/core/cma_configfs.c | 77 +++++++++++++++++++++++---
+ 1 file changed, 68 insertions(+), 9 deletions(-)
+
+--- a/drivers/infiniband/core/cma_configfs.c
++++ b/drivers/infiniband/core/cma_configfs.c
+@@ -37,6 +37,10 @@
+ #include "core_priv.h"
+ #include "cma_priv.h"
+ 
++#ifndef CONFIGFS_ATTR
++#define HAVE_OLD_CONFIGFS_API
++#endif
++
+ struct cma_device;
+ 
+ struct cma_dev_group;
+@@ -54,6 +58,23 @@ struct cma_dev_group {
+ 	struct cma_dev_port_group	*ports;
+ };
+ 
++#ifdef HAVE_OLD_CONFIGFS_API
++struct cma_configfs_attr {
++	struct configfs_attribute	attr;
++	ssize_t				(*show)(struct config_item *item,
++						char *buf);
++	ssize_t				(*store)(struct config_item *item,
++						 const char *buf, size_t count);
++};
++#define CONFIGFS_ATTR(dummy, _name)				\
++static struct cma_configfs_attr attr_##_name =	\
++	__CONFIGFS_ATTR(_name, S_IRUGO | S_IWUSR, _name##_show, _name##_store)
++
++#define CONFIGFS_ATTR_ADD(name) &name.attr
++#else
++#define CONFIGFS_ATTR_ADD(name) &name
++#endif /* HAVE_OLD_CONFIGFS_API */
++
+ static struct cma_dev_port_group *to_dev_port_group(struct config_item *item)
+ {
+ 	struct config_group *group;
+@@ -70,6 +91,34 @@ static bool filter_by_name(struct ib_dev
+ 	return !strcmp(dev_name(&ib_dev->dev), cookie);
+ }
+ 
++#ifdef HAVE_OLD_CONFIGFS_API
++static ssize_t cma_configfs_attr_show(struct config_item *item,
++				      struct configfs_attribute *attr,
++				      char *buf)
++{
++	struct cma_configfs_attr *ca =
++		container_of(attr, struct cma_configfs_attr, attr);
++
++	if (ca->show)
++		return ca->show(item, buf);
++
++	return -EINVAL;
++}
++
++static ssize_t cma_configfs_attr_store(struct config_item *item,
++				       struct configfs_attribute *attr,
++				       const char *buf, size_t count)
++{
++	struct cma_configfs_attr *ca =
++		container_of(attr, struct cma_configfs_attr, attr);
++
++	if (ca->store)
++		return ca->store(item, buf, count);
++
++	return -EINVAL;
++}
++#endif /* HAVE_OLD_CONFIGFS_API */
++
+ static int cma_configfs_params_get(struct config_item *item,
+ 				   struct cma_device **pcma_dev,
+ 				   struct cma_dev_port_group **pgroup)
+@@ -186,12 +235,23 @@ static ssize_t default_roce_tos_store(st
+ CONFIGFS_ATTR(, default_roce_tos);
+ 
+ static struct configfs_attribute *cma_configfs_attributes[] = {
+-	&attr_default_roce_mode,
+-	&attr_default_roce_tos,
++	CONFIGFS_ATTR_ADD(attr_default_roce_mode),
++	CONFIGFS_ATTR_ADD(attr_default_roce_tos),
+ 	NULL,
+ };
+ 
+-static const struct config_item_type cma_port_group_type = {
++#ifdef HAVE_OLD_CONFIGFS_API
++static struct configfs_item_operations cma_item_ops = {
++	.show_attribute		= cma_configfs_attr_show,
++	.store_attribute	= cma_configfs_attr_store,
++};
++#else /* HAVE_OLD_CONFIGFS_API */
++static struct configfs_item_operations cma_item_ops = {
++};
++#endif
++
++static struct config_item_type cma_port_group_type = {
++	.ct_item_ops	= &cma_item_ops,
+ 	.ct_attrs	= cma_configfs_attributes,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -227,7 +287,6 @@ static int make_cma_ports(struct cma_dev
+ 					    &cma_port_group_type);
+ 		configfs_add_default_group(&ports[i].group,
+ 				&cma_dev_group->ports_group);
+-
+ 	}
+ 	cma_dev_group->ports = ports;
+ 	return 0;
+@@ -260,7 +319,7 @@ static struct configfs_item_operations c
+ 	.release = release_cma_ports_group
+ };
+ 
+-static const struct config_item_type cma_ports_group_type = {
++static struct config_item_type cma_ports_group_type = {
+ 	.ct_item_ops	= &cma_ports_item_ops,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -269,7 +328,7 @@ static struct configfs_item_operations c
+ 	.release = release_cma_dev
+ };
+ 
+-static const struct config_item_type cma_device_group_type = {
++static struct config_item_type cma_device_group_type = {
+ 	.ct_item_ops	= &cma_device_item_ops,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -303,8 +362,8 @@ static struct config_group *make_cma_dev
+ 
+ 	config_group_init_type_name(&cma_dev_group->device_group, name,
+ 				    &cma_device_group_type);
+-	configfs_add_default_group(&cma_dev_group->ports_group,
+-			&cma_dev_group->device_group);
++       configfs_add_default_group(&cma_dev_group->ports_group,
++       		&cma_dev_group->device_group);
+ 
+ 	cma_dev_put(cma_dev);
+ 	return &cma_dev_group->device_group;
+@@ -333,7 +392,7 @@ static struct configfs_group_operations
+ 	.drop_item	= drop_cma_dev,
+ };
+ 
+-static const struct config_item_type cma_subsys_type = {
++static struct config_item_type cma_subsys_type = {
+ 	.ct_group_ops	= &cma_subsys_group_ops,
+ 	.ct_owner	= THIS_MODULE,
+ };

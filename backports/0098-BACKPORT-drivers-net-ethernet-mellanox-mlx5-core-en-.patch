@@ -1,31 +1,36 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 
+Change-Id: I7ef730d8dcb06bef97ab548e0f794bb2e6207fc1
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/selq.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
- void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
- 				  struct mlx5e_encap_entry *e);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_EN_SELQ_H__
  
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
- 		       void *type_data);
+ #include <linux/kernel.h>
++#include <linux/netdevice.h>
+ 
+ struct mlx5e_selq_params;
+ 
+@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+ 	return txq;
+ }
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
+ 
++#else
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
 +#endif
- 
- void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
- 			  struct sk_buff *skb);
- 
-+#ifdef HAVE_BASECODE_EXTRAS
-+void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
-+
-+int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
-+				void *cb_priv);
-+#endif
-+
- #else /* CONFIG_MLX5_CLS_ACT */
- 
- struct mlx5e_rep_priv;
+ #endif /* __MLX5_EN_SELQ_H__ */

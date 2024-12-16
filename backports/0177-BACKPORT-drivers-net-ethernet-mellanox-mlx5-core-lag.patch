@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+
+Change-Id: Idd46c6de54234fcf4f0c757c1f0dd612907a699d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+@@ -2,7 +2,9 @@
+ /* Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
+ 
+ #include <linux/netdevice.h>
++#ifdef HAVE_NET_NEXTHOP_H
+ #include <net/nexthop.h>
++#endif
+ #include "lag/lag.h"
+ #include "eswitch.h"
+ #include "esw/acl/ofld.h"

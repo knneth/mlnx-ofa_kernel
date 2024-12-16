@@ -1,0 +1,37 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+
+Change-Id: I82caa02e78e25359107e18620b317adadea3a0c1
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+@@ -35,6 +35,9 @@
+ #include "en.h"
+ #include "en/rx_res.h"
+ #include "en/rss.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include "linux/namei.h"
++#endif
+ 
+ /* For non-default namespaces, add suffix in format "@<pci_id>" */
+ /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
+@@ -219,7 +222,6 @@ static void mlx5e_debugs_free_recursive_
+ 
+ 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
+-
+ 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);
+@@ -227,7 +229,6 @@ static void mlx5e_debugs_free_recursive_
+ 
+ 	for (i = 0; i < priv->max_nch; i++) {
+ 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
+-
+ 		dent = debugfs_lookup(name, priv->netdev_dfs_root);
+ 		if (dent && dent->d_inode && dent->d_inode->i_private)
+ 			kvfree(dent->d_inode->i_private);

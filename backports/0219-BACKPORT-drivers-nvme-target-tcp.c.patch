@@ -1,0 +1,386 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/tcp.c
+
+Change-Id: Ie4b9e7b4bfc9837a5397d26bb1eb26371d3c59e8
+---
+ drivers/nvme/target/tcp.c | 127 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 124 insertions(+), 3 deletions(-)
+
+--- a/drivers/nvme/target/tcp.c
++++ b/drivers/nvme/target/tcp.c
+@@ -3,6 +3,9 @@
+  * NVMe over Fabrics TCP target.
+  * Copyright (c) 2018 Lightbits Labs. All rights reserved.
+  */
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -10,12 +13,16 @@
+ #include <linux/err.h>
+ #include <linux/key.h>
+ #include <linux/nvme-tcp.h>
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ #include <linux/nvme-keyring.h>
++#endif
+ #include <net/sock.h>
+ #include <net/tcp.h>
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ #include <net/tls.h>
+ #include <net/tls_prot.h>
+ #include <net/handshake.h>
++#endif
+ #include <linux/inet.h>
+ #include <linux/llist.h>
+ #include <crypto/hash.h>
+@@ -374,17 +381,28 @@ static void nvmet_tcp_build_pdu_iovec(st
+ 	while (length) {
+ 		u32 iov_len = min_t(u32, length, sg->length - sg_offset);
+ 
++#ifdef HAVE_BVEC_SET_PAGE
+ 		bvec_set_page(iov, sg_page(sg), iov_len,
+ 				sg->offset + sg_offset);
+ 
++#else
++		iov->bv_page = sg_page(sg);
++		iov->bv_len = sg->length;
++		iov->bv_offset = sg->offset + sg_offset;
++#endif
+ 		length -= iov_len;
+ 		sg = sg_next(sg);
+ 		iov++;
+ 		sg_offset = 0;
+ 	}
+ 
++#ifdef HAVE_ITER_DEST
+ 	iov_iter_bvec(&cmd->recv_msg.msg_iter, ITER_DEST, cmd->iov,
+ 		      nr_pages, cmd->pdu_len);
++#else
++	iov_iter_bvec(&cmd->recv_msg.msg_iter, READ, cmd->iov,
++		      nr_pages, cmd->pdu_len);
++#endif
+ }
+ 
+ static void nvmet_tcp_fatal_error(struct nvmet_tcp_queue *queue)
+@@ -603,17 +621,25 @@ static void nvmet_tcp_execute_request(st
+ 
+ static int nvmet_try_send_data_pdu(struct nvmet_tcp_cmd *cmd)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
+ 	struct msghdr msg = {
+ 		.msg_flags = MSG_DONTWAIT | MSG_MORE | MSG_SPLICE_PAGES,
+ 	};
+ 	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->data_pdu) - cmd->offset + hdgst;
+ 	int ret;
+ 
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->data_pdu),
++			offset_in_page(cmd->data_pdu) + cmd->offset,
++			left, MSG_DONTWAIT | MSG_MORE | MSG_SENDPAGE_NOTLAST);
++#else
+ 	bvec_set_virt(&bvec, (void *)cmd->data_pdu + cmd->offset, left);
+ 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
+ 	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 
+@@ -634,21 +660,37 @@ static int nvmet_try_send_data(struct nv
+ 	int ret;
+ 
+ 	while (cmd->cur_sg) {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
+ 		struct msghdr msg = {
+ 			.msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES,
+ 		};
++#endif
+ 		struct page *page = sg_page(cmd->cur_sg);
++#ifndef HAVE_PROTO_OPS_SENDPAGE
+ 		struct bio_vec bvec;
++#endif
+ 		u32 left = cmd->cur_sg->length - cmd->offset;
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++		int flags = MSG_DONTWAIT;
++#endif
+ 
+ 		if ((!last_in_batch && cmd->queue->send_list_len) ||
+ 		    cmd->wbytes_done + left < cmd->req.transfer_len ||
+ 		    queue->data_digest || !queue->nvme_sq.sqhd_disabled)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++			flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
++#else
+ 			msg.msg_flags |= MSG_MORE;
++#endif
+ 
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++		ret = kernel_sendpage(cmd->queue->sock, page, cmd->offset,
++					left, flags);
++#else
+ 		bvec_set_page(&bvec, page, left, cmd->offset);
+ 		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
+ 		ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 		if (ret <= 0)
+ 			return ret;
+ 
+@@ -684,13 +726,26 @@ static int nvmet_try_send_data(struct nv
+ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
+ 		bool last_in_batch)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
+ 	struct msghdr msg = { .msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES, };
+ 	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->rsp_pdu) - cmd->offset + hdgst;
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++	int flags = MSG_DONTWAIT;
++#endif
+ 	int ret;
+ 
+ 	if (!last_in_batch && cmd->queue->send_list_len)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++		flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
++	else
++		flags |= MSG_EOR;
++
++	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->rsp_pdu),
++		offset_in_page(cmd->rsp_pdu) + cmd->offset, left, flags);
++#else
+ 		msg.msg_flags |= MSG_MORE;
+ 	else
+ 		msg.msg_flags |= MSG_EOR;
+@@ -698,6 +753,7 @@ static int nvmet_try_send_response(struc
+ 	bvec_set_virt(&bvec, (void *)cmd->rsp_pdu + cmd->offset, left);
+ 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
+ 	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 	cmd->offset += ret;
+@@ -714,13 +770,26 @@ static int nvmet_try_send_response(struc
+ 
+ static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
+ {
++#ifndef HAVE_PROTO_OPS_SENDPAGE
+ 	struct msghdr msg = { .msg_flags = MSG_DONTWAIT | MSG_SPLICE_PAGES, };
+ 	struct bio_vec bvec;
++#endif
+ 	u8 hdgst = nvmet_tcp_hdgst_len(cmd->queue);
+ 	int left = sizeof(*cmd->r2t_pdu) - cmd->offset + hdgst;
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++	int flags = MSG_DONTWAIT;
++#endif
+ 	int ret;
+ 
+ 	if (!last_in_batch && cmd->queue->send_list_len)
++#ifdef HAVE_PROTO_OPS_SENDPAGE
++		flags |= MSG_MORE | MSG_SENDPAGE_NOTLAST;
++	else
++		flags |= MSG_EOR;
++
++	ret = kernel_sendpage(cmd->queue->sock, virt_to_page(cmd->r2t_pdu),
++		offset_in_page(cmd->r2t_pdu) + cmd->offset, left, flags);
++#else
+ 		msg.msg_flags |= MSG_MORE;
+ 	else
+ 		msg.msg_flags |= MSG_EOR;
+@@ -728,6 +797,7 @@ static int nvmet_try_send_r2t(struct nvm
+ 	bvec_set_virt(&bvec, (void *)cmd->r2t_pdu + cmd->offset, left);
+ 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
+ 	ret = sock_sendmsg(cmd->queue->sock, &msg);
++#endif
+ 	if (ret <= 0)
+ 		return ret;
+ 	cmd->offset += ret;
+@@ -1138,6 +1208,7 @@ static inline bool nvmet_tcp_pdu_valid(u
+ 	return false;
+ }
+ 
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ static int nvmet_tcp_tls_record_ok(struct nvmet_tcp_queue *queue,
+ 		struct msghdr *msg, char *cbuf)
+ {
+@@ -1172,11 +1243,16 @@ static int nvmet_tcp_tls_record_ok(struc
+ 	}
+ 	return ret;
+ }
++#endif
+ 
+ static int nvmet_tcp_try_recv_pdu(struct nvmet_tcp_queue *queue)
+ {
+ 	struct nvme_tcp_hdr *hdr = &queue->pdu.cmd.hdr;
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 	int len, ret;
++#else
++	int len;
++#endif
+ 	struct kvec iov;
+ 	char cbuf[CMSG_LEN(sizeof(char))] = {};
+ 	struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
+@@ -1192,12 +1268,13 @@ recv:
+ 			iov.iov_len, msg.msg_flags);
+ 	if (unlikely(len < 0))
+ 		return len;
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 	if (queue->tls_pskid) {
+ 		ret = nvmet_tcp_tls_record_ok(queue, &msg, cbuf);
+ 		if (ret < 0)
+ 			return ret;
+ 	}
+-
++#endif
+ 	queue->offset += len;
+ 	queue->left -= len;
+ 	if (queue->left)
+@@ -1249,19 +1326,25 @@ static void nvmet_tcp_prep_recv_ddgst(st
+ static int nvmet_tcp_try_recv_data(struct nvmet_tcp_queue *queue)
+ {
+ 	struct nvmet_tcp_cmd  *cmd = queue->cmd;
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 	int len, ret;
++#else
++	int len;
++#endif
+ 
+ 	while (msg_data_left(&cmd->recv_msg)) {
+ 		len = sock_recvmsg(cmd->queue->sock, &cmd->recv_msg,
+ 			cmd->recv_msg.msg_flags);
+ 		if (len <= 0)
+ 			return len;
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 		if (queue->tls_pskid) {
+ 			ret = nvmet_tcp_tls_record_ok(cmd->queue,
+ 					&cmd->recv_msg, cmd->recv_cbuf);
+ 			if (ret < 0)
+ 				return ret;
+ 		}
++#endif
+ 
+ 		cmd->pdu_recv += len;
+ 		cmd->rbytes_done += len;
+@@ -1298,12 +1381,13 @@ static int nvmet_tcp_try_recv_ddgst(stru
+ 			iov.iov_len, msg.msg_flags);
+ 	if (unlikely(len < 0))
+ 		return len;
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 	if (queue->tls_pskid) {
+ 		ret = nvmet_tcp_tls_record_ok(queue, &msg, cbuf);
+ 		if (ret < 0)
+ 			return ret;
+ 	}
+-
++#endif
+ 	queue->offset += len;
+ 	queue->left -= len;
+ 	if (queue->left)
+@@ -1395,10 +1479,12 @@ static void nvmet_tcp_release_queue(stru
+ static void nvmet_tcp_schedule_release_queue(struct nvmet_tcp_queue *queue)
+ {
+ 	spin_lock_bh(&queue->state_lock);
++#ifdef CONFIG_NVME_TARGET_TCP_TLS
+ 	if (queue->state == NVMET_TCP_Q_TLS_HANDSHAKE) {
+ 		/* Socket closed during handshake */
+ 		tls_handshake_cancel(queue->sock->sk);
+ 	}
++#endif
+ 	if (queue->state != NVMET_TCP_Q_DISCONNECTING) {
+ 		queue->state = NVMET_TCP_Q_DISCONNECTING;
+ 		kref_put(&queue->kref, nvmet_tcp_release_queue);
+@@ -1589,6 +1675,9 @@ static void nvmet_tcp_free_cmd_data_in_b
+ 
+ static void nvmet_tcp_release_queue_work(struct work_struct *w)
+ {
++#ifndef HAVE_PAGE_FRAG_CACHE_DRAIN
++	struct page *page;
++#endif
+ 	struct nvmet_tcp_queue *queue =
+ 		container_of(w, struct nvmet_tcp_queue, release_work);
+ 
+@@ -1612,7 +1701,12 @@ static void nvmet_tcp_release_queue_work
+ 	if (queue->hdr_digest || queue->data_digest)
+ 		nvmet_tcp_free_crypto(queue);
+ 	ida_free(&nvmet_tcp_queue_ida, queue->idx);
++#ifdef HAVE_PAGE_FRAG_CACHE_DRAIN
+ 	page_frag_cache_drain(&queue->pf_cache);
++#else
++	page = virt_to_head_page(queue->pf_cache.va);
++	__page_frag_cache_drain(page, queue->pf_cache.pagecnt_bias);
++#endif
+ 	kfree(queue);
+ }
+ 
+@@ -1620,7 +1714,9 @@ static void nvmet_tcp_data_ready(struct
+ {
+ 	struct nvmet_tcp_queue *queue;
+ 
++#ifdef HAVE_TRACE_EVENTS_TRACE_SK_DATA_READY
+ 	trace_sk_data_ready(sk);
++#endif
+ 
+ 	read_lock_bh(&sk->sk_callback_lock);
+ 	queue = sk->sk_user_data;
+@@ -1710,8 +1806,19 @@ static int nvmet_tcp_set_queue_sock(stru
+ 		sock_set_priority(sock->sk, so_priority);
+ 
+ 	/* Set socket type of service */
++#ifdef HAVE_IP_SOCK_SET_TOS
+ 	if (inet->rcv_tos > 0)
+ 		ip_sock_set_tos(sock->sk, inet->rcv_tos);
++#else
++	if (inet->rcv_tos > 0) {
++		int tos = inet->rcv_tos;
++
++		ret = kernel_setsockopt(sock, SOL_IP, IP_TOS,
++			(char *)&tos, sizeof(tos));
++		if (ret)
++			return ret;
++	}
++#endif
+ 
+ 	ret = 0;
+ 	write_lock_bh(&sock->sk->sk_callback_lock);
+@@ -1992,8 +2099,9 @@ static void nvmet_tcp_listen_data_ready(
+ {
+ 	struct nvmet_tcp_port *port;
+ 
++#ifdef HAVE_TRACE_EVENTS_TRACE_SK_DATA_READY
+ 	trace_sk_data_ready(sk);
+-
++#endif
+ 	read_lock_bh(&sk->sk_callback_lock);
+ 	port = sk->sk_user_data;
+ 	if (!port)
+@@ -2010,6 +2118,9 @@ static int nvmet_tcp_add_port(struct nvm
+ 	struct nvmet_tcp_port *port;
+ 	__kernel_sa_family_t af;
+ 	int ret;
++#ifndef HAVE_TCP_SOCK_SET_NODELAY
++	int opt;
++#endif
+ 
+ 	port = kzalloc(sizeof(*port), GFP_KERNEL);
+ 	if (!port)
+@@ -2053,7 +2164,17 @@ static int nvmet_tcp_add_port(struct nvm
+ 	port->data_ready = port->sock->sk->sk_data_ready;
+ 	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
+ 	sock_set_reuseaddr(port->sock->sk);
++#ifdef HAVE_TCP_SOCK_SET_NODELAY
+ 	tcp_sock_set_nodelay(port->sock->sk);
++#else
++	opt = 1;
++	ret = kernel_setsockopt(port->sock, IPPROTO_TCP,
++			TCP_NODELAY, (char *)&opt, sizeof(opt));
++	if (ret) {
++		pr_err("failed to set TCP_NODELAY sock opt %d\n", ret);
++		goto err_sock;
++	}
++#endif
+ 	if (so_priority > 0)
+ 		sock_set_priority(port->sock->sk, so_priority);
+ 

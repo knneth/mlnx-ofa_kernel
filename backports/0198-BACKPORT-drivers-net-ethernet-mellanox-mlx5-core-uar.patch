@@ -1,0 +1,60 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/uar.c
+
+Change-Id: I969fc207849845f639801182bf9f031b76d4d255
+---
+ drivers/net/ethernet/mellanox/mlx5/core/uar.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/uar.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
+@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars
+ 	int err = -ENOMEM;
+ 	phys_addr_t pfn;
+ 	int bfregs;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	int node;
++#endif
+ 	int i;
+ 
+ 	bfregs = uars_per_sys_page(mdev) * MLX5_BFREGS_PER_UAR;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	node = mdev->priv.numa_node;
+ 	up = kzalloc_node(sizeof(*up), GFP_KERNEL, node);
++#else
++	up = kzalloc(sizeof(*up), GFP_KERNEL);
++#endif
+ 	if (!up)
+ 		return ERR_PTR(err);
+ 
+ 	up->mdev = mdev;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	up->reg_bitmap = bitmap_zalloc_node(bfregs, GFP_KERNEL, node);
++#else
++	up->reg_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
++#endif
+ 	if (!up->reg_bitmap)
+ 		goto error1;
+ 
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	up->fp_bitmap = bitmap_zalloc_node(bfregs, GFP_KERNEL, node);
++#else
++	up->fp_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
++#endif
+ 	if (!up->fp_bitmap)
+ 		goto error1;
+ 
+@@ -358,9 +372,13 @@ static int mlx5_get_pcie_dev_link_caps(s
+ 		*width = (lnkcap1 & PCI_EXP_LNKCAP_MLW) >>
+ 			PCI_EXP_LNKCAP_MLW_SHIFT;
+ 		if (*speed == PCI_SPEED_UNKNOWN) { /* pre-r3.0 */
++#ifdef PCI_EXP_LNKCAP_SLS_8_0GB
+ 			if (lnkcap1 & PCI_EXP_LNKCAP_SLS_8_0GB)
+ 				*speed = PCIE_SPEED_8_0GT;
+ 			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_5_0GB)
++#else
++			if (lnkcap1 & PCI_EXP_LNKCAP_SLS_5_0GB)
++#endif
+ 				*speed = PCIE_SPEED_5_0GT;
+ 			else if (lnkcap1 & PCI_EXP_LNKCAP_SLS_2_5GB)
+ 				*speed = PCIE_SPEED_2_5GT;

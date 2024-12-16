@@ -1,0 +1,312 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
+
+Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
+---
+ drivers/nvme/host/fc.c | 102 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 98 insertions(+), 4 deletions(-)
+
+--- a/drivers/nvme/host/fc.c
++++ b/drivers/nvme/host/fc.c
+@@ -2,6 +2,7 @@
+ /*
+  * Copyright (c) 2016 Avago Technologies.  All rights reserved.
+  */
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -12,13 +13,18 @@
+ #include <uapi/scsi/fc/fc_els.h>
+ #include <linux/delay.h>
+ #include <linux/overflow.h>
++#include <linux/sizes.h>
++#ifdef HAVE_FC_APPID_LEN
+ #include <linux/blk-cgroup.h>
++#endif
+ #include "nvme.h"
+ #include "fabrics.h"
+ #include <linux/nvme-fc-driver.h>
+ #include <linux/nvme-fc.h>
+ #include "fc.h"
++#ifdef HAVE_SCSI_TRANSPORT_FC_FC_PORT_ROLE_NVME_TARGET
+ #include <scsi/scsi_transport_fc.h>
++#endif
+ #include <linux/blk-mq-pci.h>
+ 
+ /* *************************** Data Structures/Defines ****************** */
+@@ -255,7 +261,11 @@ nvme_fc_free_lport(struct kref *ref)
+ 	list_del(&lport->port_list);
+ 	spin_unlock_irqrestore(&nvme_fc_lock, flags);
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&nvme_fc_local_port_cnt, lport->localport.port_num);
++#else
++	ida_simple_remove(&nvme_fc_local_port_cnt, lport->localport.port_num);
++#endif
+ 	ida_destroy(&lport->endp_cnt);
+ 
+ 	put_device(lport->dev);
+@@ -395,7 +405,11 @@ nvme_fc_register_localport(struct nvme_f
+ 		goto out_reghost_failed;
+ 	}
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	idx = ida_alloc(&nvme_fc_local_port_cnt, GFP_KERNEL);
++#else
++	idx = ida_simple_get(&nvme_fc_local_port_cnt, 0, 0, GFP_KERNEL);
++#endif
+ 	if (idx < 0) {
+ 		ret = -ENOSPC;
+ 		goto out_fail_kfree;
+@@ -435,7 +449,11 @@ nvme_fc_register_localport(struct nvme_f
+ 	return 0;
+ 
+ out_ida_put:
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&nvme_fc_local_port_cnt, idx);
++#else
++	ida_simple_remove(&nvme_fc_local_port_cnt, idx);
++#endif
+ out_fail_kfree:
+ 	kfree(newrec);
+ out_reghost_failed:
+@@ -531,7 +549,11 @@ nvme_fc_free_rport(struct kref *ref)
+ 	spin_unlock_irqrestore(&nvme_fc_lock, flags);
+ 
+ 	WARN_ON(!list_empty(&rport->disc_list));
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&lport->endp_cnt, rport->remoteport.port_num);
++#else
++	ida_simple_remove(&lport->endp_cnt, rport->remoteport.port_num);
++#endif
+ 
+ 	kfree(rport);
+ 
+@@ -709,7 +731,11 @@ nvme_fc_register_remoteport(struct nvme_
+ 		goto out_lport_put;
+ 	}
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	idx = ida_alloc(&lport->endp_cnt, GFP_KERNEL);
++#else
++	idx = ida_simple_get(&lport->endp_cnt, 0, 0, GFP_KERNEL);
++#endif
+ 	if (idx < 0) {
+ 		ret = -ENOSPC;
+ 		goto out_kfree_rport;
+@@ -1922,7 +1948,11 @@ char *nvme_fc_io_getuuid(struct nvmefc_f
+ 
+ 	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !rq || !rq->bio)
+ 		return NULL;
++#ifdef HAVE_BLKCG_GET_FC_APPID
+ 	return blkcg_get_fc_appid(rq->bio);
++#else
++	return NULL;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvme_fc_io_getuuid);
+ 
+@@ -2408,7 +2438,11 @@ nvme_fc_ctrl_free(struct kref *ref)
+ 	put_device(ctrl->dev);
+ 	nvme_fc_rport_put(ctrl->rport);
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&nvme_fc_ctrl_cnt, ctrl->cnum);
++#else
++	ida_simple_remove(&nvme_fc_ctrl_cnt, ctrl->cnum);
++#endif
+ 	if (ctrl->ctrl.opts)
+ 		nvmf_free_options(ctrl->ctrl.opts);
+ 	kfree(ctrl);
+@@ -2453,7 +2487,13 @@ nvme_fc_nvme_ctrl_freed(struct nvme_ctrl
+  * status. The done path will return the io request back to the block
+  * layer with an error status.
+  */
++#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_3_PARAMS
++static bool nvme_fc_terminate_exchange(struct request *req, void *data, bool reserved)
++#elif defined HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_2_PARAMS
+ static bool nvme_fc_terminate_exchange(struct request *req, void *data)
++#else
++static void nvme_fc_terminate_exchange(struct request *req, void *data, bool reserved)
++#endif
+ {
+ 	struct nvme_ctrl *nctrl = data;
+ 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(nctrl);
+@@ -2461,7 +2501,9 @@ static bool nvme_fc_terminate_exchange(s
+ 
+ 	op->nreq.flags |= NVME_REQ_CANCELLED;
+ 	__nvme_fc_abort_op(ctrl, op);
++#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
+ 	return true;
++#endif
+ }
+ 
+ /*
+@@ -2566,7 +2608,12 @@ nvme_fc_error_recovery(struct nvme_fc_ct
+ 	nvme_reset_ctrl(&ctrl->ctrl);
+ }
+ 
+-static enum blk_eh_timer_return nvme_fc_timeout(struct request *rq)
++static enum blk_eh_timer_return
++#ifdef HAVE_BLK_MQ_OPS_TIMEOUT_1_PARAM
++nvme_fc_timeout(struct request *rq)
++#else
++nvme_fc_timeout(struct request *rq, bool reserved)
++#endif
+ {
+ 	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
+ 	struct nvme_fc_ctrl *ctrl = op->ctrl;
+@@ -2608,9 +2655,15 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ct
+ 		return 0;
+ 
+ 	freq->sg_table.sgl = freq->first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 	ret = sg_alloc_table_chained(&freq->sg_table,
+ 			blk_rq_nr_phys_segments(rq), freq->sg_table.sgl,
+ 			NVME_INLINE_SG_CNT);
++#else
++	ret = sg_alloc_table_chained(&freq->sg_table,
++			blk_rq_nr_phys_segments(rq),
++			freq->sg_table.sgl);
++#endif
+ 	if (ret)
+ 		return -ENOMEM;
+ 
+@@ -2619,7 +2672,11 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ct
+ 	freq->sg_cnt = fc_dma_map_sg(ctrl->lport->dev, freq->sg_table.sgl,
+ 				op->nents, rq_dma_dir(rq));
+ 	if (unlikely(freq->sg_cnt <= 0)) {
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 		sg_free_table_chained(&freq->sg_table, NVME_INLINE_SG_CNT);
++#else
++		sg_free_table_chained(&freq->sg_table, true);
++#endif
+ 		freq->sg_cnt = 0;
+ 		return -EFAULT;
+ 	}
+@@ -2642,7 +2699,11 @@ nvme_fc_unmap_data(struct nvme_fc_ctrl *
+ 	fc_dma_unmap_sg(ctrl->lport->dev, freq->sg_table.sgl, op->nents,
+ 			rq_dma_dir(rq));
+ 
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 	sg_free_table_chained(&freq->sg_table, NVME_INLINE_SG_CNT);
++#else
++	sg_free_table_chained(&freq->sg_table, true);
++#endif
+ 
+ 	freq->sg_cnt = 0;
+ }
+@@ -2862,7 +2923,12 @@ nvme_fc_complete_rq(struct request *rq)
+ 	nvme_fc_ctrl_put(ctrl);
+ }
+ 
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_MAP
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
++static int nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#else
+ static void nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#endif
+ {
+ 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(set->driver_data);
+ 	int i;
+@@ -2882,7 +2948,11 @@ static void nvme_fc_map_queues(struct bl
+ 		else
+ 			blk_mq_map_queues(map);
+ 	}
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
++	return 0;
++#endif
+ }
++#endif
+ 
+ static const struct blk_mq_ops nvme_fc_mq_ops = {
+ 	.queue_rq	= nvme_fc_queue_rq,
+@@ -2891,7 +2961,9 @@ static const struct blk_mq_ops nvme_fc_m
+ 	.exit_request	= nvme_fc_exit_request,
+ 	.init_hctx	= nvme_fc_init_hctx,
+ 	.timeout	= nvme_fc_timeout,
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_MAP
+ 	.map_queues	= nvme_fc_map_queues,
++#endif
+ };
+ 
+ static int
+@@ -2918,8 +2990,12 @@ nvme_fc_create_io_queues(struct nvme_fc_
+ 
+ 	ret = nvme_alloc_io_tag_set(&ctrl->ctrl, &ctrl->tag_set,
+ 			&nvme_fc_mq_ops, 1,
++#ifdef HAVE_STRUCT_SIZE_T
+ 			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+-				      ctrl->lport->ops->fcprqst_priv_sz));
++#else
++			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
++#endif
++				    ctrl->lport->ops->fcprqst_priv_sz));
+ 	if (ret)
+ 		return ret;
+ 
+@@ -3411,7 +3487,6 @@ nvme_fc_connect_ctrl_work(struct work_st
+ 			ctrl->cnum);
+ }
+ 
+-
+ static const struct blk_mq_ops nvme_fc_admin_mq_ops = {
+ 	.queue_rq	= nvme_fc_queue_rq,
+ 	.complete	= nvme_fc_complete_rq,
+@@ -3475,7 +3550,11 @@ nvme_fc_init_ctrl(struct device *dev, st
+ 		goto out_fail;
+ 	}
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	idx = ida_alloc(&nvme_fc_ctrl_cnt, GFP_KERNEL);
++#else
++	idx = ida_simple_get(&nvme_fc_ctrl_cnt, 0, 0, GFP_KERNEL);
++#endif
+ 	if (idx < 0) {
+ 		ret = -ENOSPC;
+ 		goto out_free_ctrl;
+@@ -3547,8 +3626,12 @@ nvme_fc_init_ctrl(struct device *dev, st
+ 
+ 	ret = nvme_alloc_admin_tag_set(&ctrl->ctrl, &ctrl->admin_tag_set,
+ 			&nvme_fc_admin_mq_ops,
++#ifdef HAVE_STRUCT_SIZE_T
+ 			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+-				      ctrl->lport->ops->fcprqst_priv_sz));
++#else
++			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
++#endif
++				    ctrl->lport->ops->fcprqst_priv_sz));
+ 	if (ret)
+ 		goto fail_ctrl;
+ 
+@@ -3607,7 +3690,11 @@ out_free_queues:
+ 	kfree(ctrl->queues);
+ out_free_ida:
+ 	put_device(ctrl->dev);
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&nvme_fc_ctrl_cnt, ctrl->cnum);
++#else
++	ida_simple_remove(&nvme_fc_ctrl_cnt, ctrl->cnum);
++#endif
+ out_free_ctrl:
+ 	kfree(ctrl);
+ out_fail:
+@@ -3886,6 +3973,9 @@ static const struct attribute_group *nvm
+ static struct class fc_class = {
+ 	.name = "fc",
+ 	.dev_groups = nvme_fc_attr_groups,
++#ifndef HAVE_CLASS_CREATE_GET_1_PARAM
++	.owner = THIS_MODULE,
++#endif
+ };
+ 
+ static int __init nvme_fc_init_module(void)
+@@ -3976,3 +4066,7 @@ module_exit(nvme_fc_exit_module);
+ 
+ MODULE_DESCRIPTION("NVMe host FC transport driver");
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
++

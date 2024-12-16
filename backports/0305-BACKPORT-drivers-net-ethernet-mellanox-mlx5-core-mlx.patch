@@ -1,0 +1,127 @@
+From: Shay Drory <shayd@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+
+Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
+---
+ .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 46 ++++++++++++++++---
+ 1 file changed, 40 insertions(+), 6 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+@@ -142,21 +142,30 @@ static int mlx5_devm_sf_port_new(struct
+ {
+ 	struct devlink_port_new_attrs devl_attrs;
+ 	struct mlx5_devm_device *mdevm_dev;
++#ifdef HAVE_DEVLINK_PORT_OPS
+ 	struct devlink_port *devport;
++#endif
+ 	struct devlink *devlink;
+ 	int ret;
+ 
+ 	devlink = mlxdevm_to_devlink(devm_dev);
+ 	dm_new_attrs2devl_new_attrs(attrs, &devl_attrs);
+ 
++#ifdef HAVE_DEVLINK_PORT_OPS
+ 	devl_lock(devlink);
+ 	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, &devport);
+ 	devl_unlock(devlink);
++#else
++	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, new_port_index);
++#endif
++
+ 
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef HAVE_DEVLINK_PORT_OPS
+ 	*new_port_index = devport->index;
++#endif
+         mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
+         return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
+                          xa_mk_value(attrs->sfnum), GFP_KERNEL);
+@@ -180,9 +189,13 @@ static int mlx5_devm_sf_port_del(struct
+ 	if (!port)
+ 		return -ENODEV;
+ 
++#ifdef HAVE_DEVLINK_PORT_OPS
+ 	devl_lock(devlink);
+ 	ret = mlx5_devlink_sf_port_del(devlink, port->dl_port, extack);
+ 	devl_unlock(devlink);
++#else
++	ret = mlx5_devlink_sf_port_del(devlink, port_index, extack);
++#endif
+ 	return ret;
+ }
+ 
+@@ -193,16 +206,15 @@ static int mlx5_devm_sf_port_fn_state_ge
+ {
+ 	enum devlink_port_fn_opstate dl_opstate;
+ 	enum devlink_port_fn_state dl_state;
+-	struct devlink_port devport;
+ 	struct devlink *devlink;
+ 	int ret;
+ 
+ 	devlink = mlxdevm_to_devlink(port->devm);
+-	memset(&devport, 0, sizeof(devport));
+-	devport.devlink = devlink;
+-	devport.index = port->index;
+-
+-	ret = mlx5_devlink_sf_port_fn_state_get(&devport, &dl_state, &dl_opstate, extack);
++#if defined(HAVE_PORT_FUNCTION_STATE_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
++	ret = mlx5_devlink_sf_port_fn_state_get(port->dl_port, &dl_state, &dl_opstate, extack);
++#else
++	ret = mlx5_devlink_sf_port_fn_state_get(devlink, port->dl_port, &dl_state, &dl_opstate, extack);
++#endif
+ 	if (!ret) {
+ 		*state = devlink_to_mlxdevm_state(dl_state);
+ 		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
+@@ -214,18 +226,33 @@ static int mlx5_devm_sf_port_fn_state_se
+ 				   enum mlxdevm_port_fn_state state,
+ 				   struct netlink_ext_ack *extack)
+ {
++#if !defined(HAVE_PORT_FUNCTION_STATE_GET_4_PARAM) && !defined(HAVE_DEVLINK_PORT_OPS)
++	struct devlink *devlink = mlxdevm_to_devlink(port->devm);
++#endif
+ 	enum devlink_port_fn_state dl_state;
+ 
+ 	dl_state = mlxdevm_to_devlink_state(state);
++
++#if defined(HAVE_PORT_FUNCTION_STATE_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
+ 	return mlx5_devlink_sf_port_fn_state_set(port->dl_port, dl_state, extack);
++#else
++	return mlx5_devlink_sf_port_fn_state_set(devlink, port->dl_port, dl_state, extack);
++#endif
+ }
+ 
+ static int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
+ 				     u8 *hw_addr, int *hw_addr_len,
+ 				     struct netlink_ext_ack *extack)
+ {
++#if defined(HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
+ 	return mlx5_devlink_port_fn_hw_addr_get(port->dl_port, hw_addr,
+ 						hw_addr_len, extack);
++#else
++	struct devlink *devlink = mlxdevm_to_devlink(port->devm);
++
++	return mlx5_devlink_port_fn_hw_addr_get(devlink, port->dl_port, hw_addr,
++			hw_addr_len, extack);
++#endif
+ }
+ 
+ static int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
+@@ -246,8 +273,15 @@ static int mlx5_devm_sf_port_fn_hw_addr_
+ 				     const u8 *hw_addr, int hw_addr_len,
+ 				     struct netlink_ext_ack *extack)
+ {
++#if defined(HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
+ 	return mlx5_devlink_port_fn_hw_addr_set(port->dl_port, hw_addr,
+ 						hw_addr_len, extack);
++#else
++	struct devlink *devlink = mlxdevm_to_devlink(port->devm);
++
++	return mlx5_devlink_port_fn_hw_addr_set(devlink, port->dl_port, hw_addr,
++						hw_addr_len, extack);
++#endif
+ }
+ 
+ static int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,

@@ -76,7 +76,7 @@ override_dh_auto_configure:
 ifneq ($(WITH_DKMS),1)
 	@echo Building for $(kernelver)
 	find compat -type f -exec touch -t 200012201010 '{}' \; || true
-	$(CURDIR)/scripts/mlnx_en_patch.sh --kernel $(kernelver) --kernel-sources $(kernel_source_dir) $(MLNX_EN_PATCH_PARAMS) -j$(NJOBS)
+	$(CURDIR)/configure --mlnx_en --kernel-version $(kernelver) --kernel-sources $(kernel_source_dir) $(MLNX_EN_PATCH_PARAMS) -j$(NJOBS)
 	make -j$(NJOBS)
 endif
 
@@ -101,6 +101,8 @@ endif
 
 	cp -a source/LICENSE		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp -a source/configure		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/makefile		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/Makefile		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion)

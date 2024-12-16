@@ -1,0 +1,14 @@
+Source: fwctl
+Section: kernel
+Priority: optional
+Maintainer: Mohammad Kabat <mohammadkab@nvidia.com>
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, make
+Standards-Version: 1.0
+Homepage: http://nvidia.com
+
+Package: fwctl-modules
+Section: kernel
+Architecture: any
+Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
+Description: fwctl kernel modules
+ This package provides the binary code for the fwctl kernel modules.

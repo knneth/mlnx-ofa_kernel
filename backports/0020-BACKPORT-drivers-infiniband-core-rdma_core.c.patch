@@ -1,0 +1,47 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
+
+Change-Id: Iaba250f579861d2f50bf8be5cbeec1ba6b61783f
+---
+ drivers/infiniband/core/rdma_core.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/rdma_core.c
++++ b/drivers/infiniband/core/rdma_core.c
+@@ -74,7 +74,13 @@ static int uverbs_try_lock_object(struct
+ 	 */
+ 	switch (mode) {
+ 	case UVERBS_LOOKUP_READ:
++#ifdef HAVE_ATOMIC_FETCH_ADD_UNLESS
+ 		return atomic_fetch_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#elif defined(HAVE___ATOMIC_ADD_UNLESS)
++		return __atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#else
++		return atomic_add_unless(&uobj->usecnt, 1, -1) == -1 ?
++#endif
+ 			-EBUSY : 0;
+ 	case UVERBS_LOOKUP_WRITE:
+ 		/* lock is exclusive */
+@@ -524,7 +530,6 @@ static void alloc_abort_idr_uobject(stru
+ {
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
+-
+ 	xa_erase(&uobj->ufile->idr, uobj->id);
+ }
+ 
+@@ -545,13 +550,13 @@ static int __must_check destroy_hw_idr_u
+ 
+ 	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
+ 			   RDMACG_RESOURCE_HCA_OBJECT);
+-
+ 	return 0;
+ }
+ 
+ static void remove_handle_idr_uobject(struct ib_uobject *uobj)
+ {
+ 	xa_erase(&uobj->ufile->idr, uobj->id);
++
+ 	/* Matches the kref in alloc_commit_idr_uobject */
+ 	uverbs_uobject_put(uobj);
+ }

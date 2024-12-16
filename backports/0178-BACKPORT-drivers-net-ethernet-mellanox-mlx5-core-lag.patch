@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+
+Change-Id: I8c57801f2fc034b44daa9bf502d5ab5ba0d38ddc
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+@@ -272,12 +272,14 @@ static int mlx5_lag_set_definer(u32 *mat
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_smac_15_0);
+ 
++#ifdef HAVE_NETDEV_LAG_HASH_VLAN_SRCMAC
+ 		if (hash == NETDEV_LAG_HASH_VLAN_SRCMAC) {
+ 			MLX5_SET_TO_ONES(match_definer_format_0,
+ 					 match_definer_mask,
+ 					 outer_first_vlan_vid);
+ 			break;
+ 		}
++#endif
+ 
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_ethertype);

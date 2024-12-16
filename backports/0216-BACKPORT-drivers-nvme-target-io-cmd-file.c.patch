@@ -1,0 +1,94 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
+
+Change-Id: I8cd38a83b497aace19283db5558b7d2810931965
+---
+ drivers/nvme/target/io-cmd-file.c | 37 +++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+--- a/drivers/nvme/target/io-cmd-file.c
++++ b/drivers/nvme/target/io-cmd-file.c
+@@ -76,6 +76,15 @@ err:
+ 	return ret;
+ }
+ 
++#ifndef HAVE_BVEC_SET_PAGE
++static void nvmet_file_init_bvec(struct bio_vec *bv, struct scatterlist *sg)
++{
++	bv->bv_page = sg_page(sg);
++	bv->bv_offset = sg->offset;
++	bv->bv_len = sg->length;
++}
++#endif
++
+ static ssize_t nvmet_file_submit_bvec(struct nvmet_req *req, loff_t pos,
+ 		unsigned long nr_segs, size_t count, int ki_flags)
+ {
+@@ -88,22 +97,42 @@ static ssize_t nvmet_file_submit_bvec(st
+ 		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
+ 			ki_flags |= IOCB_DSYNC;
+ 		call_iter = req->ns->file->f_op->write_iter;
++#ifdef HAVE_ITER_DEST
+ 		rw = ITER_SOURCE;
++#else
++		rw = WRITE;
++#endif
+ 	} else {
+ 		call_iter = req->ns->file->f_op->read_iter;
++#ifdef HAVE_ITER_DEST
+ 		rw = ITER_DEST;
++#else
++		rw = READ;
++#endif
+ 	}
+ 
++#ifdef HAVE_IOV_ITER_IS_BVEC_SET
+ 	iov_iter_bvec(&iter, rw, req->f.bvec, nr_segs, count);
++#else
++	iov_iter_bvec(&iter, ITER_BVEC | rw, req->f.bvec, nr_segs, count);
++#endif
+ 
+ 	iocb->ki_pos = pos;
+ 	iocb->ki_filp = req->ns->file;
++#ifdef HAVE_FILE_F_IOCB_FLAGS
+ 	iocb->ki_flags = ki_flags | iocb->ki_filp->f_iocb_flags;
++#else
++	iocb->ki_flags = ki_flags | iocb_flags(req->ns->file);
++#endif
+ 
+ 	return call_iter(iocb, &iter);
+ }
+ 
++#ifdef HAVE_FS_KIOCB_KI_COMPLETE_2_ARG
+ static void nvmet_file_io_done(struct kiocb *iocb, long ret)
++#else
++static void nvmet_file_io_done(struct kiocb *iocb, long ret, long ret2)
++#endif
+ {
+ 	struct nvmet_req *req = container_of(iocb, struct nvmet_req, f.iocb);
+ 	u16 status = NVME_SC_SUCCESS;
+@@ -142,8 +171,12 @@ static bool nvmet_file_execute_io(struct
+ 
+ 	memset(&req->f.iocb, 0, sizeof(struct kiocb));
+ 	for_each_sg(req->sg, sg, req->sg_cnt, i) {
++#ifdef HAVE_BVEC_SET_PAGE
+ 		bvec_set_page(&req->f.bvec[bv_cnt], sg_page(sg), sg->length,
+ 			      sg->offset);
++#else
++		nvmet_file_init_bvec(&req->f.bvec[bv_cnt], sg);
++#endif
+ 		len += req->f.bvec[bv_cnt].bv_len;
+ 		total_len += req->f.bvec[bv_cnt].bv_len;
+ 		bv_cnt++;
+@@ -201,7 +234,11 @@ static bool nvmet_file_execute_io(struct
+ 	}
+ 
+ complete:
++#ifdef HAVE_FS_KIOCB_KI_COMPLETE_2_ARG
+ 	nvmet_file_io_done(&req->f.iocb, ret);
++#else
++	nvmet_file_io_done(&req->f.iocb, ret, 0);
++#endif
+ 	return true;
+ }
+ 

@@ -195,4 +195,3 @@ void mlx5_irq_affinity_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *i
 		if (pool->irqs_per_cpu)
 			cpu_put(pool, cpu);
 }
-

@@ -574,6 +574,7 @@ enum ib_port_speed {
 	IB_SPEED_EDR	= 32,
 	IB_SPEED_HDR	= 64,
 	IB_SPEED_NDR	= 128,
+	IB_SPEED_XDR	= 256,
 };
 
 enum ib_stat_flag {
@@ -620,7 +621,7 @@ struct rdma_hw_stats {
 	const struct rdma_stat_desc *descs;
 	unsigned long	*is_disabled;
 	int		num_counters;
-	u64		value[];
+	u64		value[] __counted_by(num_counters);
 };
 
 #define RDMA_HW_STATS_DEFAULT_LIFESPAN 10
@@ -857,6 +858,7 @@ enum ib_rate {
 	IB_RATE_50_GBPS  = 20,
 	IB_RATE_400_GBPS = 21,
 	IB_RATE_600_GBPS = 22,
+	IB_RATE_800_GBPS = 23,
 };
 
 /**
@@ -1116,7 +1118,7 @@ struct ib_qp_cap {
 
 	/*
 	 * Maximum number of rdma_rw_ctx structures in flight at a time.
-	 * ib_create_qp() will calculate the right amount of neededed WRs
+	 * ib_create_qp() will calculate the right amount of needed WRs
 	 * and MRs based on this.
 	 */
 	u32	max_rdma_ctxs;
@@ -1936,8 +1938,6 @@ struct ib_flow_eth_filter {
 	u8	src_mac[6];
 	__be16	ether_type;
 	__be16	vlan_tag;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_eth {
@@ -1950,8 +1950,6 @@ struct ib_flow_spec_eth {
 struct ib_flow_ib_filter {
 	__be16 dlid;
 	__u8   sl;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_ib {
@@ -1975,8 +1973,6 @@ struct ib_flow_ipv4_filter {
 	u8	tos;
 	u8	ttl;
 	u8	flags;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_ipv4 {
@@ -1993,9 +1989,7 @@ struct ib_flow_ipv6_filter {
 	u8	next_hdr;
 	u8	traffic_class;
 	u8	hop_limit;
-	/* Must be last */
-	u8	real_sz[];
-};
+} __packed;
 
 struct ib_flow_spec_ipv6 {
 	u32			   type;
@@ -2007,8 +2001,6 @@ struct ib_flow_spec_ipv6 {
 struct ib_flow_tcp_udp_filter {
 	__be16	dst_port;
 	__be16	src_port;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_tcp_udp {
@@ -2020,7 +2012,6 @@ struct ib_flow_spec_tcp_udp {
 
 struct ib_flow_tunnel_filter {
 	__be32	tunnel_id;
-	u8	real_sz[];
 };
 
 /* ib_flow_spec_tunnel describes the Vxlan tunnel
@@ -2036,8 +2027,6 @@ struct ib_flow_spec_tunnel {
 struct ib_flow_esp_filter {
 	__be32	spi;
 	__be32  seq;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_esp {
@@ -2051,8 +2040,6 @@ struct ib_flow_gre_filter {
 	__be16 c_ks_res0_ver;
 	__be16 protocol;
 	__be32 key;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_gre {
@@ -2064,8 +2051,6 @@ struct ib_flow_spec_gre {
 
 struct ib_flow_mpls_filter {
 	__be32 tag;
-	/* Must be last */
-	u8	real_sz[];
 };
 
 struct ib_flow_spec_mpls {
@@ -2644,6 +2629,8 @@ struct ib_device_ops {
 	int (*fill_res_qp_entry)(struct sk_buff *msg, struct ib_qp *ibqp);
 	int (*fill_res_qp_entry_raw)(struct sk_buff *msg, struct ib_qp *ibqp);
 	int (*fill_res_cm_id_entry)(struct sk_buff *msg, struct rdma_cm_id *id);
+	int (*fill_res_srq_entry)(struct sk_buff *msg, struct ib_srq *ib_srq);
+	int (*fill_res_srq_entry_raw)(struct sk_buff *msg, struct ib_srq *ib_srq);
 
 	/* Device lifecycle callbacks */
 	/*

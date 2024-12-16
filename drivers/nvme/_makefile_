@@ -142,7 +142,6 @@ default:
 # compile with ofed driver
 	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		$(MY_NVMF_KCONFIGS) \
-		CONFIG_NVME_AUTH=$(CONFIG_NVME_AUTH) \
 		CONFIG_DTRACE= \
 		CONFIG_CTF= \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \

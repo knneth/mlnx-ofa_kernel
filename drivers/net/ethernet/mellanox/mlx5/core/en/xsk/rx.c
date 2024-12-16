@@ -30,9 +30,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 	if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, rq->mpwqe.pages_per_wqe)))
 		goto err;
 
-	xsk_buffs = (struct xdp_buff **)wi->alloc_units.xsk_buffs;
-
 	XSK_CHECK_PRIV_TYPE(struct mlx5e_xdp_buff);
+	xsk_buffs = (struct xdp_buff **)wi->alloc_units.xsk_buffs;
 	batch = xsk_buff_alloc_batch(rq->xsk_pool, xsk_buffs,
 				     rq->mpwqe.pages_per_wqe);
 

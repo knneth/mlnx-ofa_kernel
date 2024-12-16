@@ -1,0 +1,143 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
+
+Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 55 +++++++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/ulp/iser/iscsi_iser.c
++++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
+@@ -76,6 +76,9 @@
+ 
+ MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
+ 
+ static const struct scsi_host_template iscsi_iser_sht;
+@@ -239,6 +242,7 @@ static int iscsi_iser_task_init(struct i
+ 	if (ret) {
+ 		iser_err("Failed to init task %p, err = %d\n",
+ 			 iser_task, ret);
++
+ 		return ret;
+ 	}
+ 
+@@ -493,7 +497,9 @@ static int iscsi_iser_conn_bind(struct i
+ 	iser_conn->iscsi_conn = conn;
+ 
+ out:
++#ifdef HAVE_ISCSI_PUT_ENDPOINT
+ 	iscsi_put_endpoint(ep);
++#endif
+ 	mutex_unlock(&iser_conn->state_mutex);
+ 	return error;
+ }
+@@ -568,7 +574,11 @@ static void iscsi_iser_session_destroy(s
+ 	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
+ 
+ 	iscsi_session_teardown(cls_session);
++#ifdef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
+ 	iscsi_host_remove(shost, false);
++#else
++	iscsi_host_remove(shost);
++#endif
+ 	iscsi_host_free(shost);
+ }
+ 
+@@ -649,10 +659,10 @@ iscsi_iser_session_create(struct iscsi_e
+ 			scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP |
+ 						   SHOST_DIX_GUARD_CRC);
+ 		}
+-
++#ifdef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
+ 		if (!(ib_dev->attrs.kernel_cap_flags & IBK_SG_GAPS_REG))
+ 			shost->virt_boundary_mask = SZ_4K - 1;
+-
++#endif
+ 		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
+ 			mutex_unlock(&iser_conn->state_mutex);
+ 			goto free_host;
+@@ -685,7 +695,11 @@ iscsi_iser_session_create(struct iscsi_e
+ 	return cls_session;
+ 
+ remove_host:
++#ifdef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
+ 	iscsi_host_remove(shost, false);
++#else
++	iscsi_host_remove(shost);
++#endif
+ free_host:
+ 	iscsi_host_free(shost);
+ 	return NULL;
+@@ -956,6 +970,31 @@ static umode_t iser_attr_is_visible(int
+ 	return 0;
+ }
+ 
++#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
++static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
++{
++	struct iscsi_session *session;
++	struct iser_conn *iser_conn;
++	struct ib_device *ib_dev;
++
++	mutex_lock(&unbind_iser_conn_mutex);
++
++	session = starget_to_session(scsi_target(sdev))->dd_data;
++	iser_conn = session->leadconn->dd_data;
++	if (!iser_conn) {
++		mutex_unlock(&unbind_iser_conn_mutex);
++		return -ENOTCONN;
++	}
++	ib_dev = iser_conn->ib_conn.device->ib_device;
++
++	if (!(ib_dev->attrs.kernel_cap_flags & IBK_SG_GAPS_REG))
++		blk_queue_virt_boundary(sdev->request_queue, ~(SZ_4K - 1));
++
++	mutex_unlock(&unbind_iser_conn_mutex);
++	return 0;
++}
++#endif
++
+ static const struct scsi_host_template iscsi_iser_sht = {
+ 	.module                 = THIS_MODULE,
+ 	.name                   = "iSCSI Initiator over iSER",
+@@ -963,15 +1002,25 @@ static const struct scsi_host_template i
+ 	.change_queue_depth	= scsi_change_queue_depth,
+ 	.sg_tablesize           = ISCSI_ISER_DEF_SG_TABLESIZE,
+ 	.cmd_per_lun            = ISER_DEF_CMD_PER_LUN,
++#ifdef HAVE_ISCSI_EH_CMD_TIMED_OUT
+ 	.eh_timed_out		= iscsi_eh_cmd_timed_out,
++#endif
+ 	.eh_abort_handler       = iscsi_eh_abort,
+ 	.eh_device_reset_handler= iscsi_eh_device_reset,
+ 	.eh_target_reset_handler = iscsi_eh_recover_target,
+ 	.target_alloc		= iscsi_target_alloc,
++#ifdef ENABLE_CLUSTERING
++	.use_clustering		= ENABLE_CLUSTERING,
++#endif
++#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
++	.slave_alloc		= iscsi_iser_slave_alloc,
++#endif
+ 	.proc_name              = "iscsi_iser",
+ 	.this_id                = -1,
+ 	.track_queue_depth	= 1,
++#ifdef HAVE_ISCSI_CMD
+ 	.cmd_size		= sizeof(struct iscsi_cmd),
++#endif
+ };
+ 
+ static struct iscsi_transport iscsi_iser_transport = {
+@@ -984,7 +1033,9 @@ static struct iscsi_transport iscsi_iser
+ 	/* connection management */
+ 	.create_conn            = iscsi_iser_conn_create,
+ 	.bind_conn              = iscsi_iser_conn_bind,
++#ifdef HAVE_ISCSI_CONN_UNBIND
+ 	.unbind_conn		= iscsi_conn_unbind,
++#endif
+ 	.destroy_conn           = iscsi_conn_teardown,
+ 	.attr_is_visible	= iser_attr_is_visible,
+ 	.set_param              = iscsi_iser_set_param,

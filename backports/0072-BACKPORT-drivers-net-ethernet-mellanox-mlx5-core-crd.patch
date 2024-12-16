@@ -1,6 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/crdump.c
 
+Change-Id: Ia0b08be9e24b57ecbdcfb4b6dac42f79a7e700bf
 ---
  .../net/ethernet/mellanox/mlx5/core/crdump.c   | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)

@@ -30,7 +30,6 @@ void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
 void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev);
 bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum);
 void mlx5_devm_sfs_clean(struct mlx5_core_dev *dev);
-void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
 
 #else
 static inline int mlx5_devm_register(struct mlx5_core_dev *dev)
@@ -64,60 +63,5 @@ mlx5_devm_affinity_get_weight(struct mlx5_core_dev *dev)
 	return 0;
 }
 
-static inline void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
-{
-}
-#endif
-
-#ifdef CONFIG_MLX5_ESWITCH
-int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
-			  const struct mlxdevm_port_new_attrs *attrs,
-			  struct netlink_ext_ack *extack,
-			  unsigned int *new_port_index);
-int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
-			  unsigned int port_index,
-			  struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
-				   enum mlxdevm_port_fn_state *state,
-				   enum mlxdevm_port_fn_opstate *opstate,
-				   struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
-				   enum mlxdevm_port_fn_state state,
-				   struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
-				     u8 *hw_addr, int *hw_addr_len,
-				     struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
-					 bool *trusted,
-					 struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
-				     const u8 *hw_addr, int hw_addr_len,
-				     struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
-					 bool trusted,
-					 struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
-				 struct mlxdevm_port_fn_cap *cap,
-				 struct netlink_ext_ack *extack);
-int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
-				 const struct mlxdevm_port_fn_cap *cap,
-				 struct netlink_ext_ack *extack);
-int mlx5_devm_rate_leaf_get(struct mlxdevm_port *port,
-			    u64 *tx_max, u64 *tx_share, char **group,
-			    struct netlink_ext_ack *extack);
-int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_port *port,
-				   u64 tx_max, struct netlink_ext_ack *extack);
-int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_port *port,
-				     u64 tx_share, struct netlink_ext_ack *extack);
-int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
-				  const char *group, struct netlink_ext_ack *extack);
-int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group_name,
-				     u64 tx_share, struct netlink_ext_ack *extack);
-int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_name,
-				   u64 tx_max, struct netlink_ext_ack *extack);
-int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
-			    struct netlink_ext_ack *extack);
-int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
-			    struct netlink_ext_ack *extack);
 #endif
 #endif

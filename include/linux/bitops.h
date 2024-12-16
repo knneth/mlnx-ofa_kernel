@@ -14,4 +14,13 @@
 #define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
 #endif
 
+#ifndef aligned_byte_mask
+/* Set bits in the first 'n' bytes when loaded from memory */
+#ifdef __LITTLE_ENDIAN
+#  define aligned_byte_mask(n) ((1UL << 8*(n))-1)
+#else
+#  define aligned_byte_mask(n) (~0xffUL << (BITS_PER_LONG - 8 - 8*(n)))
+#endif
+#endif
+
 #endif /* _COMPAT_LINUX_BITOPS_H */

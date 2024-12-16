@@ -16,9 +16,11 @@
 #endif
 
 #define MLX5_SFS_PER_CTRL_IRQ 64
+#define MLX5_MAX_MSIX_PER_SF 256
 #define MLX5_IRQ_CTRL_SF_MAX 8
 /* min num of vectors for SFs to be enabled */
 #define MLX5_IRQ_VEC_COMP_BASE_SF 2
+#define MLX5_IRQ_VEC_COMP_BASE 1
 
 #define MLX5_EQ_SHARE_IRQ_MAX_COMP (8)
 #define MLX5_EQ_SHARE_IRQ_MAX_CTRL (UINT_MAX)
@@ -246,6 +248,7 @@ static void irq_set_name(struct mlx5_irq_pool *pool, char *name, int vecidx)
 		return;
 	}
 
+	vecidx -= MLX5_IRQ_VEC_COMP_BASE;
 	snprintf(name, MLX5_MAX_IRQ_NAME, "mlx5_comp%d", vecidx);
 }
 
@@ -585,7 +588,7 @@ struct mlx5_irq *mlx5_irq_request_vector(struct mlx5_core_dev *dev, u16 cpu,
 	struct mlx5_irq_table *table = mlx5_irq_table_get(dev);
 	struct mlx5_irq_pool *pool = table->pcif_pool;
 	struct irq_affinity_desc af_desc;
-	int offset = 1;
+	int offset = MLX5_IRQ_VEC_COMP_BASE;
 
 	if (!pool->xa_num_irqs.max)
 		offset = 0;
@@ -643,8 +646,6 @@ static void irq_pool_free(struct mlx5_irq_pool *pool)
 static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pcif_vec)
 {
 	struct mlx5_irq_table *table = dev->priv.irq_table;
-	int num_sf_ctrl_by_msix;
-	int num_sf_ctrl_by_sfs;
 	int num_sf_ctrl;
 	int err;
 
@@ -662,10 +663,8 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pcif_vec)
 	}
 
 	/* init sf_ctrl_pool */
-	num_sf_ctrl_by_msix = DIV_ROUND_UP(sf_vec, MLX5_COMP_EQS_PER_SF);
-	num_sf_ctrl_by_sfs = DIV_ROUND_UP(mlx5_sf_max_functions(dev),
-					  MLX5_SFS_PER_CTRL_IRQ);
-	num_sf_ctrl = min_t(int, num_sf_ctrl_by_msix, num_sf_ctrl_by_sfs);
+	num_sf_ctrl = DIV_ROUND_UP(mlx5_sf_max_functions(dev),
+				   MLX5_SFS_PER_CTRL_IRQ);
 	num_sf_ctrl = min_t(int, MLX5_IRQ_CTRL_SF_MAX, num_sf_ctrl);
 	table->sf_ctrl_pool = irq_pool_alloc(dev, pcif_vec, num_sf_ctrl,
 					     "mlx5_sf_ctrl",
@@ -765,7 +764,9 @@ int mlx5_irq_table_get_num_comp(struct mlx5_irq_table *table)
 
 int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 {
-	int max_num_eq = MLX5_CAP_GEN(dev, max_num_eqs);
+	int max_num_eq = MLX5_CAP_GEN_2(dev, max_num_eqs_24b) ?
+		         MLX5_CAP_GEN_2(dev, max_num_eqs_24b) :
+		         MLX5_CAP_GEN(dev, max_num_eqs);
 	int num_eqs;
 	int total_vec;
 	int pcif_vec;
@@ -790,8 +791,7 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 
 	total_vec = pcif_vec;
 	if (mlx5_sf_max_functions(dev))
-		total_vec += MLX5_IRQ_CTRL_SF_MAX +
-			MLX5_COMP_EQS_PER_SF * mlx5_sf_max_functions(dev);
+		total_vec += MLX5_MAX_MSIX_PER_SF * mlx5_sf_max_functions(dev);
 	total_vec = min_t(int, total_vec, pci_msix_vec_count(dev->pdev));
 	pcif_vec = min_t(int, pcif_vec, pci_msix_vec_count(dev->pdev));
 

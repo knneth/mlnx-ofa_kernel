@@ -110,6 +110,7 @@ enum mlxdevm_port_fn_attr {
 	MLXDEVM_PORT_FN_ATTR_STATE =		2,	/* u8 */
 	MLXDEVM_PORT_FN_ATTR_OPSTATE =		3,	/* u8 */
 	MLXDEVM_PORT_FN_ATTR_TRUST_STATE =	4,	/* u8 */
+	MLXDEVM_PORT_FN_ATTR_MAX_IO_EQS =	6,	/* u32 */
 
 	/* All upstream devlink port function attributes must be added before
 	 * with the exact value as that of upstream without fail.

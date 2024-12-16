@@ -1,0 +1,23 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
+
+Change-Id: I59f2e23164e18cb8edfe9fbbb81714bd1fb4a5bc
+---
+ .../net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h  | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
+@@ -25,7 +25,11 @@ TRACE_EVENT(mlx5e_rep_neigh_update,
+ 			struct in6_addr *pin6;
+ 			__be32 *p32;
+ 
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 			__assign_str(devname, nhe->neigh_dev->name);
++#else
++			__assign_str(devname);
++#endif
+ 			__entry->neigh_connected = neigh_connected;
+ 			memcpy(__entry->ha, ha, ETH_ALEN);
+ 

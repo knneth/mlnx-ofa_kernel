@@ -1,0 +1,40 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+
+Change-Id: Ibf53ca7ea4848d6b95407a7da831dceaddf69c42
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -68,12 +68,14 @@ static inline ktime_t mlx5_timecounter_c
+ 	struct mlx5_timer *timer = &clock->timer;
+ 	unsigned int seq;
+ 	u64 nsec;
+-
++#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	do {
+ 		seq = read_seqbegin(&clock->lock);
+ 		nsec = timecounter_cyc2time(&timer->tc, timestamp);
+ 	} while (read_seqretry(&clock->lock, seq));
+-
++#else
++	nsec = 0;
++#endif
+ 	return ns_to_ktime(nsec);
+ }
+ 
+@@ -82,8 +84,11 @@ static inline ktime_t mlx5_timecounter_c
+ static inline ktime_t mlx5_real_time_cyc2time(struct mlx5_clock *clock,
+ 					      u64 timestamp)
+ {
++#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	u64 time = REAL_TIME_TO_NS(timestamp >> 32, timestamp & 0xFFFFFFFF);
+-
++#else
++	u64 time = 0;
++#endif
+ 	return ns_to_ktime(time);
+ }
+ #else

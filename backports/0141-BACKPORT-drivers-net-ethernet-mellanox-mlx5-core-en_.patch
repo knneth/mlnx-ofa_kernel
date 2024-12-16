@@ -1,42 +1,69 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
 
+Change-Id: I795c73b88f1cf3e8ccdcbd3a2a37c368e7877cc1
 ---
- .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ .../mellanox/mlx5/core/en_accel/macsec.c      | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
-@@ -19,9 +19,21 @@ enum {
- 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+@@ -599,7 +599,11 @@ static int mlx5e_macsec_upd_txsa(struct
+ 		goto out;
+ 	}
  
-+#ifdef HAVE_KTLS_STRUCTS
- int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
- 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
- void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
 +#else
-+static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
-+				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
-+{
-+	return -EOPNOTSUPP;
-+}
-+
-+static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
-+{
-+}
++	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
 +#endif
- int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
- 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
- void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
-@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
- union mlx5e_crypto_info {
- 	struct tls_crypto_info crypto_info;
- 	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;
-+#ifdef TLS_CIPHER_AES_GCM_256
- 	struct tls12_crypto_info_aes_gcm_256 crypto_info_256;
+ 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
+ 			   assoc_num);
+ 		err = -EINVAL;
+@@ -658,7 +662,11 @@ static int mlx5e_macsec_del_txsa(struct
+ 
+ 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
+ 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(tx_sa);
++#else
++	kfree_rcu(tx_sa, rcu_head);
++#endif
+ 	macsec_device->tx_sa[assoc_num] = NULL;
+ 
+ out:
+@@ -826,7 +834,11 @@ static void macsec_del_rxsc_ctx(struct m
+ 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
+ 	metadata_dst_free(rx_sc->md_dst);
+ 	kfree(rx_sc->sc_xarray_element);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(rx_sc);
++#else
++	kfree_rcu(rx_sc, rcu_head);
++#endif
+ }
+ 
+ static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
+@@ -992,7 +1004,11 @@ static int mlx5e_macsec_upd_rxsa(struct
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
++#else
++	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
++#endif
+ 		netdev_err(ctx->netdev,
+ 			   "MACsec offload update RX sa %d PN isn't supported\n",
+ 			   assoc_num);
+@@ -1640,6 +1656,9 @@ static const struct macsec_ops macsec_of
+ 	.mdo_add_secy = mlx5e_macsec_add_secy,
+ 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
+ 	.mdo_del_secy = mlx5e_macsec_del_secy,
++#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
++	.rx_uses_md_dst = true,
 +#endif
  };
  
- struct mlx5e_set_tls_static_params_wqe {
+ bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)

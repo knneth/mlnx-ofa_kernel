@@ -161,7 +161,7 @@ static void ib_umad_dev_free(struct kref *kref)
 	struct ib_umad_device *dev =
 		container_of(kref, struct ib_umad_device, kref);
 
-	kfree(dev);
+	kvfree(dev);
 }
 
 static void ib_umad_dev_get(struct ib_umad_device *dev)
@@ -1393,9 +1393,9 @@ static int ib_umad_add_one(struct ib_device *device)
 	s = rdma_start_port(device);
 	e = rdma_end_port(device);
 
-	umad_dev = kzalloc(struct_size(umad_dev, ports,
-				       size_add(size_sub(e, s), 1)),
-			   GFP_KERNEL);
+	umad_dev = kvzalloc(struct_size(umad_dev, ports,
+					size_add(size_sub(e, s), 1)),
+					GFP_KERNEL);
 	if (!umad_dev)
 		return -ENOMEM;
 

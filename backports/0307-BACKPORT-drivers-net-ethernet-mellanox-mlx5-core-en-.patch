@@ -1,0 +1,626 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+
+Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
+---
+ .../ethernet/mellanox/mlx5/core/en/xsk/rx.c   | 454 +++++++++++++++++-
+ 1 file changed, 441 insertions(+), 13 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+@@ -1,13 +1,26 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "rx.h"
+ #include "en/xdp.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
+ #include <linux/filter.h>
++#ifdef HAVE_NET_PAGE_POOL_OLD_H
++#include <net/page_pool.h>
++#endif
++#ifdef HAVE_NET_PAGE_POOL_TYPES_H
++#include <net/page_pool/types.h>
++#include <net/page_pool/helpers.h>
++#endif
+ 
+ /* RX data path */
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ static struct mlx5e_xdp_buff *xsk_buff_to_mxbuf(struct xdp_buff *xdp)
+ {
+ 	/* mlx5e_xdp_buff shares its layout with xdp_buff_xsk
+@@ -15,24 +28,121 @@ static struct mlx5e_xdp_buff *xsk_buff_t
+ 	 */
+ 	return (struct mlx5e_xdp_buff *)xdp;
+ }
++#endif
+ 
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xsk_pages_enough_umem(struct mlx5e_rq *rq, int count)
++{
++	/* Check in advance that we have enough frames, instead of allocating
++	 * one-by-one, failing and moving frames to the Reuse Ring.
++	 */
++	return xsk_umem_has_addrs_rq(rq->umem, count);
++}
++
++int mlx5e_xsk_page_alloc_pool(struct mlx5e_rq *rq,
++		struct mlx5e_alloc_unit *au)
++{
++	struct xdp_umem *umem = rq->umem;
++
++	dma_addr_t addr;
++	u64 handle;
++
++	if (!xsk_umem_peek_addr_rq(umem, &handle))
++		return -ENOMEM;
++
++#ifdef HAVE_XSK_UMEM_ADJUST_OFFSET
++	au->xsk.handle = xsk_umem_adjust_offset(umem, handle,
++			rq->buff.umem_headroom);
++#else
++	au->xsk.handle = handle + rq->buff.umem_headroom;
++#endif
++	au->xsk.data = xdp_umem_get_data(umem, au->xsk.handle);
++
++	/* No need to add headroom to the DMA address. In striding RQ case, we
++	 * just provide pages for UMR, and headroom is counted at the setup
++	 * stage when creating a WQE. In non-striding RQ case, headroom is
++	 * accounted in mlx5e_alloc_rx_wqe.
++	 */
++	addr = xdp_umem_get_dma(umem, handle);
++#if !defined(HAVE_PAGE_POOL_GET_DMA_ADDR) || !defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
++	au->addr = addr;
++#endif
++
++#ifdef HAVE_XSK_UMEM_RELEASE_ADDR_RQ
++	xsk_umem_release_addr_rq(umem);
++#else
++	xsk_umem_discard_addr_rq(umem);
++#endif
++
++	dma_sync_single_for_device(rq->pdev, addr, PAGE_SIZE,
++			DMA_BIDIRECTIONAL);
++	return 0;
++}
++
++static inline void mlx5e_xsk_recycle_frame(struct mlx5e_rq *rq, u64 handle)
++{
++	xsk_umem_fq_reuse(rq->umem, handle & rq->umem->chunk_mask);
++}
++
++/* XSKRQ uses pages from UMEM, they must not be released. They are returned to
++ * the userspace if possible, and if not, this function is called to reuse them
++ * in the driver.
++ */
++void mlx5e_xsk_page_release(struct mlx5e_rq *rq,
++		struct mlx5e_alloc_unit *au)
++{
++	mlx5e_xsk_recycle_frame(rq, au->xsk.handle);
++}
++
++/* Return a frame back to the hardware to fill in again. It is used by XDP when
++ * the XDP program returns XDP_TX or XDP_REDIRECT not to an XSKMAP.
++ */
++void mlx5e_xsk_zca_free(struct zero_copy_allocator *zca, unsigned long handle)
++{
++	struct mlx5e_rq *rq = container_of(zca, struct mlx5e_rq, zca);
++
++	mlx5e_xsk_recycle_frame(rq, handle);
++}
++
++#endif /* HAVE_XSK_BUFF_ALLOC */
++#ifdef HAVE_XSK_BUFF_ALLOC_BATCH
+ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
+ {
+ 	struct mlx5e_mpw_info *wi = mlx5e_get_mpw_info(rq, ix);
+ 	struct mlx5e_icosq *icosq = rq->icosq;
+ 	struct mlx5_wq_cyc *wq = &icosq->wq;
+ 	struct mlx5e_umr_wqe *umr_wqe;
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 	struct xdp_buff **xsk_buffs;
++#endif
+ 	int batch, i;
+ 	u32 offset; /* 17-bit value with MTT. */
+ 	u16 pi;
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	if (unlikely(!xsk_buff_can_alloc(rq->xsk_pool, rq->mpwqe.pages_per_wqe)))
++#else
++	if (unlikely(!xsk_buff_can_alloc(rq->umem, MLX5_MPWRQ_MAX_PAGES_PER_WQE)))
++#endif
+ 		goto err;
+ 
++#ifdef HAVE_XDP_METADATA_OPS
+ 	XSK_CHECK_PRIV_TYPE(struct mlx5e_xdp_buff);
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 	xsk_buffs = (struct xdp_buff **)wi->alloc_units.xsk_buffs;
+-	batch = xsk_buff_alloc_batch(rq->xsk_pool, xsk_buffs,
++#endif
++	batch = xsk_buff_alloc_batch(
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++				     rq->xsk_pool,
++#else
++				     rq->umem,
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++				     xsk_buffs,
++#else
++				     (struct xdp_buff **)wi->alloc_units,
++#endif
+ 				     rq->mpwqe.pages_per_wqe);
+ 
+ 	/* If batch < pages_per_wqe, either:
+@@ -42,8 +152,24 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 	 * the first error, which will mean there are no more valid descriptors.
+ 	 */
+ 	for (; batch < rq->mpwqe.pages_per_wqe; batch++) {
+-		xsk_buffs[batch] = xsk_buff_alloc(rq->xsk_pool);
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++		xsk_buffs[batch] =
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++		xsk_buff_alloc(rq->xsk_pool);
++#else
++		xsk_buff_alloc(rq->umem);
++#endif
+ 		if (unlikely(!xsk_buffs[batch]))
++#else
++		wi->alloc_units[batch].xsk =
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++					     xsk_buff_alloc(rq->xsk_pool);
++#else
++					     xsk_buff_alloc(rq->umem);
++#endif
++		if (unlikely(!wi->alloc_units[batch].xsk))
++#endif
++
+ 			goto err_reuse_batch;
+ 	}
+ 
+@@ -53,31 +179,68 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 
+ 	if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_ALIGNED)) {
+ 		for (i = 0; i < batch; i++) {
+-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
++#ifdef HAVE_XDP_METADATA_OPS
++			struct mlx5e_xdp_buff *mxbuf =
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++				xsk_buff_to_mxbuf(xsk_buffs[i]);
++#else
++				xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
++#endif
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
++#else
++			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++#endif
+ 
+ 			umr_wqe->inline_mtts[i] = (struct mlx5_mtt) {
+ 				.ptag = cpu_to_be64(addr | MLX5_EN_WR),
+ 			};
++#ifdef HAVE_XDP_METADATA_OPS
+ 			mxbuf->rq = rq;
++#endif
+ 		}
+ 	} else if (unlikely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_UNALIGNED)) {
+ 		for (i = 0; i < batch; i++) {
+-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
++#ifdef HAVE_XDP_METADATA_OPS
++			struct mlx5e_xdp_buff *mxbuf =
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++				xsk_buff_to_mxbuf(xsk_buffs[i]);
++#else
++				xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
++#endif
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
++#else
++			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++#endif
+ 
+ 			umr_wqe->inline_ksms[i] = (struct mlx5_ksm) {
+ 				.key = rq->mkey_be,
+ 				.va = cpu_to_be64(addr),
+ 			};
++#ifdef HAVE_XDP_METADATA_OPS
+ 			mxbuf->rq = rq;
++#endif
+ 		}
+ 	} else if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_TRIPLE)) {
+ 		u32 mapping_size = 1 << (rq->mpwqe.page_shift - 2);
+ 
+ 		for (i = 0; i < batch; i++) {
+-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
++#ifdef HAVE_XDP_METADATA_OPS
++			struct mlx5e_xdp_buff *mxbuf =
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++				xsk_buff_to_mxbuf(xsk_buffs[i]);
++#else
++				xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
++#endif
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
++#else
++			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++#endif
+ 
+ 			umr_wqe->inline_ksms[i << 2] = (struct mlx5_ksm) {
+ 				.key = rq->mkey_be,
+@@ -95,7 +258,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 				.key = rq->mkey_be,
+ 				.va = cpu_to_be64(rq->wqe_overflow.addr),
+ 			};
++#ifdef HAVE_XDP_METADATA_OPS
+ 			mxbuf->rq = rq;
++#endif
+ 		}
+ 	} else {
+ 		__be32 pad_size = cpu_to_be32((1 << rq->mpwqe.page_shift) -
+@@ -103,8 +268,19 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 		__be32 frame_size = cpu_to_be32(rq->xsk_pool->chunk_size);
+ 
+ 		for (i = 0; i < batch; i++) {
+-			struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(xsk_buffs[i]);
++#ifdef HAVE_XDP_METADATA_OPS
++			struct mlx5e_xdp_buff *mxbuf =
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++				xsk_buff_to_mxbuf(xsk_buffs[i]);
++#else
++				xsk_buff_to_mxbuf(wi->alloc_units[i].xsk);
++#endif
++#endif
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(xsk_buffs[i]);
++#else
++			dma_addr_t addr = xsk_buff_xdp_get_frame_dma(wi->alloc_units[i].xsk);
++#endif
+ 
+ 			umr_wqe->inline_klms[i << 1] = (struct mlx5_klm) {
+ 				.key = rq->mkey_be,
+@@ -116,7 +292,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 				.va = cpu_to_be64(rq->wqe_overflow.addr),
+ 				.bcount = pad_size,
+ 			};
++#ifdef HAVE_XDP_METADATA_OPS
+ 			mxbuf->rq = rq;
++#endif
+ 		}
+ 	}
+ 
+@@ -150,13 +328,20 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+ 
+ err_reuse_batch:
+ 	while (--batch >= 0)
+-		xsk_buff_free(xsk_buffs[batch]);
++		xsk_buff_free(
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++		xsk_buffs[batch]);
++#else
++	        wi->alloc_units[batch].xsk);
++#endif
+ 
+ err:
+ 	rq->stats->buff_alloc_err++;
+ 	return -ENOMEM;
+ }
++#endif
+ 
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
+ {
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+@@ -194,7 +379,7 @@ int mlx5e_xsk_alloc_rx_wqes_batched(stru
+ 
+ 	return alloc;
+ }
+-
++#endif
+ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
+ {
+ 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+@@ -210,13 +395,43 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e
+ 		/* Assumes log_num_frags == 0. */
+ 		frag = &rq->wqe.frags[j];
+ 
+-		*frag->xskp = xsk_buff_alloc(rq->xsk_pool);
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++		*frag->xskp = 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++			xsk_buff_alloc(rq->xsk_pool);
++#else
++			xsk_buff_alloc(rq->umem);
++#endif
+ 		if (unlikely(!*frag->xskp))
+ 			return i;
++#else /* HAVE_PAGE_POOL_DEFRAG_PAGE */
++#ifdef HAVE_XSK_BUFF_ALLOC
++		frag->au->xsk =
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++				xsk_buff_alloc(rq->xsk_pool);
++#else
++				xsk_buff_alloc(rq->umem);
++#endif
++		if (unlikely(!(frag->au->xsk)))
++			return i;
++#endif
++#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
+ 
+-		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
++		addr =
++#if defined(HAVE_PAGE_POOL_GET_DMA_ADDR) && defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
++				xsk_buff_xdp_get_frame_dma(
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
++					*frag->xskp);
++#else
++					frag->au->xsk);
++#endif
++#else
++			frag->au->addr;
++#endif
+ 		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 		frag->flags &= ~BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
++#endif
+ 	}
+ 
+ 	return wqe_bulk;
+@@ -244,6 +459,7 @@ static struct sk_buff *mlx5e_xsk_constru
+ 	return skb;
+ }
+ 
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
+ 						    struct mlx5e_mpw_info *wi,
+ 						    struct mlx5_cqe64 *cqe,
+@@ -266,11 +482,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+ 	 * head_offset should always be 0.
+ 	 */
+ 	WARN_ON_ONCE(head_offset);
+-
++#ifdef HAVE_XDP_METADATA_OPS
+ 	/* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
+ 	mxbuf->cqe = cqe;
++#endif
+ 	xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
++#ifdef HAVE_SKIP_CALLING_NOP_SYNC_OPS //forwardport
++	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
++#else
+ 	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
++#endif
+ 	net_prefetch(mxbuf->xdp.data);
+ 
+ 	/* Possible flows:
+@@ -315,11 +536,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 	 * wi->offset should always be 0.
+ 	 */
+ 	WARN_ON_ONCE(wi->offset);
+-
++#ifdef HAVE_XDP_METADATA_OPS
+ 	/* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
+ 	mxbuf->cqe = cqe;
++#endif
+ 	xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
++#ifdef HAVE_SKIP_CALLING_NOP_SYNC_OPS //forwardpord
++	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
++#else
+ 	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
++#endif
+ 	net_prefetch(mxbuf->xdp.data);
+ 
+ 	prog = rcu_dereference(rq->xdp_prog);
+@@ -335,3 +561,205 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+ 	 */
+ 	return mlx5e_xsk_construct_skb(rq, &mxbuf->xdp);
+ }
++#else /* HAVE_PAGE_POOL_DEFRAG_PAGE  */
++#if defined(HAVE_XDP_SUPPORT) && !defined(HAVE_XSK_BUFF_ALLOC) && defined(HAVE_XSK_ZERO_COPY_SUPPORT)
++static void mlx5e_fill_xdp_buff(struct mlx5e_rq *rq, void *va, u16 headroom, u32 len,
++		struct xdp_buff *xdp)
++{      
++	xdp_init_buff(xdp, rq->buff.frame0_sz, &rq->xdp_rxq);
++	xdp_prepare_buff(xdp, va, headroom, len, true);
++}
++
++void mlx5e_fill_xdp_buff_for_old_xsk(struct mlx5e_rq *rq, void *va, u16 headroom,
++		u32 len, struct xdp_buff *xdp,
++		struct mlx5e_alloc_unit *au)
++{
++	mlx5e_fill_xdp_buff(rq, va, headroom, len, xdp);
++	xdp->handle = au->xsk.handle;
++}
++#endif
++
++struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
++		struct mlx5e_mpw_info *wi,
++		struct mlx5_cqe64 *cqe,
++		u16 cqe_bcnt,
++		u32 head_offset,
++		u32 page_idx)
++{
++#ifdef HAVE_XSK_BUFF_ALLOC
++	struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->alloc_units[page_idx].xsk);
++#else
++	 struct xdp_buff xdp_old;
++	 struct xdp_buff *xdp = &xdp_old;
++	 struct mlx5e_alloc_unit *au = &wi->alloc_units[page_idx];
++	 u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	 dma_addr_t addr;
++#endif
++	 void *va, *data;
++	 u32 frag_size;
++#endif
++#ifndef HAVE_XSK_BUFF_ALLOC
++	 u32 cqe_bcnt32 = cqe_bcnt;
++#endif
++	struct bpf_prog *prog;
++
++        /* Check packet size. Note LRO doesn't use linear SKB */
++        if (unlikely(cqe_bcnt > rq->hw_mtu + rq->pet_hdr_size)) {
++                rq->stats->oversize_pkts_sw_drop++;
++                return NULL;
++        }
++		/* head_offset is not used in this function, because xdp->data and the
++         * DMA address point directly to the necessary place. Furthermore, in
++         * the current implementation, UMR pages are mapped to XSK frames, so
++         * head_offset should always be 0.
++         */
++        WARN_ON_ONCE(head_offset);
++
++#ifdef HAVE_XSK_BUFF_ALLOC
++#ifdef HAVE_XDP_METADATA_OPS
++        /* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
++        mxbuf->cqe = cqe;
++#endif
++        xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
++#ifdef HAVE_XSK_BUFF_DMA_SYNC_FOR_CPU_2_PARAMS
++        xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
++#else
++	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
++#endif
++#else
++	va        = au->xsk.data;
++	data      = va + rx_headroom;
++	frag_size = rq->buff.headroom + cqe_bcnt32;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	addr = page_pool_get_dma_addr(au->page);
++	dma_sync_single_for_cpu(rq->pdev, addr, frag_size, DMA_BIDIRECTIONAL);
++#else
++	dma_sync_single_for_cpu(rq->pdev, au->addr, frag_size, DMA_BIDIRECTIONAL);
++#endif
++	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt, xdp, au);
++#endif
++#ifdef HAVE_XSK_BUFF_ALLOC
++        net_prefetch(mxbuf->xdp.data);
++#else
++	net_prefetch(xdp->data);
++#endif
++
++        /* Possible flows:
++         * - XDP_REDIRECT to XSKMAP:
++         *   The page is owned by the userspace from now.
++         * - XDP_TX and other XDP_REDIRECTs:
++         *   The page was returned by ZCA and recycled.
++         * - XDP_DROP:
++         *   Recycle the page.
++         * - XDP_PASS:
++         *   Allocate an SKB, copy the data and recycle the page.
++         *
++         * Pages to be recycled go to the Reuse Ring on MPWQE deallocation. Its
++         * size is the same as the Driver RX Ring's size, and pages for WQEs are
++         * allocated first from the Reuse Ring, so it has enough space.
++         */
++
++        prog = rcu_dereference(rq->xdp_prog);
++        if (likely(prog &&
++#ifdef HAVE_XSK_BUFF_ALLOC
++		   mlx5e_xdp_handle(rq, &wi->alloc_units[page_idx], prog, mxbuf
++#else
++		   mlx5e_xdp_handle_old(rq, &wi->alloc_units[page_idx], prog, xdp
++#endif
++		))) {
++                if (likely(__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)))
++                        __set_bit(page_idx, wi->skip_release_bitmap); /* non-atomic */
++                return NULL; /* page/packet was consumed by XDP */
++        }
++
++        /* XDP_PASS: copy the data from the UMEM to a new SKB and reuse the
++         * frame. On SKB allocation failure, NULL is returned.
++         */
++        return mlx5e_xsk_construct_skb(rq,
++#ifdef HAVE_XSK_BUFF_ALLOC
++				       &mxbuf->xdp);
++#else
++					xdp);
++#endif
++}
++
++struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
++                                              struct mlx5e_wqe_frag_info *wi,
++                                              struct mlx5_cqe64 *cqe,
++                                              u32 cqe_bcnt)
++{
++#ifdef HAVE_XSK_BUFF_ALLOC
++        struct mlx5e_xdp_buff *mxbuf = xsk_buff_to_mxbuf(wi->au->xsk);
++#else
++	struct xdp_buff xdp_old;
++	struct xdp_buff *xdp = &xdp_old;
++	struct mlx5e_alloc_unit *au = wi->au;
++	u16 rx_headroom = rq->buff.headroom - rq->buff.umem_headroom;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	dma_addr_t addr;
++#endif
++	void *va, *data;
++	u32 frag_size;
++#endif
++        struct bpf_prog *prog;
++
++        /* wi->offset is not used in this function, because xdp->data and the
++         * DMA address point directly to the necessary place. Furthermore, the
++         * XSK allocator allocates frames per packet, instead of pages, so
++         * wi->offset should always be 0.
++         */
++        WARN_ON_ONCE(wi->offset);
++#ifdef HAVE_XSK_BUFF_ALLOC
++#ifdef HAVE_XDP_METADATA_OPS
++        /* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
++        mxbuf->cqe = cqe;
++#endif
++        xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
++#ifdef HAVE_XSK_BUFF_DMA_SYNC_FOR_CPU_2_PARAMS
++        xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
++#else
++	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
++#endif
++#else
++	va        = au->xsk.data;
++	data      = va + rx_headroom;
++	frag_size = rq->buff.headroom + cqe_bcnt;
++#ifdef HAVE_PAGE_POOL_GET_DMA_ADDR
++	addr = page_pool_get_dma_addr(au->page);
++	dma_sync_single_for_cpu(rq->pdev, addr, frag_size, DMA_BIDIRECTIONAL);
++#else
++	dma_sync_single_for_cpu(rq->pdev, au->addr, frag_size, DMA_BIDIRECTIONAL);
++#endif
++	mlx5e_fill_xdp_buff_for_old_xsk(rq, va, rx_headroom, cqe_bcnt, xdp, au);
++#endif
++#ifdef HAVE_XSK_BUFF_ALLOC
++        net_prefetch(mxbuf->xdp.data);
++#else
++        net_prefetch(xdp->data);
++#endif
++
++        prog = rcu_dereference(rq->xdp_prog);
++        if (likely(prog &&
++#ifdef HAVE_XSK_BUFF_ALLOC
++		   mlx5e_xdp_handle(rq, wi->au, prog, mxbuf
++#else
++		   mlx5e_xdp_handle_old(rq, wi->au, prog, xdp
++#endif
++				       )))
++                return NULL; /* page/packet was consumed by XDP */
++
++        /* XDP_PASS: copy the data from the UMEM to a new SKB. The frame reuse
++         * will be handled by mlx5e_free_rx_wqe.
++         * On SKB allocation failure, NULL is returned.
++         */
++        return mlx5e_xsk_construct_skb(rq,
++#ifdef HAVE_XSK_BUFF_ALLOC
++					&mxbuf->xdp);
++#else
++					xdp);
++#endif
++}
++#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
++
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT*/

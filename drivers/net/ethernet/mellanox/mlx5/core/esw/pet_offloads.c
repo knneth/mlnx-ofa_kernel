@@ -116,7 +116,7 @@ static void mlx5_pet_destroy_fg(struct mlx5_eswitch *esw, struct mlx5_flow_group
 	mlx5_destroy_flow_group(fg);
 }
 
-int mlx5_pet_push_hdr_ft(struct mlx5_eswitch *esw)
+static int mlx5_pet_push_hdr_ft(struct mlx5_eswitch *esw)
 {
 	int err;
 
@@ -130,12 +130,12 @@ int mlx5_pet_push_hdr_ft(struct mlx5_eswitch *esw)
 	return 0;
 }
 
-void mlx5_pet_push_hdr_ft_cleanup(struct mlx5_eswitch *esw)
+static void mlx5_pet_push_hdr_ft_cleanup(struct mlx5_eswitch *esw)
 {
 	mlx5_pet_destroy_ft(esw, esw->offloads.pet_vport_action.push_pet_hdr.ft);
 }
 
-int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
+static int mlx5_pet_push_hdr_rule(struct mlx5_eswitch *esw)
 {
 	struct mlx5_flow_table *ft = esw->offloads.pet_vport_action.push_pet_hdr.ft;
 	int mlnx_ether = htons(MLX5_CAP_GEN(esw->dev, mlnx_tag_ethertype));
@@ -215,7 +215,7 @@ err_alloc:
 	return err;
 }
 
-void mlx5_pet_push_hdr_rule_cleanup(struct mlx5_eswitch *esw)
+static void mlx5_pet_push_hdr_rule_cleanup(struct mlx5_eswitch *esw)
 {
 	struct mlx5_pet_actions pet_action = esw->offloads.pet_vport_action.push_pet_hdr;
 
@@ -227,7 +227,7 @@ void mlx5_pet_push_hdr_rule_cleanup(struct mlx5_eswitch *esw)
 	mlx5_pet_destroy_fg(esw, pet_action.fg);
 }
 
-int mlx5_pet_copy_data_ft(struct mlx5_eswitch *esw)
+static int mlx5_pet_copy_data_ft(struct mlx5_eswitch *esw)
 {
 	int err;
 
@@ -240,12 +240,12 @@ int mlx5_pet_copy_data_ft(struct mlx5_eswitch *esw)
 	return 0;
 }
 
-void mlx5_pet_copy_data_ft_cleanup(struct mlx5_eswitch *esw)
+static void mlx5_pet_copy_data_ft_cleanup(struct mlx5_eswitch *esw)
 {
 	mlx5_pet_destroy_ft(esw, esw->offloads.pet_vport_action.copy_data_to_pet_hdr.ft);
 }
 
-int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *dest_ft)
+static int mlx5_pet_copy_data_rule(struct mlx5_eswitch *esw, struct mlx5_flow_table *dest_ft)
 {
 	struct mlx5_flow_table *ft = esw->offloads.pet_vport_action.copy_data_to_pet_hdr.ft;
 	u8 action[MLX5_UN_SZ_BYTES(set_add_copy_action_in_auto)] = {};
@@ -312,7 +312,7 @@ err_create_group:
 	return err;
 }
 
-void mlx5_pet_copy_data_rule_cleanup(struct mlx5_eswitch *esw)
+static void mlx5_pet_copy_data_rule_cleanup(struct mlx5_eswitch *esw)
 {
 	struct mlx5_pet_actions pet_action = esw->offloads.pet_vport_action.copy_data_to_pet_hdr;
 

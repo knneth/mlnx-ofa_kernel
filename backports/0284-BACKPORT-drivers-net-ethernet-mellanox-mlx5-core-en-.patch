@@ -1,24 +1,126 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
 
-Change-Id: I6717fb123bb4a9763c84ad669e8826c6822e8e36
+Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 2 ++
- 1 file changed, 2 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 44 +++++++++++++++++--
+ 1 file changed, 41 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
-@@ -31,6 +31,7 @@
-  */
- #include "port_buffer.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+@@ -1,13 +1,22 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
  
-+#ifdef CONFIG_MLX5_CORE_EN_DCB
- int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
- 			    struct mlx5e_port_buffer *port_buffer)
- {
-@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(stru
- 
- 	return err;
- }
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "tx.h"
+ #include "pool.h"
+ #include "en/xdp.h"
+ #include "en/params.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
+-
+-int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
++#else
++#include <net/xdp_sock.h>
 +#endif
++
++int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
++#ifdef HAVE_NDO_XSK_WAKEUP
++		     , u32 flags
++#endif
++		     )
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 	struct mlx5e_params *params = &priv->channels.params;
+@@ -55,15 +64,21 @@ static void mlx5e_xsk_tx_post_err(struct
+ 
+ 	nopwqe = mlx5e_post_nop(&sq->wq, sq->sqn, &sq->pc);
+ 	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, *xdpi);
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 	if (xp_tx_metadata_enabled(sq->xsk_pool))
+ 		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
+ 				     (union mlx5e_xdp_info) { .xsk_meta = {} });
++#endif
+ 	sq->doorbell_cseg = &nopwqe->ctrl;
+ }
+ 
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ {
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	struct xsk_buff_pool *pool = sq->xsk_pool;
++#else
++	struct xdp_umem *pool = sq->umem;
++#endif
+ 	struct xsk_tx_metadata *meta = NULL;
+ 	union mlx5e_xdp_info xdpi;
+ 	bool work_done = true;
+@@ -84,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			work_done = false;
+ 			break;
+ 		}
+-
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		if (!xsk_tx_peek_desc(pool, &desc)) {
++#else
++		if (!xsk_umem_consume_tx(pool, &desc)) {
++#endif
+ 			/* TX will get stuck until something wakes it up by
+ 			 * triggering NAPI. Currently it's expected that the
+ 			 * application calls sendto() if there are consumed, but
+@@ -94,12 +112,25 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			break;
+ 		}
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xdptxd.dma_addr = xsk_buff_raw_get_dma(pool, desc.addr);
+ 		xdptxd.data = xsk_buff_raw_get_data(pool, desc.addr);
++#else
++		xdptxd.dma_addr = xdp_umem_get_dma(pool, desc.addr);
++		xdptxd.data = xdp_umem_get_data(pool, desc.addr);
++#endif
+ 		xdptxd.len = desc.len;
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 		meta = xsk_buff_get_metadata(pool, desc.addr);
++#endif
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xsk_buff_raw_dma_sync_for_device(pool, xdptxd.dma_addr, xdptxd.len);
++#else
++		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
++					   xdptxd.len, DMA_BIDIRECTIONAL);
++
++#endif
+ 
+ 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
+ 				      mlx5e_xmit_xdp_frame, sq, &xdptxd,
+@@ -111,6 +142,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			mlx5e_xsk_tx_post_err(sq, &xdpi);
+ 		} else {
+ 			mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, xdpi);
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 			if (xp_tx_metadata_enabled(sq->xsk_pool)) {
+ 				struct xsk_tx_metadata_compl compl;
+ 
+@@ -121,6 +153,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 						     (union mlx5e_xdp_info)
+ 						     { .xsk_meta = compl });
+ 			}
++#endif
+ 		}
+ 
+ 		flush = true;
+@@ -131,8 +164,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+ 			mlx5e_xdp_mpwqe_complete(sq);
+ 		mlx5e_xmit_xdp_doorbell(sq);
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_tx_release(pool);
++#else
++		xsk_umem_consume_tx_done(pool);
++#endif
+ 	}
+ 
+ 	return !(budget && work_done);
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

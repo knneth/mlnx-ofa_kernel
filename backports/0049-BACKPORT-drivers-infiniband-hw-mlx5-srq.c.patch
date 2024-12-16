@@ -1,0 +1,35 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/srq.c
+
+Change-Id: I08e3b78c887ddf04683dab9e2e26e0c6b86a48b7
+---
+ drivers/infiniband/hw/mlx5/srq.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/srq.c
++++ b/drivers/infiniband/hw/mlx5/srq.c
+@@ -75,7 +75,11 @@ static int create_srq_user(struct ib_pd
+ 
+ 	srq->wq_sig = !!(ucmd.flags & MLX5_SRQ_FLAG_SIGNATURE);
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	srq->umem = ib_umem_get_peer(pd->device, ucmd.buf_addr, buf_size, 0, 0);
++#else
++	srq->umem = ib_umem_get_peer(udata, ucmd.buf_addr, buf_size, 0, 0);
++#endif
+ 	if (IS_ERR(srq->umem)) {
+ 		mlx5_ib_dbg(dev, "failed umem get, size %d\n", buf_size);
+ 		err = PTR_ERR(srq->umem);
+@@ -83,7 +87,11 @@ static int create_srq_user(struct ib_pd
+ 	}
+ 	in->umem = srq->umem;
+ 
+-	err = mlx5_ib_db_map_user(ucontext, ucmd.db_addr, &srq->db);
++	err = mlx5_ib_db_map_user(ucontext,
++#ifdef HAVE_BASECODE_EXTRAS
++				  udata,
++#endif
++				  ucmd.db_addr, &srq->db);
+ 	if (err) {
+ 		mlx5_ib_dbg(dev, "map doorbell failed\n");
+ 		goto err_umem;

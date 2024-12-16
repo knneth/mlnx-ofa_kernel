@@ -1,0 +1,366 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
+
+Change-Id: Ifb0a0f3d02d5a0aee3c98171b361acd30e587da6
+Signed-off-by: Tom Wu <tomwu@nvidia.com>
+---
+ net/sunrpc/xprtrdma/transport.c | 129 +++++++++++++++++++++++++++++++-
+ 1 file changed, 126 insertions(+), 3 deletions(-)
+
+--- a/net/sunrpc/xprtrdma/transport.c
++++ b/net/sunrpc/xprtrdma/transport.c
+@@ -58,8 +58,15 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
+ /*
+  * tunables
+  */
+@@ -69,7 +76,9 @@ unsigned int xprt_rdma_max_inline_read =
+ unsigned int xprt_rdma_max_inline_write = RPCRDMA_DEF_INLINE;
+ unsigned int xprt_rdma_memreg_strategy		= RPCRDMA_FRWR;
+ int xprt_rdma_pad_optimize;
++#ifdef HAVE_RPC_XPRT_XPRT_CLASS
+ static struct xprt_class xprt_rdma;
++#endif
+ 
+ #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
+ 
+@@ -81,6 +90,9 @@ static unsigned int max_padding = PAGE_S
+ static unsigned int min_memreg = RPCRDMA_BOUNCEBUFFERS;
+ static unsigned int max_memreg = RPCRDMA_LAST - 1;
+ static unsigned int dummy;
++#ifndef HAVE_SYSCTL_ZERO_ENABLED
++static unsigned int zero;
++#endif
+ 
+ static struct ctl_table_header *sunrpc_table_header;
+ 
+@@ -118,7 +130,11 @@ static struct ctl_table xr_tunables_tabl
+ 		.maxlen		= sizeof(unsigned int),
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_dointvec_minmax,
++#ifdef HAVE_SYSCTL_ZERO_ENABLED
+ 		.extra1		= SYSCTL_ZERO,
++#else
++		.extra1		= &zero,
++#endif
+ 		.extra2		= &max_padding,
+ 	},
+ 	{
+@@ -140,6 +156,17 @@ static struct ctl_table xr_tunables_tabl
+ 	{ },
+ };
+ 
++#ifdef HAVE_CTL_TABLE_CHILD
++static struct ctl_table sunrpc_table[] = {
++	{
++		.procname       = "sunrpc",
++		.mode           = 0555,
++		.child          = xr_tunables_table
++	},
++	{ }, 
++};      
++#endif
++
+ #endif
+ 
+ static const struct rpc_xprt_ops xprt_rdma_procs;
+@@ -226,11 +253,13 @@ xprt_rdma_connect_worker(struct work_str
+ 	struct rpcrdma_xprt *r_xprt = container_of(work, struct rpcrdma_xprt,
+ 						   rx_connect_worker.work);
+ 	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
+-	unsigned int pflags = current->flags;
+ 	int rc;
++#ifdef HAVE_SVC_XPRT_CLOSE
++	unsigned int pflags = current->flags;
+ 
+ 	if (atomic_read(&xprt->swapper))
+ 		current->flags |= PF_MEMALLOC;
++#endif
+ 	rc = rpcrdma_xprt_connect(r_xprt);
+ 	xprt_clear_connecting(xprt);
+ 	if (!rc) {
+@@ -240,11 +269,22 @@ xprt_rdma_connect_worker(struct work_str
+ 					   xprt->stat.connect_start;
+ 		xprt_set_connected(xprt);
+ 		rc = -EAGAIN;
++#ifdef HAVE_XPRT_LOCK_CONNECT
+ 	} else
+ 		rpcrdma_xprt_disconnect(r_xprt);
+ 	xprt_unlock_connect(xprt, r_xprt);
++#else
++	} else {
++		/* Force a call to xprt_rdma_close to clean up */
++		spin_lock(&xprt->transport_lock);
++		set_bit(XPRT_CLOSE_WAIT, &xprt->state);
++		spin_unlock(&xprt->transport_lock);
++	}
++#endif
+ 	xprt_wake_pending_tasks(xprt, rc);
++#ifdef HAVE_SVC_XPRT_CLOSE
+ 	current_restore_flags(pflags, PF_MEMALLOC);
++#endif
+ }
+ 
+ /**
+@@ -261,7 +301,9 @@ xprt_rdma_inject_disconnect(struct rpc_x
+ {
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_op_inject_dsc(r_xprt);
++#endif
+ 	rdma_disconnect(r_xprt->rx_ep->re_id);
+ }
+ 
+@@ -321,8 +363,10 @@ xprt_setup_rdma(struct xprt_create *args
+ 	}
+ 
+ 	xprt->timeout = &xprt_rdma_default_timeout;
++#ifdef HAVE_XPRT_RECONNECT_DELAY
+ 	xprt->connect_timeout = xprt->timeout->to_initval;
+ 	xprt->max_reconnect_timeout = xprt->timeout->to_maxval;
++#endif
+ 	xprt->bind_timeout = RPCRDMA_BIND_TO;
+ 	xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
+ 	xprt->idle_timeout = RPCRDMA_IDLE_DISC_TO;
+@@ -338,7 +382,9 @@ xprt_setup_rdma(struct xprt_create *args
+ 	/* Ensure xprt->addr holds valid server TCP (not RDMA)
+ 	 * address, for any side protocols which peek at it */
+ 	xprt->prot = IPPROTO_TCP;
++#ifdef HAVE_RPC_XPRT_XPRT_CLASS
+ 	xprt->xprt_class = &xprt_rdma;
++#endif
+ 	xprt->addrlen = args->addrlen;
+ 	memcpy(&xprt->addr, sap, xprt->addrlen);
+ 
+@@ -426,6 +472,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, s
+ 	xprt_force_disconnect(xprt);
+ }
+ 
++#ifdef HAVE_XPRT_RECONNECT_DELAY
+ /**
+  * xprt_rdma_set_connect_timeout - set timeouts for establishing a connection
+  * @xprt: controlling transport instance
+@@ -439,7 +486,9 @@ static void xprt_rdma_set_connect_timeou
+ {
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_op_set_cto(r_xprt, connect_timeout, reconnect_timeout);
++#endif
+ 
+ 	spin_lock(&xprt->transport_lock);
+ 
+@@ -463,6 +512,7 @@ static void xprt_rdma_set_connect_timeou
+ 
+ 	spin_unlock(&xprt->transport_lock);
+ }
++#endif
+ 
+ /**
+  * xprt_rdma_connect - schedule an attempt to reconnect
+@@ -475,17 +525,39 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
+ {
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
+ 	struct rpcrdma_ep *ep = r_xprt->rx_ep;
++#ifdef HAVE_XPRT_RECONNECT_DELAY
+ 	unsigned long delay;
+ 
++#ifdef HAVE_XPRT_LOCK_CONNECT
+ 	WARN_ON_ONCE(!xprt_lock_connect(xprt, task, r_xprt));
++#endif
+ 
+ 	delay = 0;
+ 	if (ep && ep->re_connect_status != 0) {
+ 		delay = xprt_reconnect_delay(xprt);
+ 		xprt_reconnect_backoff(xprt, RPCRDMA_INIT_REEST_TO);
+ 	}
+-	trace_xprtrdma_op_connect(r_xprt, delay);
+ 	queue_delayed_work(system_long_wq, &r_xprt->rx_connect_worker, delay);
++#else
++	if (ep && ep->re_connect_status != 0) {
++		/* Reconnect */
++		schedule_delayed_work(&r_xprt->rx_connect_worker,
++					xprt->reestablish_timeout);
++		xprt->reestablish_timeout <<= 1;
++		if (xprt->reestablish_timeout > RPCRDMA_MAX_REEST_TO)
++				xprt->reestablish_timeout = RPCRDMA_MAX_REEST_TO;
++		else if (xprt->reestablish_timeout < RPCRDMA_INIT_REEST_TO)
++				xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
++	} else {
++		schedule_delayed_work(&r_xprt->rx_connect_worker, 0);
++		if (!RPC_IS_ASYNC(task))
++				flush_delayed_work(&r_xprt->rx_connect_worker);
++	}
++#endif
++
++#if defined(HAVE_TRACE_RPCRDMA_H) && defined(HAVE_XPRT_RECONNECT_DELAY)
++	trace_xprtrdma_op_connect(r_xprt, delay);
++#endif
+ }
+ 
+ /**
+@@ -512,7 +584,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xp
+ 
+ out_sleep:
+ 	task->tk_status = -ENOMEM;
++#ifdef HAVE_XPRT_ADD_BACKLOG
+ 	xprt_add_backlog(xprt, task);
++#else
++	set_bit(XPRT_CONGESTED, &xprt->state);
++	rpc_sleep_on(&xprt->backlog, task, NULL);
++#endif
+ }
+ 
+ /**
+@@ -527,11 +604,18 @@ xprt_rdma_free_slot(struct rpc_xprt *xpr
+ 	struct rpcrdma_xprt *r_xprt =
+ 		container_of(xprt, struct rpcrdma_xprt, rx_xprt);
+ 
++#ifdef HAVE_XPRT_ADD_BACKLOG
+ 	rpcrdma_reply_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
+ 	if (!xprt_wake_up_backlog(xprt, rqst)) {
+ 		memset(rqst, 0, sizeof(*rqst));
+ 		rpcrdma_buffer_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
+ 	}
++#else
++	memset(rqst, 0, sizeof(*rqst));
++	rpcrdma_buffer_put(&r_xprt->rx_buf, rpcr_to_rdmar(rqst));
++	if (unlikely(!rpc_wake_up_next(&xprt->backlog)))
++		clear_bit(XPRT_CONGESTED, &xprt->state);
++#endif
+ }
+ 
+ static bool rpcrdma_check_regbuf(struct rpcrdma_xprt *r_xprt,
+@@ -561,7 +645,19 @@ xprt_rdma_allocate(struct rpc_task *task
+ 	struct rpc_rqst *rqst = task->tk_rqstp;
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(rqst->rq_xprt);
+ 	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
++#ifdef HAVE_RPC_TASK_GPF_MASK_EXPORTED
+ 	gfp_t flags = rpc_task_gfp_mask();
++#else
++	gfp_t flags;
++
++	flags = (GFP_NOIO | __GFP_NOWARN);
++	if (RPC_IS_ASYNC(task))
++		flags = GFP_NOWAIT | __GFP_NOWARN;
++#ifndef HAVE_SVC_XPRT_CLOSE
++	if (RPC_IS_SWAPPER(task))
++		flags |= __GFP_MEMALLOC;
++#endif
++#endif
+ 
+ 	if (!rpcrdma_check_regbuf(r_xprt, req->rl_sendbuf, rqst->rq_callsize,
+ 				  flags))
+@@ -591,7 +687,9 @@ xprt_rdma_free(struct rpc_task *task)
+ 	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
+ 
+ 	if (unlikely(!list_empty(&req->rl_registered))) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mrs_zap(task);
++#endif
+ 		frwr_unmap_sync(rpcx_to_rdmax(rqst->rq_xprt), req);
+ 	}
+ 
+@@ -619,8 +717,14 @@ xprt_rdma_free(struct rpc_task *task)
+  *		Do not try to send this message again.
+  */
+ static int
++#ifdef HAVE_XPRT_OPS_SEND_REQUEST_RQST_ARG
+ xprt_rdma_send_request(struct rpc_rqst *rqst)
+ {
++#else
++xprt_rdma_send_request(struct rpc_task *task)
++{
++	struct rpc_rqst *rqst = task->tk_rqstp;
++#endif
+ 	struct rpc_xprt *xprt = rqst->rq_xprt;
+ 	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
+@@ -634,8 +738,10 @@ xprt_rdma_send_request(struct rpc_rqst *
+ 	if (!xprt_connected(xprt))
+ 		return -ENOTCONN;
+ 
++#ifdef HAVE_XPRT_REQUEST_GET_CONG
+ 	if (!xprt_request_get_cong(xprt, rqst))
+ 		return -EBADSLT;
++#endif
+ 
+ 	rc = rpcrdma_marshal_req(r_xprt, rqst);
+ 	if (rc < 0)
+@@ -721,14 +827,18 @@ xprt_rdma_disable_swap(struct rpc_xprt *
+ /*
+  * Plumbing for rpc transport switch and kernel module
+  */
+-
+ static const struct rpc_xprt_ops xprt_rdma_procs = {
+ 	.reserve_xprt		= xprt_reserve_xprt_cong,
+ 	.release_xprt		= xprt_release_xprt_cong, /* sunrpc/xprt.c */
+ 	.alloc_slot		= xprt_rdma_alloc_slot,
+ 	.free_slot		= xprt_rdma_free_slot,
+ 	.release_request	= xprt_release_rqst_cong,       /* ditto */
++#ifdef HAVE_RPC_XPRT_OPS_SET_RETRANS_TIMEOUT
++	.set_retrans_timeout	= xprt_set_retrans_timeout_def, /* ditto */
++#endif
++#ifdef HAVE_RPC_XPRT_OPS_WAIT_FOR_REPLY_REQUEST
+ 	.wait_for_reply_request	= xprt_wait_for_reply_request_def, /* ditto */
++#endif
+ 	.timer			= xprt_rdma_timer,
+ 	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */
+ 	.set_port		= xprt_rdma_set_port,
+@@ -738,15 +848,22 @@ static const struct rpc_xprt_ops xprt_rd
+ 	.send_request		= xprt_rdma_send_request,
+ 	.close			= xprt_rdma_close,
+ 	.destroy		= xprt_rdma_destroy,
++#ifdef HAVE_XPRT_RECONNECT_DELAY
+ 	.set_connect_timeout	= xprt_rdma_set_connect_timeout,
++#endif
+ 	.print_stats		= xprt_rdma_print_stats,
+ 	.enable_swap		= xprt_rdma_enable_swap,
+ 	.disable_swap		= xprt_rdma_disable_swap,
+ 	.inject_disconnect	= xprt_rdma_inject_disconnect,
+ #if defined(CONFIG_SUNRPC_BACKCHANNEL)
+ 	.bc_setup		= xprt_rdma_bc_setup,
++#ifdef HAVE_RPC_XPRT_OPS_BC_UP
++	.bc_up			= xprt_rdma_bc_up,
++#endif
+ 	.bc_maxpayload		= xprt_rdma_bc_maxpayload,
++#ifdef HAVE_RPC_XPRT_OPS_BC_NUM_SLOTS
+ 	.bc_num_slots		= xprt_rdma_bc_max_slots,
++#endif
+ 	.bc_free_rqst		= xprt_rdma_bc_free_rqst,
+ 	.bc_destroy		= xprt_rdma_bc_destroy,
+ #endif
+@@ -758,7 +875,9 @@ static struct xprt_class xprt_rdma = {
+ 	.owner			= THIS_MODULE,
+ 	.ident			= XPRT_TRANSPORT_RDMA,
+ 	.setup			= xprt_setup_rdma,
++#ifdef HAVE_XPRT_CLASS_NETID
+ 	.netid			= { "rdma", "rdma6", "" },
++#endif
+ };
+ 
+ void xprt_rdma_cleanup(void)
+@@ -790,7 +909,11 @@ int xprt_rdma_init(void)
+ 
+ #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
+ 	if (!sunrpc_table_header)
++#ifdef HAVE_CTL_TABLE_CHILD
++		sunrpc_table_header = register_sysctl_table(sunrpc_table);
++#else
+ 		sunrpc_table_header = register_sysctl("sunrpc", xr_tunables_table);
+ #endif
++#endif
+ 	return 0;
+ }

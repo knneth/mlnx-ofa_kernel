@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+
+Change-Id: Ifd06d7b58c175cd324710603eea719c0d8b6486b
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fs_core.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+@@ -37,7 +37,7 @@
+ #include <linux/mlx5/fs.h>
+ #include <linux/rhashtable.h>
+ #include <linux/llist.h>
+-#include <steering/fs_dr.h>
++#include "steering/fs_dr.h"
+ 
+ #define FDB_TC_MAX_CHAIN 3
+ #define FDB_FT_CHAIN (FDB_TC_MAX_CHAIN + 1)

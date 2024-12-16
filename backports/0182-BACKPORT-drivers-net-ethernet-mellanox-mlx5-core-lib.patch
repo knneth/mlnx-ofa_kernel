@@ -1,0 +1,53 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
+
+Change-Id: Iee5501c78b331d955ae08464d6a1b414570b8988
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
+@@ -45,6 +45,7 @@ void mlx5_init_reserved_gids(struct mlx5
+ 	dev->roce.reserved_gids.count = 0;
+ }
+ 
++
+ void mlx5_cleanup_reserved_gids(struct mlx5_core_dev *dev)
+ {
+ 	WARN_ON(!ida_is_empty(&dev->roce.reserved_gids.ida));
+@@ -88,12 +89,22 @@ void mlx5_core_unreserve_gids(struct mlx
+ int mlx5_core_reserved_gid_alloc(struct mlx5_core_dev *dev, int *gid_index)
+ {
+ 	int end = dev->roce.reserved_gids.start +
++#ifdef HAVE_IDA_ALLOC_RANGE
+ 		  dev->roce.reserved_gids.count - 1;
++#else
++		  dev->roce.reserved_gids.count;
++#endif
+ 	int index = 0;
+ 
++#ifdef HAVE_IDA_ALLOC_RANGE
+ 	index = ida_alloc_range(&dev->roce.reserved_gids.ida,
+ 				dev->roce.reserved_gids.start, end,
+ 				GFP_KERNEL);
++#else
++	index = ida_simple_get(&dev->roce.reserved_gids.ida,
++			       dev->roce.reserved_gids.start, end,
++			       GFP_KERNEL);
++#endif
+ 	if (index < 0)
+ 		return index;
+ 
+@@ -105,7 +116,11 @@ int mlx5_core_reserved_gid_alloc(struct
+ void mlx5_core_reserved_gid_free(struct mlx5_core_dev *dev, int gid_index)
+ {
+ 	mlx5_core_dbg(dev, "Freeing reserved GID %u\n", gid_index);
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&dev->roce.reserved_gids.ida, gid_index);
++#else
++	ida_simple_remove(&dev->roce.reserved_gids.ida, gid_index);
++#endif
+ }
+ 
+ unsigned int mlx5_core_reserved_gids_count(struct mlx5_core_dev *dev)

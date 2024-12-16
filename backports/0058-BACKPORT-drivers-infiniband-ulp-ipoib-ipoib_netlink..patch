@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+
+Change-Id: I9e9d0542fffe80a357dc580ca86947f379cf79c7
+---
+ drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+@@ -108,8 +108,8 @@ static int ipoib_new_child_link(struct n
+ 
+ 	if (!tb[IFLA_LINK])
+ 		return -EINVAL;
+-
+ 	pdev = __dev_get_by_index(src_net, nla_get_u32(tb[IFLA_LINK]));
++
+ 	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
+ 		return -ENODEV;
+ 
+@@ -167,7 +167,9 @@ static size_t ipoib_get_size(const struc
+ 
+ static struct rtnl_link_ops ipoib_link_ops __read_mostly = {
+ 	.kind		= "ipoib",
++#ifdef HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND
+ 	.netns_refund   = true,
++#endif
+ 	.maxtype	= IFLA_IPOIB_MAX,
+ 	.policy		= ipoib_policy,
+ 	.priv_size	= sizeof(struct ipoib_dev_priv),

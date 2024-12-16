@@ -1,40 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
 
+Change-Id: Ia0473ec39ad21998c16317819e85f2b536fc28af
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-@@ -68,6 +68,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		else
- 			*action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
- 		break;
-+#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
- 	case FLOW_ACTION_VLAN_POP_ETH:
- 		parse_state->eth_pop = true;
- 		break;
-@@ -78,6 +79,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		memcpy(attr->eth.h_dest, act->vlan_push_eth.dst, ETH_ALEN);
- 		memcpy(attr->eth.h_source, act->vlan_push_eth.src, ETH_ALEN);
- 		break;
-+#endif
- 	default:
- 		NL_SET_ERR_MSG_MOD(extack, "Unexpected action id for VLAN");
- 		return -EINVAL;
-@@ -127,10 +129,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
- 	struct flow_action_entry vlan_act = {
- 		.id = FLOW_ACTION_VLAN_POP,
- 	};
--	int nest_level, err = 0;
-+	int nest_level = 1, err = 0;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
+@@ -250,10 +250,10 @@ mlx5_ct_fs_smfs_ct_validate_flow_rule(st
+ 	struct flow_match_basic basic;
+ 	struct flow_match_ports ports;
+ 	struct flow_match_tcp tcp;
++	u64 used_keys_u64 = flow_rule->match.dissector->used_keys;
  
-+#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
- 	nest_level = attr->parse_attr->filter_dev->lower_level -
- 						priv->netdev->lower_level;
-+#endif
- 	while (nest_level--) {
- 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
- 					   extack, NULL);
+ 	if (!mlx5_tc_ct_valid_used_dissector_keys(flow_rule->match.dissector->used_keys)) {
+-		ct_dbg("rule uses unexpected dissectors (0x%016llx)",
+-		       flow_rule->match.dissector->used_keys);
++		ct_dbg("rule uses unexpected dissectors (0x%016llx)", used_keys_u64);
+ 		return false;
+ 	}
+ 

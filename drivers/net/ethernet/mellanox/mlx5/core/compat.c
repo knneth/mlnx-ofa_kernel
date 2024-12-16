@@ -7,6 +7,7 @@
 #include "en.h"
 #include "en_rep.h"
 #include "en/rep/tc.h"
+#include "compat.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
 #if defined(HAVE_SWITCHDEV_OPS)

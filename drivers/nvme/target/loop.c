@@ -394,7 +394,7 @@ out_free_sq:
 	return error;
 }
 
-static void nvme_loop_shutdown_ctrl(struct nvme_loop_ctrl *ctrl, bool shutdown)
+static void nvme_loop_shutdown_ctrl(struct nvme_loop_ctrl *ctrl)
 {
 	if (ctrl->ctrl.queue_count > 1) {
 		nvme_quiesce_io_queues(&ctrl->ctrl);
@@ -403,8 +403,8 @@ static void nvme_loop_shutdown_ctrl(struct nvme_loop_ctrl *ctrl, bool shutdown)
 	}
 
 	nvme_quiesce_admin_queue(&ctrl->ctrl);
-	if (ctrl->ctrl.state == NVME_CTRL_LIVE)
-		nvme_disable_ctrl(&ctrl->ctrl, shutdown);
+	if (nvme_ctrl_state(&ctrl->ctrl) == NVME_CTRL_LIVE)
+		nvme_disable_ctrl(&ctrl->ctrl, true);
 
 	nvme_cancel_admin_tagset(&ctrl->ctrl);
 	nvme_loop_destroy_admin_queue(ctrl);
@@ -412,7 +412,7 @@ static void nvme_loop_shutdown_ctrl(struct nvme_loop_ctrl *ctrl, bool shutdown)
 
 static void nvme_loop_delete_ctrl_host(struct nvme_ctrl *ctrl)
 {
-	nvme_loop_shutdown_ctrl(to_loop_ctrl(ctrl), true);
+	nvme_loop_shutdown_ctrl(to_loop_ctrl(ctrl));
 }
 
 static void nvme_loop_delete_ctrl(struct nvmet_ctrl *nctrl)
@@ -434,11 +434,13 @@ static void nvme_loop_reset_ctrl_work(struct work_struct *work)
 	int ret;
 
 	nvme_stop_ctrl(&ctrl->ctrl);
-	nvme_loop_shutdown_ctrl(ctrl, false);
+	nvme_loop_shutdown_ctrl(ctrl);
 
 	if (!nvme_change_ctrl_state(&ctrl->ctrl, NVME_CTRL_CONNECTING)) {
-		if (ctrl->ctrl.state != NVME_CTRL_DELETING &&
-		    ctrl->ctrl.state != NVME_CTRL_DELETING_NOIO)
+		enum nvme_ctrl_state state = nvme_ctrl_state(&ctrl->ctrl);
+
+		if (state != NVME_CTRL_DELETING &&
+		    state != NVME_CTRL_DELETING_NOIO)
 			/* state change failure for non-deleted ctrl? */
 			WARN_ON_ONCE(1);
 		return;
@@ -469,7 +471,8 @@ static void nvme_loop_reset_ctrl_work(struct work_struct *work)
 out_destroy_io:
 	nvme_loop_destroy_io_queues(ctrl);
 out_destroy_admin:
-	nvme_disable_ctrl(&ctrl->ctrl, false);
+	nvme_quiesce_admin_queue(&ctrl->ctrl);
+	nvme_cancel_admin_tagset(&ctrl->ctrl);
 	nvme_loop_destroy_admin_queue(ctrl);
 out_disable:
 	dev_warn(ctrl->ctrl.device, "Removing after reset failure\n");
@@ -604,7 +607,8 @@ static struct nvme_ctrl *nvme_loop_create_ctrl(struct device *dev,
 	return &ctrl->ctrl;
 
 out_remove_admin_queue:
-	nvme_disable_ctrl(&ctrl->ctrl, false);
+	nvme_quiesce_admin_queue(&ctrl->ctrl);
+	nvme_cancel_admin_tagset(&ctrl->ctrl);
 	nvme_loop_destroy_admin_queue(ctrl);
 out_free_queues:
 	kfree(ctrl->queues);
@@ -689,5 +693,6 @@ static void __exit nvme_loop_cleanup_module(void)
 module_init(nvme_loop_init_module);
 module_exit(nvme_loop_cleanup_module);
 
+MODULE_DESCRIPTION("NVMe target loop transport driver");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("nvmet-transport-254"); /* 254 == NVMF_TRTYPE_LOOP */

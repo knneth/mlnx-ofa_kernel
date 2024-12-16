@@ -4,32 +4,26 @@
 #
 # Called with --from-buildpl when run from build.pl
 
-mv ofed_scripts/mlnx_en/Makefile.mlnx_en ./Makefile
-mv ofed_scripts/mlnx_en/makefile.mlnx_en ./makefile
 mv ofed_scripts/mlnx_en/MLNX_EN_Linux_README.txt .
 mv ofed_scripts/mlnx_en/MLNX_EN_Linux_Release_Notes.txt .
 mv ofed_scripts/mlnx_en/LICENSE .
 mv drivers/infiniband/debug ./drivers/net/ethernet/mellanox
 
-mv ofed_scripts/mlnx_en/kmodtool.rh5 ../
-mv ofed_scripts/mlnx_en/kmodtool.rh7 ../
-mv ofed_scripts/mlnx_en/kmp-tool.sh ../
-mv ofed_scripts/mlnx_en/mlx4_core.conf ../
-mv ofed_scripts/mlnx_en/mlx4_en.conf ../
 mv ofed_scripts/mlnx_en/mlx4.files ../
-mv ofed_scripts/mlnx_en/mlx4.files.sles* ../
-mv ofed_scripts/mlnx_en/mlx4_ib.conf ../
 
 ./ofed_scripts/ofed_patch.sh
 
+if [ ! -e configure ]; then
+	ln -s ofed_scripts/configure .
+fi
+
 rm -rf debian
-mv ofed_scripts/mlnx_en/debian ./
+mv ofed_scripts/mlnx_en/debian ./debian
 
 if [ -d "scripts" ]; then
 	rm -rf scripts
 fi
 mv ofed_scripts/mlnx_en/ ./scripts
-rm -rf drivers/infiniband
 rm -rf lib
 rm -rf fs
 rm -rf net/9p
@@ -46,15 +40,11 @@ rm -rf drivers/net/eipoib
 rm -rf drivers/net/ethernet/mellanox/mlx4_vnic
 rm -rf drivers/scsi/
 rm -rf Documentation
-rm -f configure
 
-if echo ofed_scripts/mlnx_en/en_patches/* | grep -q -v '\*'; then
-	patch -p1 -i scripts/en_patches/*
-fi
-
-mkdir -p drivers/infiniband/hw
-cp -a scripts/mlx4_ib-dummy/ drivers/infiniband/hw/mlx4
-cp -a scripts/mlx5_ib-dummy/ drivers/infiniband/hw/mlx5
+mv drivers/infiniband/hw/mlx5/mlx5_ib-dummy .
+rm -rf drivers/infiniband
+mkdir -p drivers/infiniband/hw/mlx5
+mv mlx5_ib-dummy drivers/infiniband/hw/mlx5/
 
 mv scripts/mlnx_en.spec .
 /bin/rm -f ofed_scripts/mlnx-ofa_kernel.spec

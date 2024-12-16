@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"24.04"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"24.07"}
 
 echo 'is_conf_set() {'
 echo '	grep -q "^$1=[ym]" "$kernel_source_dir/.config" 2>/dev/null'

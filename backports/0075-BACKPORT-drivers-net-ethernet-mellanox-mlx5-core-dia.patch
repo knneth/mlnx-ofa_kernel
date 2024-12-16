@@ -2,9 +2,10 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 
+Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
 ---
- .../mlx5/core/diag/en_tc_tracepoint.h         | 28 +++++++++++++++++++
- 1 file changed, 28 insertions(+)
+ .../mlx5/core/diag/en_tc_tracepoint.h         | 32 +++++++++++++++++++
+ 1 file changed, 32 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
@@ -79,7 +80,19 @@ Subject: [PATCH] BACKPORT:
  );
  
  TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
-@@ -112,3 +138,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+@@ -86,7 +112,11 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+ 			struct in6_addr *pin6;
+ 			__be32 *p32;
+ 
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 			__assign_str(devname, nhe->neigh_dev->name);
++#else
++			__assign_str(devname);
++#endif
+ 			__entry->neigh_used = neigh_used;
+ 
+ 			p32 = (__be32 *)__entry->v4;
+@@ -112,3 +142,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
  #undef TRACE_INCLUDE_FILE
  #define TRACE_INCLUDE_FILE en_tc_tracepoint
  #include <trace/define_trace.h>

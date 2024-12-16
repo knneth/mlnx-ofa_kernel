@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
+
+Change-Id: I3ababd83fac4365cbf119b9bdf4c70716f957efd
+---
+ drivers/infiniband/hw/mlx5/devx.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/devx.c
++++ b/drivers/infiniband/hw/mlx5/devx.c
+@@ -16,6 +16,9 @@
+ #include "mlx5_ib.h"
+ #include "devx.h"
+ #include "qp.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/eventfd.h>
++#endif
+ #include <linux/xarray.h>
+ 
+ #define UVERBS_MODULE_NAME mlx5_ib
+@@ -2193,6 +2196,7 @@ static int devx_umem_get(struct mlx5_ib_
+ 	if (err)
+ 		return err;
+ 
++#ifdef HAVE_IB_UMEM_DMABUF_GET_PINNED
+ 	if (uverbs_attr_is_valid(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_DMABUF_FD)) {
+ 		struct ib_umem_dmabuf *umem_dmabuf;
+ 		int dmabuf_fd;
+@@ -2207,8 +2211,14 @@ static int devx_umem_get(struct mlx5_ib_
+ 		if (IS_ERR(umem_dmabuf))
+ 			return PTR_ERR(umem_dmabuf);
+ 		obj->umem = &umem_dmabuf->umem;
+-	} else {
++	} else 
++#endif
++	{
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		obj->umem = ib_umem_get_peer(&dev->ib_dev, addr, size, access_flags, 0);
++#else
++		obj->umem = ib_umem_get_peer(&attrs->driver_udata, addr, size, access_flags, 0);
++#endif
+ 		if (IS_ERR(obj->umem))
+ 			return PTR_ERR(obj->umem);
+ 	}
+@@ -2501,7 +2511,11 @@ static void dispatch_event_fd(struct lis
+ 
+ 	list_for_each_entry_rcu(item, fd_list, xa_list) {
+ 		if (item->eventfd)
++#ifdef HAVE_EVENTFD_SIGNAL_GET_1_PARAM
+ 			eventfd_signal(item->eventfd);
++#else
++			eventfd_signal(item->eventfd, 1);
++#endif
+ 		else
+ 			deliver_event(item, data);
+ 	}
+@@ -2684,7 +2698,11 @@ static ssize_t devx_async_event_read(str
+ {
+ 	struct devx_async_event_file *ev_file = filp->private_data;
+ 	struct devx_event_subscription *event_sub;
++#ifndef uninitialized_var
+ 	struct devx_async_event_data *event;
++#else
++	struct devx_async_event_data *uninitialized_var(event);
++#endif
+ 	int ret = 0;
+ 	size_t eventsz;
+ 	bool omit_data;

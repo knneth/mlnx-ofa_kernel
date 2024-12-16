@@ -42,6 +42,8 @@
 #define NVMET_RDMA_MAX_MDTS			8
 #define NVMET_RDMA_MAX_METADATA_MDTS		5
 
+#define NVMET_RDMA_BACKLOG 128
+
 struct nvmet_rdma_srq;
 
 struct nvmet_rdma_cmd {
@@ -56,7 +58,6 @@ struct nvmet_rdma_cmd {
 
 enum {
 	NVMET_RDMA_REQ_INLINE_DATA	= (1 << 0),
-	NVMET_RDMA_REQ_INVALIDATE_RKEY	= (1 << 1),
 };
 
 struct nvmet_rdma_rsp {
@@ -532,12 +533,8 @@ nvmet_rdma_alloc_rsps(struct nvmet_rdma_queue *queue)
 	return 0;
 
 out_free:
-	while (--i >= 0) {
-		struct nvmet_rdma_rsp *rsp = &queue->rsps[i];
-
-		list_del(&rsp->free_list);
-		nvmet_rdma_free_rsp(ndev, rsp);
-	}
+	while (--i >= 0)
+		nvmet_rdma_free_rsp(ndev, &queue->rsps[i]);
 	kfree(queue->rsps);
 out:
 	return ret;
@@ -548,12 +545,8 @@ static void nvmet_rdma_free_rsps(struct nvmet_rdma_queue *queue)
 	struct nvmet_rdma_device *ndev = queue->dev;
 	int i, nr_rsps = queue->recv_queue_size * 2;
 
-	for (i = 0; i < nr_rsps; i++) {
-		struct nvmet_rdma_rsp *rsp = &queue->rsps[i];
-
-		list_del(&rsp->free_list);
-		nvmet_rdma_free_rsp(ndev, rsp);
-	}
+	for (i = 0; i < nr_rsps; i++)
+		nvmet_rdma_free_rsp(ndev, &queue->rsps[i]);
 	kfree(queue->rsps);
 }
 
@@ -779,7 +772,7 @@ static void nvmet_rdma_queue_response(struct nvmet_req *req)
 	struct rdma_cm_id *cm_id = rsp->queue->cm_id;
 	struct ib_send_wr *first_wr;
 
-	if (rsp->flags & NVMET_RDMA_REQ_INVALIDATE_RKEY) {
+	if (rsp->invalidate_rkey) {
 		rsp->send_wr.opcode = IB_WR_SEND_WITH_INV;
 		rsp->send_wr.ex.invalidate_rkey = rsp->invalidate_rkey;
 	} else {
@@ -962,10 +955,8 @@ static u16 nvmet_rdma_map_sgl_keyed(struct nvmet_rdma_rsp *rsp,
 		goto error_out;
 	rsp->n_rdma += ret;
 
-	if (invalidate) {
+	if (invalidate)
 		rsp->invalidate_rkey = key;
-		rsp->flags |= NVMET_RDMA_REQ_INVALIDATE_RKEY;
-	}
 
 	return 0;
 
@@ -1104,6 +1095,7 @@ static void nvmet_rdma_recv_done(struct ib_cq *cq, struct ib_wc *wc)
 	rsp->req.cmd = cmd->nvme_cmd;
 	rsp->req.port = queue->port;
 	rsp->n_rdma = 0;
+	rsp->invalidate_rkey = 0;
 
 	if (unlikely(queue->state != NVMET_RDMA_Q_LIVE)) {
 		unsigned long flags;
@@ -1362,7 +1354,7 @@ static int nvmet_rdma_create_queue_ib(struct nvmet_rdma_queue *queue)
 	qp_attr.cap.max_send_wr = queue->send_queue_size + 1;
 	factor = rdma_rw_mr_factor(ndev->device, queue->cm_id->port_num,
 				   1 << NVMET_RDMA_MAX_MDTS);
-	qp_attr.cap.max_rdma_ctxs = queue->send_queue_size * factor;
+	qp_attr.cap.max_rdma_ctxs = (queue->offload ? 1 : queue->send_queue_size) * factor;
 	qp_attr.cap.max_send_sge = max(ndev->device->attrs.max_sge_rd,
 					ndev->device->attrs.max_send_sge);
 
@@ -1443,6 +1435,7 @@ static void nvmet_rdma_free_queue(struct nvmet_rdma_queue *queue)
 				!queue->host_qid);
 	}
 	nvmet_rdma_free_rsps(queue);
+	cancel_work_sync(&queue->disconnect_work);
 	ida_free(&nvmet_rdma_queue_ida, queue->idx);
 	kfree(queue);
 }
@@ -1689,8 +1682,19 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 	}
 
 	if (queue->host_qid == 0) {
-		/* Let inflight controller teardown complete */
-		flush_workqueue(nvmet_wq);
+		struct nvmet_rdma_queue *q;
+		int pending = 0;
+
+		/* Check for pending controller teardown */
+		mutex_lock(&nvmet_rdma_queue_mutex);
+		list_for_each_entry(q, &nvmet_rdma_queue_list, queue_list) {
+			if (q->nvme_sq.ctrl == queue->nvme_sq.ctrl &&
+			    q->state == NVMET_RDMA_Q_DISCONNECTING)
+				pending++;
+		}
+		mutex_unlock(&nvmet_rdma_queue_mutex);
+		if (pending > NVMET_RDMA_BACKLOG)
+			return NVME_SC_CONNECT_CTRL_BUSY;
 	}
 
 	ret = nvmet_rdma_cm_accept(cm_id, queue, &event->param.conn);
@@ -1963,7 +1967,7 @@ static int nvmet_rdma_enable_port(struct nvmet_rdma_port *port)
 		goto out_destroy_id;
 	}
 
-	ret = rdma_listen(cm_id, 128);
+	ret = rdma_listen(cm_id, NVMET_RDMA_BACKLOG);
 	if (ret) {
 		pr_err("listening to %pISpcs failed (%d)\n", addr, ret);
 		goto out_destroy_id;
@@ -2038,6 +2042,14 @@ static int nvmet_rdma_add_port(struct nvmet_port *nport)
 		nport->inline_data_size = NVMET_RDMA_MAX_INLINE_DATA_SIZE;
 	}
 
+	if (nport->max_queue_size < 0) {
+		nport->max_queue_size = NVME_RDMA_DEFAULT_QUEUE_SIZE;
+	} else if (nport->max_queue_size > NVME_RDMA_MAX_QUEUE_SIZE) {
+		pr_warn("max_queue_size %u is too large, reducing to %u\n",
+			nport->max_queue_size, NVME_RDMA_MAX_QUEUE_SIZE);
+		nport->max_queue_size = NVME_RDMA_MAX_QUEUE_SIZE;
+	}
+
 	ret = inet_pton_with_scope(&init_net, af, nport->disc_addr.traddr,
 			nport->disc_addr.trsvcid, &port->addr);
 	if (ret) {
@@ -2101,6 +2113,8 @@ static u8 nvmet_rdma_get_mdts(const struct nvmet_ctrl *ctrl)
 
 static u16 nvmet_rdma_get_max_queue_size(const struct nvmet_ctrl *ctrl)
 {
+	if (ctrl->pi_support)
+		return NVME_RDMA_MAX_METADATA_QUEUE_SIZE;
 	return NVME_RDMA_MAX_QUEUE_SIZE;
 }
 
@@ -2277,6 +2291,7 @@ static void __exit nvmet_rdma_exit(void)
 module_init(nvmet_rdma_init);
 module_exit(nvmet_rdma_exit);
 
+MODULE_DESCRIPTION("NVMe target RDMA transport driver");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("nvmet-transport-1"); /* 1 == NVMF_TRTYPE_RDMA */
 

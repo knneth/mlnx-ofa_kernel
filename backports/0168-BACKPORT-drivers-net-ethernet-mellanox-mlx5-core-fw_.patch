@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
+
+Change-Id: Id8059e12c99685b2785658eda548129b014f7e78
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
+@@ -11,7 +11,9 @@ int mlx5_fw_reset_set_reset_sync(struct
+ 				 struct netlink_ext_ack *extack);
+ int mlx5_fw_reset_set_live_patch(struct mlx5_core_dev *dev);
+ 
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
+ int mlx5_fw_reset_wait_reset_done(struct mlx5_core_dev *dev);
++#endif
+ int mlx5_fw_reset_verify_fw_complete(struct mlx5_core_dev *dev,
+ 				     struct netlink_ext_ack *extack);
+ void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev);
+@@ -19,5 +21,9 @@ void mlx5_fw_reset_events_stop(struct ml
+ void mlx5_drain_fw_reset(struct mlx5_core_dev *dev);
+ int mlx5_fw_reset_init(struct mlx5_core_dev *dev);
+ void mlx5_fw_reset_cleanup(struct mlx5_core_dev *dev);
++#if (defined(HAVE_DEVLINK_PARAMS_PUBLISHED) || defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS)) && !defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
++int mlx5_register_devlink_fw_params(struct mlx5_core_dev *dev);
++void mlx5_unregister_devlink_fw_params(struct mlx5_core_dev *dev);
++#endif
+ 
+ #endif

@@ -49,6 +49,7 @@ RUN_MLNX_TUNE=${RUN_MLNX_TUNE:-"no"}
 
 UNLOAD_MODULES="mlx5_ib mlx5_core mlx4_fc mlx4_en mlx4_ib mlx4_core mlxfw memtrack compat mlx_compat"
 UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa"
+UNLOAD_MODULES="$UNLOAD_MODULES mlx5_fwctl fwctl"
 STATUS_MODULES="mlx5_core mlxfw"
 
 # Only use ONBOOT option if called by a runlevel directory.

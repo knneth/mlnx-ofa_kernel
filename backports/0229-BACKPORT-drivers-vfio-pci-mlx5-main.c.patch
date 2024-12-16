@@ -1,0 +1,47 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
+
+Change-Id: I412120629afa3d5ec817bb2b16652c864d2c35e9
+---
+ drivers/vfio/pci/mlx5/main.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/vfio/pci/mlx5/main.c
++++ b/drivers/vfio/pci/mlx5/main.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_VFIO_SUPPORT
+ #include <linux/device.h>
+ #include <linux/eventfd.h>
+ #include <linux/file.h>
+@@ -1390,10 +1391,14 @@ static const struct vfio_device_ops mlx5
+ 	.mmap = vfio_pci_core_mmap,
+ 	.request = vfio_pci_core_request,
+ 	.match = vfio_pci_core_match,
++#ifdef HAVE_SUPPORT_IOMMUFD_VFIO_PHYS_DEVICES
+ 	.bind_iommufd = vfio_iommufd_physical_bind,
+ 	.unbind_iommufd = vfio_iommufd_physical_unbind,
+ 	.attach_ioas = vfio_iommufd_physical_attach_ioas,
++#endif
++#ifdef HAVE_DETACH_IOAS_NDO
+ 	.detach_ioas = vfio_iommufd_physical_detach_ioas,
++#endif
+ };
+ 
+ static int mlx5vf_pci_probe(struct pci_dev *pdev,
+@@ -1444,10 +1449,13 @@ static struct pci_driver mlx5vf_pci_driv
+ 	.probe = mlx5vf_pci_probe,
+ 	.remove = mlx5vf_pci_remove,
+ 	.err_handler = &mlx5vf_err_handlers,
++#ifdef HAVE_PCI_DRIVER_MANAGED_DMA
+ 	.driver_managed_dma = true,
++#endif
+ };
+ 
+ module_pci_driver(mlx5vf_pci_driver);
++#endif /* HAVE_VFIO_SUPPORT */
+ 
+ MODULE_IMPORT_NS(IOMMUFD);
+ MODULE_LICENSE("GPL");

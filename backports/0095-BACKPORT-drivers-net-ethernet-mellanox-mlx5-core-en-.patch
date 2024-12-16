@@ -1,31 +1,49 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 
+Change-Id: I157f8be4cd9fb811781f1745f43459c5cc486af3
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-@@ -10,6 +10,10 @@
- #include <linux/notifier.h>
- #include <net/netevent.h>
- #include <net/arp.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <net/addrconf.h>
-+#include <net/ipv6_stubs.h>
-+#endif
- #include "neigh.h"
- #include "tc.h"
- #include "en_rep.h"
-@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+@@ -278,11 +278,17 @@ static const struct sysfs_ops rep_sysfs_
+ 	.store  = rep_attr_store
+ };
  
- 	neigh_connected = (nud_state & NUD_VALID) && !dead;
- 
-+#ifndef MLX_DISABLE_TRACEPOINTS
- 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ ATTRIBUTE_GROUPS(rep);
 +#endif
  
- 	if (!same_dev)
- 		goto out;
+ static struct kobj_type rep_type = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = rep_groups
++#else
++	.default_attrs = rep_attrs
++#endif
+ };
+ 
+ static struct attribute *rep_paging_attrs[] = {
+@@ -290,12 +296,18 @@ static struct attribute *rep_paging_attr
+ 	&attr_num_pages.attr,
+ 	NULL,
+ };
+-ATTRIBUTE_GROUPS(rep_paging);
+ 
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
++ATTRIBUTE_GROUPS(rep_paging);
++#endif
+ 
+ static struct kobj_type rep_paging = {
+ 	.sysfs_ops     = &rep_sysfs_ops,
++#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
+ 	.default_groups = rep_paging_groups
++#else
++	.default_attrs = rep_paging_attrs
++#endif
+ };
+ 
+ void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)

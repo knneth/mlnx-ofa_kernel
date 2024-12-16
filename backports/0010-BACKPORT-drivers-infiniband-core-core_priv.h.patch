@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
+
+Change-Id: I4f9e545464ce8ea5bda78e81835cd46aeb96c91a
+---
+ drivers/infiniband/core/core_priv.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/infiniband/core/core_priv.h
++++ b/drivers/infiniband/core/core_priv.h
+@@ -40,6 +40,9 @@
+ #include <net/netns/generic.h>
+ 
+ #include <rdma/ib_verbs.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <rdma/ib_addr.h>
++#endif
+ #include <rdma/opa_addr.h>
+ #include <rdma/ib_mad.h>
+ #include <rdma/restrack.h>

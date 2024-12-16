@@ -1,0 +1,199 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
+
+Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
+---
+ .../ethernet/mellanox/mlx5/core/lib/vxlan.c   | 98 +++++++++++++++++--
+ 1 file changed, 91 insertions(+), 7 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
+@@ -41,11 +41,17 @@ struct mlx5_vxlan {
+ 	struct mlx5_core_dev		*mdev;
+ 	/* max_num_ports is usually 4, 16 buckets is more than enough */
+ 	DECLARE_HASHTABLE(htable, 4);
++#ifndef HAVE_UDP_TUNNEL_NIC_INFO
++	int                         	num_ports;
++#endif
+ 	struct mutex                    sync_lock; /* sync add/del port HW operations */
+ };
+ 
+ struct mlx5_vxlan_port {
+ 	struct hlist_node hlist;
++#ifndef HAVE_UDP_TUNNEL_NIC_INFO
++	refcount_t refcount;
++#endif
+ 	u16 udp_port;
+ };
+ 
+@@ -73,12 +79,13 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
+ {
+ 	struct mlx5_vxlan_port *vxlanp;
+ 	bool found = false;
++	COMPAT_HL_NODE
+ 
+ 	if (!mlx5_vxlan_allowed(vxlan))
+ 		return NULL;
+ 
+ 	rcu_read_lock();
+-	hash_for_each_possible_rcu(vxlan->htable, vxlanp, hlist, port)
++	compat_hash_for_each_possible_rcu(vxlan->htable, vxlanp, hlist, port)
+ 		if (vxlanp->udp_port == port) {
+ 			found = true;
+ 			break;
+@@ -91,8 +98,9 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
+ static struct mlx5_vxlan_port *vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 port)
+ {
+ 	struct mlx5_vxlan_port *vxlanp;
++	COMPAT_HL_NODE
+ 
+-	hash_for_each_possible(vxlan->htable, vxlanp, hlist, port)
++	compat_hash_for_each_possible(vxlan->htable, vxlanp, hlist, port)
+ 		if (vxlanp->udp_port == port)
+ 			return vxlanp;
+ 	return NULL;
+@@ -101,24 +109,62 @@ static struct mlx5_vxlan_port *vxlan_loo
+ int mlx5_vxlan_add_port(struct mlx5_vxlan *vxlan, u16 port)
+ {
+ 	struct mlx5_vxlan_port *vxlanp;
+-	int ret;
+-
++       	int ret = 0;
++#ifdef HAVE_UDP_TUNNEL_NIC_INFO
+ 	vxlanp = kzalloc(sizeof(*vxlanp), GFP_KERNEL);
+ 	if (!vxlanp)
+ 		return -ENOMEM;
+ 	vxlanp->udp_port = port;
+-
++#else
++       mutex_lock(&vxlan->sync_lock);
++       vxlanp = vxlan_lookup_port(vxlan, port);
++       if (vxlanp) {
++	       refcount_inc(&vxlanp->refcount);
++	       goto unlock;
++       }
++       if (vxlan->num_ports >= mlx5_vxlan_max_udp_ports(vxlan->mdev)) {
++	       mlx5_core_info(vxlan->mdev,
++			       "UDP port (%d) not offloaded, max number of UDP ports (%d) are already offloaded\n",
++			       port, mlx5_vxlan_max_udp_ports(vxlan->mdev));
++	       ret = -ENOSPC;
++	       goto unlock;
++       }
++#endif
+ 	ret = mlx5_vxlan_core_add_port_cmd(vxlan->mdev, port);
++#ifdef HAVE_UDP_TUNNEL_NIC_INFO
+ 	if (ret) {
+ 		kfree(vxlanp);
+ 		return ret;
+ 	}
+ 
+ 	mutex_lock(&vxlan->sync_lock);
++#else
++	if (ret)
++		goto unlock;
++
++	vxlanp = kzalloc(sizeof(*vxlanp), GFP_KERNEL);
++	if (!vxlanp) {
++		ret = -ENOMEM;
++		goto err_delete_port;
++	}
++	vxlanp->udp_port = port;
++	refcount_set(&vxlanp->refcount, 1);
++#endif		
+ 	hash_add_rcu(vxlan->htable, &vxlanp->hlist, port);
++#ifndef HAVE_UDP_TUNNEL_NIC_INFO
++	vxlan->num_ports++;
++#endif
+ 	mutex_unlock(&vxlan->sync_lock);
+-
+ 	return 0;
++
++#ifndef HAVE_UDP_TUNNEL_NIC_INFO
++err_delete_port:
++	mlx5_vxlan_core_del_port_cmd(vxlan->mdev, port);
++
++unlock:
++	mutex_unlock(&vxlan->sync_lock);
++	return ret;
++#endif
+ }
+ 
+ int mlx5_vxlan_del_port(struct mlx5_vxlan *vxlan, u16 port)
+@@ -129,15 +175,29 @@ int mlx5_vxlan_del_port(struct mlx5_vxla
+ 	mutex_lock(&vxlan->sync_lock);
+ 
+ 	vxlanp = vxlan_lookup_port(vxlan, port);
++#ifdef HAVE_UDP_TUNNEL_NIC_INFO
+ 	if (WARN_ON(!vxlanp)) {
++#else
++	if (!vxlanp) {
++#endif
+ 		ret = -ENOENT;
+ 		goto out_unlock;
+ 	}
+ 
++#ifdef HAVE_UDP_TUNNEL_NIC_INFO
+ 	hash_del_rcu(&vxlanp->hlist);
+ 	synchronize_rcu();
+ 	mlx5_vxlan_core_del_port_cmd(vxlan->mdev, port);
+ 	kfree(vxlanp);
++#else
++       if (refcount_dec_and_test(&vxlanp->refcount)) {
++              hash_del_rcu(&vxlanp->hlist);
++              synchronize_rcu();
++              mlx5_vxlan_core_del_port_cmd(vxlan->mdev, port);
++              kfree(vxlanp);
++              vxlan->num_ports--;
++       }
++#endif
+ 
+ out_unlock:
+ 	mutex_unlock(&vxlan->sync_lock);
+@@ -165,6 +225,7 @@ struct mlx5_vxlan *mlx5_vxlan_create(str
+ 	return vxlan;
+ }
+ 
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
+ void mlx5_vxlan_destroy(struct mlx5_vxlan *vxlan)
+ {
+ 	if (!mlx5_vxlan_allowed(vxlan))
+@@ -181,11 +242,12 @@ void mlx5_vxlan_reset_to_default(struct
+ 	struct mlx5_vxlan_port *vxlanp;
+ 	struct hlist_node *tmp;
+ 	int bkt;
++	COMPAT_HL_NODE
+ 
+ 	if (!mlx5_vxlan_allowed(vxlan))
+ 		return;
+ 
+-	hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
++	compat_hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
+ 		/* Don't delete default UDP port added by the HW.
+ 		 * Remove only user configured ports
+ 		 */
+@@ -194,3 +256,25 @@ void mlx5_vxlan_reset_to_default(struct
+ 		mlx5_vxlan_del_port(vxlan, vxlanp->udp_port);
+ 	}
+ }
++
++#else
++void mlx5_vxlan_destroy(struct mlx5_vxlan *vxlan)
++{
++	struct mlx5_vxlan_port *vxlanp;
++	struct hlist_node *tmp;
++	int bkt;
++	COMPAT_HL_NODE
++
++	if (!mlx5_vxlan_allowed(vxlan))
++		return;
++
++	/* Lockless since we are the only hash table consumers*/
++	compat_hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
++		hash_del(&vxlanp->hlist);
++		mlx5_vxlan_core_del_port_cmd(vxlan->mdev, vxlanp->udp_port);
++		kfree(vxlanp);
++	}
++
++	kfree(vxlan);
++}
++#endif

@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: Ia6d789c6f7fc44ec4ba991262635be8686c46e79
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -118,7 +118,12 @@ struct mlx5i_tx_wqe {
+ 	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
+ 
+ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+-		   struct mlx5_av *av, u32 dqpn, u32 dqkey, bool xmit_more);
++		   struct mlx5_av *av, u32 dqpn, u32 dqkey
++#if defined(HAVE_SK_BUFF_XMIT_MORE) || defined(HAVE_NETDEV_XMIT_MORE)
++		   , bool xmit_more);
++#else
++		   );
++#endif
+ void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
+ 
+ /* Reference management for child to parent interfaces. */

@@ -1,0 +1,182 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/sunrpc/svc_rdma.h
+
+Change-Id: I2f2f4195fe568e898769e2ce11bed22083c11dae
+Signed-off-by: Tom Wu <tomwu@nvidia.com>
+---
+ include/linux/sunrpc/svc_rdma.h | 65 +++++++++++++++++++++++++++++++--
+ 1 file changed, 62 insertions(+), 3 deletions(-)
+
+--- a/include/linux/sunrpc/svc_rdma.h
++++ b/include/linux/sunrpc/svc_rdma.h
+@@ -42,12 +42,17 @@
+ 
+ #ifndef SVC_RDMA_H
+ #define SVC_RDMA_H
++
++#include "../../../compat/config.h"
++
+ #include <linux/llist.h>
+ #include <linux/sunrpc/xdr.h>
+ #include <linux/sunrpc/svcsock.h>
+ #include <linux/sunrpc/rpc_rdma.h>
+ #include <linux/sunrpc/rpc_rdma_cid.h>
++#ifdef HAVE_SVC_RDMA_PCL
+ #include <linux/sunrpc/svc_rdma_pcl.h>
++#endif
+ 
+ #include <linux/percpu_counter.h>
+ #include <rdma/ib_verbs.h>
+@@ -95,8 +100,10 @@ struct svcxprt_rdma {
+ 	spinlock_t	     sc_rw_ctxt_lock;
+ 	struct llist_head    sc_rw_ctxts;
+ 
++#ifdef HAVE_SVCXPRT_RDMA_SC_PENDING_RECVS
+ 	u32		     sc_pending_recvs;
+ 	u32		     sc_recv_batch;
++#endif
+ 	struct list_head     sc_rq_dto_q;
+ 	struct list_head     sc_read_complete_q;
+ 	spinlock_t	     sc_rq_dto_lock;
+@@ -170,6 +177,9 @@ struct svc_rdma_chunk_ctxt {
+ 	struct list_head	cc_rwctxts;
+ 	ktime_t			cc_posttime;
+ 	int			cc_sqecount;
++#ifndef HAVE_SVC_RDMA_PCL
++	struct svcxprt_rdma	*cc_rdma;
++#endif
+ };
+ 
+ struct svc_rdma_recv_ctxt {
+@@ -180,10 +190,15 @@ struct svc_rdma_recv_ctxt {
+ 	struct rpc_rdma_cid	rc_cid;
+ 	struct ib_sge		rc_recv_sge;
+ 	void			*rc_recv_buf;
++#ifndef HAVE_SVC_RDMA_PCL
++	struct xdr_buf		rc_arg;
++#endif
+ 	struct xdr_stream	rc_stream;
+ 	u32			rc_byte_len;
++#ifndef HAVE_SVC_RDMA_PCL
++	unsigned int		rc_hdr_count;
++#endif
+ 	u32			rc_inv_rkey;
+-	__be32			rc_msgtype;
+ 
+ 	/* State for pulling a Read chunk */
+ 	unsigned int		rc_pageoff;
+@@ -192,12 +207,20 @@ struct svc_rdma_recv_ctxt {
+ 	struct xdr_buf		rc_saved_arg;
+ 	struct svc_rdma_chunk_ctxt	rc_cc;
+ 
++#ifdef HAVE_SVC_RDMA_PCL
++	__be32			rc_msgtype;
+ 	struct svc_rdma_pcl	rc_call_pcl;
+ 
+ 	struct svc_rdma_pcl	rc_read_pcl;
+ 	struct svc_rdma_chunk	*rc_cur_result_payload;
+ 	struct svc_rdma_pcl	rc_write_pcl;
+ 	struct svc_rdma_pcl	rc_reply_pcl;
++#else
++	__be32			*rc_write_list;
++	__be32			*rc_reply_chunk;
++	unsigned int		rc_read_payload_offset;
++	unsigned int		rc_read_payload_length;
++#endif
+ 
+ 	unsigned int		rc_page_count;
+ 	struct page		*rc_pages[RPCSVC_MAXPAGES];
+@@ -212,7 +235,12 @@ struct svc_rdma_write_info {
+ 	struct svcxprt_rdma	*wi_rdma;
+ 	struct list_head	wi_list;
+ 
++#ifdef HAVE_SVC_RDMA_PCL
+ 	const struct svc_rdma_chunk	*wi_chunk;
++#else
++	unsigned int		wi_nsegs;
++	__be32			*wi_segs;
++#endif
+ 
+ 	/* write state of this chunk */
+ 	unsigned int		wi_seg_off;
+@@ -262,18 +290,22 @@ extern struct svc_rdma_recv_ctxt *
+ extern void svc_rdma_recv_ctxt_put(struct svcxprt_rdma *rdma,
+ 				   struct svc_rdma_recv_ctxt *ctxt);
+ extern void svc_rdma_flush_recv_queues(struct svcxprt_rdma *rdma);
++#ifdef HAVE_SVC_RDMA_RELEASE_RQST
++extern void svc_rdma_release_rqst(struct svc_rqst *rqstp);
++#endif
++#ifdef HAVE_XPO_RELEASE_CTXT
+ extern void svc_rdma_release_ctxt(struct svc_xprt *xprt, void *ctxt);
++#endif
+ extern int svc_rdma_recvfrom(struct svc_rqst *);
+ 
+ /* svc_rdma_rw.c */
+-extern void svc_rdma_cc_init(struct svcxprt_rdma *rdma,
+-			     struct svc_rdma_chunk_ctxt *cc);
+ extern void svc_rdma_destroy_rw_ctxts(struct svcxprt_rdma *rdma);
+ extern void svc_rdma_cc_init(struct svcxprt_rdma *rdma,
+ 			     struct svc_rdma_chunk_ctxt *cc);
+ extern void svc_rdma_cc_release(struct svcxprt_rdma *rdma,
+ 				struct svc_rdma_chunk_ctxt *cc,
+ 				enum dma_data_direction dir);
++#ifdef HAVE_SVC_RDMA_PCL
+ extern void svc_rdma_write_chunk_release(struct svcxprt_rdma *rdma,
+ 					 struct svc_rdma_send_ctxt *ctxt);
+ extern void svc_rdma_reply_chunk_release(struct svcxprt_rdma *rdma,
+@@ -290,6 +322,18 @@ extern int svc_rdma_prepare_reply_chunk(
+ extern int svc_rdma_process_read_list(struct svcxprt_rdma *rdma,
+ 				      struct svc_rqst *rqstp,
+ 				      struct svc_rdma_recv_ctxt *head);
++#else
++extern int svc_rdma_recv_read_chunk(struct svcxprt_rdma *rdma,
++					struct svc_rqst *rqstp,
++					struct svc_rdma_recv_ctxt *head, __be32 *p);
++extern int svc_rdma_send_write_chunk(struct svcxprt_rdma *rdma,
++					__be32 *wr_ch, struct xdr_buf *xdr,
++					unsigned int offset,
++					unsigned long length);
++extern int svc_rdma_send_reply_chunk(struct svcxprt_rdma *rdma,
++					const struct svc_rdma_recv_ctxt *rctxt,
++					struct xdr_buf *xdr);
++#endif
+ 
+ /* svc_rdma_sendto.c */
+ extern void svc_rdma_send_ctxts_destroy(struct svcxprt_rdma *rdma);
+@@ -297,6 +341,7 @@ extern struct svc_rdma_send_ctxt *
+ 		svc_rdma_send_ctxt_get(struct svcxprt_rdma *rdma);
+ extern void svc_rdma_send_ctxt_put(struct svcxprt_rdma *rdma,
+ 				   struct svc_rdma_send_ctxt *ctxt);
++#ifdef HAVE_SVC_RDMA_PCL
+ extern int svc_rdma_post_send(struct svcxprt_rdma *rdma,
+ 			      struct svc_rdma_send_ctxt *ctxt);
+ extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
+@@ -304,14 +349,28 @@ extern int svc_rdma_map_reply_msg(struct
+ 				  const struct svc_rdma_pcl *write_pcl,
+ 				  const struct svc_rdma_pcl *reply_pcl,
+ 				  const struct xdr_buf *xdr);
++#else
++extern int svc_rdma_send(struct svcxprt_rdma *rdma,
++			struct svc_rdma_send_ctxt *ctxt);
++extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
++				  struct svc_rdma_send_ctxt *sctxt,
++				  const struct svc_rdma_recv_ctxt *rctxt,
++				  struct xdr_buf *xdr);
++#endif
+ extern void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
+ 				    struct svc_rdma_send_ctxt *sctxt,
+ 				    struct svc_rdma_recv_ctxt *rctxt,
+ 				    int status);
+ extern void svc_rdma_wake_send_waiters(struct svcxprt_rdma *rdma, int avail);
+ extern int svc_rdma_sendto(struct svc_rqst *);
++#ifdef HAVE_XPO_READ_PAYLOAD
++extern int svc_rdma_read_payload(struct svc_rqst *rqstp, unsigned int offset,
++				 unsigned int length);
++#endif
++#ifdef HAVE_XPO_RESULT_PAYLOAD
+ extern int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
+ 				   unsigned int length);
++#endif
+ 
+ /* svc_rdma_transport.c */
+ extern struct svc_xprt_class svc_rdma_class;

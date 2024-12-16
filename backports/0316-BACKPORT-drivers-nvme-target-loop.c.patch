@@ -1,0 +1,77 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
+
+---
+ drivers/nvme/target/loop.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+--- a/drivers/nvme/target/loop.c
++++ b/drivers/nvme/target/loop.c
+@@ -78,7 +78,11 @@ static void nvme_loop_complete_rq(struct
+ {
+ 	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
+ 
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 	sg_free_table_chained(&iod->sg_table, NVME_INLINE_SG_CNT);
++#else
++	sg_free_table_chained(&iod->sg_table, true);
++#endif
+ 	nvme_complete_rq(req);
+ }
+ 
+@@ -157,9 +161,15 @@ static blk_status_t nvme_loop_queue_rq(s
+ 
+ 	if (blk_rq_nr_phys_segments(req)) {
+ 		iod->sg_table.sgl = iod->first_sgl;
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 		if (sg_alloc_table_chained(&iod->sg_table,
+ 				blk_rq_nr_phys_segments(req),
+ 				iod->sg_table.sgl, NVME_INLINE_SG_CNT)) {
++#else
++		if (sg_alloc_table_chained(&iod->sg_table,
++				blk_rq_nr_phys_segments(req),
++				iod->sg_table.sgl)) {
++#endif
+ 			nvme_cleanup_cmd(req);
+ 			return BLK_STS_RESOURCE;
+ 		}
+@@ -216,7 +226,9 @@ static int nvme_loop_init_request(struct
+ 			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
+ }
+ 
++#ifdef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
+ static struct lock_class_key loop_hctx_fq_lock_key;
++#endif
+ 
+ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
+ 		unsigned int hctx_idx)
+@@ -232,7 +244,9 @@ static int nvme_loop_init_hctx(struct bl
+ 	 * then we can remove the dynamically allocated lock class for each
+ 	 * flush queue, that way may cause horrible boot delay.
+ 	 */
++#ifdef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
+ 	blk_mq_hctx_set_fq_lock_class(hctx, &loop_hctx_fq_lock_key);
++#endif
+ 
+ 	hctx->driver_data = queue;
+ 	return 0;
+@@ -376,7 +390,11 @@ static int nvme_loop_configure_admin_que
+ 		goto out_cleanup_tagset;
+ 
+ 	ctrl->ctrl.max_hw_sectors =
++#ifdef HAVE_BLK_TYPES_PAGE_SECTORS_SHIFT
+ 		(NVME_LOOP_MAX_SEGMENTS - 1) << PAGE_SECTORS_SHIFT;
++#else
++		(NVME_LOOP_MAX_SEGMENTS - 1) << (PAGE_SHIFT - 9);
++#endif
+ 
+ 	nvme_unquiesce_admin_queue(&ctrl->ctrl);
+ 
+@@ -695,4 +713,7 @@ module_exit(nvme_loop_cleanup_module);
+ 
+ MODULE_DESCRIPTION("NVMe target loop transport driver");
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_ALIAS("nvmet-transport-254"); /* 254 == NVMF_TRTYPE_LOOP */

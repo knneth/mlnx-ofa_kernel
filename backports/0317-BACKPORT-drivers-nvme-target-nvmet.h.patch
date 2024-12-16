@@ -1,0 +1,60 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
+
+Change-Id: I8c2b7c3af6d381e253ff6aab71f363553116d1d2
+---
+ drivers/nvme/target/nvmet.h | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/drivers/nvme/target/nvmet.h
++++ b/drivers/nvme/target/nvmet.h
+@@ -22,6 +22,15 @@
+ #include <linux/blkdev.h>
+ #include <linux/radix-tree.h>
+ #include <linux/t10-pi.h>
++#include <linux/xarray.h>
++
++#ifndef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
++#undef CONFIG_NVME_TARGET_AUTH
++#endif
++
++#ifdef HAVE_BLK_INTEGRITY_H
++#define HAVE_BLKDEV_BIO_INTEGRITY_BYTES
++#endif
+ 
+ #define NVMET_DEFAULT_VS		NVME_VS(1, 3, 0)
+ 
+@@ -60,7 +69,11 @@
+ 
+ struct nvmet_ns {
+ 	struct percpu_ref	ref;
++#ifdef HAVE_BDEV_FILE_OPEN_BY_PATH	
+ 	struct file		*bdev_file;
++#elif defined(HAVE_BDEV_RELEASE)
++	struct bdev_handle	*bdev_handle;
++#endif
+ 	struct block_device	*bdev;
+ 	struct pci_dev		*pdev;
+ 	struct file		*file;
+@@ -540,7 +553,9 @@ u16 nvmet_parse_connect_cmd(struct nvmet
+ void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
+ u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
+ u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ u16 nvmet_bdev_zns_parse_io_cmd(struct nvmet_req *req);
++#endif
+ u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_discovery_cmd(struct nvmet_req *req);
+ u16 nvmet_parse_fabrics_admin_cmd(struct nvmet_req *req);
+@@ -682,9 +697,11 @@ void nvmet_file_ns_revalidate(struct nvm
+ bool nvmet_ns_revalidate(struct nvmet_ns *ns);
+ u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts);
+ 
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ bool nvmet_bdev_zns_enable(struct nvmet_ns *ns);
+ void nvmet_execute_identify_ctrl_zns(struct nvmet_req *req);
+ void nvmet_execute_identify_ns_zns(struct nvmet_req *req);
++#endif
+ void nvmet_bdev_execute_zone_mgmt_recv(struct nvmet_req *req);
+ void nvmet_bdev_execute_zone_mgmt_send(struct nvmet_req *req);
+ void nvmet_bdev_execute_zone_append(struct nvmet_req *req);

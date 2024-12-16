@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/apple.c
+
+---
+ drivers/nvme/host/apple.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/nvme/host/apple.c
++++ b/drivers/nvme/host/apple.c
+@@ -874,7 +874,12 @@ static void apple_nvme_disable(struct ap
+ 	}
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_TIMEOUT_1_PARAM
+ static enum blk_eh_timer_return apple_nvme_timeout(struct request *req)
++#else
++static enum blk_eh_timer_return apple_nvme_timeout(struct request *req,
++						   bool reserved)
++#endif
+ {
+ 	struct apple_nvme_iod *iod = blk_mq_rq_to_pdu(req);
+ 	struct apple_nvme_queue *q = iod->q;
+@@ -1516,7 +1521,11 @@ static int apple_nvme_probe(struct platf
+ 		goto put_dev;
+ 	}
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_QUEUE
+ 	anv->ctrl.admin_q = blk_mq_alloc_queue(&anv->admin_tagset, NULL, NULL);
++#else
++	anv->ctrl.admin_q = blk_mq_init_queue(&anv->admin_tagset);
++#endif
+ 	if (IS_ERR(anv->ctrl.admin_q)) {
+ 		ret = -ENOMEM;
+ 		goto put_dev;

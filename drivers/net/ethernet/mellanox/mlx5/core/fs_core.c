@@ -114,9 +114,9 @@
 #define ETHTOOL_NUM_PRIOS 11
 #define ETHTOOL_MIN_LEVEL (KERNEL_MIN_LEVEL + ETHTOOL_NUM_PRIOS)
 /* Promiscuous, Vlan, mac, ttc, inner ttc, {UDP/ANY/aRFS/accel/{esp, esp_err}}, IPsec policy,
- * IPsec RoCE policy
+ * {IPsec RoCE MPV,Alias table},IPsec RoCE policy
  */
-#define KERNEL_NIC_PRIO_NUM_LEVELS 9
+#define KERNEL_NIC_PRIO_NUM_LEVELS 11
 #define KERNEL_NIC_NUM_PRIOS 1
 /* One more level for tc */
 #define KERNEL_MIN_LEVEL (KERNEL_NIC_PRIO_NUM_LEVELS + 1)
@@ -140,7 +140,7 @@
 #define LAG_MIN_LEVEL (OFFLOADS_MIN_LEVEL + KERNEL_RX_MACSEC_MIN_LEVEL + 1)
 
 #define KERNEL_TX_IPSEC_NUM_PRIOS  1
-#define KERNEL_TX_IPSEC_NUM_LEVELS 3
+#define KERNEL_TX_IPSEC_NUM_LEVELS 4
 #define KERNEL_TX_IPSEC_MIN_LEVEL        (KERNEL_TX_IPSEC_NUM_LEVELS +  1)
 
 #define KERNEL_TX_MACSEC_NUM_PRIOS  1
@@ -242,7 +242,7 @@ enum {
 };
 
 #define RDMA_RX_IPSEC_NUM_PRIOS 1
-#define RDMA_RX_IPSEC_NUM_LEVELS 2
+#define RDMA_RX_IPSEC_NUM_LEVELS 4
 #define RDMA_RX_IPSEC_MIN_LEVEL  (RDMA_RX_IPSEC_NUM_LEVELS)
 
 #define RDMA_RX_BYPASS_MIN_LEVEL MLX5_BY_PASS_NUM_REGULAR_PRIOS
@@ -299,7 +299,7 @@ enum {
 #define RDMA_TX_BYPASS_MIN_LEVEL MLX5_BY_PASS_NUM_PRIOS
 #define RDMA_TX_COUNTERS_MIN_LEVEL (RDMA_TX_BYPASS_MIN_LEVEL + 1)
 
-#define RDMA_TX_IPSEC_NUM_PRIOS 1
+#define RDMA_TX_IPSEC_NUM_PRIOS 2
 #define RDMA_TX_IPSEC_PRIO_NUM_LEVELS 1
 #define RDMA_TX_IPSEC_MIN_LEVEL  (RDMA_TX_COUNTERS_MIN_LEVEL + RDMA_TX_IPSEC_NUM_PRIOS)
 
@@ -2113,15 +2113,16 @@ search_again_locked:
 
 	/* Collect all fgs which has a matching match_criteria */
 	err = build_match_list(&match_head, ft, spec, flow_act->fg, take_write);
-	if (!take_write) {
-		up_read_ref_node(&ft->node);
-	} else {
-		up_write_ref_node(&ft->node, false);
-		take_write = false;
+	if (err) {
+		if (take_write)
+			up_write_ref_node(&ft->node, false);
+		else
+			up_read_ref_node(&ft->node);
+		return ERR_PTR(err);
 	}
 
-	if (err)
-		return ERR_PTR(err);
+	if (!take_write)
+		up_read_ref_node(&ft->node);
 
 	rule = try_add_to_existing_fg(ft, &match_head.list, spec, flow_act, dest,
 				      dest_num, version);
@@ -3502,12 +3503,9 @@ void mlx5_fs_core_free(struct mlx5_core_dev *dev)
 	mlx5_cleanup_fc_stats(dev);
 }
 
-#define CACHE_SIZE_NAME 30
 int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
 {
 	struct mlx5_flow_steering *steering;
-	char *ftes_cache_name;
-	char *fgs_cache_name;
 	int err = 0;
 
 	err = mlx5_init_fc_stats(dev);
@@ -3524,13 +3522,6 @@ int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
 		goto err;
 	}
 
-	ftes_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
-	fgs_cache_name = kzalloc(sizeof(char) * CACHE_SIZE_NAME, GFP_KERNEL);
-	if (!ftes_cache_name || !fgs_cache_name) {
-		err = -ENOMEM;
-		goto err;
-	}
-
 	steering->dev = dev;
 	dev->priv.steering = steering;
 
@@ -3539,27 +3530,19 @@ int mlx5_fs_core_alloc(struct mlx5_core_dev *dev)
 	else
 		steering->mode = MLX5_FLOW_STEERING_MODE_DMFS;
 
-	snprintf(ftes_cache_name, CACHE_SIZE_NAME, "fs_ftes_%s", dev_name(dev->device));
-	snprintf(fgs_cache_name, CACHE_SIZE_NAME, "fs_fgs_%s", dev_name(dev->device));
-	steering->fgs_cache = kmem_cache_create(fgs_cache_name,
+	steering->fgs_cache = kmem_cache_create("mlx5_fs_fgs",
 						sizeof(struct mlx5_flow_group), 0,
 						0, NULL);
-	steering->ftes_cache = kmem_cache_create(ftes_cache_name,
-						 sizeof(struct fs_fte), 0,
+	steering->ftes_cache = kmem_cache_create("mlx5_fs_ftes", sizeof(struct fs_fte), 0,
 						 0, NULL);
-
 	if (!steering->ftes_cache || !steering->fgs_cache) {
 		err = -ENOMEM;
 		goto err;
 	}
 
-	kfree(ftes_cache_name);
-	kfree(fgs_cache_name);
 	return 0;
 
 err:
-	kfree(ftes_cache_name);
-	kfree(fgs_cache_name);
 	mlx5_fs_core_free(dev);
 	return err;
 }

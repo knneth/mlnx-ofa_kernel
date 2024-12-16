@@ -1,0 +1,204 @@
+From: Shay Drory <shayd@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
+
+Change-Id: I7348a55d0e67ea83dce62ed4e21f3891e3e1244d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 55 ++++++++++++++++++--
+ 1 file changed, 51 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
+@@ -45,7 +45,9 @@ enum {
+ 	MLX5_EQ_POLLING_BUDGET	= 128,
+ };
+ 
++#ifdef HAVE_STATIC_ASSERT
+ static_assert(MLX5_EQ_POLLING_BUDGET <= MLX5_NUM_SPARE_EQE);
++#endif
+ 
+ struct mlx5_eq_table {
+ 	struct xarray           comp_eqs;
+@@ -127,7 +129,11 @@ static int mlx5_eq_comp_int(struct notif
+ 		/* Make sure we read EQ entry contents after we've
+ 		 * checked the ownership bit.
+ 		 */
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
+ 		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
+ 
+@@ -206,7 +212,7 @@ static int mlx5_eq_async_int(struct noti
+ 	struct mlx5_eq_table *eqt;
+ 	struct mlx5_core_dev *dev;
+ 	struct mlx5_eqe *eqe;
+-	unsigned long flags;
++	unsigned long flags = 0;
+ 	int num_eqes = 0;
+ 	bool recovery;
+ 
+@@ -225,7 +231,11 @@ static int mlx5_eq_async_int(struct noti
+ 		 * Make sure we read EQ entry contents after we've
+ 		 * checked the ownership bit.
+ 		 */
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 
+ 		atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
+ 		atomic_notifier_call_chain(&eqt->nh[MLX5_EVENT_TYPE_NOTIFY_ANY], eqe->type, eqe);
+@@ -330,7 +340,7 @@ create_map_eq(struct mlx5_core_dev *dev,
+ 
+ 	eq->vecidx = vecidx;
+ 	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
+-	eq->irqn = pci_irq_vector(dev->pdev, vecidx);
++        eq->irqn = pci_irq_vector(dev->pdev, vecidx);
+ 	eq->dev = dev;
+ 	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
+ 
+@@ -660,13 +670,18 @@ static void cleanup_async_eq(struct mlx5
+ 			      name, err);
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE  
+ static u16 async_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
+ {
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_param_driverinit_value_get(devlink,
++#else
++	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 					      DEVLINK_PARAM_GENERIC_ID_EVENT_EQ_SIZE,
+ 					      &val);
+ 	if (!err)
+@@ -674,6 +689,7 @@ static u16 async_eq_depth_devlink_param_
+ 	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
+ 	return MLX5_NUM_ASYNC_EQE;
+ }
++#endif
+ 
+ static int create_async_eqs(struct mlx5_core_dev *dev)
+ {
+@@ -706,7 +722,11 @@ static int create_async_eqs(struct mlx5_
+ 
+ 	param = (struct mlx5_eq_param) {
+ 		.irq = table->ctrl_irq,
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE  
+ 		.nent = async_eq_depth_devlink_param_get(dev),
++#else
++		.nent = MLX5_NUM_ASYNC_EQE,
++#endif
+ 	};
+ 
+ 	if (mlx5_core_is_sf(dev) && dev->async_eq_depth)
+@@ -831,7 +851,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+ 	 * checked the ownership bit.
+ 	 */
+ 	if (eqe)
++#ifdef dma_rmb
+ 		dma_rmb();
++#else
++		rmb();
++#endif
+ 
+ 	return eqe;
+ }
+@@ -866,12 +890,15 @@ static void comp_irq_release_pci(struct
+ 
+ static int mlx5_cpumask_default_spread(int numa_node, int index)
+ {
++#if defined(for_each_numa_hop_mask) && defined(for_each_cpu_andnot)
+ 	const struct cpumask *prev = cpu_none_mask;
+ 	const struct cpumask *mask;
+-	int found_cpu = 0;
+-	int i = 0;
+ 	int cpu;
++	int i = 0;
++#endif
++	int found_cpu = 0;
+ 
++#if defined(for_each_numa_hop_mask) && defined(for_each_cpu_andnot)
+ 	rcu_read_lock();
+ 	for_each_numa_hop_mask(mask, numa_node) {
+ 		for_each_cpu_andnot(cpu, mask, prev) {
+@@ -885,6 +912,9 @@ static int mlx5_cpumask_default_spread(i
+ 
+ spread_done:
+ 	rcu_read_unlock();
++#else
++	return cpumask_local_spread(index, numa_node);
++#endif
+ 	return found_cpu;
+ }
+ 
+@@ -1032,13 +1062,18 @@ static void destroy_comp_eq(struct mlx5_
+ 	table->curr_comp_eqs--;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+ static u16 comp_eq_depth_devlink_param_get(struct mlx5_core_dev *dev)
+ {
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_param_driverinit_value_get(devlink,
++#else
++	err = devlink_param_driverinit_value_get(devlink,
++#endif
+ 					      DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE,
+ 					      &val);
+ 	if (!err)
+@@ -1046,6 +1081,7 @@ static u16 comp_eq_depth_devlink_param_g
+ 	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
+ 	return MLX5_COMP_EQ_SIZE;
+ }
++#endif
+ 
+ /* Must be called with EQ table comp_lock held */
+ static int create_comp_eq(struct mlx5_core_dev *dev, u16 vecidx)
+@@ -1064,7 +1100,11 @@ static int create_comp_eq(struct mlx5_co
+ 		return -ENOMEM;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+ 	nent = comp_eq_depth_devlink_param_get(dev);
++#else
++	nent = MLX5_COMP_EQ_SIZE;
++#endif
+ 
+ 	/* if user specified completion eq depth, honor that */
+ 	if (mlx5_core_is_sf(dev) && dev->cmpl_eq_depth)
+@@ -1077,7 +1117,12 @@ static int create_comp_eq(struct mlx5_co
+ 	INIT_LIST_HEAD(&eq->tasklet_ctx.list);
+ 	INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
+ 	spin_lock_init(&eq->tasklet_ctx.lock);
++#ifdef HAVE_TASKLET_SETUP
+ 	tasklet_setup(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb);
++#else
++	tasklet_init(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb,
++			(unsigned long)&eq->tasklet_ctx);
++#endif
+ 
+ 	irq = xa_load(&table->comp_irqs, vecidx);
+ 	eq->irq_nb.notifier_call = mlx5_eq_comp_int;
+@@ -1231,8 +1276,10 @@ static int get_num_eqs(struct mlx5_core_
+ 	 * have the other vectors available for other drivers using mlx5_core. For
+ 	 * example, mlx5_vdpa
+ 	 */
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ 	if (!mlx5_core_is_eth_enabled(dev) && mlx5_eth_supported(dev))
+ 		return 1;
++#endif
+ 
+ 	max_dev_eqs = mlx5_max_eq_cap_get(dev);
+ 

@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs.h
+
+Change-Id: I1b90a77e2ad9b501b54f536593520e50067430cd
+---
+ drivers/infiniband/core/uverbs.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/drivers/infiniband/core/uverbs.h
++++ b/drivers/infiniband/core/uverbs.h
+@@ -158,7 +158,6 @@ struct ib_uverbs_file {
+ 	struct mutex umap_lock;
+ 	struct list_head umaps;
+ 	struct page *disassociate_page;
+-
+ 	struct xarray		idr;
+ };
+ 

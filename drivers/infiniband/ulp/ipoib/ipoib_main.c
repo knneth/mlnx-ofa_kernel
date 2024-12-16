@@ -1352,10 +1352,10 @@ static int ipoib_get_iflink(const struct net_device *dev)
 
 	/* parent interface */
 	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags))
-		return dev->ifindex;
+		return READ_ONCE(dev->ifindex);
 
 	/* child/vlan interface */
-	return priv->parent->ifindex;
+	return READ_ONCE(priv->parent->ifindex);
 }
 
 static u32 ipoib_addr_hash(struct ipoib_neigh_hash *htbl, u8 *daddr)
@@ -2119,8 +2119,7 @@ static void ipoib_ndo_uninit(struct net_device *dev)
 		priv->wq = NULL;
 	}
 
-	if (priv->parent)
-		dev_put(priv->parent);
+	dev_put(priv->parent);
 }
 
 static int ipoib_set_vf_link_state(struct net_device *dev, int vf, int link_state)

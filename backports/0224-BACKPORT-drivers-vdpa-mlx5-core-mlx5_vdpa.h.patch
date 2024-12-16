@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/core/mlx5_vdpa.h
+
+Change-Id: I4fce09852c1cb8633dbaeb841f6aeb1020516e6f
+---
+ drivers/vdpa/mlx5/core/mlx5_vdpa.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/vdpa/mlx5/core/mlx5_vdpa.h
++++ b/drivers/vdpa/mlx5/core/mlx5_vdpa.h
+@@ -1,6 +1,8 @@
+ /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+ /* Copyright (c) 2020 Mellanox Technologies Ltd. */
+ 
++#ifdef HAVE_VDPA_SUPPORT
++
+ #ifndef __MLX5_VDPA_H__
+ #define __MLX5_VDPA_H__
+ 
+@@ -133,7 +135,9 @@ int mlx5_vdpa_update_cvq_iotlb(struct ml
+ 				struct vhost_iotlb *iotlb,
+ 				unsigned int asid);
+ int mlx5_vdpa_create_dma_mr(struct mlx5_vdpa_dev *mvdev);
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ int mlx5_vdpa_reset_mr(struct mlx5_vdpa_dev *mvdev, unsigned int asid);
++#endif
+ 
+ #define mlx5_vdpa_warn(__dev, format, ...)                                                         \
+ 	dev_warn((__dev)->mdev->device, "%s:%d:(pid %d) warning: " format, __func__, __LINE__,     \
+@@ -148,3 +152,4 @@ int mlx5_vdpa_reset_mr(struct mlx5_vdpa_
+ 		  current->pid, ##__VA_ARGS__)
+ 
+ #endif /* __MLX5_VDPA_H__ */
++#endif

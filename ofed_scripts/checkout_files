@@ -16,8 +16,11 @@ drivers/net/ethernet/mellanox/Kconfig
 drivers/nvme/
 drivers/scsi/scsi_priv.h
 drivers/scsi/scsi_transport_srp.c
-drivers/base/auxiliary.c
+include/uapi/fwctl/
 drivers/base/Makefile
+drivers/fwctl/Makefile
+drivers/fwctl/main.c
+drivers/fwctl/mlx5
 drivers/vfio/pci/mlx5
 drivers/vdpa/mlx5
 net/sunrpc/xprtrdma
@@ -43,6 +46,7 @@ include/trace/misc/rdma.h
 include/trace/misc/sunrpc.h
 include/linux/sunrpc/rpc_rdma_cid.h
 include/linux/auxiliary_bus.h
+include/linux/fwctl.h
 include/linux/mod_devicetable.h
 include/linux/bitfield.h
 include/linux/sunrpc/svc_rdma_pcl.h

@@ -1,39 +1,87 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
 
+Change-Id: Ib0a1d15d227fe2bf958615a20710de75e41b53b2
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ .../mellanox/mlx5/core/en/tc/act_stats.c      | 43 ++++++++++++++++++-
+ 1 file changed, 42 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
-@@ -12,10 +12,12 @@ tc_act_can_offload_prio(struct mlx5e_tc_
- 			int act_index,
- 			struct mlx5_flow_attr *attr)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
+@@ -3,6 +3,7 @@
+ 
+ #include <linux/rhashtable.h>
+ #include <net/flow_offload.h>
++#include <net/act_api.h>
+ #include "en/tc_priv.h"
+ #include "act_stats.h"
+ #include "en/fs.h"
+@@ -169,11 +170,18 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
  {
-+#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	if (act->priority > mlx5e_fs_get_tc(parse_state->flow->priv->fs)->num_prio_hp) {
- 		NL_SET_ERR_MSG_MOD(parse_state->extack, "Skb priority value is out of range");
- 		return false;
- 	}
+ 	struct rhashtable *ht = &handle->ht;
+ 	struct mlx5e_tc_act_stats *item;
++	struct mlx5e_tc_act_stats key;
+ 	u64 pkts, bytes, lastused;
+ 	int err = 0;
+ 
++#if defined(HAVE_FLOW_ACTION_ENTRY_COOKIE)
++	key.tc_act_cookie = fl_act->cookie;
++#else
++	return -EOPNOTSUPP;
++#endif
++
+ 	rcu_read_lock();
+-	item = rhashtable_lookup(ht, &fl_act->cookie, act_counters_ht_params);
++	item = rhashtable_lookup(ht, &key, act_counters_ht_params);
+ 	if (!item) {
+ 		rcu_read_unlock();
+ 		err = -ENOENT;
+@@ -183,10 +191,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+ 	mlx5_fc_query_cached_raw(item->counter,
+ 				 &bytes, &pkts, &lastused);
+ 
++#if defined(HAVE_FLOW_OFFLOAD_ACTION)
+ 	flow_stats_update(&fl_act->stats,
+ 			  bytes - item->lastbytes,
+ 			  pkts - item->lastpackets,
+ 			  0, lastused, FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_TCF_ACTION_STATS_UPDATE_5_PARAMS)
++	tcf_action_stats_update((struct tc_action *) fl_act,
++			  bytes - item->lastbytes,
++			  pkts - item->lastpackets,
++			  lastused, true);
++#elif defined(HAVE_TCF_ACTION_STATS_UPDATE)
++	tcf_action_stats_update((struct tc_action *) fl_act,
++			  bytes - item->lastbytes,
++			  pkts - item->lastpackets,
++			  lastused);
++#else
++	{
++		struct tc_action *a = (struct tc_action *) fl_act;
++
++		tcf_action_update_stats(a, bytes - item->lastbytes, pkts - item->lastpackets,
++				        0, true);
++		a->tcfa_tm.lastuse = max_t(u64, a->tcfa_tm.lastuse, lastused);
++	}
 +#endif
  
- 	return true;
+ 	item->lastpackets = pkts;
+ 	item->lastbytes = bytes;
+@@ -197,3 +225,16 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+ err_out:
+ 	return err;
  }
-@@ -27,6 +29,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
- 			 struct mlx5e_priv *priv,
- 			 struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_PRIORITY
- 	int err;
- 
- 	attr->nic_attr->user_prio = act->priority;
-@@ -37,6 +40,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
- 		return err;
- 
- 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
-+#endif
- 
- 	return 0;
- }
++
++void
++mlx5e_tc_act_stats_fill_stats_flow(struct mlx5e_tc_act_stats_handle *handle,
++				   struct mlx5e_tc_flow *flow)
++{
++	struct mlx5_flow_attr *attr;
++	int i;
++
++	list_for_each_entry(attr, &flow->attrs, list)
++		for (i = 0; i < attr->tc_act_cookies_count; i++)
++			mlx5e_tc_act_stats_fill_stats(handle,
++						      (struct flow_offload_action *) ((void *) attr->tc_act_cookies[i]));
++}

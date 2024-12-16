@@ -1,19 +1,29 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 
+Change-Id: Ia12960d1f63c76b354efd6c7467ceaaccdc503ab
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-@@ -4,7 +4,7 @@
- #ifndef __MLX5_EN_TC_SAMPLE_H__
- #define __MLX5_EN_TC_SAMPLE_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+@@ -15,6 +15,9 @@ struct mlx5e_tc_mod_hdr_acts;
+ struct mlx5_rep_uplink_priv;
+ struct mlx5e_tc_flow;
+ struct mlx5e_priv;
++#ifdef HAVE_BASECODE_EXTRAS
++struct mlx5e_post_act;
++#endif
  
--#include "eswitch.h"
-+#include "../../eswitch.h"
+ struct mlx5_fs_chains;
+ struct mlx5_tc_ct_priv;
+@@ -140,6 +143,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx
  
- struct mlx5_flow_attr;
- struct mlx5e_tc_psample;
+ #else /* CONFIG_MLX5_TC_CT */
+ 
++#include <net/flow_offload.h>
++
+ static inline struct mlx5_tc_ct_priv *
+ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
+ 		struct mod_hdr_tbl *mod_hdr,

@@ -5,7 +5,6 @@
 #define __MLX5_EN_REP_METER_H__
 
 #include "en_rep.h"
-
 void
 mlx5_rep_destroy_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv);
 int

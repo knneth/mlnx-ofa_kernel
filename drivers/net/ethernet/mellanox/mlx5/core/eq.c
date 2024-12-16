@@ -717,6 +717,12 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 	if (err)
 		goto err2;
 
+	/* Skip page eq creation when the device does not request for page requests */
+	if (MLX5_CAP_GEN(dev, page_request_disable)) {
+		mlx5_core_dbg(dev, "Skip page EQ creation\n");
+		return 0;
+	}
+
 	param = (struct mlx5_eq_param) {
 		.irq = table->ctrl_irq,
 		.nent = /* TODO: sriov max_vf + */ 1,
@@ -745,7 +751,8 @@ static void destroy_async_eqs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *table = dev->priv.eq_table;
 
-	cleanup_async_eq(dev, &table->pages_eq, "pages");
+	if (!MLX5_CAP_GEN(dev, page_request_disable))
+		cleanup_async_eq(dev, &table->pages_eq, "pages");
 	cleanup_async_eq(dev, &table->async_eq, "async");
 	mlx5_cmd_allowed_opcode(dev, MLX5_CMD_OP_DESTROY_EQ);
 	mlx5_cmd_use_polling(dev);
@@ -1022,7 +1029,6 @@ static void destroy_comp_eq(struct mlx5_core_dev *dev, struct mlx5_eq_comp *eq, 
 			       eq->core.eqn);
 	tasklet_disable(&eq->tasklet_ctx.task);
 	kfree(eq);
-	comp_irq_release(dev, vecidx);
 	table->curr_comp_eqs--;
 }
 
@@ -1058,10 +1064,6 @@ static int create_comp_eq(struct mlx5_core_dev *dev, u16 vecidx)
 		return -ENOMEM;
 	}
 
-	err = comp_irq_request(dev, vecidx);
-	if (err)
-		return err;
-
 	nent = comp_eq_depth_devlink_param_get(dev);
 
 	/* if user specified completion eq depth, honor that */
@@ -1069,10 +1071,8 @@ static int create_comp_eq(struct mlx5_core_dev *dev, u16 vecidx)
 		nent = dev->cmpl_eq_depth;
 
 	eq = kzalloc_node(sizeof(*eq), GFP_KERNEL, dev->priv.numa_node);
-	if (!eq) {
-		err = -ENOMEM;
-		goto clean_irq;
-	}
+	if (!eq)
+		return -ENOMEM;
 
 	INIT_LIST_HEAD(&eq->tasklet_ctx.list);
 	INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
@@ -1107,8 +1107,6 @@ disable_eq:
 	mlx5_eq_disable(dev, &eq->core, &eq->irq_nb);
 clean_eq:
 	kfree(eq);
-clean_irq:
-	comp_irq_release(dev, vecidx);
 	return err;
 }
 
@@ -1118,6 +1116,8 @@ int mlx5_comp_eqn_get(struct mlx5_core_dev *dev, u16 vecidx, int *eqn)
 	struct mlx5_eq_comp *eq;
 	int ret = 0;
 
+	if (WARN_ON(vecidx >= table->max_comp_eqs))
+		return -EINVAL;
 	mutex_lock(&table->comp_lock);
 	eq = xa_load(&table->comp_eqs, vecidx);
 	if (eq) {
@@ -1225,7 +1225,6 @@ static int get_num_eqs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *eq_table = dev->priv.eq_table;
 	int max_dev_eqs;
-	int max_eqs_sf;
 	int num_eqs;
 
 	/* If ethernet is disabled we use just a single completion vector to
@@ -1235,16 +1234,17 @@ static int get_num_eqs(struct mlx5_core_dev *dev)
 	if (!mlx5_core_is_eth_enabled(dev) && mlx5_eth_supported(dev))
 		return 1;
 
-	max_dev_eqs = MLX5_CAP_GEN(dev, max_num_eqs) ?
-		      MLX5_CAP_GEN(dev, max_num_eqs) :
-		      1 << MLX5_CAP_GEN(dev, log_max_eq);
+	max_dev_eqs = mlx5_max_eq_cap_get(dev);
 
 	num_eqs = min_t(int, mlx5_irq_table_get_num_comp(eq_table->irq_table),
 			max_dev_eqs - MLX5_MAX_ASYNC_EQS);
 	if (mlx5_core_is_sf(dev)) {
 		int user_affinity_weight = mlx5_devm_affinity_get_weight(dev);
+		int max_eqs_sf = MLX5_CAP_GEN_2(dev, sf_eq_usage) ?
+				 MLX5_CAP_GEN_2(dev, max_num_eqs_24b) :
+				 MLX5_COMP_EQS_PER_SF;
 
-		max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
+		max_eqs_sf = min_t(int, max_eqs_sf,
 				   mlx5_irq_table_get_sfs_vec(eq_table->irq_table));
 		num_eqs = min_t(int, num_eqs, max_eqs_sf);
 		/* If user has setup non zero max completion EQs, honor that */
@@ -1261,8 +1261,19 @@ int mlx5_eq_table_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *eq_table = dev->priv.eq_table;
 	int err;
+	int i;
 
 	eq_table->max_comp_eqs = get_num_eqs(dev);
+	for (i = 0; i < eq_table->max_comp_eqs; i++) {
+		err = comp_irq_request(dev, i);
+		if (err)
+			break;
+	}
+
+	if (!i && eq_table->max_comp_eqs)
+		return err;
+	eq_table->max_comp_eqs = i;
+
 	err = create_async_eqs(dev);
 	if (err) {
 		mlx5_core_err(dev, "Failed to create async EQs\n");
@@ -1280,6 +1291,8 @@ int mlx5_eq_table_create(struct mlx5_core_dev *dev)
 err_rmap:
 	destroy_async_eqs(dev);
 err_async_eqs:
+	while (i--)
+		comp_irq_release(dev, i);
 	return err;
 }
 
@@ -1288,9 +1301,13 @@ void mlx5_eq_table_destroy(struct mlx5_core_dev *dev)
 	struct mlx5_eq_table *table = dev->priv.eq_table;
 	struct mlx5_eq_comp *eq;
 	unsigned long index;
+	int i;
 
 	xa_for_each(&table->comp_eqs, index, eq)
 		destroy_comp_eq(dev, eq, index);
+
+	for (i = 0; i < table->max_comp_eqs; i++)
+		comp_irq_release(dev, i);
 
 	free_rmap(dev);
 	destroy_async_eqs(dev);

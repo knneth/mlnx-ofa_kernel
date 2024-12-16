@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
+
+Change-Id: I592a6a482a7af71e69aa91e41cc4736b021dd746
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
+@@ -27,11 +27,13 @@ struct mlx5_sf_dev {
+ #endif
+ };
+ 
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ struct mlx5_sf_peer_devlink_event_ctx {
+ 	u16 fn_id;
+ 	struct devlink *devlink;
+ 	int err;
+ };
++#endif
+ 
+ void mlx5_sf_dev_table_create(struct mlx5_core_dev *dev);
+ void mlx5_sf_dev_table_destroy(struct mlx5_core_dev *dev);

@@ -1,23 +1,26 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 
+Change-Id: I11623dc953aff3accd3bbaa8ce45f2b6f2fd147f
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
- 1 file changed, 5 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
- int
- mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
- 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
-+#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
- int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
- 		       struct netlink_ext_ack *extack);
-+#else
-+int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
-+		       u16 *new_qid, struct netlink_ext_ack *extack);
-+#endif
- int
- mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
- 			struct netlink_ext_ack *extack);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+@@ -71,12 +71,12 @@ struct mlx5e_ptp {
+ static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
+ {
+ 	struct flow_keys fk;
+-
+ 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+ 		return false;
+ 
+-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
+-		return false;
++        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
++                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
+ 
+ 	if (fk.basic.n_proto == htons(ETH_P_1588))
+ 		return true;

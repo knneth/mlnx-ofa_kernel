@@ -298,8 +298,8 @@ static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 	u16 drain_count = MLX5E_PAGECNT_BIAS_MAX - frag_page->frags;
 	struct page *page = frag_page->page;
 
-	if (page_pool_defrag_page(page, drain_count) == 0)
-		page_pool_put_defragged_page(rq->page_pool, page, -1, true);
+	if (page_pool_unref_page(page, drain_count) == 0)
+		page_pool_put_unrefed_page(rq->page_pool, page, -1, true);
 }
 
 static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
@@ -920,7 +920,6 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
 	} else if (likely(!rq->xsk_pool->dma_need_sync)) {
 		mlx5e_xsk_free_rx_wqes(rq, head, wqe_bulk);
 		count = mlx5e_xsk_alloc_rx_wqes_batched(rq, head, wqe_bulk);
-
 	} else {
 		mlx5e_xsk_free_rx_wqes(rq, head, wqe_bulk);
 		/* If dma_need_sync is true, it's more efficient to call
@@ -1050,7 +1049,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq)
 						     (struct mlx5_err_cqe *)cqe);
 				mlx5_wq_cyc_wqe_dump(&sq->wq, ci, wi->num_wqebbs);
 				if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state))
-					queue_work(cq->priv->wq, &sq->recover_work);
+					queue_work(cq->workqueue, &sq->recover_work);
 				break;
 			}
 

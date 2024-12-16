@@ -976,6 +976,7 @@ err_rule:
 	mlx5_tc_ct_entry_destroy_mod_hdr(ct_priv, zone_rule->attr, mh);
 	mlx5_put_label_mapping(ct_priv, attr->ct_attr.ct_labels_id);
 err_mod_hdr:
+	*attr = *old_attr;
 	kfree(old_attr);
 err_attr:
 	kvfree(spec);
@@ -1207,7 +1208,7 @@ mlx5_tc_ct_entry_replace_rules(struct mlx5_tc_ct_priv *ct_priv,
 	if (mlx5_tc_ct_entry_in_ct_nat_table(entry)) {
 		err = mlx5_tc_ct_entry_replace_rule(ct_priv, flow_rule, entry, true,
 						    zone_restore_id);
-		if (err)
+		if (err && mlx5_tc_ct_entry_in_ct_table(entry))
 			mlx5_tc_ct_entry_del_rule(ct_priv, entry, false);
 	}
 	return err;

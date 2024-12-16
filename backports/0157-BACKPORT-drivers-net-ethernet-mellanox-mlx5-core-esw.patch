@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
+
+Change-Id: If0b66870383efad646cf762faf2df4755d87e6f5
+---
+ drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
+@@ -44,7 +44,7 @@ int mlx5_esw_ipsec_vf_offload_get(struct
+ {
+ 	int query_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+ 	void *hca_cap, *query_cap;
+-	bool ipsec_enabled;
++	bool ipsec_enabled = false;
+ 	int err;
+ 
+ 	/* Querying IPsec caps only makes sense when generic ipsec_offload

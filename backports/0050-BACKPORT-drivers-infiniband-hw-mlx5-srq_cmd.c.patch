@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/srq_cmd.c
+
+Change-Id: I6f94800d3c0624b241ac54c0ba5a6ed96603ea41
+---
+ drivers/infiniband/hw/mlx5/srq_cmd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/infiniband/hw/mlx5/srq_cmd.c
++++ b/drivers/infiniband/hw/mlx5/srq_cmd.c
+@@ -481,7 +481,7 @@ static int create_xrq_cmd(struct mlx5_ib
+ 	void *xrqc;
+ 	void *wq;
+ 	void *pas;
+-	int pas_size, rq_pas_size;
++	int pas_size, rq_pas_size = 0;
+ 	int inlen;
+ 	int err;
+ 

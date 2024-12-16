@@ -1,48 +1,32 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
+Change-Id: Ib11f1d728cf626f0471fc6a978f8f8d12d19d487
 ---
- .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
- 1 file changed, 13 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-@@ -278,11 +278,17 @@ static const struct sysfs_ops rep_sysfs_
- 	.store  = rep_attr_store
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
  
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(rep);
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
 +#endif
  
- static struct kobj_type rep_type = {
- 	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_groups
-+#else
-+	.default_attrs = rep_attrs
+ void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
+ 			  struct sk_buff *skb);
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
++
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
 +#endif
- };
++
+ #else /* CONFIG_MLX5_CLS_ACT */
  
- static struct attribute *rep_paging_attrs[] = {
-@@ -290,12 +296,18 @@ static struct attribute *rep_paging_attr
- 	&attr_num_pages.attr,
- 	NULL,
- };
--ATTRIBUTE_GROUPS(rep_paging);
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
-+ATTRIBUTE_GROUPS(rep_paging);
-+#endif
- 
- static struct kobj_type rep_paging = {
- 	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_paging_groups
-+#else
-+	.default_attrs = rep_paging_attrs
-+#endif
- };
- 
- void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)
+ struct mlx5e_rep_priv;

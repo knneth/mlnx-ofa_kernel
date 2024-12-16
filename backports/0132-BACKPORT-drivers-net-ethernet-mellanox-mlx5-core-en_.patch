@@ -2,13 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 
+Change-Id: Ia309fed866569f891bc509212ea9312618aec5ec
 ---
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
-@@ -122,6 +122,7 @@ enum mlx5_ipsec_cap {
+@@ -123,6 +123,7 @@ enum mlx5_ipsec_cap {
  
  struct mlx5e_priv;
  
@@ -16,7 +17,7 @@ Subject: [PATCH] BACKPORT:
  struct mlx5e_ipsec_hw_stats {
  	u64 ipsec_rx_pkts;
  	u64 ipsec_rx_bytes;
-@@ -290,8 +291,6 @@ struct mlx5e_ipsec_pol_entry {
+@@ -300,8 +301,6 @@ struct mlx5e_ipsec_pol_entry {
  	struct mlx5_accel_pol_xfrm_attrs attrs;
  };
  

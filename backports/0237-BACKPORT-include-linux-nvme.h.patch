@@ -1,0 +1,51 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/nvme.h
+
+Change-Id: Ic841e1c9dae6255c733fd00df3debdf20f07e814
+---
+ include/linux/nvme.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/include/linux/nvme.h
++++ b/include/linux/nvme.h
+@@ -4,9 +4,16 @@
+  * Copyright (c) 2011-2014, Intel Corporation.
+  */
+ 
++/* build vs. Non-MLNX_OFED .h */
++#if 0
++#include_next <linux/nvme.h>
++#else
++
+ #ifndef _LINUX_NVME_H
+ #define _LINUX_NVME_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/bits.h>
+ #include <linux/types.h>
+ #include <linux/uuid.h>
+@@ -961,14 +968,18 @@ struct nvme_common_command {
+ 	__le32			cdw2[2];
+ 	__le64			metadata;
+ 	union nvme_data_ptr	dptr;
++#ifdef struct_group
+ 	struct_group(cdws,
++#endif
+ 	__le32			cdw10;
+ 	__le32			cdw11;
+ 	__le32			cdw12;
+ 	__le32			cdw13;
+ 	__le32			cdw14;
+ 	__le32			cdw15;
++#ifdef struct_group
+ 	);
++#endif
+ };
+ 
+ struct nvme_rw_command {
+@@ -2026,3 +2037,4 @@ struct nvme_completion {
+ #define NVME_TERTIARY(ver)	((ver) & 0xff)
+ 
+ #endif /* _LINUX_NVME_H */
++#endif /* build vs. Non-MLNX_OFED .h */

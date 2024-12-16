@@ -1,0 +1,51 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
+
+Change-Id: I987e37d8fc775ac1623797dcf542ac4fae7759d5
+---
+ .../mellanox/mlx5/core/ipoib/ipoib_vlan.c       | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
+@@ -73,8 +73,9 @@ static struct qpn_to_netdev *mlx5i_find_
+ {
+ 	struct hlist_head *h = &buckets[hash_32(qpn, MLX5I_MAX_LOG_PKEY_SUP)];
+ 	struct qpn_to_netdev *node;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(node, h, hlist) {
++	compat_hlist_for_each_entry(node, h, hlist) {
+ 		if (node->underlay_qpn == qpn)
+ 			return node;
+ 	}
+@@ -149,7 +150,14 @@ static const struct net_device_ops mlx5i
+ 	.ndo_get_stats64         = mlx5i_get_stats,
+ 	.ndo_uninit              = mlx5i_pkey_dev_cleanup,
+ 	.ndo_change_mtu          = mlx5i_pkey_change_mtu,
++	.ndo_do_ioctl            = mlx5i_pkey_ioctl,
++
++#ifdef HAVE_NDO_ETH_IOCTL
+ 	.ndo_eth_ioctl            = mlx5i_pkey_ioctl,
++#else
++	.ndo_do_ioctl		  = mlx5i_pkey_ioctl,
++#endif
++
+ };
+ 
+ /* Child NDOs */
+@@ -298,6 +306,13 @@ static int mlx5i_pkey_init(struct mlx5_c
+ 	if (err)
+ 		return err;
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++       netdev->features &= ~NETIF_F_LRO;
++       priv->netdev->hw_features &= ~NETIF_F_LRO;
++       priv->netdev->wanted_features &= ~NETIF_F_LRO;
++       priv->channels.params.lro_en = false;
++#endif
++
+ 	/* Override parent ndo */
+ 	netdev->netdev_ops = &mlx5i_pkey_netdev_ops;
+ 

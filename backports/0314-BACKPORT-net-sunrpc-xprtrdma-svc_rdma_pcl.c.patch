@@ -1,0 +1,63 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_pcl.c
+
+Change-Id: I1ecd9ab92762c000b21104cd4c06601166990ef4
+Signed-off-by: Tom Wu <tomwu@nvidia.com>
+---
+ net/sunrpc/xprtrdma/svc_rdma_pcl.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/svc_rdma_pcl.c
++++ b/net/sunrpc/xprtrdma/svc_rdma_pcl.c
+@@ -3,11 +3,14 @@
+  * Copyright (c) 2020 Oracle. All rights reserved.
+  */
+ 
++#ifdef HAVE_SVC_RDMA_PCL
+ #include <linux/sunrpc/svc_rdma.h>
+ #include <linux/sunrpc/rpc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ /**
+  * pcl_free - Release all memory associated with a parsed chunk list
+@@ -76,7 +79,9 @@ static void pcl_set_read_segment(const s
+ 	segment->rs_length = length;
+ 	segment->rs_offset = offset;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_svcrdma_decode_rseg(&rctxt->rc_cid, chunk, segment);
++#endif
+ 
+ 	chunk->ch_length += length;
+ 	chunk->ch_segcount++;
+@@ -220,7 +225,9 @@ bool pcl_alloc_write(struct svc_rdma_rec
+ 			p = xdr_decode_rdma_segment(p, &segment->rs_handle,
+ 						    &segment->rs_length,
+ 						    &segment->rs_offset);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 			trace_svcrdma_decode_wseg(&rctxt->rc_cid, chunk, j);
++#endif
+ 
+ 			chunk->ch_length += segment->rs_length;
+ 			chunk->ch_segcount++;
+@@ -238,7 +245,11 @@ static int pcl_process_region(const stru
+ 
+ 	if (!length)
+ 		return 0;
++#ifdef HAVE_XDR_BUF_SUBSEGMENT_CONST
+ 	if (xdr_buf_subsegment(xdr, &subbuf, offset, length))
++#else
++	if (xdr_buf_subsegment((struct xdr_buf *)(void *)xdr, &subbuf, offset, length))
++#endif
+ 		return -EMSGSIZE;
+ 	return actor(&subbuf, data);
+ }
+@@ -304,3 +315,4 @@ int pcl_process_nonpayloads(const struct
+ 
+ 	return 0;
+ }
++#endif

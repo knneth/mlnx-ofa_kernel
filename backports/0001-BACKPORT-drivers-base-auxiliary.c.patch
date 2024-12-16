@@ -1,9 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
 
+Change-Id: Idaa52f73da647ffc22b4d26316be52a644ef08a1
 ---
- drivers/base/auxiliary.c | 53 ++++++++++++++++++++++++++++++++++------
- 1 file changed, 45 insertions(+), 8 deletions(-)
+ drivers/base/auxiliary.c | 57 ++++++++++++++++++++++++++++++++++------
+ 1 file changed, 49 insertions(+), 8 deletions(-)
 
 --- a/drivers/base/auxiliary.c
 +++ b/drivers/base/auxiliary.c
@@ -67,7 +68,19 @@ Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
  }
  
  static void auxiliary_bus_shutdown(struct device *dev)
-@@ -353,9 +368,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+@@ -248,7 +263,11 @@ static void auxiliary_bus_shutdown(struc
+ 		auxdrv->shutdown(auxdev);
+ }
+ 
++#ifdef HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE
+ static const struct bus_type auxiliary_bus_type = {
++#else
++static struct bus_type auxiliary_bus_type = {
++#endif
+ 	.name = "auxiliary",
+ 	.probe = auxiliary_bus_probe,
+ 	.remove = auxiliary_bus_remove,
+@@ -353,9 +372,17 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
   * if it does.  If the callback returns non-zero, this function will
   * return to the caller and not iterate over any more devices.
   */
@@ -88,7 +101,7 @@ Subject: [PATCH] BACKPORT: drivers/base/auxiliary.c
  {
  	struct device *dev;
  
-@@ -417,7 +440,21 @@ void auxiliary_driver_unregister(struct
+@@ -417,7 +444,21 @@ void auxiliary_driver_unregister(struct
  }
  EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
  

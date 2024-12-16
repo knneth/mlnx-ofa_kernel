@@ -1,41 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
 
+Change-Id: I4e2d70cec002148c6dc04568034952bf0df049b6
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/channels.c | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
-@@ -18,9 +18,13 @@ static struct mlx5e_channel *mlx5e_chann
- 
- bool mlx5e_channels_is_xsk(struct mlx5e_channels *chs, unsigned int ix)
- {
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- 	struct mlx5e_channel *c = mlx5e_channels_get(chs, ix);
- 
- 	return test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
+ int
+ mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
+ 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
+ 		       struct netlink_ext_ack *extack);
 +#else
-+	return false;
++int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack);
 +#endif
- }
- 
- void mlx5e_channels_get_regular_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn)
-@@ -32,11 +36,16 @@ void mlx5e_channels_get_regular_rqn(stru
- 
- void mlx5e_channels_get_xsk_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn)
- {
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- 	struct mlx5e_channel *c = mlx5e_channels_get(chs, ix);
- 
- 	WARN_ON_ONCE(!test_bit(MLX5E_CHANNEL_STATE_XSK, c->state));
- 
- 	*rqn = c->xskrq.rqn;
-+#else
-+	return;
-+
-+#endif
- }
- 
- bool mlx5e_channels_get_ptp_rqn(struct mlx5e_channels *chs, u32 *rqn)
+ int
+ mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
+ 			struct netlink_ext_ack *extack);

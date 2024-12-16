@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/xdp_sock_drv.h
+
+Change-Id: Ibfccbe9050086e424d2fa6290e6f3ef6c9c9c53d
+---
+ include/net/xdp_sock_drv.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/include/net/xdp_sock_drv.h
++++ b/include/net/xdp_sock_drv.h
+@@ -11,4 +11,12 @@
+ #define XDP_UMEM_MIN_CHUNK_SHIFT 11
+ #endif
+ 
++#ifndef HAVE_XSK_BUFF_SET_SIZE
++static inline void xsk_buff_set_size(struct xdp_buff *xdp, u32 size)
++{
++	xdp->data = xdp->data_hard_start + XDP_PACKET_HEADROOM;
++	xdp->data_meta = xdp->data;
++	xdp->data_end = xdp->data + size;
++}
++#endif
+ #endif /* _COMPAT_NET_XDP_SOCK_DRV_H */

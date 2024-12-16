@@ -84,6 +84,12 @@ struct rx_res_debugfs {
 	int i;
 };
 
+struct tis_debugfs {
+	struct mlx5e_priv *priv;
+	int tc;
+	int i;
+};
+
 static int get_tir_dir(void *data, u64 *val)
 {
 	struct rx_res_debugfs *rx_res_dbg = (struct rx_res_debugfs *)data;
@@ -100,8 +106,19 @@ static int get_tir_indir(void *data, u64 *val)
 	return 0;
 }
 
+static int get_tis(void *data, u64 *val)
+{
+	struct tis_debugfs *tis_dbg = (struct tis_debugfs *)data;
+	struct mlx5e_priv *priv = tis_dbg->priv;
+
+	*val = mlx5e_profile_get_tisn(priv->mdev, priv, priv->profile, tis_dbg->i, tis_dbg->tc);
+	return 0;
+}
+
 DEFINE_DEBUGFS_ATTRIBUTE(fops_dir, get_tir_dir, NULL, "%llu\n");
 DEFINE_DEBUGFS_ATTRIBUTE(fops_indir, get_tir_indir, NULL, "%llu\n");
+DEFINE_DEBUGFS_ATTRIBUTE(fops_tis, get_tis, NULL, "%llu\n");
+
 
 void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 {
@@ -112,6 +129,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 	char *root_name;
 	u8 *num_tc;
 	int i;
+	 
 
 	num_tc = kvzalloc(sizeof(*priv->fds_num_tc), GFP_KERNEL);
 	if (!num_tc) {
@@ -144,13 +162,17 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		int tc;
 
 		for (tc = 0; tc < *num_tc; tc++) {
+			struct tis_debugfs *tis_dbg = kvzalloc(sizeof(*tis_dbg), GFP_KERNEL);
+
+			tis_dbg->i = i;
+			tis_dbg->tc = tc;
+			tis_dbg->priv = priv;
 			snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "tisn-%d_%d", i, tc);
-			debugfs_create_u32(name, S_IRUSR, priv->netdev_dfs_root,
-					&priv->tisn[i][tc]);
+			debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, tis_dbg, &fops_tis);
 		}
 	}
 
-	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
+	for (i = 0; i < MLX5E_NUM_INDIR_TIRS && !priv->shared_rq; i++) {
 		struct rx_res_debugfs *rx_res_dbg = kvzalloc(sizeof(*rx_res_dbg), GFP_KERNEL);
 
 		rx_res_dbg->i = i;
@@ -159,7 +181,7 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		debugfs_create_file_unsafe(name, 0400, priv->netdev_dfs_root, rx_res_dbg, &fops_indir);
 	}
 
-	for (i = 0; i < priv->max_nch; i++) {
+	for (i = 0; i < priv->max_nch && !priv->shared_rq; i++) {
 		struct rx_res_debugfs *rx_res_dbg = kvzalloc(sizeof(*rx_res_dbg), GFP_KERNEL);
 
 		rx_res_dbg->i = i;
@@ -172,11 +194,28 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		mlx5e_create_channel_debugfs(priv, i);
 }
 
-void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
+static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 {
-	int i;
+	char name[MLX5_MAX_DEBUGFS_NAME_LEN] = {};
 	struct dentry *dent;
-	char name[MLX5_MAX_DEBUGFS_NAME_LEN];
+	u8 num_tc;
+	int i;
+
+	num_tc = mlx5e_get_dcb_num_tc(&priv->channels.params);
+	for (i = 0; i < mlx5e_get_num_lag_ports(priv->mdev); i++) {
+		int tc;
+
+		for (tc = 0; tc < num_tc; tc++) {
+			snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "tisn-%d_%d", i, tc);
+
+			dent = debugfs_lookup(name, priv->netdev_dfs_root);
+			if (dent && dent->d_inode && dent->d_inode->i_private)
+				kvfree(dent->d_inode->i_private);
+		}
+	}
+
+	if (priv->shared_rq)
+		return;
 
 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);

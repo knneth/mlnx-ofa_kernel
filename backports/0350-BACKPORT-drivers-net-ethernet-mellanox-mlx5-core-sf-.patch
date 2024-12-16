@@ -1,0 +1,23 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
+
+Change-Id: I671196eff76fe96e1fb6a9ee6ef237551df8de81
+---
+ .../ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h  | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
+@@ -22,7 +22,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_dev_template
+ 				     __field(u16, hw_fn_id)
+ 				     __field(u32, sfnum)
+ 		    ),
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 		    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#else
++		    TP_fast_assign(__assign_str(devname);
++#endif
+ 				   __entry->sfdev = sfdev;
+ 				   __entry->aux_id = aux_id;
+ 				   __entry->hw_fn_id = sfdev->fn_id;

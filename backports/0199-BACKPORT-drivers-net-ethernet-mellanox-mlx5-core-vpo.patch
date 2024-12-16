@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/vport.c
+
+Change-Id: Ia081bcb93bab3750d3b2c0fbce9cd09ca3717435
+---
+ drivers/net/ethernet/mellanox/mlx5/core/vport.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/vport.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/vport.c
+@@ -191,6 +191,7 @@ void mlx5_query_min_inline(struct mlx5_c
+ 		if (!mlx5_query_nic_vport_min_inline(mdev, 0, min_inline_mode))
+ 			break;
+ 		fallthrough;
++
+ 	case MLX5_CAP_INLINE_MODE_L2:
+ 		*min_inline_mode = MLX5_INLINE_MODE_L2;
+ 		break;

@@ -33,6 +33,7 @@ WORK_DIR="$(dirname $(dirname ${SCRIPTS_DIR}))"
 CUSTOM_OFA_DIR=
 CUSTOM_CONFIG=
 INCLUDE_MK_CONFIG=0
+COMMIT=1
 CONFIG=$(mktemp "/tmp/final_defs_XXXXXX.h")
 while [ ! -z "$1" ]
 do
@@ -59,7 +60,9 @@ do
 		;;
 		--include_mk_config)
 		INCLUDE_MK_CONFIG=1
-		shift;
+		;;
+		--without-commit)
+		COMMIT=0
 		;;
 		-h | --help)
 		echo "Usage: ${SCRIPT_NAME} [options]
@@ -69,12 +72,14 @@ do
 
 		-h, --help 		Display this help message and exit.
 		-d, --directory		Path to specific OFED directory,
-					default is '$WORK_DIR'
+					default is '$WORK_DIR'.
 		-c, --config-file	Path to specific ready config file,
 					script will not create new one.
 		--include_mk_config	Include filtered configs found in
 					configure.mk.kernel to be removed by
-					unifdef
+					unifdef.
+		--without-commit	Script won't create commit at the
+					end of the run.
 
 	Requirements:
 	-------------
@@ -128,8 +133,8 @@ if [ -z "$CUSTOM_CONFIG" ];then
 		exit 1
 	fi
 else
-	CONFIG=$CUSTOM_CONFIG
-	echo "Using custom config: $CONFIG"
+	echo "Using custom config: $CUSTOM_CONFIG, parsing it without notes under $CONFIG"
+	cat "$CUSTOM_CONFIG" | "$SCRIPTS_DIR/help_scripts/handle_config_h.sh" > "$CONFIG"
 fi
 if [ ! -f "${CONFIG}" ]; then
 	echo "-E- Config file does not exist at '${CONFIG}'" >&2
@@ -148,13 +153,13 @@ Aborting..." >&2
 fi
 echo "Verification done, start running.."
 # This part search & remove risk defines that can change their values during compilation
-if [ -z "$CUSTOM_CONFIG" ];then
-	echo "search & remove risk defines that can change their values during compilation"
-	for d in $(grep -rE "^#define.*HAVE_.*|^#undef.*HAVE_.*" | grep -v compat/config | grep -v compat/configure.ac | grep -v backports | grep -v output | grep -vi binary | sed 's/.*\(HAVE_[A-Z0-9_]*\).*/\1/' | sort | uniq)
-	do
-		sed -i "/\<${d}\>/d" "${CONFIG}"
-	done
-fi
+#if [ -z "$CUSTOM_CONFIG" ];then
+#	echo "search & remove risk defines that can change their values during compilation"
+#	for d in $(grep -rE "^#define.*HAVE_.*|^#undef.*HAVE_.*" | grep -v compat/config | grep -v compat/configure.ac | grep -v backports | grep -v output | grep -vi binary | sed 's/.*\(HAVE_[A-Z0-9_]*\).*/\1/' | sort | uniq)
+#	do
+#		sed -i "/\<${d}\>/d" "${CONFIG}"
+#	done
+#fi
 echo "start cleaning files.."
 MOD="tmp.txt"
 for i in $(find "${WORK_DIR}" \( -name '*.c' -o \
@@ -172,9 +177,14 @@ do
 	mv -f "${i}".tmp "${i}"
 done
 rm -rf "$MOD"
-echo "Create git commit"
-git add -u
-git commit -s -m "BASECODE: remove #ifdef from code"
+if [ ${COMMIT} -eq 1 ]; then
+	echo "Create git commit!"
+	git add -u
+	git commit -s -m "BASECODE: remove #ifdef from code"
+else
+	echo "No git commit created!"
+fi
+
 echo
 echo "Script ended succsfully!"
 echo "---------------------------------------------------------------------------"

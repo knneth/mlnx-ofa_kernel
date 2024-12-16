@@ -1,0 +1,391 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/net/mlx5_vnet.c
+
+Change-Id: I8329386010aee4dce3afe7cc99be9dc094b17d0a
+---
+ drivers/vdpa/mlx5/net/mlx5_vnet.c | 95 +++++++++++++++++++++++++++----
+ 1 file changed, 84 insertions(+), 11 deletions(-)
+
+--- a/drivers/vdpa/mlx5/net/mlx5_vnet.c
++++ b/drivers/vdpa/mlx5/net/mlx5_vnet.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2020 Mellanox Technologies Ltd. */
+ 
++#ifdef HAVE_VDPA_SUPPORT
+ #include <linux/module.h>
+ #include <linux/vdpa.h>
+ #include <linux/vringh.h>
+@@ -21,10 +22,6 @@
+ #include "mlx5_vdpa.h"
+ #include "mlx5_vnet.h"
+ 
+-MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
+-MODULE_DESCRIPTION("Mellanox VDPA driver");
+-MODULE_LICENSE("Dual BSD/GPL");
+-
+ #define VALID_FEATURES_MASK                                                                        \
+ 	(BIT_ULL(VIRTIO_NET_F_CSUM) | BIT_ULL(VIRTIO_NET_F_GUEST_CSUM) |                                   \
+ 	 BIT_ULL(VIRTIO_NET_F_CTRL_GUEST_OFFLOADS) | BIT_ULL(VIRTIO_NET_F_MTU) | BIT_ULL(VIRTIO_NET_F_MAC) |   \
+@@ -858,8 +855,7 @@ static bool counters_supported(const str
+ static bool msix_mode_supported(struct mlx5_vdpa_dev *mvdev)
+ {
+ 	return MLX5_CAP_DEV_VDPA_EMULATION(mvdev->mdev, event_mode) &
+-		(1 << MLX5_VIRTIO_Q_EVENT_MODE_MSIX_MODE) &&
+-		pci_msix_can_alloc_dyn(mvdev->mdev->pdev);
++		(1 << MLX5_VIRTIO_Q_EVENT_MODE_MSIX_MODE);
+ }
+ 
+ static int create_virtqueue(struct mlx5_vdpa_net *ndev, struct mlx5_vdpa_virtqueue *mvq)
+@@ -868,7 +864,9 @@ static int create_virtqueue(struct mlx5_
+ 	u32 out[MLX5_ST_SZ_DW(create_virtio_net_q_out)] = {};
+ 	struct mlx5_vdpa_dev *mvdev = &ndev->mvdev;
+ 	struct mlx5_vdpa_mr *vq_mr;
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	struct mlx5_vdpa_mr *vq_desc_mr;
++#endif
+ 	void *obj_context;
+ 	u16 mlx_features;
+ 	void *cmd_hdr;
+@@ -925,9 +923,11 @@ static int create_virtqueue(struct mlx5_
+ 	if (vq_mr)
+ 		MLX5_SET(virtio_q, vq_ctx, virtio_q_mkey, vq_mr->mkey);
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	vq_desc_mr = mvdev->mr[mvdev->group2asid[MLX5_VDPA_DATAVQ_DESC_GROUP]];
+ 	if (vq_desc_mr && MLX5_CAP_DEV_VDPA_EMULATION(mvdev->mdev, desc_group_mkey_supported))
+ 		MLX5_SET(virtio_q, vq_ctx, desc_group_mkey, vq_desc_mr->mkey);
++#endif
+ 
+ 	MLX5_SET(virtio_q, vq_ctx, umem_1_id, mvq->umem1.id);
+ 	MLX5_SET(virtio_q, vq_ctx, umem_1_size, mvq->umem1.size);
+@@ -950,10 +950,12 @@ static int create_virtqueue(struct mlx5_
+ 	mlx5_vdpa_get_mr(mvdev, vq_mr);
+ 	mvq->vq_mr = vq_mr;
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	if (vq_desc_mr && MLX5_CAP_DEV_VDPA_EMULATION(mvdev->mdev, desc_group_mkey_supported)) {
+ 		mlx5_vdpa_get_mr(mvdev, vq_desc_mr);
+ 		mvq->desc_mr = vq_desc_mr;
+ 	}
++#endif
+ 
+ 	return 0;
+ 
+@@ -1187,10 +1189,18 @@ err_cmd:
+ 
+ static bool is_resumable(struct mlx5_vdpa_net *ndev)
+ {
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 	return ndev->mvdev.vdev.config->resume;
++#else
++	return false;
++#endif
+ }
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ static bool is_valid_state_change(int oldstate, int newstate, bool resumable)
++#else
++static bool is_valid_state_change(int oldstate, int newstate)
++#endif
+ {
+ 	switch (oldstate) {
+ 	case MLX5_VIRTIO_NET_Q_OBJECT_STATE_INIT:
+@@ -1198,7 +1208,9 @@ static bool is_valid_state_change(int ol
+ 	case MLX5_VIRTIO_NET_Q_OBJECT_STATE_RDY:
+ 		return newstate == MLX5_VIRTIO_NET_Q_OBJECT_STATE_SUSPEND;
+ 	case MLX5_VIRTIO_NET_Q_OBJECT_STATE_SUSPEND:
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 		return resumable ? newstate == MLX5_VIRTIO_NET_Q_OBJECT_STATE_RDY : false;
++#endif
+ 	case MLX5_VIRTIO_NET_Q_OBJECT_STATE_ERR:
+ 	default:
+ 		return false;
+@@ -1224,7 +1236,9 @@ static int modify_virtqueue(struct mlx5_
+ 	struct mlx5_vdpa_dev *mvdev = &ndev->mvdev;
+ 	struct mlx5_vdpa_mr *desc_mr = NULL;
+ 	struct mlx5_vdpa_mr *vq_mr = NULL;
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 	bool state_change = false;
++#endif
+ 	void *obj_context;
+ 	void *cmd_hdr;
+ 	void *vq_ctx;
+@@ -1237,6 +1251,11 @@ static int modify_virtqueue(struct mlx5_
+ 	if (!modifiable_virtqueue_fields(mvq))
+ 		return -EINVAL;
+ 
++#ifndef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
++	if (!is_valid_state_change(mvq->fw_state, state))
++		return -EINVAL;
++#endif
++
+ 	in = kzalloc(inlen, GFP_KERNEL);
+ 	if (!in)
+ 		return -ENOMEM;
+@@ -1252,13 +1271,17 @@ static int modify_virtqueue(struct mlx5_
+ 	vq_ctx = MLX5_ADDR_OF(virtio_net_q_object, obj_context, virtio_q_context);
+ 
+ 	if (mvq->modified_fields & MLX5_VIRTQ_MODIFY_MASK_STATE) {
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 		if (!is_valid_state_change(mvq->fw_state, state, is_resumable(ndev))) {
+ 			err = -EINVAL;
+ 			goto done;
+ 		}
++#endif
+ 
+ 		MLX5_SET(virtio_net_q_object, obj_context, state, state);
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 		state_change = true;
++#endif
+ 	}
+ 
+ 	if (mvq->modified_fields & MLX5_VIRTQ_MODIFY_MASK_VIRTIO_Q_ADDRS) {
+@@ -1293,10 +1316,15 @@ static int modify_virtqueue(struct mlx5_
+ 
+ 	MLX5_SET64(virtio_net_q_object, obj_context, modify_field_select, mvq->modified_fields);
+ 	err = mlx5_cmd_exec(ndev->mvdev.mdev, in, inlen, out, sizeof(out));
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 	if (err)
+ 		goto done;
+ 
+ 	if (state_change)
++#else
++	kfree(in);
++	if (!err)
++#endif
+ 		mvq->fw_state = state;
+ 
+ 	if (mvq->modified_fields & MLX5_VIRTQ_MODIFY_MASK_VIRTIO_Q_MKEY) {
+@@ -1313,8 +1341,10 @@ static int modify_virtqueue(struct mlx5_
+ 
+ 	mvq->modified_fields = 0;
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ done:
+ 	kfree(in);
++#endif
+ 	return err;
+ }
+ 
+@@ -1522,7 +1552,9 @@ static void resume_vq(struct mlx5_vdpa_n
+ 
+ static void resume_vqs(struct mlx5_vdpa_net *ndev)
+ {
+-	for (int i = 0; i < ndev->mvdev.max_vqs; i++)
++	int i;
++
++	for (i = 0; i < ndev->mvdev.max_vqs; i++)
+ 		resume_vq(ndev, &ndev->vqs[i]);
+ }
+ 
+@@ -2448,6 +2480,7 @@ static u32 mlx5_vdpa_get_vq_group(struct
+ 	return MLX5_VDPA_DATAVQ_GROUP;
+ }
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ static u32 mlx5_vdpa_get_vq_desc_group(struct vdpa_device *vdev, u16 idx)
+ {
+ 	struct mlx5_vdpa_dev *mvdev = to_mvdev(vdev);
+@@ -2457,6 +2490,7 @@ static u32 mlx5_vdpa_get_vq_desc_group(s
+ 
+ 	return MLX5_VDPA_DATAVQ_DESC_GROUP;
+ }
++#endif
+ 
+ static u64 mlx_to_vritio_features(u16 dev_features)
+ {
+@@ -2696,10 +2730,12 @@ static void unregister_link_notifier(str
+ 		flush_workqueue(ndev->mvdev.wq);
+ }
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES
+ static u64 mlx5_vdpa_get_backend_features(const struct vdpa_device *vdpa)
+ {
+ 	return BIT_ULL(VHOST_BACKEND_F_ENABLE_AFTER_DRIVER_OK);
+ }
++#endif
+ 
+ static int mlx5_vdpa_set_driver_features(struct vdpa_device *vdev, u64 features)
+ {
+@@ -2841,6 +2877,7 @@ static int mlx5_vdpa_change_map(struct m
+ 	struct mlx5_vdpa_net *ndev = to_mlx5_vdpa_ndev(mvdev);
+ 	bool teardown = !is_resumable(ndev);
+ 	int err;
++	int i;
+ 
+ 	suspend_vqs(ndev);
+ 	if (teardown) {
+@@ -2853,7 +2890,7 @@ static int mlx5_vdpa_change_map(struct m
+ 
+ 	mlx5_vdpa_update_mr(mvdev, new_mr, asid);
+ 
+-	for (int i = 0; i < ndev->cur_num_vqs; i++)
++	for (i = 0; i < ndev->cur_num_vqs; i++)
+ 		ndev->vqs[i].modified_fields |= MLX5_VIRTQ_MODIFY_MASK_VIRTIO_Q_MKEY |
+ 						MLX5_VIRTQ_MODIFY_MASK_DESC_GROUP_MKEY;
+ 
+@@ -3042,7 +3079,9 @@ static int mlx5_vdpa_compat_reset(struct
+ 	unregister_link_notifier(ndev);
+ 	teardown_driver(ndev);
+ 	clear_vqs_ready(ndev);
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	if (flags & VDPA_RESET_F_CLEAN_MAP)
++#endif
+ 		mlx5_vdpa_destroy_mr_resources(&ndev->mvdev);
+ 	ndev->mvdev.status = 0;
+ 	ndev->mvdev.suspended = false;
+@@ -3054,8 +3093,12 @@ static int mlx5_vdpa_compat_reset(struct
+ 	init_group_to_asid_map(mvdev);
+ 	++mvdev->generation;
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	if ((flags & VDPA_RESET_F_CLEAN_MAP) &&
+ 	    MLX5_CAP_GEN(mvdev->mdev, umem_uid_0)) {
++#else
++	if (MLX5_CAP_GEN(mvdev->mdev, umem_uid_0)) {
++#endif
+ 		if (mlx5_vdpa_create_dma_mr(mvdev))
+ 			mlx5_vdpa_warn(mvdev, "create MR failed\n");
+ 	}
+@@ -3148,6 +3191,7 @@ static int mlx5_vdpa_set_map(struct vdpa
+ 	return err;
+ }
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ static int mlx5_vdpa_reset_map(struct vdpa_device *vdev, unsigned int asid)
+ {
+ 	struct mlx5_vdpa_dev *mvdev = to_mvdev(vdev);
+@@ -3159,7 +3203,9 @@ static int mlx5_vdpa_reset_map(struct vd
+ 	up_write(&ndev->reslock);
+ 	return err;
+ }
++#endif
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV
+ static struct device *mlx5_get_vq_dma_dev(struct vdpa_device *vdev, u16 idx)
+ {
+ 	struct mlx5_vdpa_dev *mvdev = to_mvdev(vdev);
+@@ -3169,6 +3215,7 @@ static struct device *mlx5_get_vq_dma_de
+ 
+ 	return mvdev->vdev.dma_dev;
+ }
++#endif
+ 
+ static void free_irqs(struct mlx5_vdpa_net *ndev)
+ {
+@@ -3183,8 +3230,6 @@ static void free_irqs(struct mlx5_vdpa_n
+ 
+ 	for (i = ndev->irqp.num_ent - 1; i >= 0; i--) {
+ 		ent = ndev->irqp.entries + i;
+-		if (ent->map.virq)
+-			pci_msix_free_irq(ndev->mvdev.mdev->pdev, ent->map);
+ 	}
+ 	kfree(ndev->irqp.entries);
+ }
+@@ -3378,6 +3423,7 @@ static int mlx5_vdpa_suspend(struct vdpa
+ 	return 0;
+ }
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ static int mlx5_vdpa_resume(struct vdpa_device *vdev)
+ {
+ 	struct mlx5_vdpa_dev *mvdev = to_mvdev(vdev);
+@@ -3394,6 +3440,7 @@ static int mlx5_vdpa_resume(struct vdpa_
+ 	up_write(&ndev->reslock);
+ 	return 0;
+ }
++#endif
+ 
+ static int mlx5_set_group_asid(struct vdpa_device *vdev, u32 group,
+ 			       unsigned int asid)
+@@ -3428,9 +3475,13 @@ static const struct vdpa_config_ops mlx5
+ 	.get_vq_irq = mlx5_get_vq_irq,
+ 	.get_vq_align = mlx5_vdpa_get_vq_align,
+ 	.get_vq_group = mlx5_vdpa_get_vq_group,
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	.get_vq_desc_group = mlx5_vdpa_get_vq_desc_group, /* Op disabled if not supported. */
++#endif
+ 	.get_device_features = mlx5_vdpa_get_device_features,
++#ifdef HAVE_VDPA_CONFIG_OPS_GET_BACKEND_FEATURES
+ 	.get_backend_features = mlx5_vdpa_get_backend_features,
++#endif
+ 	.set_driver_features = mlx5_vdpa_set_driver_features,
+ 	.get_driver_features = mlx5_vdpa_get_driver_features,
+ 	.set_config_cb = mlx5_vdpa_set_config_cb,
+@@ -3440,18 +3491,26 @@ static const struct vdpa_config_ops mlx5
+ 	.get_status = mlx5_vdpa_get_status,
+ 	.set_status = mlx5_vdpa_set_status,
+ 	.reset = mlx5_vdpa_reset,
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	.compat_reset = mlx5_vdpa_compat_reset,
++#endif
+ 	.get_config_size = mlx5_vdpa_get_config_size,
+ 	.get_config = mlx5_vdpa_get_config,
+ 	.set_config = mlx5_vdpa_set_config,
+ 	.get_generation = mlx5_vdpa_get_generation,
+ 	.set_map = mlx5_vdpa_set_map,
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	.reset_map = mlx5_vdpa_reset_map,
++#endif
+ 	.set_group_asid = mlx5_set_group_asid,
++#ifdef HAVE_VDPA_CONFIG_OPS_GET_VQ_DMA_DEV
+ 	.get_vq_dma_dev = mlx5_get_vq_dma_dev,
++#endif
+ 	.free = mlx5_vdpa_free,
+ 	.suspend = mlx5_vdpa_suspend,
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 	.resume = mlx5_vdpa_resume, /* Op disabled if not supported. */
++#endif
+ };
+ 
+ static int query_mtu(struct mlx5_core_dev *mdev, u16 *mtu)
+@@ -3576,7 +3635,6 @@ static void allocate_irqs(struct mlx5_vd
+ 		ent = ndev->irqp.entries + i;
+ 		snprintf(ent->name, MLX5_VDPA_IRQ_NAME_LEN, "%s-vq-%d",
+ 			 dev_name(&ndev->mvdev.vdev.dev), i);
+-		ent->map = pci_msix_alloc_irq_at(ndev->mvdev.mdev->pdev, MSI_ANY_INDEX, NULL);
+ 		if (!ent->map.virq)
+ 			return;
+ 
+@@ -3645,7 +3703,11 @@ static int mlx5_vdpa_dev_add(struct vdpa
+ 		max_vqs = 2;
+ 	}
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	ndev = vdpa_alloc_device(struct mlx5_vdpa_net, mvdev.vdev, mdev->device, &mgtdev->vdpa_ops,
++#else
++	ndev = vdpa_alloc_device(struct mlx5_vdpa_net, mvdev.vdev, mdev->device, &mlx5_vdpa_ops,
++#endif
+ 				 MLX5_VDPA_NUMVQ_GROUPS, MLX5_VDPA_NUM_AS, name, false);
+ 	if (IS_ERR(ndev))
+ 		return PTR_ERR(ndev);
+@@ -3820,13 +3882,17 @@ static int mlx5v_probe(struct auxiliary_
+ 		MLX5_CAP_DEV_VDPA_EMULATION(mdev, max_num_virtio_queues) + 1;
+ 	mgtdev->mgtdev.supported_features = get_supported_features(mdev);
+ 	mgtdev->madev = madev;
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ 	mgtdev->vdpa_ops = mlx5_vdpa_ops;
+ 
+ 	if (!MLX5_CAP_DEV_VDPA_EMULATION(mdev, desc_group_mkey_supported))
+ 		mgtdev->vdpa_ops.get_vq_desc_group = NULL;
++#endif
+ 
++#ifdef HAVE_VDPA_CONFIG_OPS_HAS_RESUME
+ 	if (!MLX5_CAP_DEV_VDPA_EMULATION(mdev, freeze_to_rdy_supported))
+ 		mgtdev->vdpa_ops.resume = NULL;
++#endif
+ 
+ 	err = vdpa_mgmtdev_register(&mgtdev->mgtdev);
+ 	if (err)
+@@ -3865,3 +3931,10 @@ static struct auxiliary_driver mlx5v_dri
+ };
+ 
+ module_auxiliary_driver(mlx5v_driver);
++#endif /* HAVE_VDPA_SUPPORT */
++
++MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
++MODULE_DESCRIPTION("Mellanox VDPA driver");
++MODULE_LICENSE("Dual BSD/GPL");
++
++

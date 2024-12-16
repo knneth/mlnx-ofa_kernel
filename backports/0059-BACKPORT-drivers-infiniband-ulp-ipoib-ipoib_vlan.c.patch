@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+
+Change-Id: I3b38f1341f39f7961e2ecd05ebba90a5de67ee57
+---
+ drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+@@ -105,7 +105,6 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
+ 	 * always use this flow.
+ 	 */
+ 	ndev->priv_destructor = ipoib_intf_free;
+-
+ 	/*
+ 	 * Racing with unregister of the parent must be prevented by the
+ 	 * caller.
+@@ -231,13 +230,15 @@ static void ipoib_vlan_delete_task(struc
+ 	struct ipoib_vlan_delete_work *pwork =
+ 		container_of(work, struct ipoib_vlan_delete_work, work);
+ 	struct net_device *dev = pwork->dev;
++	struct ipoib_dev_priv *priv = NULL;
++	struct ipoib_dev_priv *ppriv = NULL;
+ 
+ 	rtnl_lock();
+ 
+ 	/* Unregistering tasks can race with another task or parent removal */
+ 	if (dev->reg_state == NETREG_REGISTERED) {
+-		struct ipoib_dev_priv *priv = ipoib_priv(dev);
+-		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
++		priv = ipoib_priv(dev);
++		ppriv = ipoib_priv(priv->parent);
+ 
+ 		ipoib_dbg(ppriv, "delete child vlan %s\n", dev->name);
+ 		unregister_netdevice(dev);

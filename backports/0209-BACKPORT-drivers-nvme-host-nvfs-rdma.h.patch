@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/nvfs-rdma.h
+
+Change-Id: If593c90a0760a2dc1aae3feafcfa5f7502b098a5
+---
+ drivers/nvme/host/nvfs-rdma.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/nvme/host/nvfs-rdma.h
++++ b/drivers/nvme/host/nvfs-rdma.h
+@@ -19,7 +19,12 @@ static bool nvme_rdma_nvfs_unmap_data(st
+ 				dma_dir);
+ 		if (count) {
+ 			nvfs_put_ops();
++#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
+ 			sg_free_table_chained(&req->data_sgl.sg_table, NVME_INLINE_SG_CNT);
++#else
++			sg_free_table_chained(&req->data_sgl.sg_table, true);
++#endif
++
+ 			return true;
+ 		}
+ 	}

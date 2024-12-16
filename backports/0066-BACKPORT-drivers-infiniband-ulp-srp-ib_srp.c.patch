@@ -1,0 +1,539 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/srp/ib_srp.c
+
+Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
+---
+ drivers/infiniband/ulp/srp/ib_srp.c | 283 +++++++++++++++++++++++++++-
+ 1 file changed, 282 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/srp/ib_srp.c
++++ b/drivers/infiniband/ulp/srp/ib_srp.c
+@@ -64,6 +64,31 @@
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("InfiniBand SCSI RDMA Protocol initiator");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
++
++#if !defined(CONFIG_DYNAMIC_DEBUG)
++#define DEFINE_DYNAMIC_DEBUG_METADATA(name, fmt)
++#define DYNAMIC_DEBUG_BRANCH(descriptor) false
++#else
++#if defined(DEFINE_DYNAMIC_DEBUG_METADATA) && !defined(DYNAMIC_DEBUG_BRANCH)
++#ifdef DEBUG
++#define DYNAMIC_DEBUG_BRANCH(descriptor) \
++	        likely(descriptor.flags & _DPRINTK_FLAGS_PRINT)
++#else
++#define DYNAMIC_DEBUG_BRANCH(descriptor) \
++	        unlikely(descriptor.flags & _DPRINTK_FLAGS_PRINT)
++#endif
++#endif
++#endif
++
++#ifndef DEFINE_DYNAMIC_DEBUG_METADATA
++#define DEFINE_DYNAMIC_DEBUG_METADATA(name, fmt)
++#endif
++#ifndef DYNAMIC_DEBUG_BRANCH
++#define DYNAMIC_DEBUG_BRANCH(descriptor) false
++#endif
+ 
+ static unsigned int srp_sg_tablesize;
+ static unsigned int cmd_sg_entries;
+@@ -960,6 +985,7 @@ static void srp_disconnect_target(struct
+ 	}
+ }
+ 
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ static int srp_exit_cmd_priv(struct Scsi_Host *shost, struct scsi_cmnd *cmd)
+ {
+ 	struct srp_target_port *target = host_to_target(shost);
+@@ -1011,6 +1037,74 @@ static int srp_init_cmd_priv(struct Scsi
+ out:
+ 	return ret;
+ }
++#else /* HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV */
++static void srp_free_req_data(struct srp_target_port *target,
++			      struct srp_rdma_ch *ch)
++{
++	struct srp_device *dev = target->srp_host->srp_dev;
++	struct ib_device *ibdev = dev->dev;
++	struct srp_request *req;
++	int i;
++
++	if (!ch->req_ring)
++		return;
++
++	for (i = 0; i < target->req_ring_size; ++i) {
++		req = &ch->req_ring[i];
++		if (dev->use_fast_reg)
++			kfree(req->fr_list);
++		if (req->indirect_dma_addr) {
++			ib_dma_unmap_single(ibdev, req->indirect_dma_addr,
++					    target->indirect_size,
++					    DMA_TO_DEVICE);
++		}
++		kfree(req->indirect_desc);
++	}
++
++	kfree(ch->req_ring);
++	ch->req_ring = NULL;
++}
++
++static int srp_alloc_req_data(struct srp_rdma_ch *ch)
++{
++	struct srp_target_port *target = ch->target;
++	struct srp_device *srp_dev = target->srp_host->srp_dev;
++	struct ib_device *ibdev = srp_dev->dev;
++	struct srp_request *req;
++	dma_addr_t dma_addr;
++	int i, ret = -ENOMEM;
++
++	ch->req_ring = kcalloc(target->req_ring_size, sizeof(*ch->req_ring),
++			       GFP_KERNEL);
++	if (!ch->req_ring)
++		goto out;
++
++	for (i = 0; i < target->req_ring_size; ++i) {
++		req = &ch->req_ring[i];
++		if (srp_dev->use_fast_reg) {
++			req->fr_list = kmalloc_array(target->mr_per_cmd,
++						sizeof(void *), GFP_KERNEL);
++			if (!req->fr_list)
++				goto out;
++		}
++		req->indirect_desc = kmalloc(target->indirect_size, GFP_KERNEL);
++		if (!req->indirect_desc)
++			goto out;
++
++		dma_addr = ib_dma_map_single(ibdev, req->indirect_desc,
++					     target->indirect_size,
++					     DMA_TO_DEVICE);
++		if (ib_dma_mapping_error(ibdev, dma_addr))
++			goto out;
++
++		req->indirect_dma_addr = dma_addr;
++	}
++	ret = 0;
++
++out:
++	return ret;
++}
++#endif /* HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV */
+ 
+ /**
+  * srp_del_scsi_host_attr() - Remove attributes defined in the host template.
+@@ -1021,6 +1115,7 @@ out:
+  */
+ static void srp_del_scsi_host_attr(struct Scsi_Host *shost)
+ {
++#ifdef HAVE_SCSI_HOST_TEMPLATE_SHOST_GROUPS
+ 	const struct attribute_group **g;
+ 	struct attribute **attr;
+ 
+@@ -1032,6 +1127,12 @@ static void srp_del_scsi_host_attr(struc
+ 			device_remove_file(&shost->shost_dev, dev_attr);
+ 		}
+ 	}
++#else
++	struct device_attribute **attr;
++
++	for (attr = shost->hostt->shost_attrs; attr && *attr; ++attr)
++		device_remove_file(&shost->shost_dev, *attr);
++#endif
+ }
+ 
+ static void srp_remove_target(struct srp_target_port *target)
+@@ -1054,6 +1155,12 @@ static void srp_remove_target(struct srp
+ 	}
+ 	cancel_work_sync(&target->tl_err_work);
+ 	srp_rport_put(target->rport);
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	for (i = 0; i < target->ch_count; i++) {
++		ch = &target->ch[i];
++		srp_free_req_data(target, ch);
++	}
++#endif
+ 	kfree(target->ch);
+ 	target->ch = NULL;
+ 
+@@ -1268,20 +1375,34 @@ static void srp_finish_req(struct srp_rd
+ 	if (scmnd) {
+ 		srp_free_req(ch, req, scmnd, 0);
+ 		scmnd->result = result;
++#ifdef HAVE_SCSI_DONE
+ 		scsi_done(scmnd);
++#else
++		scmnd->scsi_done(scmnd);
++#endif
+ 	}
+ }
+ 
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ struct srp_terminate_context {
+ 	struct srp_target_port *srp_target;
+ 	int scsi_result;
+ };
+ 
++#ifdef HAVE_SCSI_HOST_BUSY_ITER_FN_2_ARGS
+ static bool srp_terminate_cmd(struct scsi_cmnd *scmnd, void *context_ptr)
++#else
++static bool srp_terminate_cmd(struct scsi_cmnd *scmnd, void *context_ptr,
++			      bool reserved)
++#endif
+ {
+ 	struct srp_terminate_context *context = context_ptr;
+ 	struct srp_target_port *target = context->srp_target;
++#ifdef HAVE_SCSI_CMD_TO_RQ
+ 	u32 tag = blk_mq_unique_tag(scsi_cmd_to_rq(scmnd));
++#else
++	u32 tag = blk_mq_unique_tag(scmnd->request);
++#endif
+ 	struct srp_rdma_ch *ch = &target->ch[blk_mq_unique_tag_to_hwq(tag)];
+ 	struct srp_request *req = scsi_cmd_priv(scmnd);
+ 
+@@ -1298,6 +1419,25 @@ static void srp_terminate_io(struct srp_
+ 
+ 	scsi_host_busy_iter(target->scsi_host, srp_terminate_cmd, &context);
+ }
++#else
++static void srp_terminate_io(struct srp_rport *rport)
++{
++	struct srp_target_port *target = rport->lld_data;
++	struct srp_rdma_ch *ch;
++	int i, j;
++
++	for (i = 0; i < target->ch_count; i++) {
++		ch = &target->ch[i];
++
++		for (j = 0; j < target->req_ring_size; ++j) {
++			struct srp_request *req = &ch->req_ring[j];
++
++			srp_finish_req(ch, req, NULL,
++				       DID_TRANSPORT_FAILFAST << 16);
++		}
++	}
++}
++#endif /* HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV */
+ 
+ /* Calculate maximum initiator to target information unit length. */
+ static uint32_t srp_max_it_iu_len(int cmd_sg_cnt, bool use_imm_data,
+@@ -1352,6 +1492,7 @@ static int srp_rport_reconnect(struct sr
+ 		ch = &target->ch[i];
+ 		ret += srp_new_cm_id(ch);
+ 	}
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 	{
+ 		struct srp_terminate_context context = {
+ 			.srp_target = target, .scsi_result = DID_RESET << 16};
+@@ -1359,6 +1500,16 @@ static int srp_rport_reconnect(struct sr
+ 		scsi_host_busy_iter(target->scsi_host, srp_terminate_cmd,
+ 				    &context);
+ 	}
++#else
++	for (i = 0; i < target->ch_count; i++) {
++		ch = &target->ch[i];
++		for (j = 0; j < target->req_ring_size; ++j) {
++			struct srp_request *req = &ch->req_ring[j];
++
++			srp_finish_req(ch, req, NULL, DID_RESET << 16);
++		}
++	}
++#endif
+ 	for (i = 0; i < target->ch_count; i++) {
+ 		ch = &target->ch[i];
+ 		/*
+@@ -1953,10 +2104,19 @@ static void srp_process_rsp(struct srp_r
+ 		spin_unlock_irqrestore(&ch->lock, flags);
+ 	} else {
+ 		scmnd = scsi_host_find_tag(target->scsi_host, rsp->tag);
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 		if (scmnd) {
+ 			req = scsi_cmd_priv(scmnd);
+ 			scmnd = srp_claim_req(ch, req, NULL, scmnd);
+ 		}
++#else
++		if (scmnd && scmnd->host_scribble) {
++			req = (void *)scmnd->host_scribble;
++			scmnd = srp_claim_req(ch, req, NULL, scmnd);
++		} else {
++			scmnd = NULL;
++		}
++#endif
+ 		if (!scmnd) {
+ 			shost_printk(KERN_ERR, target->scsi_host,
+ 				     "Null scmnd for RSP w/tag %#016llx received on ch %td / QP %#x\n",
+@@ -1985,7 +2145,14 @@ static void srp_process_rsp(struct srp_r
+ 		srp_free_req(ch, req, scmnd,
+ 			     be32_to_cpu(rsp->req_lim_delta));
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++		scmnd->host_scribble = NULL;
++#endif
++#ifdef HAVE_SCSI_DONE
+ 		scsi_done(scmnd);
++#else
++		scmnd->scsi_done(scmnd);
++#endif
+ 	}
+ }
+ 
+@@ -2150,15 +2317,26 @@ static void srp_handle_qp_err(struct ib_
+ 
+ static int srp_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
+ {
++#ifdef HAVE_SCSI_CMD_TO_RQ
+ 	struct request *rq = scsi_cmd_to_rq(scmnd);
++#else
++	struct request *rq = scmnd->request;
++#endif
+ 	struct srp_target_port *target = host_to_target(shost);
+ 	struct srp_rdma_ch *ch;
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 	struct srp_request *req = scsi_cmd_priv(scmnd);
++#else
++	struct srp_request *req;
++#endif
+ 	struct srp_iu *iu;
+ 	struct srp_cmd *cmd;
+ 	struct ib_device *dev;
+ 	unsigned long flags;
+ 	u32 tag;
++#if !defined(HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV)
++	u16 idx;
++#endif
+ 	int len, ret;
+ 
+ 	scmnd->result = srp_chkready(target->rport);
+@@ -2168,6 +2346,12 @@ static int srp_queuecommand(struct Scsi_
+ 	WARN_ON_ONCE(rq->tag < 0);
+ 	tag = blk_mq_unique_tag(rq);
+ 	ch = &target->ch[blk_mq_unique_tag_to_hwq(tag)];
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	idx = blk_mq_unique_tag_to_tag(tag);
++	WARN_ONCE(idx >= target->req_ring_size, "%s: tag %#x: idx %d >= %d\n",
++		  dev_name(&shost->shost_gendev), tag, idx,
++		  target->req_ring_size);
++#endif
+ 
+ 	spin_lock_irqsave(&ch->lock, flags);
+ 	iu = __srp_get_tx_iu(ch, SRP_IU_CMD);
+@@ -2176,10 +2360,16 @@ static int srp_queuecommand(struct Scsi_
+ 	if (!iu)
+ 		goto err;
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	req = &ch->req_ring[idx];
++#endif
+ 	dev = target->srp_host->srp_dev->dev;
+ 	ib_dma_sync_single_for_cpu(dev, iu->dma, ch->max_it_iu_len,
+ 				   DMA_TO_DEVICE);
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	scmnd->host_scribble = (void *) req;
++#endif
+ 	cmd = iu->buf;
+ 	memset(cmd, 0, sizeof *cmd);
+ 
+@@ -2208,7 +2398,11 @@ static int srp_queuecommand(struct Scsi_
+ 		 * to reduce queue depth temporarily.
+ 		 */
+ 		scmnd->result = len == -ENOMEM ?
++#ifdef HAVE_SCSI_QUEUE_FULL
++			DID_OK << 16 | QUEUE_FULL << 1 : DID_ERROR << 16;
++#else
+ 			DID_OK << 16 | SAM_STAT_TASK_SET_FULL : DID_ERROR << 16;
++#endif
+ 		goto err_iu;
+ 	}
+ 
+@@ -2237,7 +2431,11 @@ err_iu:
+ 
+ err:
+ 	if (scmnd->result) {
++#ifdef HAVE_SCSI_DONE
+ 		scsi_done(scmnd);
++#else
++		scmnd->scsi_done(scmnd);
++#endif
+ 		ret = 0;
+ 	} else {
+ 		ret = SCSI_MLQUEUE_HOST_BUSY;
+@@ -2780,14 +2978,26 @@ static int srp_send_tsk_mgmt(struct srp_
+ static int srp_abort(struct scsi_cmnd *scmnd)
+ {
+ 	struct srp_target_port *target = host_to_target(scmnd->device->host);
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 	struct srp_request *req = scsi_cmd_priv(scmnd);
++#else
++	struct srp_request *req = (void *)scmnd->host_scribble;
++#endif
+ 	u32 tag;
+ 	u16 ch_idx;
+ 	struct srp_rdma_ch *ch;
+ 
+ 	shost_printk(KERN_ERR, target->scsi_host, "SRP abort called\n");
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	if (!req)
++		return SUCCESS;
++#endif
++#ifdef HAVE_SCSI_CMD_TO_RQ
+ 	tag = blk_mq_unique_tag(scsi_cmd_to_rq(scmnd));
++#else
++	tag = blk_mq_unique_tag(scmnd->request);
++#endif
+ 	ch_idx = blk_mq_unique_tag_to_hwq(tag);
+ 	if (WARN_ON_ONCE(ch_idx >= target->ch_count))
+ 		return SUCCESS;
+@@ -2844,6 +3054,20 @@ static int srp_target_alloc(struct scsi_
+ 	return 0;
+ }
+ 
++#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
++static int srp_slave_alloc(struct scsi_device *sdev)
++{
++	struct Scsi_Host *shost = sdev->host;
++	struct srp_target_port *target = host_to_target(shost);
++	struct srp_device *srp_dev = target->srp_host->srp_dev;
++
++	blk_queue_virt_boundary(sdev->request_queue,
++				~srp_dev->mr_page_mask);
++
++	return 0;
++}
++#endif
++
+ static int srp_slave_configure(struct scsi_device *sdev)
+ {
+ 	struct Scsi_Host *shost = sdev->host;
+@@ -3040,6 +3264,7 @@ static ssize_t allow_ext_sg_show(struct
+ 
+ static DEVICE_ATTR_RO(allow_ext_sg);
+ 
++#ifdef HAVE_SCSI_HOST_TEMPLATE_SHOST_GROUPS
+ static struct attribute *srp_host_attrs[] = {
+ 	&dev_attr_id_ext.attr,
+ 	&dev_attr_ioc_guid.attr,
+@@ -3061,16 +3286,46 @@ static struct attribute *srp_host_attrs[
+ };
+ 
+ ATTRIBUTE_GROUPS(srp_host);
++#else
++static struct device_attribute *srp_host_attrs[] = {
++	&dev_attr_id_ext,
++	&dev_attr_ioc_guid,
++	&dev_attr_service_id,
++	&dev_attr_pkey,
++	&dev_attr_sgid,
++	&dev_attr_dgid,
++	&dev_attr_orig_dgid,
++	&dev_attr_req_lim,
++	&dev_attr_zero_req_lim,
++	&dev_attr_local_ib_port,
++	&dev_attr_local_ib_device,
++	&dev_attr_ch_count,
++	&dev_attr_comp_vector,
++	&dev_attr_tl_retry_count,
++	&dev_attr_cmd_sg_entries,
++	&dev_attr_allow_ext_sg,
++	NULL
++};
++#endif /* HAVE_SCSI_HOST_TEMPLATE_SHOST_GROUPS */
+ 
++#ifdef HAVE_SCSI_HOST_ALLOC_GET_CONST_SHT
+ static const struct scsi_host_template srp_template = {
++#else
++static struct scsi_host_template srp_template = {
++#endif
+ 	.module				= THIS_MODULE,
+ 	.name				= "InfiniBand SRP initiator",
+ 	.proc_name			= DRV_NAME,
+ 	.target_alloc			= srp_target_alloc,
++#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
++	.slave_alloc			= srp_slave_alloc,
++#endif
+ 	.slave_configure		= srp_slave_configure,
+ 	.info				= srp_target_info,
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 	.init_cmd_priv			= srp_init_cmd_priv,
+ 	.exit_cmd_priv			= srp_exit_cmd_priv,
++#endif
+ 	.queuecommand			= srp_queuecommand,
+ 	.change_queue_depth             = srp_change_queue_depth,
+ 	.eh_timed_out			= srp_timed_out,
+@@ -3082,9 +3337,18 @@ static const struct scsi_host_template s
+ 	.can_queue			= SRP_DEFAULT_CMD_SQ_SIZE,
+ 	.this_id			= -1,
+ 	.cmd_per_lun			= SRP_DEFAULT_CMD_SQ_SIZE,
++#ifdef ENABLE_CLUSTERING
++	.use_clustering			= ENABLE_CLUSTERING,
++#endif
++#ifdef HAVE_SCSI_HOST_TEMPLATE_SHOST_GROUPS
+ 	.shost_groups			= srp_host_groups,
++#else
++	.shost_attrs			= srp_host_attrs,
++#endif
+ 	.track_queue_depth		= 1,
++#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
+ 	.cmd_size			= sizeof(struct srp_request),
++#endif
+ };
+ 
+ static int srp_sdev_count(struct Scsi_Host *host)
+@@ -3704,9 +3968,12 @@ static ssize_t add_target_store(struct d
+ 	target_host->max_id      = 1;
+ 	target_host->max_lun     = -1LL;
+ 	target_host->max_cmd_len = sizeof ((struct srp_cmd *) (void *) 0L)->cdb;
++#ifdef HAVE_SCSI_HOST_MAX_SEGMENT_SIZE
+ 	target_host->max_segment_size = ib_dma_max_seg_size(ibdev);
+-
++#endif
++#ifdef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
+ 	target_host->virt_boundary_mask = ~srp_dev->mr_page_mask;
++#endif
+ 
+ 	target = host_to_target(target_host);
+ 
+@@ -3736,6 +4003,9 @@ static ssize_t add_target_store(struct d
+ 	if (ret)
+ 		goto out;
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++	target->req_ring_size = target->queue_size - SRP_TSK_MGMT_SQ_SIZE;
++#endif
+ 	if (!srp_conn_unique(target->srp_host, target)) {
+ 		if (target->using_rdma_cm) {
+ 			shost_printk(KERN_INFO, target->scsi_host,
+@@ -3830,6 +4100,11 @@ static ssize_t add_target_store(struct d
+ 		if (ret)
+ 			goto err_disconnect;
+ 
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++		ret = srp_alloc_req_data(ch);
++		if (ret)
++			goto err_disconnect;
++#endif
+ 		ret = srp_connect_ch(ch, max_iu_len, multich);
+ 		if (ret) {
+ 			char dst[64];
+@@ -3848,6 +4123,9 @@ static ssize_t add_target_store(struct d
+ 				goto free_ch;
+ 			} else {
+ 				srp_free_ch_ib(target, ch);
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++				srp_free_req_data(target, ch);
++#endif
+ 				target->ch_count = ch - target->ch;
+ 				goto connected;
+ 			}
+@@ -3908,6 +4186,9 @@ free_ch:
+ 	for (i = 0; i < target->ch_count; i++) {
+ 		ch = &target->ch[i];
+ 		srp_free_ch_ib(target, ch);
++#ifndef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
++		srp_free_req_data(target, ch);
++#endif
+ 	}
+ 
+ 	kfree(target->ch);

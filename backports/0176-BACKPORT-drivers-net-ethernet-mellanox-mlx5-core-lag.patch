@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/mp.h
+
+Change-Id: I2682b0b9fdcde5f59056aa80c8297abb2bbb7109
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/mp.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/mp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/mp.h
+@@ -24,8 +24,7 @@ struct lag_mp {
+ 	struct workqueue_struct   *wq;
+ };
+ 
+-#ifdef CONFIG_MLX5_ESWITCH
+-
++#if defined(CONFIG_MLX5_ESWITCH)
+ void mlx5_lag_mp_reset(struct mlx5_lag *ldev);
+ int mlx5_lag_mp_init(struct mlx5_lag *ldev);
+ void mlx5_lag_mp_cleanup(struct mlx5_lag *ldev);

@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+
+Change-Id: I5f7ead1b66adb0dd1f1013f0ca429b1062b1221f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+@@ -43,8 +43,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ 			     const struct flow_action_entry *act,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	if (act->ct.action & TCA_CT_ACT_CLEAR)
+ 		return false;
++#endif
+ 
+ 	return true;
+ }
+@@ -52,7 +54,11 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ static bool
+ tc_act_is_missable_ct(const struct flow_action_entry *act)
+ {
++#ifdef HAVE_FLOW_ACTION_ENTRY_MISS_COOKIE
+ 	return !(act->ct.action & TCA_CT_ACT_CLEAR);
++#else
++	return false;
++#endif
+ }
+ 
+ struct mlx5e_tc_act mlx5e_tc_act_ct = {

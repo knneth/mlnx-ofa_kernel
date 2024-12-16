@@ -531,7 +531,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_CREATE_UCTX:
 	case MLX5_CMD_OP_CREATE_UMEM:
 	case MLX5_CMD_OP_ALLOC_MEMIC:
-	case MLX5_CMD_OP_SYNC_STEERING:
 	case MLX5_CMD_OP_MODIFY_XRQ:
 	case MLX5_CMD_OP_RELEASE_XRQ_ERROR:
 	case MLX5_CMD_OP_QUERY_VHCA_STATE:
@@ -543,6 +542,7 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_SAVE_VHCA_STATE:
 	case MLX5_CMD_OP_LOAD_VHCA_STATE:
 	case MLX5_CMD_OP_SYNC_CRYPTO:
+	case MLX5_CMD_OP_ALLOW_OTHER_VHCA_ACCESS:
 		*status = MLX5_DRIVER_STATUS_ABORTED;
 		*synd = MLX5_DRIVER_SYND;
 		return -ENOLINK;
@@ -750,13 +750,13 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(MODIFY_VHCA_STATE);
 	MLX5_COMMAND_STR_CASE(ALLOC_SF);
 	MLX5_COMMAND_STR_CASE(DEALLOC_SF);
-	MLX5_COMMAND_STR_CASE(SYNC_STEERING);
 	MLX5_COMMAND_STR_CASE(SUSPEND_VHCA);
 	MLX5_COMMAND_STR_CASE(RESUME_VHCA);
 	MLX5_COMMAND_STR_CASE(QUERY_VHCA_MIGRATION_STATE);
 	MLX5_COMMAND_STR_CASE(SAVE_VHCA_STATE);
 	MLX5_COMMAND_STR_CASE(LOAD_VHCA_STATE);
 	MLX5_COMMAND_STR_CASE(SYNC_CRYPTO);
+	MLX5_COMMAND_STR_CASE(ALLOW_OTHER_VHCA_ACCESS);
 	default: return "unknown command opcode";
 	}
 }
@@ -993,19 +993,32 @@ static void cmd_work_handler(struct work_struct *work)
 	bool poll_cmd = ent->polling;
 	struct mlx5_cmd_layout *lay;
 	struct mlx5_core_dev *dev;
-	unsigned long cb_timeout;
-	struct semaphore *sem;
+	unsigned long timeout;
 	unsigned long flags;
 	int alloc_ret;
 	int cmd_mode;
 
-	dev = container_of(cmd, struct mlx5_core_dev, cmd);
-	cb_timeout = msecs_to_jiffies(mlx5_tout_ms(dev, CMD));
-
 	complete(&ent->handling);
-	sem = ent->page_queue ? &cmd->vars.pages_sem : &cmd->vars.sem;
-	down(sem);
+
+	dev = container_of(cmd, struct mlx5_core_dev, cmd);
+	timeout = msecs_to_jiffies(mlx5_tout_ms(dev, CMD));
+
 	if (!ent->page_queue) {
+		if (down_timeout(&cmd->vars.sem, timeout)) {
+			mlx5_core_warn(dev, "%s(0x%x) timed out while waiting for a slot.\n",
+				       mlx5_command_str(ent->op), ent->op);
+			if (ent->callback) {
+				ent->callback(-EBUSY, ent->context);
+				mlx5_free_cmd_msg(dev, ent->out);
+				free_msg(dev, ent->in);
+				cmd_ent_put(ent);
+			} else {
+				ent->ret = -EBUSY;
+				complete(&ent->done);
+			}
+			complete(&ent->slotted);
+			return;
+		}
 		alloc_ret = cmd_alloc_index(cmd, ent);
 		if (alloc_ret < 0) {
 			mlx5_core_err_rl(dev, "failed to allocate command entry\n");
@@ -1018,16 +1031,19 @@ static void cmd_work_handler(struct work_struct *work)
 				ent->ret = -EAGAIN;
 				complete(&ent->done);
 			}
-			up(sem);
+			up(&cmd->vars.sem);
 			return;
 		}
 	} else {
+		down(&cmd->vars.pages_sem);
 		ent->idx = cmd->vars.max_reg_cmds;
 		spin_lock_irqsave(&cmd->alloc_lock, flags);
 		clear_bit(ent->idx, &cmd->vars.bitmask);
 		cmd->ent_arr[ent->idx] = ent;
 		spin_unlock_irqrestore(&cmd->alloc_lock, flags);
 	}
+
+	complete(&ent->slotted);
 
 	lay = get_inst(cmd, ent->idx);
 	ent->lay = lay;
@@ -1047,7 +1063,7 @@ static void cmd_work_handler(struct work_struct *work)
 	ent->ts1 = ktime_get_ns();
 	cmd_mode = cmd->mode;
 
-	if (ent->callback && schedule_delayed_work(&ent->cb_timeout_work, cb_timeout))
+	if (ent->callback && schedule_delayed_work(&ent->cb_timeout_work, timeout))
 		cmd_ent_get(ent);
 	set_bit(MLX5_CMD_ENT_STATE_PENDING_COMP, &ent->state);
 
@@ -1168,6 +1184,9 @@ static int wait_func(struct mlx5_core_dev *dev, struct mlx5_cmd_work_ent *ent)
 		ent->ret = -ECANCELED;
 		goto out_err;
 	}
+
+	wait_for_completion(&ent->slotted);
+
 	if (cmd->mode == CMD_MODE_POLLING || ent->polling)
 		wait_for_completion(&ent->done);
 	else if (!wait_for_completion_timeout(&ent->done, timeout))
@@ -1181,6 +1200,9 @@ out_err:
 			       mlx5_command_str(ent->op), ent->op);
 	} else if (err == -ECANCELED) {
 		mlx5_core_warn(dev, "%s(0x%x) canceled on out of queue timeout.\n",
+			       mlx5_command_str(ent->op), ent->op);
+	} else if (err == -EBUSY) {
+		mlx5_core_warn(dev, "%s(0x%x) timeout while waiting for command semaphore.\n",
 			       mlx5_command_str(ent->op), ent->op);
 	}
 	mlx5_core_dbg(dev, "err %d, delivery status %s(%d)\n",
@@ -1233,6 +1255,7 @@ static int mlx5_cmd_invoke(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *in,
 	ent->polling = force_polling;
 
 	init_completion(&ent->handling);
+	init_completion(&ent->slotted);
 	if (!callback)
 		init_completion(&ent->done);
 
@@ -1250,7 +1273,7 @@ static int mlx5_cmd_invoke(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *in,
 		return 0; /* mlx5_cmd_comp_handler() will put(ent) */
 
 	err = wait_func(dev, ent);
-	if (err == -ETIMEDOUT || err == -ECANCELED)
+	if (err == -ETIMEDOUT || err == -ECANCELED || err == -EBUSY)
 		goto out_free;
 
 	ds = ent->ts2 - ent->ts1;
@@ -1636,6 +1659,9 @@ static int cmd_comp_notifier(struct notifier_block *nb,
 	dev = container_of(cmd, struct mlx5_core_dev, cmd);
 	eqe = data;
 
+	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
+		return NOTIFY_DONE;
+
 	mlx5_cmd_comp_handler(dev, be32_to_cpu(eqe->data.cmd.vector),
 			      MLX5_CMD_COMP_TYPE_EVENT);
 
@@ -1775,6 +1801,10 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 	}
 }
 
+#define MLX5_MAX_MANAGE_PAGES_CMD_ENT 1
+#define MLX5_CMD_MASK ((1UL << (cmd->vars.max_reg_cmds + \
+			   MLX5_MAX_MANAGE_PAGES_CMD_ENT)) - 1)
+
 static void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev)
 {
 	struct mlx5_cmd *cmd = &dev->cmd;
@@ -1786,7 +1816,7 @@ static void mlx5_cmd_trigger_completions(struct mlx5_core_dev *dev)
 	/* wait for pending handlers to complete */
 	mlx5_eq_synchronize_cmd_irq(dev);
 	spin_lock_irqsave(&dev->cmd.alloc_lock, flags);
-	vector = ~dev->cmd.vars.bitmask & ((1ul << (1 << dev->cmd.vars.log_sz)) - 1);
+	vector = ~dev->cmd.vars.bitmask & MLX5_CMD_MASK;
 	if (!vector)
 		goto no_trig;
 
@@ -2149,6 +2179,74 @@ int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
 }
 EXPORT_SYMBOL(mlx5_cmd_exec_cb);
 
+int mlx5_cmd_allow_other_vhca_access(struct mlx5_core_dev *dev,
+				     struct mlx5_cmd_allow_other_vhca_access_attr *attr)
+{
+	u32 out[MLX5_ST_SZ_DW(allow_other_vhca_access_out)] = {};
+	u32 in[MLX5_ST_SZ_DW(allow_other_vhca_access_in)] = {};
+	void *key;
+
+	MLX5_SET(allow_other_vhca_access_in,
+		 in, opcode, MLX5_CMD_OP_ALLOW_OTHER_VHCA_ACCESS);
+	MLX5_SET(allow_other_vhca_access_in,
+		 in, object_type_to_be_accessed, attr->obj_type);
+	MLX5_SET(allow_other_vhca_access_in,
+		 in, object_id_to_be_accessed, attr->obj_id);
+
+	key = MLX5_ADDR_OF(allow_other_vhca_access_in, in, access_key);
+	memcpy(key, attr->access_key, sizeof(attr->access_key));
+
+	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+}
+
+int mlx5_cmd_alias_obj_create(struct mlx5_core_dev *dev,
+			      struct mlx5_cmd_alias_obj_create_attr *alias_attr,
+			      u32 *obj_id)
+{
+	u32 out[MLX5_ST_SZ_DW(general_obj_out_cmd_hdr)] = {};
+	u32 in[MLX5_ST_SZ_DW(create_alias_obj_in)] = {};
+	void *param;
+	void *attr;
+	void *key;
+	int ret;
+
+	attr = MLX5_ADDR_OF(create_alias_obj_in, in, hdr);
+	MLX5_SET(general_obj_in_cmd_hdr,
+		 attr, opcode, MLX5_CMD_OP_CREATE_GENERAL_OBJECT);
+	MLX5_SET(general_obj_in_cmd_hdr,
+		 attr, obj_type, alias_attr->obj_type);
+	param = MLX5_ADDR_OF(general_obj_in_cmd_hdr, in, op_param);
+	MLX5_SET(general_obj_create_param, param, alias_object, 1);
+
+	attr = MLX5_ADDR_OF(create_alias_obj_in, in, alias_ctx);
+	MLX5_SET(alias_context, attr, vhca_id_to_be_accessed, alias_attr->vhca_id);
+	MLX5_SET(alias_context, attr, object_id_to_be_accessed, alias_attr->obj_id);
+
+	key = MLX5_ADDR_OF(alias_context, attr, access_key);
+	memcpy(key, alias_attr->access_key, sizeof(alias_attr->access_key));
+
+	ret = mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		return ret;
+
+	*obj_id = MLX5_GET(general_obj_out_cmd_hdr, out, obj_id);
+
+	return 0;
+}
+
+int mlx5_cmd_alias_obj_destroy(struct mlx5_core_dev *dev, u32 obj_id,
+			       u16 obj_type)
+{
+	u32 out[MLX5_ST_SZ_DW(general_obj_out_cmd_hdr)] = {};
+	u32 in[MLX5_ST_SZ_DW(general_obj_in_cmd_hdr)] = {};
+
+	MLX5_SET(general_obj_in_cmd_hdr, in, opcode, MLX5_CMD_OP_DESTROY_GENERAL_OBJECT);
+	MLX5_SET(general_obj_in_cmd_hdr, in, obj_type, obj_type);
+	MLX5_SET(general_obj_in_cmd_hdr, in, obj_id, obj_id);
+
+	return mlx5_cmd_exec(dev, in, sizeof(in), out, sizeof(out));
+}
+
 static void destroy_msg_cache(struct mlx5_core_dev *dev)
 {
 	struct cmd_msg_cache *ch;
@@ -2321,7 +2419,7 @@ int mlx5_cmd_enable(struct mlx5_core_dev *dev)
 
 	cmd->state = MLX5_CMDIF_STATE_DOWN;
 	cmd->vars.max_reg_cmds = (1 << cmd->vars.log_sz) - 1;
-	cmd->vars.bitmask = (1UL << cmd->vars.max_reg_cmds) - 1;
+	cmd->vars.bitmask = MLX5_CMD_MASK;
 
 	sema_init(&cmd->vars.sem, cmd->vars.max_reg_cmds);
 	sema_init(&cmd->vars.pages_sem, 1);

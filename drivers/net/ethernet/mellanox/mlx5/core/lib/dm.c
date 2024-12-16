@@ -64,7 +64,7 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 		dm->header_encap_sw_icm_alloc_blocks =
 			bitmap_zalloc(header_sw_encap_icm_blocks, GFP_KERNEL);
 		if (!dm->header_encap_sw_icm_alloc_blocks)
-			goto err_sw_encap;
+			goto err_pattern;
 	}
 
 	support_v2 = MLX5_CAP_FLOWTABLE_NIC_RX(dev, sw_owner_v2) &&
@@ -79,15 +79,15 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 		dm->header_modify_pattern_sw_icm_alloc_blocks =
 			bitmap_zalloc(header_modify_pattern_icm_blocks, GFP_KERNEL);
 		if (!dm->header_modify_pattern_sw_icm_alloc_blocks)
-			goto err_pattern;
+			goto err_sw_encap;
 	}
 
 	return dm;
 
-err_pattern:
+err_sw_encap:
 	bitmap_free(dm->header_encap_sw_icm_alloc_blocks);
 
-err_sw_encap:
+err_pattern:
 	bitmap_free(dm->header_modify_sw_icm_alloc_blocks);
 
 err_modify_hdr:

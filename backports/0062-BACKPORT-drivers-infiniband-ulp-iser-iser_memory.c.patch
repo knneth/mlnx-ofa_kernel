@@ -1,0 +1,40 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_memory.c
+
+Change-Id: Idad8b5ee4651b4ce56de91c2cd48c2a78f39cbef
+---
+ drivers/infiniband/ulp/iser/iser_memory.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/infiniband/ulp/iser/iser_memory.c
++++ b/drivers/infiniband/ulp/iser/iser_memory.c
+@@ -178,7 +178,11 @@ static void iser_set_dif_domain(struct s
+ {
+ 	domain->sig_type = IB_SIG_TYPE_T10_DIF;
+ 	domain->sig.dif.pi_interval = scsi_prot_interval(sc);
++#ifdef HAVE_SCSI_CMD_TO_RQ
+ 	domain->sig.dif.ref_tag = t10_pi_ref_tag(scsi_cmd_to_rq(sc));
++#else
++	domain->sig.dif.ref_tag = t10_pi_ref_tag(sc->request);
++#endif
+ 	/*
+ 	 * At the moment we hard code those, but in the future
+ 	 * we will take them from sc.
+@@ -204,6 +208,8 @@ static int iser_set_sig_attrs(struct scs
+ 	case SCSI_PROT_WRITE_STRIP:
+ 		sig_attrs->wire.sig_type = IB_SIG_TYPE_NONE;
+ 		iser_set_dif_domain(sc, &sig_attrs->mem);
++		/* WA for #963642: DIX always use SCSI_PROT_IP_CHECKSUM */
++		sc->prot_flags |= SCSI_PROT_IP_CHECKSUM;
+ 		sig_attrs->mem.sig.dif.bg_type = sc->prot_flags & SCSI_PROT_IP_CHECKSUM ?
+ 						IB_T10DIF_CSUM : IB_T10DIF_CRC;
+ 		break;
+@@ -212,6 +218,8 @@ static int iser_set_sig_attrs(struct scs
+ 		iser_set_dif_domain(sc, &sig_attrs->wire);
+ 		sig_attrs->wire.sig.dif.bg_type = IB_T10DIF_CRC;
+ 		iser_set_dif_domain(sc, &sig_attrs->mem);
++		/* WA for #963642: DIX always use SCSI_PROT_IP_CHECKSUM */
++		sc->prot_flags |= SCSI_PROT_IP_CHECKSUM;
+ 		sig_attrs->mem.sig.dif.bg_type = sc->prot_flags & SCSI_PROT_IP_CHECKSUM ?
+ 						IB_T10DIF_CSUM : IB_T10DIF_CRC;
+ 		break;

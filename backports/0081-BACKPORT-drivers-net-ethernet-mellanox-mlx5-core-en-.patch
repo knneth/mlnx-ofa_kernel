@@ -1,0 +1,49 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+
+Change-Id: I66773c9be02bf93a4f21a6b2ca1140a8af07567d
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -6,6 +6,9 @@
+ 
+ #include "mod_hdr.h"
+ #include "lib/fs_ttc.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/rhashtable.h>
++#endif
+ 
+ struct mlx5_prio_hp {
+ 	u32 rate;
+@@ -186,15 +189,6 @@ int mlx5e_arfs_enable(struct mlx5e_flow_
+ int mlx5e_arfs_disable(struct mlx5e_flow_steering *fs);
+ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
+ 			u16 rxq_index, u32 flow_id);
+-#else
+-static inline int mlx5e_arfs_create_tables(struct mlx5e_flow_steering *fs,
+-					   struct mlx5e_rx_res *rx_res, bool ntuple)
+-{ return 0; }
+-static inline void mlx5e_arfs_destroy_tables(struct mlx5e_flow_steering *fs, bool ntuple) {}
+-static inline int mlx5e_arfs_enable(struct mlx5e_flow_steering *fs)
+-{ return -EOPNOTSUPP; }
+-static inline int mlx5e_arfs_disable(struct mlx5e_flow_steering *fs)
+-{ return -EOPNOTSUPP; }
+ #endif
+ 
+ #ifdef CONFIG_MLX5_EN_TLS
+@@ -259,10 +253,12 @@ void mlx5e_fs_set_state_destroy(struct m
+ void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
+ 
+ struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_flow_steering *fs);
+ int mlx5e_add_mac_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_flow_steering *fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
+ int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
+ 			     struct net_device *netdev,

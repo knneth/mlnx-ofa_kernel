@@ -1,0 +1,155 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
+
+Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
+---
+ .../net/ethernet/mellanox/mlx5/core/dpll.c    | 38 ++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
+@@ -40,9 +40,11 @@ struct mlx5_dpll_synce_status {
+ 	enum mlx5_msees_admin_status admin_status;
+ 	enum mlx5_msees_oper_status oper_status;
+ 	bool ho_acq;
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ 	bool oper_freq_measure;
+-	enum mlx5_msees_failure_reason failure_reason;
+ 	s32 frequency_diff;
++#endif
++	enum mlx5_msees_failure_reason failure_reason;
+ };
+ 
+ static int
+@@ -60,9 +62,11 @@ mlx5_dpll_synce_status_get(struct mlx5_c
+ 	synce_status->admin_status = MLX5_GET(msees_reg, out, admin_status);
+ 	synce_status->oper_status = MLX5_GET(msees_reg, out, oper_status);
+ 	synce_status->ho_acq = MLX5_GET(msees_reg, out, ho_acq);
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ 	synce_status->oper_freq_measure = MLX5_GET(msees_reg, out, oper_freq_measure);
+-	synce_status->failure_reason = MLX5_GET(msees_reg, out, failure_reason);
+ 	synce_status->frequency_diff = MLX5_GET(msees_reg, out, frequency_diff);
++#endif
++	synce_status->failure_reason = MLX5_GET(msees_reg, out, failure_reason);
+ 	return 0;
+ }
+ 
+@@ -75,10 +79,14 @@ mlx5_dpll_synce_status_set(struct mlx5_c
+ 
+ 	MLX5_SET(msees_reg, in, field_select,
+ 		 MLX5_MSEES_FIELD_SELECT_ENABLE |
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ 		 MLX5_MSEES_FIELD_SELECT_ADMIN_FREQ_MEASURE |
++#endif
+ 		 MLX5_MSEES_FIELD_SELECT_ADMIN_STATUS);
+ 	MLX5_SET(msees_reg, in, admin_status, admin_status);
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ 	MLX5_SET(msees_reg, in, admin_freq_measure, true);
++#endif
+ 	return mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
+ 				    MLX5_REG_MSEES, 0, 1);
+ }
+@@ -101,6 +109,7 @@ mlx5_dpll_lock_status_get(struct mlx5_dp
+ 	}
+ }
+ 
++#ifdef HAVE_NDO_LOCK_STATUS_GET_GET_ERROR_STATUS
+ static enum dpll_lock_status_error
+ mlx5_dpll_lock_status_error_get(struct mlx5_dpll_synce_status *synce_status)
+ {
+@@ -120,6 +129,7 @@ mlx5_dpll_lock_status_error_get(struct m
+ 		return DPLL_LOCK_STATUS_ERROR_NONE;
+ 	}
+ }
++#endif
+ 
+ static enum dpll_pin_state
+ mlx5_dpll_pin_state_get(struct mlx5_dpll_synce_status *synce_status)
+@@ -130,6 +140,7 @@ mlx5_dpll_pin_state_get(struct mlx5_dpll
+ 	       DPLL_PIN_STATE_CONNECTED : DPLL_PIN_STATE_DISCONNECTED;
+ }
+ 
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ static int
+ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_synce_status *synce_status,
+ 		      s64 *ffo)
+@@ -139,12 +150,20 @@ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_s
+ 	*ffo = synce_status->frequency_diff;
+ 	return 0;
+ }
++#endif
+ 
++#ifdef HAVE_NDO_LOCK_STATUS_GET_GET_ERROR_STATUS
+ static int
+ mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll, void *priv,
+ 				 enum dpll_lock_status *status,
+ 				 enum dpll_lock_status_error *status_error,
+ 				 struct netlink_ext_ack *extack)
++#else
++static int mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll,
++					    void *priv,
++					    enum dpll_lock_status *status,
++					    struct netlink_ext_ack *extack)
++#endif
+ {
+ 	struct mlx5_dpll_synce_status synce_status;
+ 	struct mlx5_dpll *mdpll = priv;
+@@ -154,7 +173,9 @@ mlx5_dpll_device_lock_status_get(const s
+ 	if (err)
+ 		return err;
+ 	*status = mlx5_dpll_lock_status_get(&synce_status);
++#ifdef HAVE_NDO_LOCK_STATUS_GET_GET_ERROR_STATUS
+ 	*status_error = mlx5_dpll_lock_status_error_get(&synce_status);
++#endif
+ 	return 0;
+ }
+ 
+@@ -215,6 +236,7 @@ static int mlx5_dpll_state_on_dpll_set(c
+ 					  MLX5_MSEES_ADMIN_STATUS_FREE_RUNNING);
+ }
+ 
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ static int mlx5_dpll_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+ 			     const struct dpll_device *dpll, void *dpll_priv,
+ 			     s64 *ffo, struct netlink_ext_ack *extack)
+@@ -228,12 +250,15 @@ static int mlx5_dpll_ffo_get(const struc
+ 		return err;
+ 	return mlx5_dpll_pin_ffo_get(&synce_status, ffo);
+ }
++#endif
+ 
+ static const struct dpll_pin_ops mlx5_dpll_pins_ops = {
+ 	.direction_get = mlx5_dpll_pin_direction_get,
+ 	.state_on_dpll_get = mlx5_dpll_state_on_dpll_get,
+ 	.state_on_dpll_set = mlx5_dpll_state_on_dpll_set,
++#ifdef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
+ 	.ffo_get = mlx5_dpll_ffo_get,
++#endif
+ };
+ 
+ static const struct dpll_pin_properties mlx5_dpll_pin_properties = {
+@@ -285,7 +310,12 @@ static void mlx5_dpll_netdev_dpll_pin_se
+ {
+ 	if (mdpll->tracking_netdev)
+ 		return;
++
++#ifdef HAVE_DPLL_NETDEV_PIN_SET
+ 	dpll_netdev_pin_set(netdev, mdpll->dpll_pin);
++#else
++	netdev_dpll_pin_set(netdev, mdpll->dpll_pin);
++#endif
+ 	mdpll->tracking_netdev = netdev;
+ }
+ 
+@@ -293,7 +323,11 @@ static void mlx5_dpll_netdev_dpll_pin_cl
+ {
+ 	if (!mdpll->tracking_netdev)
+ 		return;
++#ifdef HAVE_DPLL_NETDEV_PIN_SET
+ 	dpll_netdev_pin_clear(mdpll->tracking_netdev);
++#else
++	netdev_dpll_pin_clear(mdpll->tracking_netdev);
++#endif
+ 	mdpll->tracking_netdev = NULL;
+ }
+ 

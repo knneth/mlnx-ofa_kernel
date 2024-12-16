@@ -1,0 +1,44 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/nvme-fc-driver.h
+
+Change-Id: If5a14d9cf17518046fb201c7720396abe2352590
+---
+ include/linux/nvme-fc-driver.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/include/linux/nvme-fc-driver.h
++++ b/include/linux/nvme-fc-driver.h
+@@ -6,6 +6,8 @@
+ #ifndef _NVME_FC_DRIVER_H
+ #define _NVME_FC_DRIVER_H 1
+ 
++#include "../../compat/config.h"
++
+ #include <linux/scatterlist.h>
+ #include <linux/blk-mq.h>
+ 
+@@ -20,6 +22,13 @@
+  * ***********************************************************
+  */
+ 
++#ifndef HAVE_SCSI_TRANSPORT_FC_FC_PORT_ROLE_NVME_TARGET
++/* FC Port role bitmask - can merge with FC Port Roles in fc transport */
++#define FC_PORT_ROLE_NVME_INITIATOR    0x10
++#define FC_PORT_ROLE_NVME_TARGET       0x20
++#define FC_PORT_ROLE_NVME_DISCOVERY    0x40
++#endif
++
+ /**
+  * struct nvmefc_ls_req - Request structure passed from the transport
+  *            to the LLDD to perform a NVME-FC LS request and obtain
+@@ -498,8 +507,10 @@ struct nvme_fc_port_template {
+ 	int	(*xmt_ls_rsp)(struct nvme_fc_local_port *localport,
+ 				struct nvme_fc_remote_port *rport,
+ 				struct nvmefc_ls_rsp *ls_rsp);
++#ifdef HAVE_BLK_MQ_TAG_SET_HAS_MAP
+ 	void	(*map_queues)(struct nvme_fc_local_port *localport,
+ 			      struct blk_mq_queue_map *map);
++#endif
+ 
+ 	u32	max_hw_queues;
+ 	u16	max_sgl_segments;

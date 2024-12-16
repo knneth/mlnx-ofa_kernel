@@ -1,0 +1,89 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
+
+---
+ drivers/nvme/target/core.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/core.c
++++ b/drivers/nvme/target/core.c
+@@ -678,7 +678,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+ 		nvmet_bdev_ns_revalidate(ns);
+ 	else
+ 		nvmet_file_ns_revalidate(ns);
+-
+ 	return oldsize != ns->size;
+ }
+ 
+@@ -744,7 +743,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+ 
+ 	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
+ 		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
+-	
++
+ 	if (subsys->offloadble) {
+ 		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
+ 		if (!ns->pdev) {
+@@ -902,10 +901,20 @@ static void nvmet_update_sq_head(struct
+ 	if (req->sq->size) {
+ 		u32 old_sqhd, new_sqhd;
+ 
++#ifdef HAVE_TRY_CMPXCHG
+ 		old_sqhd = READ_ONCE(req->sq->sqhd);
++#endif
+ 		do {
++#ifndef HAVE_TRY_CMPXCHG
++		old_sqhd = req->sq->sqhd;
++#endif
+ 			new_sqhd = (old_sqhd + 1) % req->sq->size;
++#ifndef HAVE_TRY_CMPXCHG
++		} while (cmpxchg(&req->sq->sqhd, old_sqhd, new_sqhd) !=
++						       old_sqhd);
++#else
+ 		} while (!try_cmpxchg(&req->sq->sqhd, &old_sqhd, new_sqhd));
++#endif
+ 	}
+ 	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
+ }
+@@ -1123,8 +1132,10 @@ static u16 nvmet_parse_io_cmd(struct nvm
+ 			return nvmet_file_parse_io_cmd(req);
+ 		return nvmet_bdev_parse_io_cmd(req);
+ 	case NVME_CSI_ZNS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED))
+ 			return nvmet_bdev_zns_parse_io_cmd(req);
++#endif
+ 		return NVME_SC_INVALID_IO_CMD_SET;
+ 	default:
+ 		return NVME_SC_INVALID_IO_CMD_SET;
+@@ -1640,7 +1651,11 @@ u16 nvmet_alloc_ctrl(const char *subsysn
+ 	if (!ctrl->sqs)
+ 		goto out_free_changed_ns_list;
+ 
++#ifdef HAVE_IDA_ALLOC_RANGE
+ 	ret = ida_alloc_range(&cntlid_ida,
++#else
++	ret = ida_simple_get(&cntlid_ida,
++#endif
+ 			     subsys->cntlid_min, subsys->cntlid_max,
+ 			     GFP_KERNEL);
+ 	if (ret < 0) {
+@@ -1709,7 +1724,11 @@ static void nvmet_ctrl_free(struct kref
+ 
+ 	nvmet_destroy_auth(ctrl);
+ 
++#ifdef HAVE_IDA_FREE
+ 	ida_free(&cntlid_ida, ctrl->cntlid);
++#else
++	ida_simple_remove(&cntlid_ida, ctrl->cntlid);
++#endif
+ 
+ 	nvmet_async_events_free(ctrl);
+ 	kfree(ctrl->sqs);
+@@ -1931,3 +1950,6 @@ module_exit(nvmet_exit);
+ 
+ MODULE_DESCRIPTION("NVMe target core framework");
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif

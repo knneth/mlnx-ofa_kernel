@@ -23,7 +23,9 @@
 
 #ifdef kmalloc
 	#undef kmalloc
+	#define kmalloc mlx5_mtrack_kmalloc
 #endif
+
 #ifdef kmalloc_array
 	#undef kmalloc_array
 #endif
@@ -38,6 +40,7 @@
 #endif
 #ifdef vmalloc
 	#undef vmalloc
+	#define vmalloc mlx5_mtrack_vmalloc
 #endif
 #ifdef vzalloc
 	#undef vzalloc
@@ -62,6 +65,7 @@
 #endif
 #ifdef kmem_cache_alloc
 	#undef kmem_cache_alloc
+	#define kmem_cache_alloc mlx5_mtrack_kmem_cache_alloc
 #endif
 #ifdef kmem_cache_zalloc
 	#undef kmem_cache_zalloc
@@ -753,6 +757,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 	static const char * const str_str_arr[] = {
 		/* functions containing these strings consider non trackable */
 		"skb",
+		"fwctl_devnode",
 	};
 	static const char * const str_str_excep_arr[] = {
 		/* functions which are exception to the str_str_arr table */
@@ -760,38 +765,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 	};
 	static const char * const str_cmp_arr[] = {
 		/* functions that allocate SKBs */
-		"mlx4_en_alloc_frags",
-		"mlx4_en_alloc_frag",
-		"mlx4_en_init_allocator",
-		"mlx4_en_free_frag",
-		"mlx4_en_free_rx_desc",
-		"mlx4_en_destroy_allocator",
-		"mlx4_en_complete_rx_desc",
-		"mlx4_alloc_pages",
-		"mlx4_alloc_page",
-		"mlx4_crdump_collect_crspace",
-		"mlx4_crdump_collect_fw_health",
-		"mlx5e_page_alloc_mapped",
 		"mlx5e_put_page",
-		/* vnic skb functions */
-		"free_single_frag",
-		"vnic_alloc_rx_skb",
-		"vnic_rx_skb",
-		"vnic_alloc_frag",
-		"vnic_empty_rx_entry",
-		"vnic_init_allocator",
-		"vnic_destroy_allocator",
-		"sdp_post_recv",
-		"sdp_rx_ring_purge",
-		"sdp_post_srcavail",
-		"sk_stream_alloc_page",
-		"update_send_head",
-		"sdp_bcopy_get",
-		"sdp_destroy_resources",
-		"tcf_exts_init",
-		"tcf_hashinfo_init",
-		/* sw steering functions */
-		"dr_icm_chunk_create",
 		/* release order0 pages, for old kernels only */
 		"mlx5e_free_xdpsq_desc",
 		/* kTLS resync dump */
@@ -828,10 +802,6 @@ EXPORT_SYMBOL(is_non_trackable_alloc_func);
 int is_non_trackable_free_func(const char *func_name)
 {
 	static const char * const str_cmp_arr[] = {
-		/* sw steering functions */
-		"dr_icm_chunk_destroy",
-		/* external function in mdev module */
-		"create_store",
 		/* functions in mlxdevm.c uses memory allocated by nla_strdup */
 		"mlxdevm_nl_cmd_rate_new_doit",
 		"mlxdevm_nl_cmd_rate_del_doit",

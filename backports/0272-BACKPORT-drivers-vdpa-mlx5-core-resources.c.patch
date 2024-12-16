@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/core/resources.c
+
+Change-Id: I34d2b39e02f26f064f1be4100d45f6c520246725
+---
+ drivers/vdpa/mlx5/core/resources.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/vdpa/mlx5/core/resources.c
++++ b/drivers/vdpa/mlx5/core/resources.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2020 Mellanox Technologies Ltd. */
+ 
++#ifdef HAVE_VDPA_SUPPORT
++
+ #include <linux/iova.h>
+ #include <linux/mlx5/driver.h>
+ #include "mlx5_vdpa.h"
+@@ -321,3 +323,4 @@ void mlx5_vdpa_free_resources(struct mlx
+ 	mutex_destroy(&mvdev->mr_mtx);
+ 	res->valid = false;
+ }
++#endif

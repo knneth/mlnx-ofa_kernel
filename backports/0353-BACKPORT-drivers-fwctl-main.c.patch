@@ -1,0 +1,265 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
+
+Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
+---
+ drivers/fwctl/main.c | 145 ++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 136 insertions(+), 9 deletions(-)
+
+--- a/drivers/fwctl/main.c
++++ b/drivers/fwctl/main.c
+@@ -6,15 +6,26 @@
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+-
+ #define pr_fmt(fmt) "fwctl: " fmt
+ #include <linux/fwctl.h>
+ #include <linux/module.h>
+ #include <linux/slab.h>
++#ifdef HAVE_CONTAINER_OF_H
+ #include <linux/container_of.h>
++#endif
+ #include <linux/fs.h>
+ #include <linux/sizes.h>
+-
++#if !defined(HAVE_CONTAINER_OF_H) || !defined(HAVE_PANIC_H)
++#include <linux/kernel.h>
++#endif
++#ifndef HAVE_KVFREE_IN_SLAB_H
++#include <linux/mm.h>
++#endif
++#ifndef HAVE_CHECK_ZEROED_USER
++#include <linux/uaccess.h>
++#include <linux/bitops.h>
++#include <linux/nospec.h>
++#endif
+ #include <uapi/fwctl/fwctl.h>
+ 
+ enum {
+@@ -27,6 +38,19 @@ static unsigned long fwctl_tainted;
+ 
+ DEFINE_FREE(kfree_errptr, void *, if (!IS_ERR_OR_NULL(_T)) kfree(_T));
+ DEFINE_FREE(kvfree_errptr, void *, if (!IS_ERR_OR_NULL(_T)) kvfree(_T));
++DEFINE_FREE(kvfree_wrapper, void *, kvfree(_T));
++
++#ifndef HAVE_CLEANUP_H
++/* from include/linux/slab.h, added in upstream 6.5 */
++DEFINE_FREE(kfree, void *, if (!IS_ERR_OR_NULL(_T)) kfree(_T))
++
++/* from include/linux/rwsem.h, added in upstream 6.5 */
++DEFINE_GUARD(rwsem_read, struct rw_semaphore *, down_read(_T), up_read(_T))
++DEFINE_GUARD(rwsem_write, struct rw_semaphore *, down_write(_T), up_write(_T))
++
++/* from include/linux/mutex.h, added in upstream 6.5 */
++DEFINE_GUARD(mutex, struct mutex *, mutex_lock(_T), mutex_unlock(_T))
++#endif
+ 
+ struct fwctl_ucmd {
+ 	struct fwctl_uctx *uctx;
+@@ -89,6 +113,12 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+ 	struct fwctl_device *fwctl = ucmd->uctx->fwctl;
+ 	struct fwctl_rpc *cmd = ucmd->cmd;
+ 	size_t out_len;
++#ifdef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER
++	void *inbuf __free(kvfree) = NULL;
++#else
++	void *inbuf __free(kvfree_wrapper) = NULL;
++#endif
++	void *outbuf __free(kvfree_errptr) = NULL;
+ 
+ 	if (cmd->in_len > MAX_RPC_LEN || cmd->out_len > MAX_RPC_LEN)
+ 		return -EMSGSIZE;
+@@ -115,16 +145,14 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+ 		return -EOPNOTSUPP;
+ 	};
+ 
+-	void *inbuf __free(kvfree) =
+-		kvzalloc(cmd->in_len, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
++	inbuf = kvzalloc(cmd->in_len, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
+ 	if (!inbuf)
+ 		return -ENOMEM;
+ 	if (copy_from_user(inbuf, u64_to_user_ptr(cmd->in), cmd->in_len))
+ 		return -EFAULT;
+ 
+ 	out_len = cmd->out_len;
+-	void *outbuf __free(kvfree_errptr) = fwctl->ops->fw_rpc(
+-		ucmd->uctx, cmd->scope, inbuf, cmd->in_len, &out_len);
++	outbuf = fwctl->ops->fw_rpc( ucmd->uctx, cmd->scope, inbuf, cmd->in_len, &out_len);
+ 	if (IS_ERR(outbuf))
+ 		return PTR_ERR(outbuf);
+ 	if (outbuf == inbuf) {
+@@ -133,7 +161,7 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+ 	}
+ 
+ 	if (copy_to_user(u64_to_user_ptr(cmd->out), outbuf,
+-			 min(cmd->out_len, out_len)))
++			 min((size_t)cmd->out_len, out_len)))
+ 		return -EFAULT;
+ 
+ 	cmd->out_len = out_len;
+@@ -153,6 +181,79 @@ struct fwctl_ioctl_op {
+ 	int (*execute)(struct fwctl_ucmd *ucmd);
+ };
+ 
++#ifndef HAVE_CHECK_ZEROED_USER
++static int backport_check_zeroed_user(const void __user *from, size_t size)
++{
++	unsigned long val;
++	uintptr_t align = (uintptr_t) from % sizeof(unsigned long);
++
++	if (unlikely(size == 0))
++		return 1;
++
++	from -= align;
++	size += align;
++
++#ifdef HAVE_USER_ACCESS_BEGIN_2_PARAMS
++	if (!user_access_begin(from, size))
++		return -EFAULT;
++#elif defined(HAVE_USER_ACCESS_BEGIN_3_PARAMS)
++	if (!user_access_begin(VERIFY_READ, from, size))
++		return -EFAULT;
++#else
++	user_access_begin();
++#endif
++
++	unsafe_get_user(val, (unsigned long __user *) from, err_fault);
++	if (align)
++		val &= ~aligned_byte_mask(align);
++
++	while (size > sizeof(unsigned long)) {
++		if (unlikely(val))
++			goto done;
++
++		from += sizeof(unsigned long);
++		size -= sizeof(unsigned long);
++
++		unsafe_get_user(val, (unsigned long __user *) from, err_fault);
++	}
++
++	if (size < sizeof(unsigned long))
++		val &= aligned_byte_mask(size);
++
++done:
++	user_access_end();
++	return (val == 0);
++err_fault:
++	user_access_end();
++	return -EFAULT;
++}
++
++static __always_inline __must_check int
++copy_struct_from_user(void *dst, size_t ksize, const void __user *src,
++		      size_t usize)
++{
++	size_t size = min(ksize, usize);
++	size_t rest = max(ksize, usize) - size;
++
++	/* Double check if ksize is larger than a known object size. */
++	if (WARN_ON_ONCE(ksize > __builtin_object_size(dst, 1)))
++		return -E2BIG;
++
++	/* Deal with trailing bytes. */
++	if (usize < ksize) {
++		memset(dst + size, 0, rest);
++	} else if (usize > ksize) {
++		int ret = backport_check_zeroed_user(src + size, rest);
++		if (ret <= 0)
++			return ret ?: -E2BIG;
++	}
++	/* Copy the interoperable parts of the struct. */
++	if (copy_from_user(dst, src, size))
++		return -EFAULT;
++	return 0;
++}
++#endif
++
+ #define IOCTL_OP(_ioctl, _fn, _struct, _last)                         \
+ 	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                        \
+ 		.size = sizeof(_struct) +                             \
+@@ -210,13 +311,13 @@ static int fwctl_fops_open(struct inode
+ 	struct fwctl_device *fwctl =
+ 		container_of(inode->i_cdev, struct fwctl_device, cdev);
+ 	int ret;
++	struct fwctl_uctx *uctx __free(kfree) = NULL;
+ 
+ 	guard(rwsem_read)(&fwctl->registration_lock);
+ 	if (!fwctl->ops)
+ 		return -ENODEV;
+ 
+-	struct fwctl_uctx *uctx __free(kfree) =
+-		kzalloc(fwctl->ops->uctx_size, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
++	uctx  = kzalloc(fwctl->ops->uctx_size, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
+ 	if (!uctx)
+ 		return -ENOMEM;
+ 
+@@ -230,7 +331,13 @@ static int fwctl_fops_open(struct inode
+ 	}
+ 
+ 	get_device(&fwctl->dev);
++#ifdef HAVE_AUTO_TYPE
+ 	filp->private_data = no_free_ptr(uctx);
++#else
++	filp->private_data = uctx;
++	uctx = NULL;
++#endif
++
+ 	return 0;
+ }
+ 
+@@ -270,12 +377,20 @@ static void fwctl_device_release(struct
+ 	struct fwctl_device *fwctl =
+ 		container_of(device, struct fwctl_device, dev);
+ 
++#ifdef HAVE_IDA_ALLOC
+ 	ida_free(&fwctl_ida, fwctl->dev.devt - fwctl_dev);
++#else
++	ida_simple_remove(&fwctl_ida, fwctl->dev.devt - fwctl_dev);
++#endif
+ 	mutex_destroy(&fwctl->uctx_list_lock);
+ 	kfree(fwctl);
+ }
+ 
++#ifdef HAVE_DEVNODE_GET_CONST_DEVICE
+ static char *fwctl_devnode(const struct device *dev, umode_t *mode)
++#else
++static char *fwctl_devnode(struct device *dev, umode_t *mode)
++#endif
+ {
+ 	return kasprintf(GFP_KERNEL, "fwctl/%s", dev_name(dev));
+ }
+@@ -300,13 +415,21 @@ _alloc_device(struct device *parent, con
+ 	mutex_init(&fwctl->uctx_list_lock);
+ 	INIT_LIST_HEAD(&fwctl->uctx_list);
+ 
++#ifdef HAVE_IDA_ALLOC_MAX
+ 	devnum = ida_alloc_max(&fwctl_ida, FWCTL_MAX_DEVICES - 1, GFP_KERNEL);
++#else
++	devnum = ida_simple_get(&fwctl_ida, 0, FWCTL_MAX_DEVICES, GFP_KERNEL);
++#endif
+ 	if (devnum < 0)
+ 		return NULL;
+ 	fwctl->dev.devt = fwctl_dev + devnum;
+ 
+ 	device_initialize(&fwctl->dev);
++#ifdef HAVE_AUTO_TYPE
+ 	return_ptr(fwctl);
++#else
++	return fwctl;
++#endif
+ }
+ 
+ /* Drivers use the fwctl_alloc_device() wrapper */
+@@ -327,7 +450,11 @@ struct fwctl_device *_fwctl_alloc_device
+ 		return NULL;
+ 
+ 	fwctl->ops = ops;
++#ifdef HAVE_AUTO_TYPE
+ 	return_ptr(fwctl);
++#else
++	return fwctl;
++#endif
+ }
+ EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, FWCTL);
+ 

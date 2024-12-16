@@ -216,6 +216,7 @@ struct smp_window {
 	unsigned long outstanding;
 	unsigned long max_outstanding;
 	struct list_head overflow_list;
+	spinlock_t window_lock;
 };
 
 struct to_fifo {

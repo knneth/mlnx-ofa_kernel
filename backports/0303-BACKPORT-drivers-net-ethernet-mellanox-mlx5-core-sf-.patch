@@ -1,0 +1,97 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+
+Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
+---
+ .../mellanox/mlx5/core/sf/dev/driver.c        | 24 +++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+@@ -10,6 +10,7 @@
+ #include "devlink.h"
+ #include "cfg_driver.h"
+ 
++# ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink *devlink)
+ {
+ 	struct mlx5_sf_peer_devlink_event_ctx event_ctx = {
+@@ -23,6 +24,7 @@ static int mlx5_core_peer_devlink_set(st
+ 						&event_ctx);
+ 	return ret == NOTIFY_OK ? event_ctx.err : 0;
+ }
++#endif
+ 
+ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxiliary_device_id *id)
+ {
+@@ -45,10 +47,12 @@ static int mlx5_sf_dev_probe(struct auxi
+ 	mdev->priv.adev_idx = adev->id;
+ 	sf_dev->mdev = mdev;
+ 
++#if defined(HAVE_LIGHT_SFS)
+ 	/* Only local SFs do light probe */
+ 	if (MLX5_ESWITCH_MANAGER(sf_dev->parent_mdev) &&
+ 	    !mlx5_devm_is_devm_sf(sf_dev->parent_mdev, sf_dev->sfnum))
+ 		mlx5_dev_set_lightweight(mdev);
++#endif
+ 
+ 	err = mlx5_mdev_init(mdev, MLX5_SF_PROF);
+ 	if (err) {
+@@ -71,26 +75,38 @@ static int mlx5_sf_dev_probe(struct auxi
+ 		goto remap_err;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ 	/* Peer devlink logic expects to work on unregistered devlink instance. */
+ 	err = mlx5_core_peer_devlink_set(sf_dev, devlink);
+ 	if (err) {
+ 		mlx5_core_warn(mdev, "mlx5_core_peer_devlink_set err=%d\n", err);
+ 		goto peer_devlink_set_err;
+ 	}
++#endif
+ 
++#if defined(HAVE_LIGHT_SFS)
+ 	if (mlx5_dev_is_lightweight(mdev))
+ 		err = mlx5_init_one_light(mdev);
+ 	else
++#endif
+ 		err = mlx5_init_one(mdev);
+ 	if (err) {
+ 		mlx5_core_warn(mdev, "mlx5_init_one err=%d\n", err);
+ 		goto init_one_err;
+ 	}
+ 
++#if defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS) && !defined(HAVE_DEVL_REGISTER)
++	devlink_register(devlink);
++#endif
++#if defined(HAVE_DEVLINK_RELOAD_ENABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_enable(devlink);
++#endif
+ 	return 0;
+ 
+ init_one_err:
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ peer_devlink_set_err:
++#endif
+ 	iounmap(mdev->iseg);
+ remap_err:
+ 	mlx5_mdev_uninit(mdev);
+@@ -109,9 +125,17 @@ static void mlx5_sf_dev_remove(struct au
+ 	set_bit(MLX5_BREAK_FW_WAIT, &mdev->intf_state);
+ 	mlx5_drain_health_wq(mdev);
+ 	set_bit(MLX5_BREAK_FW_WAIT, &sf_dev->mdev->intf_state);
++#if defined(HAVE_DEVLINK_RELOAD_DISABLE) && !defined(HAVE_DEVLINK_SET_FEATURES)
++	devlink_reload_disable(devlink);
++#endif
++#if defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS) && !defined(HAVE_DEVL_REGISTER)
++	devlink_unregister(devlink);
++#endif
++#if defined(HAVE_LIGHT_SFS)
+ 	if (mlx5_dev_is_lightweight(mdev))
+ 		mlx5_uninit_one_light(mdev);
+ 	else
++#endif
+ 		mlx5_uninit_one(mdev);
+ 	iounmap(mdev->iseg);
+ 	mlx5_mdev_uninit(mdev);

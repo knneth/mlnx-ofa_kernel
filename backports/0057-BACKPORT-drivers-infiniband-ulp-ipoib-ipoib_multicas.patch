@@ -1,0 +1,29 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_multicast.c
+
+Change-Id: Ia0bac103584a315402408d8f62ccbe1500f05c6e
+---
+ drivers/infiniband/ulp/ipoib/ipoib_multicast.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
+@@ -897,13 +897,14 @@ void ipoib_mcast_restart_task(struct wor
+ 		clear_bit(IPOIB_MCAST_FLAG_FOUND, &mcast->flags);
+ 
+ 	/* Mark all of the entries that are found or don't exist */
+-	netdev_for_each_mc_addr(ha, dev) {
++       netdev_for_each_mc_addr(ha, dev) {
++
+ 		union ib_gid mgid;
+ 
+-		if (!ipoib_mcast_addr_is_valid(ha->addr, dev->broadcast))
+-			continue;
++       	if (!ipoib_mcast_addr_is_valid(ha->addr, dev->broadcast))
++       		continue;
+ 
+-		memcpy(mgid.raw, ha->addr + 4, sizeof(mgid));
++       	memcpy(mgid.raw, ha->addr + 4, sizeof(mgid));
+ 
+ 		mcast = __ipoib_mcast_find(dev, &mgid);
+ 		if (!mcast || test_bit(IPOIB_MCAST_FLAG_SENDONLY, &mcast->flags)) {

@@ -1,47 +1,122 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 
+Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 33 ++++++++++++++++---
+ 1 file changed, 28 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
  
- void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
- {
-+#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
- 	u32 trunc_size = mapped_obj->sample.trunc_size;
- 	struct psample_group psample_group = {};
- 	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
- 	skb_push(skb, skb->mac_len);
- 
- 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
-+#else
-+	u32 trunc_size = mapped_obj->sample.trunc_size;
-+	struct psample_group psample_group = {};
-+	int iif = skb->dev->ifindex;
-+	u32 size;
-+
-+	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
-+	psample_group.group_num = mapped_obj->sample.group_id;
-+	psample_group.net = &init_net;
-+	skb_push(skb, skb->mac_len);
-+
-+	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
+ 	ct_state |= MLX5_CT_STATE_TRK_BIT;
+ 	ct_state |= ctinfo == IP_CT_NEW ? MLX5_CT_STATE_NEW_BIT : MLX5_CT_STATE_ESTABLISHED_BIT;
++#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
+ 	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
 +#endif
- }
+ 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
+ 					     ct_state,
+ 					     meta->ct_metadata.mark,
+@@ -1242,9 +1244,9 @@ mlx5_tc_ct_block_flow_offload_replace(st
  
  static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
- 	struct mlx5e_sample_attr *sample_attr;
- 	struct mlx5_flow_attr *pre_attr;
- 	struct mlx5_eswitch *esw;
--	u32 default_tbl_id;
-+	u32 default_tbl_id = 0;
- 	u32 obj_id;
- 	int err;
+ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+-	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
++	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	struct flow_action_entry *meta_action;
+ 	unsigned long cookie = flow->cookie;
+@@ -1353,7 +1355,7 @@ err_set:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = flow->cookie;
+@@ -1381,7 +1383,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
+-				    struct flow_cls_offload *f)
++				    struct flow_cls_offload1 *f)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = f->cookie;
+@@ -1403,8 +1405,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+ 	spin_unlock_bh(&ct_priv->ht_lock);
+ 
+ 	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#else
++	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#endif
+ 
+ 	mlx5_tc_ct_entry_put(entry);
+ 	return 0;
+@@ -1439,7 +1448,7 @@ static int
+ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
+ 			      void *cb_priv)
+ {
+-	struct flow_cls_offload *f = type_data;
++	struct flow_cls_offload1 *f = type_data;
+ 	struct mlx5_ct_ft *ft = cb_priv;
+ 
+ 	if (type != TC_SETUP_CLSFLOWER)
+@@ -1656,7 +1665,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_c
+ 	attr->ct_attr.zone = act->ct.zone;
+ 	if (!(act->ct.action & TCA_CT_ACT_CLEAR))
+ 		attr->ct_attr.nf_ft = act->ct.flow_table;
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	attr->ct_attr.act_miss_cookie = act->miss_cookie;
++#endif
+ 
+ 	return 0;
+ }
+@@ -2047,8 +2058,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+ 	}
+ 	attr->ct_attr.ft = ft;
+ 
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	err = mlx5e_tc_action_miss_mapping_get(ct_priv->priv, attr, attr->ct_attr.act_miss_cookie,
+ 					       &act_miss_mapping);
++#else
++	err = mlx5_chains_get_chain_mapping(ct_priv->chains, attr->chain, &act_miss_mapping);
++#endif
+ 	if (err) {
+ 		ct_dbg("Failed to get register mapping for act miss");
+ 		goto err_get_act_miss;
+@@ -2084,7 +2099,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+ 	return 0;
+ 
+ err_mapping:
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	mlx5e_tc_action_miss_mapping_put(ct_priv->priv, attr, act_miss_mapping);
++#else
++	mlx5_chains_put_chain_mapping(ct_priv->chains, act_miss_mapping);
++#endif
+ err_get_act_miss:
+ 	mlx5_tc_ct_del_ft_cb(ct_priv, ft);
+ err_ft:
+@@ -2130,7 +2149,11 @@ static void
+ __mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *ct_priv,
+ 			 struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	mlx5e_tc_action_miss_mapping_put(ct_priv->priv, attr, attr->ct_attr.act_miss_mapping);
++#else
++	mlx5_chains_put_chain_mapping(ct_priv->chains, attr->ct_attr.act_miss_mapping);
++#endif
+ 	mlx5_tc_ct_del_ft_cb(ct_priv, attr->ct_attr.ft);
+ }
  

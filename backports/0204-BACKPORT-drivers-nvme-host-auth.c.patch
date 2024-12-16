@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/auth.c
+
+Change-Id: I47f50c4fccbf45e9dbf584f5659e2161c25eb663
+---
+ drivers/nvme/host/auth.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/host/auth.c
++++ b/drivers/nvme/host/auth.c
+@@ -2,7 +2,7 @@
+ /*
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Linux
+  */
+-
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
+ #include <linux/crc32.h>
+ #include <linux/base64.h>
+ #include <linux/prandom.h>
+@@ -1038,3 +1038,4 @@ void __exit nvme_exit_auth(void)
+ 	kmem_cache_destroy(nvme_chap_buf_cache);
+ 	destroy_workqueue(nvme_auth_wq);
+ }
++#endif

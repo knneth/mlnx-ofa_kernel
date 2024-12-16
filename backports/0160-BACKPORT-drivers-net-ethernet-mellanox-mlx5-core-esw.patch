@@ -1,0 +1,75 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
+
+Change-Id: Ic30c75d0f0c96867c80960f7d91bd5fe9698b57e
+---
+ .../net/ethernet/mellanox/mlx5/core/esw/vf_meter.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
+@@ -54,10 +54,12 @@ esw_acl_destrory_meter(struct mlx5_vport
+ 		meter->meter_grp = NULL;
+ 	}
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (meter->meter_hndl) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
+ 
+ 	if (meter->meter_tbl) {
+ 		mlx5_destroy_flow_table(meter->meter_tbl);
+@@ -226,7 +228,9 @@ static int
+ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
+ 			    int rx_tx, int xps, u64 rate, u64 burst)
+ {
+-	struct mlx5e_flow_meter_handle *meter_hndl;
++#ifdef CONFIG_MLX5_CLS_ACT
++	struct mlx5e_flow_meter_handle *meter_hndl = NULL;
++#endif
+ 	struct mlx5e_flow_meter_params params;
+ 	int ns, prio;
+ 	int err;
+@@ -239,19 +243,25 @@ esw_vf_meter_set_rate_limit(struct mlx5_
+ 		goto update;
+ 	}
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	if (!meter->meter_hndl) {
+ 		meter_hndl = mlx5e_alloc_flow_meter(vport->dev);
+ 		if (IS_ERR(meter_hndl))
+ 			return PTR_ERR(meter_hndl);
+ 		meter->meter_hndl = meter_hndl;
+ 	}
++#else
++	return -EOPNOTSUPP;
++#endif
+ 
+ 	params.rate = rate;
+ 	params.burst = burst;
+ 	params.mode = xps;
++#ifdef CONFIG_MLX5_CLS_ACT
+ 	err = mlx5e_tc_meter_modify(vport->dev, meter->meter_hndl, &params);
+ 	if (err)
+ 		goto check_and_free_meter_aso;
++#endif
+ 
+ 	if (!meter->meter_tbl) {
+ 		if (rx_tx == MLX5_RATE_LIMIT_TX)
+@@ -275,11 +285,13 @@ update:
+ 
+ 	return 0;
+ 
++#ifdef CONFIG_MLX5_CLS_ACT
+ check_and_free_meter_aso:
+ 	if (!meter->meter_tbl) {
+ 		mlx5e_free_flow_meter(meter->meter_hndl);
+ 		meter->meter_hndl = NULL;
+ 	}
++#endif
+ 	return err;
+ }
+ 

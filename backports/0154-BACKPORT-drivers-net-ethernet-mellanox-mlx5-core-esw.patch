@@ -1,0 +1,56 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+
+Change-Id: Ia007aeccb83f5fe24b58715be6a125f072a25b66
+---
+ .../ethernet/mellanox/mlx5/core/esw/bridge.c   | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+@@ -1860,9 +1860,14 @@ int mlx5_esw_bridge_port_mdb_add(struct
+ 		esw_warn(br_offloads->esw->dev,
+ 			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
+ 			 addr, vport_num);
+-		NL_SET_ERR_MSG_FMT_MOD(extack,
++#ifdef NL_SET_ERR_MSG_FMT_MOD
++			NL_SET_ERR_MSG_FMT_MOD(extack,
+ 				       "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
+ 				       addr, vport_num);
++#else
++			NL_SET_ERR_MSG_MOD(extack,
++					"Failed to lookup bridge port to add MDB\n");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -1873,17 +1878,28 @@ int mlx5_esw_bridge_port_mdb_add(struct
+ 			esw_warn(br_offloads->esw->dev,
+ 				 "Failed to lookup bridge port vlan metadata to create MDB (MAC=%pM,vid=%u,vport=%u)\n",
+ 				 addr, vid, vport_num);
++#ifdef NL_SET_ERR_MSG_FMT_MOD
+ 			NL_SET_ERR_MSG_FMT_MOD(extack,
+ 					       "Failed to lookup vlan metadata for MDB (MAC=%pM,vid=%u,vport=%u)\n",
+ 					       addr, vid, vport_num);
++#else
++			NL_SET_ERR_MSG_MOD(extack,
++					"Failed to lookup bridge port vlan metadata to create MDB\n");
++#endif
++
+ 			return -EINVAL;
+ 		}
+ 	}
+ 
+ 	err = mlx5_esw_bridge_port_mdb_attach(dev, port, addr, vid);
+ 	if (err) {
++#ifdef NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT_MOD(extack, "Failed to add MDB (MAC=%pM,vid=%u,vport=%u)\n",
+ 				       addr, vid, vport_num);
++#else
++		NL_SET_ERR_MSG_MOD(extack,
++				"Failed to add MDB\n");
++#endif
+ 		return err;
+ 	}
+ 

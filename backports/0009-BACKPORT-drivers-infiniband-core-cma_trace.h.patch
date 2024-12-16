@@ -1,0 +1,47 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_trace.h
+
+Change-Id: Iea9d571b963d51988b2205e5adeb960375379d42
+---
+ drivers/infiniband/core/cma_trace.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/infiniband/core/cma_trace.h
++++ b/drivers/infiniband/core/cma_trace.h
+@@ -18,6 +18,7 @@
+ #include <trace/misc/rdma.h>
+ 
+ 
++
+ DECLARE_EVENT_CLASS(cma_fsm_class,
+ 	TP_PROTO(
+ 		const struct rdma_id_private *id_priv
+@@ -84,7 +85,11 @@ TRACE_EVENT(cm_id_attach,
+ 		       sizeof(struct sockaddr_in6));
+ 		memcpy(__entry->dstaddr, &id_priv->id.route.addr.dst_addr,
+ 		       sizeof(struct sockaddr_in6));
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(devname, device->name);
++#else
++		__assign_str(devname);
++#endif
+ 	),
+ 
+ 	TP_printk("cm.id=%u src=%pISpc dst=%pISpc device=%s",
+@@ -334,7 +339,11 @@ DECLARE_EVENT_CLASS(cma_client_class,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name, device->name);
++#else
++		__assign_str(name);
++#endif
+ 	),
+ 
+ 	TP_printk("device name=%s",
+@@ -359,3 +368,4 @@ DEFINE_CMA_CLIENT_EVENT(remove_one);
+ #define TRACE_INCLUDE_FILE cma_trace
+ 
+ #include <trace/define_trace.h>
++

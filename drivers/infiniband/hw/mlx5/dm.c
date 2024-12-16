@@ -366,6 +366,7 @@ static struct ib_dm *handle_alloc_dm_sw_icm(struct ib_ucontext *ctx,
 	switch (type) {
 	case MLX5_IB_UAPI_DM_TYPE_STEERING_SW_ICM:
 	case MLX5_IB_UAPI_DM_TYPE_HEADER_MODIFY_SW_ICM:
+	case MLX5_IB_UAPI_DM_TYPE_ENCAP_SW_ICM:
 		if (!(MLX5_CAP_FLOWTABLE_NIC_RX(dev, sw_owner) ||
 		      MLX5_CAP_FLOWTABLE_NIC_TX(dev, sw_owner) ||
 		      MLX5_CAP_FLOWTABLE_NIC_RX(dev, sw_owner_v2) ||

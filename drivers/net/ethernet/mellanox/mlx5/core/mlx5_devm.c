@@ -135,7 +135,7 @@ bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum)
 	return false;
 }
 
-int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
+static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 			  const struct mlxdevm_port_new_attrs *attrs,
 			  struct netlink_ext_ack *extack,
 			  unsigned int *new_port_index)
@@ -152,23 +152,23 @@ int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 	devl_lock(devlink);
 	ret = mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, &devport);
 	devl_unlock(devlink);
-	*new_port_index = devport->index;
 
 	if (ret)
 		return ret;
 
+	*new_port_index = devport->index;
         mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
         return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
                          xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
-int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
+static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 			  unsigned int port_index,
 			  struct netlink_ext_ack *extack)
 {
 	struct mlx5_devm_device *mdevm_dev;
+	struct mlxdevm_port *port;
 	struct devlink *devlink;
-	struct devlink_port devport;
 	int ret;
 
 	mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
@@ -176,17 +176,17 @@ int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 
-	memset(&devport, 0, sizeof(devport));
-	devport.devlink = devlink;
-	devport.index = port_index;
+	port = mlxdevm_port_get_by_index(devm_dev, port_index);
+	if (!port)
+		return -ENODEV;
 
 	devl_lock(devlink);
-	ret = mlx5_devlink_sf_port_del(devlink, &devport, extack);
+	ret = mlx5_devlink_sf_port_del(devlink, port->dl_port, extack);
 	devl_unlock(devlink);
 	return ret;
 }
 
-int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
 				   enum mlxdevm_port_fn_state *state,
 				   enum mlxdevm_port_fn_opstate *opstate,
 				   struct netlink_ext_ack *extack)
@@ -210,23 +210,17 @@ int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
 	return ret;
 }
 
-int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
 				   enum mlxdevm_port_fn_state state,
 				   struct netlink_ext_ack *extack)
 {
 	enum devlink_port_fn_state dl_state;
-	struct devlink_port devport;
-	struct devlink *devlink;
 
-	devlink = mlxdevm_to_devlink(port->devm);
-	memset(&devport, 0, sizeof(devport));
-	devport.devlink = devlink;
-	devport.index = port->index;
 	dl_state = mlxdevm_to_devlink_state(state);
-	return mlx5_devlink_sf_port_fn_state_set(&devport, dl_state, extack);
+	return mlx5_devlink_sf_port_fn_state_set(port->dl_port, dl_state, extack);
 }
 
-int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 				     u8 *hw_addr, int *hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
@@ -234,7 +228,7 @@ int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 						hw_addr_len, extack);
 }
 
-int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
 					 bool *trusted,
 					 struct netlink_ext_ack *extack)
 {
@@ -248,22 +242,15 @@ int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
 						    trusted, extack);
 }
 
-int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
 				     const u8 *hw_addr, int hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
-	struct devlink_port devport;
-	struct devlink *devlink;
-
-	devlink = mlxdevm_to_devlink(port->devm);
-	memset(&devport, 0, sizeof(devport));
-	devport.devlink = devlink;
-	devport.index = port->index;
-	return mlx5_devlink_port_fn_hw_addr_set(&devport, hw_addr,
+	return mlx5_devlink_port_fn_hw_addr_set(port->dl_port, hw_addr,
 						hw_addr_len, extack);
 }
 
-int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
 					 bool trusted,
 					 struct netlink_ext_ack *extack)
 {
@@ -277,6 +264,20 @@ int mlx5_devm_sf_port_function_trust_set(struct mlxdevm_port *port,
 						    trusted, extack);
 }
 
+static int mlx5_devm_port_function_max_io_eqs_set(struct mlxdevm_port *port,
+						  u32 max_io_eqs,
+						  struct netlink_ext_ack *extack)
+{
+	return mlx5_devlink_port_fn_max_io_eqs_set(port->dl_port, max_io_eqs, extack);
+}
+
+static int mlx5_devm_port_function_max_io_eqs_get(struct mlxdevm_port *port,
+						  u32 *max_io_eqs,
+						  struct netlink_ext_ack *extack)
+{
+	return mlx5_devlink_port_fn_max_io_eqs_get(port->dl_port, max_io_eqs, extack);
+}
+
 static
 struct mlx5_core_dev *mlx5_devm_core_dev_get(struct mlxdevm *devm_dev)
 {
@@ -286,7 +287,7 @@ struct mlx5_core_dev *mlx5_devm_core_dev_get(struct mlxdevm *devm_dev)
 	return mlx5_devm->dev;
 }
 
-int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 				 struct mlxdevm_port_fn_cap *cap,
 				 struct netlink_ext_ack *extack)
 {
@@ -310,9 +311,7 @@ int mlx5_devm_sf_port_fn_cap_get(struct mlxdevm_port *port,
 	port_index = mlx5_port->port_index;
 
 	devlink = mlxdevm_to_devlink(port->devm);
-	ret = mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port_index, extack);
-	if (ret)
-		goto out_free;
+	mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port->dl_port);
 
 	ret = mlx5_vport_get_other_func_general_cap(parent_dev, hw_fn_id, query_ctx);
 	if (ret)
@@ -333,7 +332,7 @@ out_free:
 	return ret;
 }
 
-int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
+static int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 				 const struct mlxdevm_port_fn_cap *cap,
 				 struct netlink_ext_ack *extack)
 {
@@ -358,9 +357,7 @@ int mlx5_devm_sf_port_fn_cap_set(struct mlxdevm_port *port,
 	port_index = mlx5_port->port_index;
 
 	devlink = mlxdevm_to_devlink(port->devm);
-	ret = mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port_index, extack);
-	if (ret)
-		goto out_free;
+	mlx5_sf_index_to_hw_id(devlink, &hw_fn_id, port->dl_port);
 
 	ret = mlx5_vport_get_other_func_cap(parent_dev, hw_fn_id, query_ctx,
 					    MLX5_CAP_GENERAL);
@@ -452,7 +449,7 @@ out:
 	return err;
 }
 
-int mlx5_devm_rate_leaf_get(struct mlxdevm_port *port,
+static int mlx5_devm_rate_leaf_get(struct mlxdevm_port *port,
 			    u64 *tx_max, u64 *tx_share, char **group,
 			    struct netlink_ext_ack *extack)
 {
@@ -501,7 +498,7 @@ unlock:
 	return err;
 }
 
-int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_port *port,
+static int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_port *port,
 				   u64 tx_max, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
@@ -547,7 +544,7 @@ unlock:
 	return err;
 }
 
-int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_port *port,
+static int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_port *port,
 				     u64 tx_share, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
@@ -596,7 +593,7 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 	return err;
 }
 
-int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
+static int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
 				  const char *group, struct netlink_ext_ack *extack)
 {
 	struct devlink_port devport;
@@ -608,7 +605,7 @@ int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
 	return mlx5_devlink_rate_leaf_group_set(devlink, &devport, group, extack);
 }
 
-int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group_name,
+static int mlx5_devm_rate_node_tx_share_set(struct mlxdevm *devm_dev, const char *group_name,
 				     u64 tx_share, struct netlink_ext_ack *extack)
 {
 	struct mlx5_esw_rate_group *group;
@@ -636,7 +633,7 @@ unlock:
 	return err;
 }
 
-int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_name,
+static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *group_name,
 				   u64 tx_max, struct netlink_ext_ack *extack)
 {
 	struct mlx5_esw_rate_group *group;
@@ -664,7 +661,7 @@ unlock:
 	return err;
 }
 
-int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
+static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
 	struct mlx5_esw_rate_group *group;
@@ -708,7 +705,7 @@ unlock:
 	return err;
 }
 
-int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
+static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_name,
 			    struct netlink_ext_ack *extack)
 {
 	struct mlx5_esw_rate_group *group;
@@ -764,6 +761,8 @@ static const struct mlxdevm_ops mlx5_devm_ops = {
 	.rate_node_del = mlx5_devm_rate_node_del,
 	.port_fn_trust_set = mlx5_devm_sf_port_function_trust_set,
 	.port_fn_trust_get = mlx5_devm_sf_port_function_trust_get,
+	.port_fn_max_io_eqs_get = mlx5_devm_port_function_max_io_eqs_get,
+	.port_fn_max_io_eqs_set = mlx5_devm_port_function_max_io_eqs_set,
 #endif
 };
 

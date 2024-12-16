@@ -1,6 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
 
+Change-Id: I4e65e7918ac803deb927c8ad96743aab7049b5c6
 ---
  drivers/infiniband/core/cache.c | 19 +++++++++++++++++--
  1 file changed, 17 insertions(+), 2 deletions(-)

@@ -1,0 +1,174 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
+
+Change-Id: I6bf364db9d83326c6a5836159a1b43034c555ef7
+---
+ drivers/infiniband/ulp/isert/ib_isert.c | 87 +++++++++++++++++++++++++
+ 1 file changed, 87 insertions(+)
+
+--- a/drivers/infiniband/ulp/isert/ib_isert.c
++++ b/drivers/infiniband/ulp/isert/ib_isert.c
+@@ -1123,7 +1123,11 @@ sequence_cmd:
+ 	rc = iscsit_sequence_cmd(conn, cmd, buf, hdr->cmdsn);
+ 
+ 	if (!rc && !dump_payload && unsol_data)
++#ifdef HAVE_ISCSIT_SET_UNSOLICITED_DATAOUT
+ 		iscsit_set_unsolicited_dataout(cmd);
++#else
++		iscsit_set_unsoliticed_dataout(cmd);
++#endif
+ 	else if (dump_payload && imm_data)
+ 		target_put_sess_cmd(&cmd->se_cmd);
+ 
+@@ -1574,12 +1578,20 @@ isert_check_pi_status(struct se_cmd *se_
+ 		}
+ 		sec_offset_err = mr_status.sig_err.sig_err_offset;
+ 		do_div(sec_offset_err, block_size);
++#ifdef HAVE_SE_CMD_HAS_SENSE_INFO
+ 		se_cmd->sense_info = sec_offset_err + se_cmd->t_task_lba;
++#else
++		se_cmd->bad_sector = sec_offset_err + se_cmd->t_task_lba;
++#endif
+ 
+ 		isert_err("PI error found type %d at sector 0x%llx "
+ 			  "expected 0x%x vs actual 0x%x\n",
+ 			  mr_status.sig_err.err_type,
++#ifdef HAVE_SE_CMD_HAS_SENSE_INFO
+ 			  (unsigned long long)se_cmd->sense_info,
++#else
++			  (unsigned long long)se_cmd->bad_sector,
++#endif
+ 			  mr_status.sig_err.expected,
+ 			  mr_status.sig_err.actual);
+ 		ret = 1;
+@@ -2429,11 +2441,47 @@ isert_set_conn_info(struct iscsi_np *np,
+ {
+ 	struct rdma_cm_id *cm_id = isert_conn->cm_id;
+ 	struct rdma_route *cm_route = &cm_id->route;
++#ifndef HAVE_ISCSIT_CONN_LOGIN_SOCKADDR
++	struct sockaddr_in *sock_in;
++	struct sockaddr_in6 *sock_in6;
++#endif
+ 
+ 	conn->login_family = np->np_sockaddr.ss_family;
+ 
++#ifdef HAVE_ISCSIT_CONN_LOGIN_SOCKADDR
+ 	conn->login_sockaddr = cm_route->addr.dst_addr;
+ 	conn->local_sockaddr = cm_route->addr.src_addr;
++#else
++	if (np->np_sockaddr.ss_family == AF_INET6) {
++		sock_in6 = (struct sockaddr_in6 *)&cm_route->addr.dst_addr;
++		snprintf(conn->login_ip, sizeof(conn->login_ip), "%pI6c",
++		         &sock_in6->sin6_addr.in6_u);
++		conn->login_port = ntohs(sock_in6->sin6_port);
++
++		sock_in6 = (struct sockaddr_in6 *)&cm_route->addr.src_addr;
++#ifdef HAVE_ISCSIT_CONN_LOCAL_SOCKADDR
++		memcpy(&conn->local_sockaddr , &sock_in6, sizeof(sock_in6));
++#else
++		snprintf(conn->local_ip, sizeof(conn->local_ip), "%pI6c",
++		         &sock_in6->sin6_addr.in6_u);
++		conn->local_port = ntohs(sock_in6->sin6_port);
++#endif /* HAVE_ISCSIT_CONN_LOCAL_SOCKADDR */
++	} else {
++		sock_in = (struct sockaddr_in *)&cm_route->addr.dst_addr;
++		sprintf(conn->login_ip, "%pI4",
++		        &sock_in->sin_addr.s_addr);
++		conn->login_port = ntohs(sock_in->sin_port);
++
++		sock_in = (struct sockaddr_in *)&cm_route->addr.src_addr;
++#ifdef HAVE_ISCSIT_CONN_LOCAL_SOCKADDR
++		memcpy(&conn->local_sockaddr , &sock_in, sizeof(sock_in));
++#else
++		sprintf(conn->local_ip, "%pI4",
++		        &sock_in->sin_addr.s_addr);
++		conn->local_port = ntohs(sock_in->sin_port);
++#endif /* HAVE_ISCSIT_CONN_LOCAL_SOCKADDR */
++	}
++#endif /* HAVE_ISCSIT_CONN_LOGIN_SOCKADDR */
+ }
+ 
+ static int
+@@ -2568,8 +2616,17 @@ isert_wait4cmds(struct iscsit_conn *conn
+ 	isert_info("iscsit_conn %p\n", conn);
+ 
+ 	if (conn->sess) {
++#ifdef HAVE_TARGET_STOP_CMD_COUNTER
+ 		target_stop_cmd_counter(conn->cmd_cnt);
+ 		target_wait_for_cmds(conn->cmd_cnt);
++#else
++#ifdef HAVE_TARGET_STOP_SESSION
++		target_stop_session(conn->sess->se_sess);
++#else
++		target_sess_cmd_list_set_waiting(conn->sess->se_sess);
++#endif
++		target_wait_for_sess_cmds(conn->sess->se_sess);
++#endif
+ 	}
+ }
+ 
+@@ -2608,6 +2665,7 @@ isert_put_unsol_pending_cmds(struct iscs
+ 	}
+ }
+ 
++#ifdef CONFIG_COMPAT_ISCSIT_WAIT_CONN
+ static void isert_wait_conn(struct iscsit_conn *conn)
+ {
+ 	struct isert_conn *isert_conn = conn->context;
+@@ -2625,12 +2683,36 @@ static void isert_wait_conn(struct iscsi
+ 
+ 	queue_work(isert_release_wq, &isert_conn->release_work);
+ }
++#endif
+ 
+ static void isert_free_conn(struct iscsit_conn *conn)
+ {
+ 	struct isert_conn *isert_conn = conn->context;
+ 
++#ifndef CONFIG_COMPAT_ISCSIT_WAIT_CONN
++	mutex_lock(&isert_conn->mutex);
++	if (isert_conn->state == ISER_CONN_INIT) {
++		mutex_unlock(&isert_conn->mutex);
++		goto out;
++	}
++	isert_conn_terminate(isert_conn);
++	mutex_unlock(&isert_conn->mutex);
++
++	/*
++	 * Only drain qp if the isert_conn made it
++	 * into full feature phase.
++	 */
++	if (isert_conn->state == ISER_CONN_FULL_FEATURE) {
++		ib_drain_qp(isert_conn->qp);
++		isert_put_unsol_pending_cmds(conn);
++		isert_wait4cmds(conn);
++		isert_wait4logout(isert_conn);
++	}
++	queue_work(isert_release_wq, &isert_conn->release_work);
++out:
++#else
+ 	ib_drain_qp(isert_conn->qp);
++#endif
+ 	isert_put_conn(isert_conn);
+ }
+ 
+@@ -2652,7 +2734,9 @@ static struct iscsit_transport iser_targ
+ 	.iscsit_setup_np	= isert_setup_np,
+ 	.iscsit_accept_np	= isert_accept_np,
+ 	.iscsit_free_np		= isert_free_np,
++#ifdef CONFIG_COMPAT_ISCSIT_WAIT_CONN
+ 	.iscsit_wait_conn	= isert_wait_conn,
++#endif
+ 	.iscsit_free_conn	= isert_free_conn,
+ 	.iscsit_get_login_rx	= isert_get_login_rx,
+ 	.iscsit_put_login_tx	= isert_put_login_tx,
+@@ -2714,6 +2798,9 @@ static void __exit isert_exit(void)
+ MODULE_DESCRIPTION("iSER-Target for mainline target infrastructure");
+ MODULE_AUTHOR("nab@Linux-iSCSI.org");
+ MODULE_LICENSE("GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ module_init(isert_init);
+ module_exit(isert_exit);

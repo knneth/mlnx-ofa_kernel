@@ -1,0 +1,55 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+
+Change-Id: I1c7f862cb3f7fef326d418dcc969db516a19bfa0
+---
+ .../ethernet/mellanox/mlx5/core/en_dcbnl.c    | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+@@ -61,6 +61,7 @@ enum {
+ 				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
+ 				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
+ 
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
+ static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
+ 
+@@ -988,7 +989,11 @@ static int mlx5e_dcbnl_setbuffer(struct
+ 	return err;
+ }
+ 
++#ifdef CONFIG_COMPAT_IS_DCBNL_OPS_CONST
+ static const struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
++#else
++struct dcbnl_rtnl_ops mlx5e_dcbnl_ops = {
++#endif
+ 	.ieee_getets	= mlx5e_dcbnl_ieee_getets,
+ 	.ieee_setets	= mlx5e_dcbnl_ieee_setets,
+ 	.ieee_getmaxrate = mlx5e_dcbnl_ieee_getmaxrate,
+@@ -1173,11 +1178,14 @@ unlock:
+ 		return err;
+ 
+ 	/* In DSCP trust state, we need 8 send queues per channel */
+-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
+-		mutex_lock(&priv->state_lock);
+-		mlx5e_setup_tc_mqprio(priv, &mqprio);
+-		mutex_unlock(&priv->state_lock);
+-	} else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP) {
++	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
++       {
++	       mutex_lock(&priv->state_lock);
++	       mlx5e_setup_tc_mqprio(priv, &mqprio);
++	       mutex_unlock(&priv->state_lock);
++       }
++	else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP)
++	{
+ 		mutex_lock(&priv->state_lock);
+ 		mqprio.qopt.num_tc = priv->pcp_tc_num;
+ 		mlx5e_setup_tc_mqprio(priv, &mqprio);
+@@ -1286,3 +1294,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+ 
+ 	mlx5e_ets_init(priv);
+ }
++#endif

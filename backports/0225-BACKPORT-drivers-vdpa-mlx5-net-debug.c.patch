@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/net/debug.c
+
+Change-Id: I21fb25fdde5d609d522d15f4f0f227d8389e9bb1
+---
+ drivers/vdpa/mlx5/net/debug.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/vdpa/mlx5/net/debug.c
++++ b/drivers/vdpa/mlx5/net/debug.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
++#ifdef HAVE_VDPA_SUPPORT
+ 
+ #include <linux/debugfs.h>
+ #include <linux/mlx5/fs.h>
+@@ -151,3 +152,4 @@ void mlx5_vdpa_remove_debugfs(struct mlx
+ 	debugfs_remove_recursive(ndev->debugfs);
+ 	ndev->debugfs = NULL;
+ }
++#endif /* HAVE_VDPA_SUPPORT */

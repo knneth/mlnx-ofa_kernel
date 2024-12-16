@@ -1,0 +1,366 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/peer_mem.c
+
+Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
+---
+ drivers/infiniband/core/peer_mem.c | 230 +++++++++++++++++++++++++++++
+ 1 file changed, 230 insertions(+)
+
+--- a/drivers/infiniband/core/peer_mem.c
++++ b/drivers/infiniband/core/peer_mem.c
+@@ -6,13 +6,139 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/ib_umem.h>
+ #include <linux/sched/mm.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <rdma/uverbs_ioctl.h>
++#endif
+ #include "ib_peer_mem.h"
+ static DEFINE_MUTEX(peer_memory_mutex);
+ static LIST_HEAD(peer_memory_list);
++#ifdef HAVE_MM_KOBJ_EXPORTED
++static struct kobject *peers_kobj;
++#endif
+ #define PEER_NO_INVALIDATION_ID U32_MAX
+ 
+ static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context);
+ 
++#ifdef HAVE_MM_KOBJ_EXPORTED
++struct peer_mem_attribute {
++	struct attribute attr;
++	ssize_t (*show)(struct ib_peer_memory_client *ib_peer_client,
++			struct peer_mem_attribute *attr, char *buf);
++	ssize_t (*store)(struct ib_peer_memory_client *ib_peer_client,
++			 struct peer_mem_attribute *attr, const char *buf,
++			 size_t count);
++};
++#define PEER_ATTR_RO(_name)                                                    \
++	struct peer_mem_attribute peer_attr_ ## _name = __ATTR_RO(_name)
++
++static ssize_t version_show(struct ib_peer_memory_client *ib_peer_client,
++			    struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(buf, PAGE_SIZE, "%s\n",
++			 ib_peer_client->peer_mem->version);
++}
++static PEER_ATTR_RO(version);
++
++static ssize_t num_alloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
++				  struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_alloc_mrs));
++}
++static PEER_ATTR_RO(num_alloc_mrs);
++
++static ssize_t
++num_dealloc_mrs_show(struct ib_peer_memory_client *ib_peer_client,
++		     struct peer_mem_attribute *attr, char *buf)
++
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_dealloc_mrs));
++}
++static PEER_ATTR_RO(num_dealloc_mrs);
++
++static ssize_t num_reg_pages_show(struct ib_peer_memory_client *ib_peer_client,
++				  struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_reg_pages));
++}
++static PEER_ATTR_RO(num_reg_pages);
++
++static ssize_t
++num_dereg_pages_show(struct ib_peer_memory_client *ib_peer_client,
++		     struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_pages));
++}
++static PEER_ATTR_RO(num_dereg_pages);
++
++static ssize_t num_reg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
++				  struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_reg_bytes));
++}
++static PEER_ATTR_RO(num_reg_bytes);
++
++static ssize_t
++num_dereg_bytes_show(struct ib_peer_memory_client *ib_peer_client,
++		     struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(
++		buf, PAGE_SIZE, "%llu\n",
++		(u64)atomic64_read(&ib_peer_client->stats.num_dereg_bytes));
++}
++static PEER_ATTR_RO(num_dereg_bytes);
++
++static ssize_t
++num_free_callbacks_show(struct ib_peer_memory_client *ib_peer_client,
++			struct peer_mem_attribute *attr, char *buf)
++{
++	return scnprintf(buf, PAGE_SIZE, "%lu\n",
++			 ib_peer_client->stats.num_free_callbacks);
++}
++static PEER_ATTR_RO(num_free_callbacks);
++
++static struct attribute *peer_mem_attrs[] = {
++			&peer_attr_version.attr,
++			&peer_attr_num_alloc_mrs.attr,
++			&peer_attr_num_dealloc_mrs.attr,
++			&peer_attr_num_reg_pages.attr,
++			&peer_attr_num_dereg_pages.attr,
++			&peer_attr_num_reg_bytes.attr,
++			&peer_attr_num_dereg_bytes.attr,
++			&peer_attr_num_free_callbacks.attr,
++			NULL,
++};
++
++static const struct attribute_group peer_mem_attr_group = {
++	.attrs = peer_mem_attrs,
++};
++
++static ssize_t peer_attr_show(struct kobject *kobj, struct attribute *attr,
++			      char *buf)
++{
++	struct peer_mem_attribute *peer_attr =
++		container_of(attr, struct peer_mem_attribute, attr);
++
++	if (!peer_attr->show)
++		return -EIO;
++	return peer_attr->show(container_of(kobj, struct ib_peer_memory_client,
++					    kobj),
++			       peer_attr, buf);
++}
++
++static const struct sysfs_ops peer_mem_sysfs_ops = {
++	.show = peer_attr_show,
++};
++#endif
+ static void ib_peer_memory_client_release(struct kobject *kobj)
+ {
+ 	struct ib_peer_memory_client *ib_peer_client =
+@@ -22,6 +148,9 @@ static void ib_peer_memory_client_releas
+ }
+ 
+ static struct kobj_type peer_mem_type = {
++#ifdef HAVE_MM_KOBJ_EXPORTED
++	.sysfs_ops = &peer_mem_sysfs_ops,
++#endif
+ 	.release = ib_peer_memory_client_release,
+ };
+ 
+@@ -58,6 +187,9 @@ ib_register_peer_memory_client(const str
+ 			       invalidate_peer_memory *invalidate_callback)
+ {
+ 	struct ib_peer_memory_client *ib_peer_client;
++#ifdef HAVE_MM_KOBJ_EXPORTED
++	int ret;
++#endif
+ 
+ 	if (ib_memory_peer_check_mandatory(peer_client))
+ 		return NULL;
+@@ -81,9 +213,37 @@ ib_register_peer_memory_client(const str
+ 	}
+ 
+ 	mutex_lock(&peer_memory_mutex);
++#ifdef HAVE_MM_KOBJ_EXPORTED
++	if (!peers_kobj) {
++		/* Created under /sys/kernel/mm */
++		peers_kobj = kobject_create_and_add("memory_peers", mm_kobj);
++		if (!peers_kobj)
++			goto err_unlock;
++	}
++
++	ret = kobject_add(&ib_peer_client->kobj, peers_kobj, peer_client->name);
++	if (ret)
++		goto err_parent;
++
++	ret = sysfs_create_group(&ib_peer_client->kobj,
++				 &peer_mem_attr_group);
++	if (ret)
++		goto err_parent;
++#endif
+ 	list_add_tail(&ib_peer_client->core_peer_list, &peer_memory_list);
+ 	mutex_unlock(&peer_memory_mutex);
+ 	return ib_peer_client;
++#ifdef HAVE_MM_KOBJ_EXPORTED
++err_parent:
++	if (list_empty(&peer_memory_list)) {
++		kobject_put(peers_kobj);
++		peers_kobj = NULL;
++	}
++err_unlock:
++	mutex_unlock(&peer_memory_mutex);
++	kobject_put(&ib_peer_client->kobj);
++	return NULL;
++#endif
+ }
+ EXPORT_SYMBOL(ib_register_peer_memory_client);
+ 
+@@ -93,6 +253,12 @@ void ib_unregister_peer_memory_client(vo
+ 
+ 	mutex_lock(&peer_memory_mutex);
+ 	list_del(&ib_peer_client->core_peer_list);
++#ifdef HAVE_MM_KOBJ_EXPORTED
++	if (list_empty(&peer_memory_list)) {
++		kobject_put(peers_kobj);
++		peers_kobj = NULL;
++	}
++#endif
+ 	mutex_unlock(&peer_memory_mutex);
+ 
+ 	/*
+@@ -179,21 +345,41 @@ static void ib_unmap_peer_client(struct
+ 		}
+ 
+ 		if (to_state == UMEM_PEER_UNMAPPED) {
++#ifdef HAVE_SG_APPEND_TABLE
+ 			peer_mem->dma_unmap(&umem_p->umem.sgt_append.sgt,
++#else
++			peer_mem->dma_unmap(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 					    umem_p->umem.ibdev->dma_device);
++#else
++					    umem_p->umem.context->device->dma_device);
++#endif
++#ifdef HAVE_SG_APPEND_TABLE
+ 			peer_mem->put_pages(&umem_p->umem.sgt_append.sgt,
++#else
++			peer_mem->put_pages(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context);
+ 		}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 		memset(&umem->sgt_append, 0, sizeof(umem->sgt_append));
++#else
++		memset(&umem->sg_head, 0, sizeof(umem->sg_head));
++#endif
+ 		atomic64_inc(&ib_peer_client->stats.num_dealloc_mrs);
+ 	}
+ 
+ 	if ((cur_state == UMEM_PEER_MAPPED && to_state == UMEM_PEER_UNMAPPED) ||
+ 	    (cur_state == UMEM_PEER_INVALIDATED &&
+ 	     to_state == UMEM_PEER_UNMAPPED)) {
++#ifdef HAVE_SG_APPEND_TABLE
+ 		atomic64_add(umem->sgt_append.sgt.nents,
++#else
++		atomic64_add(umem->sg_head.nents,
++#endif
+ 			     &ib_peer_client->stats.num_dereg_pages);
+ 		atomic64_add(umem->length,
+ 			     &ib_peer_client->stats.num_dereg_bytes);
+@@ -366,7 +552,11 @@ static void fix_peer_sgls(struct ib_umem
+ 	struct scatterlist *sg;
+ 	int i;
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
++#else
++	for_each_sg(umem_p->umem.sg_head.sgl, sg, umem_p->umem.nmap, i) {
++#endif
+ 		if (i == 0) {
+ 			unsigned long offset;
+ 
+@@ -382,7 +572,11 @@ static void fix_peer_sgls(struct ib_umem
+ 			sg->length -= offset;
+ 		}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 		if (i == umem->sgt_append.sgt.nents - 1) {
++#else
++		if (i == umem_p->umem.nmap - 1) {
++#endif
+ 			unsigned long trim;
+ 
+ 			umem_p->last_sg = sg;
+@@ -421,7 +615,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 
+ 	kref_init(&umem_p->kref);
+ 	umem_p->umem = *old_umem;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	memset(&umem_p->umem.sgt_append, 0, sizeof(umem_p->umem.sgt_append));
++#else
++	memset(&umem_p->umem.sg_head, 0, sizeof(umem_p->umem.sg_head));
++#endif
+ 	umem_p->umem.is_peer = 1;
+ 	umem_p->ib_peer_client = ib_peer_client;
+ 	umem_p->peer_client_context = peer_client_context;
+@@ -453,10 +651,23 @@ struct ib_umem *ib_peer_umem_get(struct
+ 	if (ret)
+ 		goto err_xa;
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sgt_append.sgt,
++#else
++	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sg_head,
++#endif
+ 						peer_client_context,
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 						umem_p->umem.ibdev->dma_device,
++#else
++						umem_p->umem.context->device->dma_device,
++#endif
++#ifdef HAVE_SG_APPEND_TABLE
++
+ 						0, &umem_p->umem.sgt_append.sgt.nents);
++#else
++						0, &umem_p->umem.nmap);
++#endif
+ 	if (ret)
+ 		goto err_pages;
+ 
+@@ -466,7 +677,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 		fix_peer_sgls(umem_p, peer_page_size);
+ 
+ 	umem_p->mapped_state = UMEM_PEER_MAPPED;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	atomic64_add(umem_p->umem.sgt_append.sgt.nents, &ib_peer_client->stats.num_reg_pages);
++#else
++	atomic64_add(umem_p->umem.nmap, &ib_peer_client->stats.num_reg_pages);
++#endif
+ 	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
+ 	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
+ 
+@@ -487,7 +702,11 @@ struct ib_umem *ib_peer_umem_get(struct
+ 	return &umem_p->umem;
+ 
+ err_pages:
++#ifdef HAVE_SG_APPEND_TABLE
+ 	ib_peer_client->peer_mem->put_pages(&umem_p->umem.sgt_append.sgt,
++#else
++	ib_peer_client->peer_mem->put_pages(&umem_p->umem.sg_head,
++#endif
+ 					    umem_p->peer_client_context);
+ err_xa:
+ 	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
+@@ -520,7 +739,18 @@ void ib_peer_umem_release(struct ib_umem
+ 	umem_p->ib_peer_client = NULL;
+ 
+ 	/* Must match ib_umem_release() */
++#ifdef HAVE_ATOMIC_PINNED_VM
+ 	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
++#else
++	down_write(&umem->owning_mm->mmap_sem);
++#ifdef HAVE_PINNED_VM
++	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
++#else
++	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
++#endif /* HAVE_PINNED_VM */
++	up_write(&umem->owning_mm->mmap_sem);
++#endif /*HAVE_ATOMIC_PINNED_VM*/
++
+ 	mmdrop(umem->owning_mm);
+ 
+ 	kref_put(&umem_p->kref, ib_peer_umem_kref_release);

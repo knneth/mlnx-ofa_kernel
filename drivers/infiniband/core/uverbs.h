@@ -319,6 +319,4 @@ ib_uverbs_get_async_event(struct uverbs_attr_bundle *attrs,
 void copy_port_attr_to_resp(struct ib_port_attr *attr,
 			    struct ib_uverbs_query_port_resp *resp,
 			    struct ib_device *ib_dev, u8 port_num);
-
-bool ib_uverbs_get_privileged_qkey(void);
 #endif /* UVERBS_H */

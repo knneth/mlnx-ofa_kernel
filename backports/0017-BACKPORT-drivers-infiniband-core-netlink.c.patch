@@ -1,0 +1,55 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/netlink.c
+
+Change-Id: Idc805d3ca88e2c9c06b4bd6152100caad85551cb
+---
+ drivers/infiniband/core/netlink.c | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+--- a/drivers/infiniband/core/netlink.c
++++ b/drivers/infiniband/core/netlink.c
+@@ -45,6 +45,8 @@
+ #include <linux/module.h>
+ #include "core_priv.h"
+ 
++
++
+ static struct {
+ 	const struct rdma_nl_cbs *cb_table;
+ 	/* Synchronizes between ongoing netlink commands and netlink client
+@@ -170,7 +172,7 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 		goto done;
+ 
+ 	if ((cb_table[op].flags & RDMA_NL_ADMIN_PERM) &&
+-	    !netlink_capable(skb, CAP_NET_ADMIN)) {
++           !netlink_capable(skb, CAP_NET_ADMIN)) {
+ 		err = -EPERM;
+ 		goto done;
+ 	}
+@@ -195,7 +197,7 @@ static int rdma_nl_rcv_msg(struct sk_buf
+ 	}
+ 
+ 	if (cb_table[op].doit)
+-		err = cb_table[op].doit(skb, nlh, extack);
++       	err = cb_table[op].doit(skb, nlh, extack);
+ done:
+ 	up_read(&rdma_nl_types[index].sem);
+ 	return err;
+@@ -312,12 +314,12 @@ void rdma_nl_exit(void)
+ int rdma_nl_net_init(struct rdma_dev_net *rnet)
+ {
+ 	struct net *net = read_pnet(&rnet->net);
+-	struct netlink_kernel_cfg cfg = {
+-		.input	= rdma_nl_rcv,
+-	};
+-	struct sock *nls;
++       struct netlink_kernel_cfg cfg = {
++       	.input	= rdma_nl_rcv,
++       };
++       struct sock *nls;
+ 
+-	nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
++       nls = netlink_kernel_create(net, NETLINK_RDMA, &cfg);
+ 	if (!nls)
+ 		return -ENOMEM;
+ 

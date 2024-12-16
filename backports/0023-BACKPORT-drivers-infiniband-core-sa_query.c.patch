@@ -1,0 +1,64 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
+
+Change-Id: Ie35b6e7e1f952d00c955717e4b1d5f609f1e3f7d
+---
+ drivers/infiniband/core/sa_query.c | 25 ++++++++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/sa_query.c
++++ b/drivers/infiniband/core/sa_query.c
+@@ -709,10 +709,20 @@ static void ib_nl_set_path_rec_attrs(str
+ 	query->mad_buf->context[1] = NULL;
+ 
+ 	/* Construct the family header first */
+-	header = skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
++	header =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct rdma_ls_resolve_header *)
++#endif
++		skb_put(skb, NLMSG_ALIGN(sizeof(*header)));
++#ifdef HAVE_STRSCPY_PAD
+ 	strscpy_pad(header->device_name,
+ 		    dev_name(&query->port->agent->device->dev),
+ 		    LS_DEVICE_NAME_MAX);
++#else
++	strncpy(header->device_name,
++		dev_name(&query->port->agent->device->dev),
++		LS_DEVICE_NAME_MAX);
++#endif
+ 	header->port_num = query->port->port_num;
+ 
+ 	if ((comp_mask & IB_SA_PATH_REC_REVERSIBLE) &&
+@@ -998,11 +1008,15 @@ int ib_nl_handle_set_timeout(struct sk_b
+ 	int ret;
+ 
+ 	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||
+-	    !(NETLINK_CB(skb).sk))
++           !(NETLINK_CB(skb).sk))
+ 		return -EPERM;
+-
++#ifdef HAVE_NLA_PARSE_DEPRECATED
+ 	ret = nla_parse_deprecated(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
+ 				   nlmsg_len(nlh), ib_nl_policy, NULL);
++#else
++	ret = nla_parse(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
++		                nlmsg_len(nlh), ib_nl_policy, NULL);
++#endif /*HAVE_NLA_PARSE_DEPRECATED*/
+ 	attr = (const struct nlattr *)tb[LS_NLA_TYPE_TIMEOUT];
+ 	if (ret || !attr)
+ 		goto settimeout_out;
+@@ -1053,8 +1067,13 @@ static inline int ib_nl_is_good_resolve_
+ 	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
+ 		return 0;
+ 
++#ifdef HAVE_NLA_PARSE_DEPRECATED
+ 	ret = nla_parse_deprecated(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
+ 				   nlmsg_len(nlh), ib_nl_policy, NULL);
++#else
++	ret = nla_parse(tb, LS_NLA_TYPE_MAX - 1, nlmsg_data(nlh),
++	                        nlmsg_len(nlh), ib_nl_policy, NULL);
++#endif
+ 	if (ret)
+ 		return 0;
+ 

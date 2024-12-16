@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/hwmon.c
+
+Change-Id: If440bf45868fb10eb27598b1f1956db8b5fcad3a
+---
+ drivers/nvme/host/hwmon.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/host/hwmon.c
++++ b/drivers/nvme/host/hwmon.c
+@@ -187,7 +187,11 @@ static umode_t nvme_hwmon_is_visible(con
+ 	return 0;
+ }
+ 
++#ifdef HAVE_HWMON_CHIP_INFO_CONST_INFO
+ static const struct hwmon_channel_info *const nvme_hwmon_info[] = {
++#else
++static const struct hwmon_channel_info *nvme_hwmon_info[] = {
++#endif
+ 	HWMON_CHANNEL_INFO(chip, HWMON_C_REGISTER_TZ),
+ 	HWMON_CHANNEL_INFO(temp,
+ 			   HWMON_T_INPUT | HWMON_T_MAX | HWMON_T_MIN |

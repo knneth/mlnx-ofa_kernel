@@ -1,24 +1,27 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
 
+Change-Id: I2127d730d93320da37e6436caaf2420a0d83b70a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
- 
-+#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
-+
- #include <net/bareudp.h>
- #include <net/mpls.h>
- #include "en/tc_tun.h"
-@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
- 	.parse_tunnel         = parse_tunnel,
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
+@@ -29,9 +29,16 @@ struct mlx5e_trap {
+ 	struct mlx5e_rq_param      rq_param;
  };
-+#endif /* HAVE_NET_BAREUDP_H */
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ void mlx5e_close_trap(struct mlx5e_trap *trap);
+ void mlx5e_deactivate_trap(struct mlx5e_priv *priv);
+ int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx);
+ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable);
++#else
++void mlx5e_close_trap(struct mlx5e_trap *trap) {}
++void mlx5e_deactivate_trap(struct mlx5e_priv *priv) {}
++int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx) { return 0; }
++int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable) { return 0; }
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ #endif

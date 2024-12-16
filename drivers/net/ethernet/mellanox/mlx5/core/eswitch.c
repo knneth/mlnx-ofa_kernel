@@ -830,28 +830,6 @@ static void esw_vport_change_handler(struct work_struct *work)
 	mutex_unlock(&esw->state_lock);
 }
 
-int mlx5_esw_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num,
-			       u32 rate_mbps)
-{
-	u32 ctx[MLX5_ST_SZ_DW(scheduling_context)] = {};
-	struct mlx5_vport *vport;
-
-	vport = mlx5_eswitch_get_vport(esw, vport_num);
-	if (IS_ERR(vport))
-		return PTR_ERR(vport);
-
-	if (!vport->qos.enabled)
-		return -EOPNOTSUPP;
-
-	MLX5_SET(scheduling_context, ctx, max_average_bw, rate_mbps);
-
-	return mlx5_modify_scheduling_element_cmd(esw->dev,
-						  SCHEDULING_HIERARCHY_E_SWITCH,
-						  ctx,
-						  vport->qos.esw_tsar_ix,
-						  MODIFY_SCHEDULING_ELEMENT_IN_MODIFY_BITMASK_MAX_AVERAGE_BW);
-}
-
 static void node_guid_gen_from_mac(u64 *node_guid, const u8 *mac)
 {
 	((u8 *)node_guid)[7] = mac[0];
@@ -1754,8 +1732,6 @@ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
 		esw->esw_funcs.num_vfs = 0;
 	else
 		esw->esw_funcs.num_ec_vfs = 0;
-
-	atomic64_set(&esw->user_count, 0);
 }
 
 /* Free resources for corresponding eswitch mode. It is called by devlink

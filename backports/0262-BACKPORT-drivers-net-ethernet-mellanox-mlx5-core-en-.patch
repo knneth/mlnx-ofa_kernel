@@ -1,0 +1,204 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+
+Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
+---
+ .../ethernet/mellanox/mlx5/core/en/devlink.c  | 138 +++++++++++++++++-
+ 1 file changed, 135 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+@@ -12,20 +12,36 @@ struct mlx5e_dev *mlx5e_create_devlink(s
+ {
+ 	struct mlx5e_dev *mlx5e_dev;
+ 	struct devlink *devlink;
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ 	int err;
++#endif
+ 
++#ifdef HAVE_DEVLINK_ALLOC_NS
+ 	devlink = devlink_alloc_ns(&mlx5e_devlink_ops, sizeof(*mlx5e_dev),
+ 				   devlink_net(priv_to_devlink(mdev)), dev);
++#else /* HAVE_DEVLINK_ALLOC_NS */
++#ifdef HAVE_DEVLINK_ALLOC_GET_3_PARAMS
++	devlink = devlink_alloc(&mlx5e_devlink_ops, sizeof(*mlx5e_dev), dev);
++#else
++	devlink = devlink_alloc(&mlx5e_devlink_ops, sizeof(*mlx5e_dev));
++#endif
++
++#endif /* HAVE_DEVLINK_ALLOC_NS */
+ 	if (!devlink)
+ 		return ERR_PTR(-ENOMEM);
+-
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ 	err = devl_nested_devlink_set(priv_to_devlink(mdev), devlink);
+ 	if (err) {
+ 		devlink_free(devlink);
+ 		return ERR_PTR(err);
+ 	}
++#endif
+ 
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ 	devlink_register(devlink);
++#else
++	devlink_register(devlink, dev);
++#endif
+ 	return devlink_priv(devlink);
+ }
+ 
+@@ -37,7 +53,7 @@ void mlx5e_destroy_devlink(struct mlx5e_
+ 	devlink_free(devlink);
+ }
+ 
+-static void
++void
+ mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
+ {
+ 	u64 parent_id;
+@@ -47,14 +63,33 @@ mlx5e_devlink_get_port_parent_id(struct
+ 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
+ }
+ 
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#ifdef HAVE_DEVLINK_PER_AUXDEV
+ int mlx5e_devlink_port_register(struct mlx5e_dev *mlx5e_dev,
+ 				struct mlx5_core_dev *mdev)
++#else
++int mlx5e_devlink_port_register(struct mlx5e_priv *priv)
++#endif 
+ {
+-	struct devlink *devlink = priv_to_devlink(mlx5e_dev);
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
+ 	struct devlink_port_attrs attrs = {};
+ 	struct netdev_phys_item_id ppid = {};
++#endif
+ 	unsigned int dl_port_index;
++#ifdef HAVE_DEVLINK_PER_AUXDEV
++	struct devlink *devlink = priv_to_devlink(mlx5e_dev);
++#else
++	struct devlink *devlink = priv_to_devlink(priv->mdev);
++	struct devlink_port *dl_port;
++#ifdef HAVE_DEVL_PORT_REGISTER
++	int ret;
++#endif
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
++	struct mlx5_core_dev *mdev =  priv->mdev;
++#endif
++#endif /* HAVE_DEVLINK_PER_AUXDEV */
+ 
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
+ 	if (mlx5_core_is_pf(mdev)) {
+ 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+ 		attrs.phys.port_number = mlx5_get_dev_index(mdev);
+@@ -70,13 +105,110 @@ int mlx5e_devlink_port_register(struct m
+ 		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
+ 	}
+ 
++#ifdef HAVE_DEVLINK_PER_AUXDEV
+ 	devlink_port_attrs_set(&mlx5e_dev->dl_port, &attrs);
++#else
++	dl_port = mlx5e_devlink_get_dl_port(priv);
++	memset(dl_port, 0, sizeof(*dl_port));
++	devlink_port_attrs_set(dl_port, &attrs);
++#endif
++#else /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS */
++	dl_port = mlx5e_devlink_get_dl_port(priv);
++	memset(dl_port, 0, sizeof(*dl_port));
++	if (mlx5_core_is_pf(priv->mdev)) {
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++		struct netdev_phys_item_id ppid = {};
++
++		if (MLX5_ESWITCH_MANAGER(priv->mdev))
++			mlx5e_devlink_get_port_parent_id(priv->mdev, &ppid);
++#endif
++		dl_port_index = mlx5_esw_vport_to_devlink_port_index(priv->mdev,
++								     MLX5_VPORT_UPLINK);
++		devlink_port_attrs_set(dl_port,
++				DEVLINK_PORT_FLAVOUR_PHYSICAL,
++				mlx5_get_dev_index(priv->mdev),
++				false, 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,&ppid.id[0], ppid.id_len
++#endif
++		);
++	} else {
++		dl_port_index = mlx5_esw_vport_to_devlink_port_index(priv->mdev, 0);
++		devlink_port_attrs_set(dl_port,
++				DEVLINK_PORT_FLAVOUR_VIRTUAL,
++				0, false , 0
++#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
++				,NULL, 0
++#endif
++		);
++	}
++#endif /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS */ 
+ 
++#ifdef HAVE_DEVLINK_PER_AUXDEV
+ 	return devlink_port_register(devlink, &mlx5e_dev->dl_port,
+ 				     dl_port_index);
++#else
++#ifdef HAVE_DEVL_PORT_REGISTER
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_lock(devlink);
++	ret = devl_port_register(devlink, dl_port, dl_port_index);
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_unlock(devlink);
++
++	return ret;
++#else
++	return devlink_port_register(devlink, dl_port, dl_port_index);
++#endif /* HAVE_DEVL_PORT_REGISTER */
++#endif /* HAVE_DEVLINK_PER_AUXDEV */
+ }
+ 
++#ifndef HAVE_DEVLINK_PER_AUXDEV
++void mlx5e_devlink_port_type_eth_set(struct mlx5e_priv *priv)
++{
++	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++#ifdef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM
++	devlink_port_type_eth_set(dl_port);
++#else
++	devlink_port_type_eth_set(dl_port, priv->netdev);
++#endif
++}
++#endif /* HAVE_DEVL_PORT_REGISTER */
++
++#ifdef HAVE_DEVLINK_PER_AUXDEV
+ void mlx5e_devlink_port_unregister(struct mlx5e_dev *mlx5e_dev)
++#else
++void mlx5e_devlink_port_unregister(struct mlx5e_priv *priv)
++#endif
+ {
++#ifdef HAVE_DEVLINK_PER_AUXDEV
+ 	devlink_port_unregister(&mlx5e_dev->dl_port);
++#else
++	struct devlink_port *dl_port = mlx5e_devlink_get_dl_port(priv);
++#ifdef HAVE_DEVL_PORT_REGISTER
++	struct devlink *devlink = priv_to_devlink(priv->mdev);
++
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_lock(devlink);
++	devl_port_unregister(dl_port);
++	if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_MLX5E_LOCKED_FLOW))
++		devl_unlock(devlink);
++#else
++	devlink_port_unregister(dl_port);
++#endif /* HAVE_DEVL_PORT_REGISTER */
++#endif /* HAVE_DEVLINK_PER_AUXDEV */
++}
++
++#ifndef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
++#ifdef HAVE_NDO_GET_DEVLINK_PORT
++struct devlink_port *mlx5e_get_devlink_port(struct net_device *dev)
++{
++	struct mlx5e_priv *priv = netdev_priv(dev);
++
++	if (!netif_device_present(dev))
++		return NULL;
++
++	return mlx5e_devlink_get_dl_port(priv);
+ }
++#endif /* HAVE_NDO_GET_DEVLINK_PORT */
++#endif /* HAVE_NET_DEVICE_HAS_DEVLINK_PORT */
++#endif  /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT */

@@ -72,26 +72,143 @@ static inline void iounmap(void *addr)
 #endif /* iounmap  */
 #endif /* CONFIG_ARM64 */
 
+static inline void *mlx5_mtrack_kzalloc(size_t size, gfp_t flags)
+{
+	return kzalloc(size, flags);
+}
+
+static inline void *mlx5_mtrack_kzalloc_node(size_t size, gfp_t flags, int node)
+{
+	return kzalloc_node(size, flags, node);
+}
+
+static inline void *mlx5_mtrack_kvzalloc(size_t size, gfp_t flags)
+{
+	return kvzalloc(size, flags);
+}
+
+static inline void *mlx5_mtrack_kvmalloc_array(size_t n, size_t size, gfp_t flags)
+{
+	return kvmalloc_array(n, size, flags);
+}
+
+static inline void *mlx5_mtrack_kvcalloc(size_t n, size_t size, gfp_t flags)
+{
+	return kvcalloc(n, size, flags);
+}
+
+static inline void *mlx5_mtrack_kcalloc_node(size_t n, size_t size, gfp_t flags, int node)
+{
+		return kcalloc_node(n, size, flags, node);
+}
+
+static inline void *mlx5_mtrack_kcalloc(size_t n, size_t size, gfp_t flags)
+{
+	return kcalloc(n, size, flags);
+}
+
+static inline void *mlx5_mtrack_kmalloc(size_t size, gfp_t flags)
+{
+	return kmalloc(size, flags);
+}
+
+static inline void *mlx5_mtrack_kmalloc_node(size_t size, gfp_t flags, int node)
+{
+	return kmalloc_node(size, flags, node);
+}
+
+static inline void *mlx5_mtrack_krealloc(const void *objp, size_t new_size, gfp_t flags)
+{
+	return krealloc(objp, new_size, flags);
+}
+
+static inline void *mlx5_mtrack_kvmalloc(size_t size, gfp_t flags)
+{
+	return kvmalloc(size, flags);
+}
+
+static inline void *mlx5_mtrack_kvmalloc_node(size_t size, gfp_t flags, int node)
+{
+	return kvmalloc_node(size, flags, node);
+}
+
+static inline void *mlx5_mtrack_kvzalloc_node(size_t size, gfp_t flags, int node)
+{
+	return kvzalloc_node(size, flags, node);
+}
+
+static inline void *mlx5_mtrack_kmalloc_array(size_t n, size_t size, gfp_t flags)
+{
+	return kmalloc_array(n, size, flags);
+}
+
+static inline void *mlx5_mtrack_kmemdup(const void *src, size_t len, gfp_t gfp)
+{
+	return kmemdup(src, len, gfp);
+}
+
+static inline void *mlx5_mtrack_kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
+{
+	return kmem_cache_alloc(cachep, flags);
+}
+
+static inline void *mlx5_mtrack_vmalloc(unsigned long size)
+{
+	return vmalloc(size);
+}
+
+static inline void *mlx5_mtrack_vmalloc_node(unsigned long size, int node)
+{
+	return vmalloc_node(size, node);
+}
+
+static inline struct page *mlx5_mtrack_alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
+{
+	return alloc_pages_node(nid, gfp_mask, order);
+}
+
+static inline struct page *mlx5_mtrack_dev_alloc_pages(unsigned int order)
+{
+	return dev_alloc_pages(order);
+}
+
+static inline struct page *mlx5_mtrack_alloc_pages(gfp_t gfp, unsigned int order)
+{
+	return alloc_pages(gfp, order);
+}
+
+static inline unsigned long mlx5_mtrack___get_free_pages(gfp_t gfp_mask, unsigned int order)
+{
+	return __get_free_pages(gfp_mask, order);
+}
+
+static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
+{
+	return get_zeroed_page(gfp_mask);
+}
+
+#undef kzalloc
 #define kzalloc(size, flags) ({							\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kzalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc");\
 	else									\
-		__memtrack_addr = kzalloc(size, flags);				\
+		__memtrack_addr = mlx5_mtrack_kzalloc(size, flags);		\
 	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {	\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 
+#undef kzalloc_node
 #define kzalloc_node(size, flags, node) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kzalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kzalloc_node"); \
 	else									\
-		__memtrack_addr = kzalloc_node(size, flags, node);		\
+		__memtrack_addr = mlx5_mtrack_kzalloc_node(size, flags, node);	\
 	if (IS_VALID_ADDR(__memtrack_addr) && (size) > 0 &&			\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
@@ -99,26 +216,28 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kvzalloc
 #define kvzalloc(size, flags) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvzalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc"); \
 	else									\
-		__memtrack_addr = kvzalloc(size, flags);			\
+		__memtrack_addr = mlx5_mtrack_kvzalloc(size, flags);		\
 	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 
+#undef kvmalloc_array
 #define kvmalloc_array(n, size, flags) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvmalloc_array", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc_array"); \
 	else									\
-		__memtrack_addr = kvmalloc_array(n, size, flags);		\
+		__memtrack_addr = mlx5_mtrack_kvmalloc_array(n, size, flags);	\
 	if (IS_VALID_ADDR(__memtrack_addr) && \
 	    !is_non_trackable_alloc_func(__func__) && (n) * (size) > 0) {	\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*size, 0UL, 0, __FILE__, __LINE__, flags); \
@@ -126,13 +245,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kvcalloc
 #define kvcalloc(n, size, flags) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvcalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvcalloc"); \
 	else									\
-		__memtrack_addr = kvcalloc(n, size, flags);			\
+		__memtrack_addr = mlx5_mtrack_kvcalloc(n, size, flags);		\
 	if (IS_VALID_ADDR(__memtrack_addr) &&					\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
@@ -140,13 +260,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kcalloc_node
 #define kcalloc_node(n, size, flags, node) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kcalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc_node"); \
 	else									\
-		__memtrack_addr = kcalloc_node(n, size, flags, node);		\
+		__memtrack_addr = mlx5_mtrack_kcalloc_node(n, size, flags, node);	\
 	if (IS_VALID_ADDR(__memtrack_addr) && (size) > 0 &&			\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr),(n) * (size), 0UL, 0, __FILE__, __LINE__, flags); \
@@ -154,13 +275,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kcalloc
 #define kcalloc(n, size, flags) ({ \
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kcalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kcalloc");\
 	else									\
-		__memtrack_addr = kcalloc(n, size, flags);			\
+		__memtrack_addr = mlx5_mtrack_kcalloc(n, size, flags);			\
 	if (IS_VALID_ADDR(__memtrack_addr) && (n) * (size) > 0 &&		\
 	    !is_non_trackable_alloc_func(__func__)) {				\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
@@ -168,13 +290,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kmalloc
 #define kmalloc(sz, flgs) ({							\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc");\
 	else									\
-		__memtrack_addr = kmalloc(sz, flgs);				\
+		__memtrack_addr = mlx5_mtrack_kmalloc(sz, flgs);		\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem())					\
@@ -183,13 +306,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kmalloc_node
 #define kmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_node"); \
 	else									\
-		__memtrack_addr = kmalloc_node(sz, flgs, node);			\
+		__memtrack_addr = mlx5_mtrack_kmalloc_node(sz, flgs, node);			\
 	if (__memtrack_addr) {							\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
@@ -198,6 +322,7 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef krealloc
 #define krealloc(p, new_size, flags) ({	\
 	void *__memtrack_addr = NULL;	\
 	void *__old_addr = (void *)p;   \
@@ -209,7 +334,7 @@ static inline void iounmap(void *addr)
 			!is_non_trackable_alloc_func(__func__)) {				\
 			memtrack_free(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__old_addr), 0UL, 0, __FILE__, __LINE__); \
 		}												\
-		__memtrack_addr = krealloc(p, new_size, flags);						\
+		__memtrack_addr = mlx5_mtrack_krealloc(p, new_size, flags);				\
 	}												\
 	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {			\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), new_size, 0UL, 0, __FILE__, __LINE__, flags);\
@@ -217,13 +342,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;										\
 })
 
+#undef kvmalloc
 #define kvmalloc(sz, flgs) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvmalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc"); \
 	else									\
-		__memtrack_addr = kvmalloc(sz, flgs);			\
+		__memtrack_addr = mlx5_mtrack_kvmalloc(sz, flgs);			\
 	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
@@ -232,13 +358,14 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kvmalloc_node
 #define kvmalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvmalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvmalloc_node"); \
 	else									\
-		__memtrack_addr = kvmalloc_node(sz, flgs, node);			\
+		__memtrack_addr = mlx5_mtrack_kvmalloc_node(sz, flgs, node);	\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 		if (memtrack_randomize_mem() && ((flgs) == GFP_KERNEL))		\
@@ -247,39 +374,42 @@ static inline void iounmap(void *addr)
 	__memtrack_addr;							\
 })
 
+#undef kvzalloc_node
 #define kvzalloc_node(sz, flgs, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvzalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc_node"); \
 	else									\
-		__memtrack_addr = kvzalloc_node(sz, flgs, node);			\
+		__memtrack_addr = mlx5_mtrack_kvzalloc_node(sz, flgs, node);	\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
 })
 
+#undef kmalloc_array
 #define kmalloc_array(n, size, flags) ({ \
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmalloc_array", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmalloc_array"); \
 	else									\
-		__memtrack_addr = kmalloc_array(n, size, flags);		\
+		__memtrack_addr = mlx5_mtrack_kmalloc_array(n, size, flags);	\
 	if (IS_VALID_ADDR(__memtrack_addr) && (n) * (size) > 0) {		\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), (n)*(size), 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 
+#undef kmemdup
 #define kmemdup(src, sz, flgs) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmemdup", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmemdup");\
 	else									\
-		__memtrack_addr = kmemdup(src, sz, flgs);			\
+		__memtrack_addr = mlx5_mtrack_kmemdup(src, sz, flgs);		\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
@@ -431,13 +561,14 @@ do {                                                            \
 
 #endif /* CONFIG_COMPAT_RCU */
 
+#undef vmalloc
 #define vmalloc(size) ({							\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "vmalloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vmalloc");\
 	else									\
-		__memtrack_addr = vmalloc(size);				\
+		__memtrack_addr = mlx5_mtrack_vmalloc(size);				\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\
@@ -510,13 +641,14 @@ do {                                                            \
 #endif
 #endif
 
+#undef vmalloc_node
 #define vmalloc_node(size, node) ({						\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "vmalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "vmalloc_node"); \
 	else									\
-		__memtrack_addr = vmalloc_node(size, node);			\
+		__memtrack_addr = mlx5_mtrack_vmalloc_node(size, node);		\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_VMALLOC, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 		if (memtrack_randomize_mem())					\
@@ -579,19 +711,21 @@ do {                                                            \
 })
 #endif
 
+#undef kmem_cache_alloc
 #define kmem_cache_alloc(cache, flags) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kmem_cache_alloc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kmem_cache_alloc"); \
 	else									\
-		__memtrack_addr = kmem_cache_alloc(cache, flags);		\
+		__memtrack_addr = mlx5_mtrack_kmem_cache_alloc(cache, flags);	\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_KMEM_OBJ, 0UL, (unsigned long)(__memtrack_addr), 1, 0UL, 0, __FILE__, __LINE__, flags); \
 	}									\
 	__memtrack_addr;							\
 })
 
+#undef kmem_cache_zalloc
 #define kmem_cache_zalloc(cache, flags) ({					\
 	void *__memtrack_addr = NULL;						\
 										\
@@ -616,7 +750,7 @@ do {                                                            \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kasprintf"); \
 	else									\
 		__memtrack_addr = kasprintf(gfp, fmt, __VA_ARGS__);		\
-	if (IS_VALID_ADDR(__memtrack_addr) && strncmp((char *)__memtrack_addr, "infiniband", 10)) {	\
+	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__) && strncmp((char *)__memtrack_addr, "infiniband", 10)) {	\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), strlen((char *)__memtrack_addr), 0UL, 0, __FILE__, __LINE__, gfp); \
 	}									\
 	__memtrack_addr;							\
@@ -735,26 +869,28 @@ do {                                                            \
 
 /* All Page handlers */
 /* TODO: Catch netif_rx for page dereference */
+#undef alloc_pages_node
 #define alloc_pages_node(nid, gfp_mask, order) ({				\
 	struct page *page_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_pages_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_pages_node"); \
 	else									\
-	page_addr = (struct page *)alloc_pages_node(nid, gfp_mask, order);	\
+	page_addr = (struct page *)mlx5_mtrack_alloc_pages_node(nid, gfp_mask, order);	\
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {		\
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), (unsigned long)(order), 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	page_addr;								\
 })
 
+#undef dev_alloc_pages
 #define dev_alloc_pages(order) ({                              \
 	struct page *page_addr = NULL;                                          \
                                                                         \
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "dev_alloc_pages", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "dev_alloc_pages"); \
 	else                                                                    \
-	page_addr = (struct page *)dev_alloc_pages(order);      \
+	page_addr = (struct page *)mlx5_mtrack_dev_alloc_pages(order);     	\
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {              \
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), (unsigned long)(order), 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}                                                                       \
@@ -778,6 +914,7 @@ do {                                                            \
 })
 #endif
 
+#undef alloc_pages
 #ifdef CONFIG_NUMA
 #define alloc_pages(gfp_mask, order) ({						\
 	struct page *page_addr = NULL;						\
@@ -785,44 +922,43 @@ do {                                                            \
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_pages", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_pages"); \
 	else									\
-		page_addr = (struct page *)alloc_pages(gfp_mask, order);	\
+		page_addr = (struct page *)mlx5_mtrack_alloc_pages(gfp_mask, order);	\
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {		\
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), (unsigned long)(order), 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	page_addr;								\
 })
 #else
-#ifdef alloc_pages
-	#undef alloc_pages
-#endif
 #define alloc_pages(gfp_mask, order) ({						\
 	struct page *page_addr;							\
 										\
-	page_addr = (struct page *)alloc_pages_node(numa_node_id(), gfp_mask, order); \
+	page_addr = (struct page *)mlx5_mtrack_alloc_pages_node(numa_node_id(), gfp_mask, order); \
 	page_addr;								\
 })
 #endif
 
+#undef __get_free_pages
 #define __get_free_pages(gfp_mask, order) ({					\
 	struct page *page_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "__get_free_pages", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "__get_free_pages"); \
 	else									\
-		page_addr = (struct page *)__get_free_pages(gfp_mask, order);	\
+		page_addr = (struct page *)mlx5_mtrack___get_free_pages(gfp_mask, order);	\
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {		\
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), (unsigned long)(order), 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	(unsigned long)page_addr;						\
 })
 
+#undef get_zeroed_page
 #define get_zeroed_page(gfp_mask) ({						\
 	struct page *page_addr = NULL;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "get_zeroed_page", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "get_zeroed_page"); \
 	else									\
-		page_addr = (struct page *)get_zeroed_page(gfp_mask);		\
+		page_addr = (struct page *)mlx5_mtrack_get_zeroed_page(gfp_mask);	\
 	if (page_addr && !is_non_trackable_alloc_func(__func__)) {		\
 		memtrack_alloc(MEMTRACK_PAGE_ALLOC, 0UL, (unsigned long)(page_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\

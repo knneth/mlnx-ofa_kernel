@@ -355,8 +355,9 @@ check_complex_defines()
 	fi
 
 # Define HAVE_KTLS_RX_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST ||
-	   check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+	if (check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST ||
+		check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START) &&
+	       	[ "X${CONFIG_MLX5_EN_TLS}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
 	else
@@ -390,16 +391,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
 	else
 		unset_complex_define_to_config_h HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
-	fi
-
-# Define HAVE_SVC_FILL_WRITE_VECTOR from other flags
-	if check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_4_PARAMS ||
-	   check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_3_PARAMS ||
-	   check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_2_PARAMS
-	then
-		set_complex_define_to_config_h HAVE_SVC_FILL_WRITE_VECTOR
-	else
-		unset_complex_define_to_config_h HAVE_SVC_FILL_WRITE_VECTOR
 	fi
 
 # Define HAVE_GET_USER_PAGES_GUP_FLAGS from other flags
@@ -458,6 +449,14 @@ check_complex_defines()
 			set_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
 		else
 			unset_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
+		fi
+
+		if (check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO) &&
+		   check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN
+		then
+			set_complex_define_to_config_h HAVE_UDP_TUNNEL_NIC_INFO_FULL
+		else
+			unset_complex_define_to_config_h HAVE_UDP_TUNNEL_NIC_INFO_FULL
 		fi
 	fi
 
@@ -788,6 +787,13 @@ check_inbox_auxiliary() {
 	[ "$CONFIG_AUXILIARY_BUS$CONFIG_AUXILIARY_BUS_MODULE" != '' ]
 }
 
+# Check if the kernel we build with has an auxiliary bus module
+check_inbox_fwctl() {
+	check_autofconf CONFIG_FWCTL_MLX5
+	check_autofconf CONFIG_FWCTL
+	[ "$CONFIG_FWCTL_MLX5$CONFIG_FWCTL" != '' ]
+}
+
 function check_autofconf {
 	VAR=$1
 	VALUE=$(tac ${KSRC_OBJ}/include/*/autoconf.h | grep -m1 ${VAR} | sed -ne 's/.*\([01]\)$/\1/gp')
@@ -867,6 +873,8 @@ CONFIG_MLX5_INFINIBAND=${CONFIG_MLX5_INFINIBAND:-''}
 CONFIG_MLX5_DEBUG=${CONFIG_MLX5_DEBUG:-''}
 CONFIG_BACKPORT_LRO=${CONFIG_BACKPORT_LRO:-''}
 CONFIG_AUXILIARY_BUS=${CONFIG_AUXILIARY_BUS:-'m'}
+CONFIG_FWCTL=${CONFIG_FWCTL:-'m'}
+CONFIG_FWCTL_MLX5=${CONFIG_FWCTL_MLX5:-'m'}
 CONFIG_MLXDEVM=${CONFIG_MLXDEVM:-'m'}
 CONFIG_MLX5_SF_CFG=${CONFIG_MLX5_SF_CFG:-''}
 CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
@@ -898,7 +906,7 @@ CONFIG_NVME_FC=${CONFIG_NVME_FC:-''}
 CONFIG_NVME_RDMA=${CONFIG_NVME_RDMA:-''}
 CONFIG_NVME_TCP=${CONFIG_NVME_TCP:-''}
 CONFIG_NVME_APPLE=${CONFIG_NVME_APPLE:-''}
-CONFIG_NVME_AUTH=${CONFIG_NVME_AUTH:-''}
+CONFIG_NVME_HOST_AUTH=${CONFIG_NVME_HOST_AUTH:-''}
 CONFIG_NVME_COMMON=${CONFIG_NVME_COMMON:-''}
 CONFIG_NVME_MULTIPATH=${CONFIG_NVME_MULTIPATH:-''}
 CONFIG_NVME_HOST_DUMMY=${CONFIG_NVME_HOST_DUMMY:-''}
@@ -937,7 +945,7 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.6"
+OFED_BASE_KVERSION="6.9"
 MIN_KVERSION="4.18"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
@@ -945,35 +953,35 @@ REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.18.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.18.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="4.18.0"
 ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 GDS_SUPPORTED_KVERSION="4.18.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.10"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.11"
 
 #ODP
 ODP_SUPPORTED_KVERSION="4.18.0"
@@ -1003,13 +1011,44 @@ check_autoconf_log() {
 	echo "################ End snippet from compat/config.log"
 }
 
+print_line() {
+    printf '%*s\n' "$(tput cols)" '' | tr ' ' '-'
+}
+
 main()
 {
         ofed_patch_params=
         # Parsing parameters
+        # When a new flag is added, it should be added to the list of flags under "--all" flag.
+        # Also programmer should decide if the new flag is needed for mlnx_en, and add it
+        # accordingly (--with-new-flag/--without-new-flag)
         while [ ! -z "$1" ]
         do
                 case $1 in
+                        --mlnx_en)
+                                CONFIG_MLNX_EN=m
+                                CONFIG_MLXSW_CORE=
+				shift
+                                set -- "--mlnx_en" "--with-mlx5-mod" "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-mlxfw-mod" "--with-sf-cfg-drv" \
+                                        "--without-memtrack" "--without-core-mod" "--without-user_mad-mod" "--without-user_access-mod" "--without-addr_trans-mod" \
+                                        "--without-ipoib-mod" "--without-srp-mod" "--without-iser-mod" "--without-isert-mod" \
+                                        "--without-nvmf_host-mod" "--without-nvmf_target-mod" "--without-gds" "--without-nfsrdma-mod" "$@"
+				print_line
+				echo "configuring MLNX_OFED_EN with the flags below:"
+				echo "${@:2}"
+				print_line
+                        ;;
+                        --all)
+				shift
+                                set -- "--all" "--with-memtrack" "--with-core-mod" "--with-user_mad-mod" "--with-user_access-mod" "--with-addr_trans-mod" \
+                                        "--with-mlx5-mod" "--with-ipoib-mod" "--with-mlxfw-mod" "--with-srp-mod" "--with-iser-mod" "--with-isert-mod" \
+                                        "--with-nvmf_host-mod" "--with-nvmf_target-mod" "--with-gds" "--with-nfsrdma-mod" \
+                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-sf-cfg-drv" "$@"
+				print_line
+				echo "configuring MLNX_OFED with all the flags:"
+				echo "${@:2}"
+				print_line
+                        ;;
                         -prefix | --prefix | --prefi | --pref | --pre | --pr | --p | -p)
                                 shift
                                 prefix=$1
@@ -1550,7 +1589,7 @@ main()
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
                             CONFIG_NVME_APPLE="m"
-                            CONFIG_NVME_AUTH="m"
+                            CONFIG_NVME_HOST_AUTH="y"
                             CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1563,7 +1602,7 @@ main()
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
 			    CONFIG_NVME_APPLE=
-			    CONFIG_NVME_AUTH=
+			    CONFIG_NVME_HOST_AUTH=
 			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1577,7 +1616,7 @@ main()
                             CONFIG_NVME_RDMA="m"
                             CONFIG_NVME_TCP="m"
                             CONFIG_NVME_APPLE="m"
-                            CONFIG_NVME_AUTH="m"
+                            CONFIG_NVME_HOST_AUTH="y"
                             CONFIG_NVME_COMMON="m"
                             CONFIG_NVME_MULTIPATH="y"
                             CONFIG_NVME_TARGET=
@@ -1596,7 +1635,7 @@ main()
                             CONFIG_NVME_RDMA=
 			    CONFIG_NVME_TCP=
 			    CONFIG_NVME_APPLE=
-			    CONFIG_NVME_AUTH=
+			    CONFIG_NVME_HOST_AUTH=
 			    CONFIG_NVME_COMMON=
                             CONFIG_NVME_MULTIPATH=
                             CONFIG_NVME_TARGET=
@@ -1758,6 +1797,11 @@ then
 	IS_SLES=1
 fi
 
+CONFIG_IS_MARINER=
+if grep -qiE 'mariner' /etc/os-release 2>/dev/null; then
+       CONFIG_IS_MARINER="y"
+fi
+
 if [ -z "$KSRC_OBJ" ]; then
 	if [[ "$IS_SLES" == 1 && "$KSRC" =~ "build" && -d ${KSRC/build/source} ]] ||
 	   [[ "$KSRC" =~ "build" && -d ${KSRC/build/source} &&
@@ -1781,6 +1825,14 @@ if check_inbox_auxiliary; then
 	CONFIG_AUXILIARY_BUS=
 else
 	CONFIG_AUXILIARY_BUS="m"
+fi
+
+if check_inbox_fwctl; then
+	CONFIG_FWCTL_MLX5=
+	CONFIG_FWCTL=
+else
+	CONFIG_FWCTL_MLX5="m"
+	CONFIG_FWCTL="m"
 fi
 
 if  check_kerver ${KVERSION} ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
@@ -1841,7 +1893,7 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_RDMA=
 		CONFIG_NVME_TCP=
 		CONFIG_NVME_APPLE=
-		CONFIG_NVME_AUTH=
+		CONFIG_NVME_HOST_AUTH=
 		CONFIG_NVME_COMMON=
 		CONFIG_NVME_MULTIPATH=
 		CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1867,7 +1919,7 @@ if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_NVME_RDMA=
         CONFIG_NVME_TCP=
         CONFIG_NVME_APPLE=
-        CONFIG_NVME_AUTH=
+        CONFIG_NVME_HOST_AUTH=
         CONFIG_NVME_COMMON=
         CONFIG_NVME_MULTIPATH=
         CONFIG_NVME_HOST_WITHOUT_FC=
@@ -2004,11 +2056,11 @@ if [ "X${CONFIG_NVME_APPLE}" == "Xm" ]; then
     fi
 fi
 
-# Enable nvme-auth only when it is enabled in the kernel
-if [ "X${CONFIG_NVME_AUTH}" == "Xm" ]; then
-    check_autofconf CONFIG_NVME_AUTH
-    if [ X${CONFIG_NVME_AUTH} == "X1" ]; then
-        CONFIG_NVME_AUTH=m
+# Enable nvme-host-auth only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_HOST_AUTH}" == "Xy" ]; then
+    check_autofconf CONFIG_NVME_HOST_AUTH
+    if [ X${CONFIG_NVME_HOST_AUTH} == "X1" ]; then
+        CONFIG_NVME_HOST_AUTH=y
     fi
 fi
 

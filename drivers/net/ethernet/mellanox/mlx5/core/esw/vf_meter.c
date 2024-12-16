@@ -2,6 +2,7 @@
 /* Copyright (c) 2021 Mellanox Technologies. */
 
 #include "eswitch.h"
+#include "esw/vf_meter.h"
 #include "en/tc/meter.h"
 #include "esw/acl/helper.h"
 
@@ -64,7 +65,7 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
 	}
 }
 
-int
+static int
 esw_acl_create_meter(struct mlx5_vport *vport, struct vport_meter *meter,
 		     int ns, int prio)
 {
@@ -221,7 +222,7 @@ out:
 	return meter;
 }
 
-int
+static int
 esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
 			    int rx_tx, int xps, u64 rate, u64 burst)
 {

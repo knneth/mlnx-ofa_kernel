@@ -73,7 +73,7 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
 	if (err != 1)
 		return -EINVAL;
 
-	if (tc_num != MLX5E_MAX_NUM_TC && tc_num != MLX5E_MIN_NUM_TC)
+	if (tc_num != MLX5_MAX_NUM_TC && tc_num != MLX5_MIN_NUM_TC)
 		return -EINVAL;
 
 	rtnl_lock();
@@ -89,8 +89,8 @@ static  ssize_t mlx5e_show_maxrate(struct device *device,
 				   char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u8 max_bw_value[MLX5E_MAX_NUM_TC];
-	u8 max_bw_unit[MLX5E_MAX_NUM_TC];
+	u8 max_bw_value[MLX5_MAX_NUM_TC];
+	u8 max_bw_unit[MLX5_MAX_NUM_TC];
 	int len = 0;
 	int ret;
 	int i;
@@ -122,8 +122,8 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 	 __u64 upper_limit_mbps = roundup(255 * MLX5E_100MBPS_TO_KBPS,
 						MLX5E_GBPS_TO_KBPS);
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u8 max_bw_value[MLX5E_MAX_NUM_TC];
-	u8 max_bw_unit[MLX5E_MAX_NUM_TC];
+	u8 max_bw_value[MLX5_MAX_NUM_TC];
+	u8 max_bw_unit[MLX5_MAX_NUM_TC];
 	u64 tc_maxrate[IEEE_8021QAZ_MAX_TCS];
 	int i = 0;
 	char delimiter;
@@ -133,7 +133,7 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 		int len;
 		u64 input_maxrate;
 
-		if (i >= MLX5E_MAX_NUM_TC)
+		if (i >= MLX5_MAX_NUM_TC)
 			goto bad_elem_count;
 
 		len = strcspn(buf, " ");
@@ -154,7 +154,7 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 		i++;
 	} while (delimiter == ' ');
 
-	if (i != MLX5E_MAX_NUM_TC)
+	if (i != MLX5_MAX_NUM_TC)
 		goto bad_elem_count;
 
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
@@ -1451,10 +1451,10 @@ static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 
 #else
 
-static int hp_sysfs_init(struct mlx5e_priv *priv)
+static inline int hp_sysfs_init(struct mlx5e_priv *priv)
 { return 0; }
 
-static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
+static inline void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 {}
 
 #endif /*CONFIG_MLX5_CLS_ACT*/

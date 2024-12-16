@@ -1094,17 +1094,18 @@ static void smp_mad_done(struct ib_mad_send_wr_private *mad_send_wr)
 	struct ib_mad_agent *mad_agent;
 	struct list_head *list;
 	struct ib_mad_send_wc mad_send_wc = { };
+	unsigned long smpflags;
 	int err;
 
 	qp_info = mad_send_wr->mad_agent_priv->qp_info;
-	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
 
+	spin_lock_irqsave(&smp->window_lock, smpflags);
 	if (smp->outstanding)
 		smp->outstanding--;
 
-retry:
+retry_locked:
 	if (list_empty(&smp->overflow_list)) {
-		spin_unlock_irqrestore(&qp_info->send_queue.lock, flags);
+		spin_unlock_irqrestore(&smp->window_lock, smpflags);
 		return;
 	}
 
@@ -1115,7 +1116,8 @@ retry:
 				      mad_list);
 	list_del(&mad_list->list);
 	mad_agent = queued_send_wr->send_buf.mad_agent;
-
+	spin_unlock_irqrestore(&smp->window_lock, smpflags);
+	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
 	if (qp_info->send_queue.count < qp_info->send_queue.max_active) {
 		err = ib_post_send(mad_agent->qp, &queued_send_wr->send_wr.wr,
 				   NULL);
@@ -1130,7 +1132,9 @@ retry:
 		 * We count SMP MADs on the QP's overflow list as MADs that
 		 * were sent to the wire
 		 */
+		spin_lock_irqsave(&smp->window_lock, smpflags);
 		smp->outstanding++;
+		spin_unlock_irqrestore(&smp->window_lock, smpflags);
 		qp_info->send_queue.count++;
 		list_add_tail(&queued_send_wr->mad_list.list, list);
 	}
@@ -1155,8 +1159,8 @@ retry:
 		 * When working with limited SMP MAD window, we must send a new
 		 * MAD to the wire for each MAD done
 		 */
-		spin_lock_irqsave(&qp_info->send_queue.lock, flags);
-		goto retry;
+		spin_lock_irqsave(&smp->window_lock, smpflags);
+		goto retry_locked;
 	}
 }
 
@@ -1249,6 +1253,7 @@ static void smp_window_init(struct smp_window *smp)
 	smp->max_outstanding = mad_smp_window;
 	smp->outstanding = 0;
 	INIT_LIST_HEAD(&smp->overflow_list);
+	spin_lock_init(&smp->window_lock);
 }
 
 /*
@@ -1663,6 +1668,7 @@ int ib_send_mad(struct ib_mad_send_wr_private *mad_send_wr)
 	struct list_head *list;
 	struct ib_mad_agent *mad_agent;
 	struct ib_sge *sge;
+	unsigned long smpflags;
 	unsigned long flags;
 	int ret;
 
@@ -1695,19 +1701,23 @@ int ib_send_mad(struct ib_mad_send_wr_private *mad_send_wr)
 	}
 	mad_send_wr->payload_mapping = sge[1].addr;
 
-	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
 	if (is_smp_mad(mad_send_wr)) {
 		mad_send_wr->is_smp_mad = 1;
 		smp = get_smp_window_obj(mad_send_wr);
+		spin_lock_irqsave(&smp->window_lock, smpflags);
 		if (smp->outstanding >= smp->max_outstanding) {
 			list_add_tail(&mad_send_wr->mad_list.list,
 				      &smp->overflow_list);
 			ret = 0;
-			goto unlock_and_exit;
+			spin_unlock_irqrestore(&smp->window_lock, smpflags);
+			goto exit;
 		} else {
 			smp->outstanding++;
+			spin_unlock_irqrestore(&smp->window_lock, smpflags);
 		}
 	}
+
+	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
 	if (qp_info->send_queue.count < qp_info->send_queue.max_active) {
 		trace_ib_mad_ib_send_mad(mad_send_wr, qp_info);
 		ret = ib_post_send(mad_agent->qp, &mad_send_wr->send_wr.wr,
@@ -1722,8 +1732,8 @@ int ib_send_mad(struct ib_mad_send_wr_private *mad_send_wr)
 		qp_info->send_queue.count++;
 		list_add_tail(&mad_send_wr->mad_list.list, list);
 	}
-unlock_and_exit:
 	spin_unlock_irqrestore(&qp_info->send_queue.lock, flags);
+exit:
 	if (ret) {
 		ib_dma_unmap_single(mad_agent->device,
 				    mad_send_wr->header_mapping,
@@ -3131,15 +3141,17 @@ static bool ib_mad_send_error(struct ib_mad_port_private *port_priv,
 
 static void cancel_mads(struct ib_mad_agent_private *mad_agent_priv)
 {
-	unsigned long flags;
-	struct ib_mad_qp_info *qp_info = mad_agent_priv->qp_info;
 	struct smp_window *smp =
 		&mad_agent_priv->qp_info->port_priv->smp_window;
 	struct ib_mad_send_wr_private *mad_send_wr, *temp_mad_send_wr;
 	struct ib_mad_send_wc mad_send_wc;
 	struct list_head cancel_list;
+	struct list_head agent_overflow_smp_list;
+	unsigned long smpflags;
+	unsigned long flags;
 
 	INIT_LIST_HEAD(&cancel_list);
+	INIT_LIST_HEAD(&agent_overflow_smp_list);
 
 	cancel_sa_cc_mads(mad_agent_priv);
 	spin_lock_irqsave(&mad_agent_priv->lock, flags);
@@ -3164,27 +3176,39 @@ static void cancel_mads(struct ib_mad_agent_private *mad_agent_priv)
 				 &cancel_list, agent_list) {
 		mad_send_wc.send_buf = &mad_send_wr->send_buf;
 		list_del(&mad_send_wr->agent_list);
-		if (mad_send_wr->is_smp_mad)
+		if (mad_send_wr->is_smp_mad) {
+			spin_lock_irqsave(&smp->window_lock, smpflags);
 			smp->outstanding--;
-		else if (mad_send_wr->is_sa_cc_mad)
+			spin_unlock_irqrestore(&smp->window_lock, smpflags);
+		} else if (mad_send_wr->is_sa_cc_mad) {
 			sa_cc_mad_done(get_cc_obj(mad_send_wr));
+		}
 		mad_agent_priv->agent.send_handler(&mad_agent_priv->agent,
 						   &mad_send_wc);
 		deref_mad_agent(mad_agent_priv);
 	}
 
-	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
+	spin_lock_irqsave(&smp->window_lock, smpflags);
 	list_for_each_entry_safe(mad_send_wr, temp_mad_send_wr,
 				 &smp->overflow_list, mad_list.list) {
 		if (mad_send_wr->mad_agent_priv != mad_agent_priv)
 			continue;
+
+		list_move_tail(&mad_send_wr->mad_list.list, &agent_overflow_smp_list);
+	}
+	spin_unlock_irqrestore(&smp->window_lock, smpflags);
+
+	list_for_each_entry_safe(mad_send_wr, temp_mad_send_wr,
+				 &agent_overflow_smp_list, mad_list.list) {
 		mad_send_wc.send_buf = &mad_send_wr->send_buf;
 		list_del(&mad_send_wr->mad_list.list);
+		spin_lock_irqsave(&mad_agent_priv->lock, flags);
+		list_del(&mad_send_wr->agent_list);
+		spin_unlock_irqrestore(&mad_agent_priv->lock, flags);
 		mad_agent_priv->agent.send_handler(&mad_agent_priv->agent,
 						   &mad_send_wc);
 		deref_mad_agent(mad_agent_priv);
 	}
-	spin_unlock_irqrestore(&qp_info->send_queue.lock, flags);
 }
 
 static struct ib_mad_send_wr_private*

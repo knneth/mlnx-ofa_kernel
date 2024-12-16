@@ -1,0 +1,27 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_addr.h
+
+Change-Id: I3ec064e9c704cccfba7209a63069f3f463ea2204
+---
+ include/rdma/ib_addr.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/include/rdma/ib_addr.h
++++ b/include/rdma/ib_addr.h
+@@ -7,6 +7,8 @@
+ #ifndef IB_ADDR_H
+ #define IB_ADDR_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/ethtool.h>
+ #include <linux/in.h>
+ #include <linux/in6.h>
+@@ -21,6 +23,7 @@
+ #include <rdma/ib_verbs.h>
+ #include <rdma/ib_pack.h>
+ #include <net/net_namespace.h>
++#include <linux/ethtool.h>
+ 
+ /**
+  * struct rdma_dev_addr - Contains resolved RDMA hardware addresses

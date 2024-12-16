@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib.h
+
+Change-Id: I467fd03696857f13be2ffee1562674c8d6c964ed
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib.h
++++ b/drivers/infiniband/ulp/ipoib/ipoib.h
+@@ -42,6 +42,9 @@
+ #include <linux/kref.h>
+ #include <linux/if_infiniband.h>
+ #include <linux/mutex.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/ratelimit.h>
++#endif
+ 
+ #include <net/neighbour.h>
+ #include <net/sch_generic.h>
+@@ -52,6 +55,9 @@
+ #include <rdma/ib_pack.h>
+ #include <rdma/ib_sa.h>
+ #include <linux/sched.h>
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++#include <linux/inet_lro.h>
++#endif
+ /* constants */
+ 
+ enum ipoib_flush_level {
+@@ -117,8 +123,19 @@ enum {
+ 	IPOIB_NON_CHILD		  = 0,
+ 	IPOIB_LEGACY_CHILD	  = 1,
+ 	IPOIB_RTNL_CHILD	  = 2,
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	IPOIB_MAX_LRO_DESCRIPTORS = 8,
++	IPOIB_LRO_MAX_AGGR      = 64,
++#endif
+ };
+ 
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++struct ipoib_lro {
++	struct net_lro_mgr lro_mgr;
++	struct net_lro_desc lro_desc[IPOIB_MAX_LRO_DESCRIPTORS];
++};
++#endif
++
+ #define	IPOIB_OP_RECV   (1ul << 31)
+ #ifdef CONFIG_INFINIBAND_IPOIB_CM
+ #define	IPOIB_OP_CM     (1ul << 30)
+@@ -427,6 +444,10 @@ struct ipoib_dev_priv {
+ 	struct ipoib_ethtool_st ethtool;
+ 	unsigned int max_send_sge;
+ 	const struct net_device_ops	*rn_ops;
++#ifdef CONFIG_COMPAT_LRO_ENABLED_IPOIB
++	struct ipoib_lro lro;
++#endif
++	struct net_device_stats ret_stats;
+ };
+ 
+ struct ipoib_ah {
+@@ -863,5 +884,6 @@ extern int ipoib_debug_level;
+ #endif /* CONFIG_INFINIBAND_IPOIB_DEBUG_DATA */
+ 
+ #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
++extern int ipoib_enhanced_enabled;
+ 
+ #endif /* _IPOIB_H */

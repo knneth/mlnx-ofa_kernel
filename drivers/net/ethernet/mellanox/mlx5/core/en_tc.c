@@ -764,7 +764,7 @@ static int mlx5e_hairpin_create_indirect_rqt(struct mlx5e_hairpin *hp)
 		return err;
 
 	mlx5e_rss_params_indir_init_uniform(&indir, hp->num_channels);
-	err = mlx5e_rqt_init_indir(&hp->indir_rqt, mdev, hp->pair->rqn, hp->num_channels,
+	err = mlx5e_rqt_init_indir(&hp->indir_rqt, mdev, hp->pair->rqn, NULL, hp->num_channels,
 				   mlx5e_rx_res_get_current_hash(priv->rx_res).hfunc,
 				   &indir);
 
@@ -1635,7 +1635,7 @@ mlx5e_get_hairpin_entry(struct mlx5e_priv *priv, struct mlx5_core_dev *peer_mdev
 		params.num_channels = 1;
 	}
 
-	params.q_counter = priv->q_counter;
+	params.q_counter = priv->q_counter[0];
 
 	hp = mlx5e_hairpin_create(priv, &params, peer_mdev);
 	complete_all(&hpe->res_ready);
@@ -1791,7 +1791,7 @@ static void mlx5e_prio_hairpin_destroy_queues(struct mlx5e_priv *priv)
 	}
 }
 
-int mlx5e_prio_hairpin_fwd_tbl_create(struct mlx5e_priv *priv, int num_hp)
+static int mlx5e_prio_hairpin_fwd_tbl_create(struct mlx5e_priv *priv, int num_hp)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	struct mlx5_flow_table_attr ft_attr = {};
@@ -1860,7 +1860,7 @@ out_free:
 	return err;
 }
 
-void mlx5e_prio_hairpin_fwd_tbl_destroy(struct mlx5e_priv *priv)
+static void mlx5e_prio_hairpin_fwd_tbl_destroy(struct mlx5e_priv *priv)
 {
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 
@@ -4109,10 +4109,10 @@ static int offload_pedit_fields(struct mlx5e_priv *priv,
 	headers_c = mlx5e_get_match_headers_criteria(*action_flags, &parse_attr->spec);
 	headers_v = mlx5e_get_match_headers_value(*action_flags, &parse_attr->spec);
 
-	set_masks = &hdrs[0].masks;
-	add_masks = &hdrs[1].masks;
-	set_vals = &hdrs[0].vals;
-	add_vals = &hdrs[1].vals;
+	set_masks = &hdrs[TCA_PEDIT_KEY_EX_CMD_SET].masks;
+	add_masks = &hdrs[TCA_PEDIT_KEY_EX_CMD_ADD].masks;
+	set_vals = &hdrs[TCA_PEDIT_KEY_EX_CMD_SET].vals;
+	add_vals = &hdrs[TCA_PEDIT_KEY_EX_CMD_ADD].vals;
 
 	for (i = 0; i < ARRAY_SIZE(fields); i++) {
 		bool skip;
@@ -5931,22 +5931,6 @@ int mlx5e_tc_delete_matchall(struct mlx5e_priv *priv,
 	struct netlink_ext_ack *extack = ma->common.extack;
 
 	return apply_police_params(priv, 0, extack);
-}
-
-void mlx5e_tc_stats_matchall(struct mlx5e_priv *priv,
-			     struct tc_cls_matchall_offload *ma)
-{
-	struct mlx5e_rep_priv *rpriv = priv->ppriv;
-	struct rtnl_link_stats64 cur_stats;
-	u64 dbytes;
-	u64 dpkts;
-
-	mlx5e_stats_copy_rep_stats(&cur_stats, &priv->stats.rep_stats);
-	dpkts = cur_stats.rx_packets - rpriv->prev_vf_vport_stats.rx_packets;
-	dbytes = cur_stats.rx_bytes - rpriv->prev_vf_vport_stats.rx_bytes;
-	rpriv->prev_vf_vport_stats = cur_stats;
-	flow_stats_update(&ma->stats, dbytes, dpkts, 0, jiffies,
-			  FLOW_ACTION_HW_STATS_DELAYED);
 }
 
 static void mlx5e_tc_hairpin_update_dead_peer(struct mlx5e_priv *priv,

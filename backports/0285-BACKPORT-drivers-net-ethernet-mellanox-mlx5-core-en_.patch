@@ -1,0 +1,96 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
+
+Change-Id: I9ea592971aebe97f15ebe756eae13cc4e152a59d
+---
+ .../net/ethernet/mellanox/mlx5/core/en_arfs.c | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
+@@ -30,11 +30,14 @@
+  * SOFTWARE.
+  */
+ 
++
+ #include <linux/hash.h>
+ #include <linux/mlx5/fs.h>
+ #include <linux/ip.h>
+ #include <linux/ipv6.h>
++#ifdef HAVE_RPS_H
+ #include <net/rps.h>
++#endif
+ #include "en.h"
+ 
+ #define ARFS_HASH_SHIFT BITS_PER_BYTE
+@@ -101,7 +104,7 @@ struct arfs_rule {
+ 
+ #define mlx5e_for_each_hash_arfs_rule(hn, tmp, hash, j) \
+ 	for (j = 0; j < ARFS_HASH_SIZE; j++) \
+-		hlist_for_each_entry_safe(hn, tmp, &hash[j], hlist)
++		compat_hlist_for_each_entry_safe(hn, tmp, &hash[j], hlist)
+ 
+ static enum mlx5_traffic_types arfs_get_tt(enum arfs_type type)
+ {
+@@ -430,6 +433,8 @@ static void arfs_may_expire_flow(struct
+ 	int i;
+ 	int j;
+ 
++	COMPAT_HL_NODE
++
+ 	spin_lock_bh(&arfs->arfs_lock);
+ 	mlx5e_for_each_arfs_rule(arfs_rule, htmp, arfs->arfs_tables, i, j) {
+ 		if (!work_pending(&arfs_rule->arfs_work) &&
+@@ -443,7 +448,7 @@ static void arfs_may_expire_flow(struct
+ 		}
+ 	}
+ 	spin_unlock_bh(&arfs->arfs_lock);
+-	hlist_for_each_entry_safe(arfs_rule, htmp, &del_list, hlist) {
++	compat_hlist_for_each_entry_safe(arfs_rule, htmp, &del_list, hlist) {
+ 		if (arfs_rule->rule) {
+ 			mlx5_del_flow_rules(arfs_rule->rule);
+ 			priv->channel_stats[arfs_rule->rxq]->rq.arfs_expired++;
+@@ -462,6 +467,8 @@ static void arfs_del_rules(struct mlx5e_
+ 	int i;
+ 	int j;
+ 
++	COMPAT_HL_NODE
++
+ 	clear_bit(MLX5E_ARFS_STATE_ENABLED, &arfs->state);
+ 
+ 	spin_lock_bh(&arfs->arfs_lock);
+@@ -471,7 +478,7 @@ static void arfs_del_rules(struct mlx5e_
+ 	}
+ 	spin_unlock_bh(&arfs->arfs_lock);
+ 
+-	hlist_for_each_entry_safe(rule, htmp, &del_list, hlist) {
++	compat_hlist_for_each_entry_safe(rule, htmp, &del_list, hlist) {
+ 		cancel_work_sync(&rule->arfs_work);
+ 		if (rule->rule)
+ 			mlx5_del_flow_rules(rule->rule);
+@@ -718,9 +725,10 @@ static struct arfs_rule *arfs_find_rule(
+ {
+ 	struct arfs_rule *arfs_rule;
+ 	struct hlist_head *head;
++	COMPAT_HL_NODE
+ 
+ 	head = arfs_hash_bucket(arfs_t, fk->ports.src, fk->ports.dst);
+-	hlist_for_each_entry(arfs_rule, head, hlist) {
++	compat_hlist_for_each_entry(arfs_rule, head, hlist) {
+ 		if (arfs_cmp(&arfs_rule->tuple, fk))
+ 			return arfs_rule;
+ 	}
+@@ -738,7 +746,7 @@ int mlx5e_rx_flow_steer(struct net_devic
+ 	struct flow_keys fk;
+ 
+ 	arfs =  mlx5e_fs_get_arfs(priv->fs);
+-	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
++	if (!skb_flow_dissect_flow_keys(skb, &fk , 0))
+ 		return -EPROTONOSUPPORT;
+ 
+ 	if (fk.basic.n_proto != htons(ETH_P_IP) &&
+@@ -779,4 +787,3 @@ int mlx5e_rx_flow_steer(struct net_devic
+ 	spin_unlock_bh(&arfs->arfs_lock);
+ 	return arfs_rule->filter_id;
+ }
+-

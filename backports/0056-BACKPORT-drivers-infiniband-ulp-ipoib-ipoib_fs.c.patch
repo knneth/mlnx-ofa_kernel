@@ -1,0 +1,104 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_fs.c
+
+Change-Id: I8b75812d28c9073bc0122c2ecb30ba48373bb3e5
+---
+ drivers/infiniband/ulp/ipoib/ipoib_fs.c | 66 ++++++++++++++++++++++++-
+ 1 file changed, 65 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_fs.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_fs.c
+@@ -124,6 +124,7 @@ static int ipoib_mcg_seq_show(struct seq
+ 	return 0;
+ }
+ 
++#ifdef DEFINE_SEQ_ATTRIBUTE
+ static const struct seq_operations ipoib_mcg_sops = {
+ 	.start = ipoib_mcg_seq_start,
+ 	.next  = ipoib_mcg_seq_next,
+@@ -133,6 +134,38 @@ static const struct seq_operations ipoib
+ 
+ DEFINE_SEQ_ATTRIBUTE(ipoib_mcg);
+ 
++#else
++static const struct seq_operations ipoib_mcg_seq_ops = {
++	.start = ipoib_mcg_seq_start,
++	.next  = ipoib_mcg_seq_next,
++	.stop  = ipoib_mcg_seq_stop,
++	.show  = ipoib_mcg_seq_show,
++};
++
++static int ipoib_mcg_open(struct inode *inode, struct file *file)
++{
++	struct seq_file *seq;
++	int ret;
++
++	ret = seq_open(file, &ipoib_mcg_seq_ops);
++	if (ret)
++		return ret;
++
++	seq = file->private_data;
++	seq->private = inode->i_private;
++
++	return 0;
++}
++
++static const struct file_operations ipoib_mcg_fops = {
++	.owner   = THIS_MODULE,
++	.open    = ipoib_mcg_open,
++	.read    = seq_read,
++	.llseek  = seq_lseek,
++	.release = seq_release
++};
++#endif
++
+ static void *ipoib_path_seq_start(struct seq_file *file, loff_t *pos)
+ {
+ 	struct ipoib_path_iter *iter;
+@@ -207,7 +240,7 @@ static int ipoib_path_seq_show(struct se
+ 
+ 	return 0;
+ }
+-
++#ifdef DEFINE_SEQ_ATTRIBUTE
+ static const struct seq_operations ipoib_path_sops = {
+ 	.start = ipoib_path_seq_start,
+ 	.next  = ipoib_path_seq_next,
+@@ -216,6 +249,37 @@ static const struct seq_operations ipoib
+ };
+ 
+ DEFINE_SEQ_ATTRIBUTE(ipoib_path);
++#else
++static const struct seq_operations ipoib_path_seq_ops = {
++	.start = ipoib_path_seq_start,
++	.next  = ipoib_path_seq_next,
++	.stop  = ipoib_path_seq_stop,
++	.show  = ipoib_path_seq_show,
++};
++
++static int ipoib_path_open(struct inode *inode, struct file *file)
++{
++	struct seq_file *seq;
++	int ret;
++
++	ret = seq_open(file, &ipoib_path_seq_ops);
++	if (ret)
++		return ret;
++
++	seq = file->private_data;
++	seq->private = inode->i_private;
++
++	return 0;
++}
++
++static const struct file_operations ipoib_path_fops = {
++	.owner   = THIS_MODULE,
++	.open    = ipoib_path_open,
++	.read    = seq_read,
++	.llseek  = seq_lseek,
++	.release = seq_release
++};
++#endif
+ 
+ void ipoib_create_debug_files(struct net_device *dev)
+ {

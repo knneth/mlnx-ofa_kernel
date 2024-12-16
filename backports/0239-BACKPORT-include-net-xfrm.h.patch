@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/xfrm.h
+
+Change-Id: I848649a0a40bf5422291b83f3e43d81b39759102
+---
+ include/net/xfrm.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/include/net/xfrm.h
++++ b/include/net/xfrm.h
+@@ -17,4 +17,20 @@
+ #define XFRM_ESP_NO_TRAILER     64
+ #endif
+ 
++#if !defined(HAVE_XFRM_DEV_DIR) && !defined(HAVE_XFRM_STATE_DIR)
++enum {
++	XFRM_DEV_OFFLOAD_IN = 1,
++	XFRM_DEV_OFFLOAD_OUT,
++	XFRM_DEV_OFFLOAD_FWD,
++};
++#endif
++
++#ifndef HAVE_XFRM_DEV_TYPE
++enum {
++	XFRM_DEV_OFFLOAD_UNSPECIFIED,
++	XFRM_DEV_OFFLOAD_CRYPTO,
++	XFRM_DEV_OFFLOAD_PACKET,
++};
++#endif
++
+ #endif	/* _COMPAT_NET_XFRM_H */

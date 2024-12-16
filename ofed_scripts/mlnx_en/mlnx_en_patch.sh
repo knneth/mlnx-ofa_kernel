@@ -209,13 +209,15 @@ check_complex_defines()
 	fi
 
 # Define HAVE_KTLS_RX_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST ||
-	   check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+	if (check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST ||
+		check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START) &&
+	       	[ "X${CONFIG_MLX5_EN_TLS}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
 	fi
+
 
 # Define HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT from other flags
 	if check_compat_config_h_var HAVE_DEVLINK_PORT_ATRRS_SET_GET_5_PARAMS ||
@@ -244,16 +246,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
 	else
 		unset_complex_define_to_config_h HAVE_XSK_UMEM_CONSUME_TX_GET_2_PARAMS
-	fi
-
-# Define HAVE_SVC_FILL_WRITE_VECTOR from other flags
-	if check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_4_PARAMS ||
-	   check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_3_PARAMS ||
-	   check_compat_config_h_var HAVE_SVC_FILL_WRITE_VECTOR_2_PARAMS
-	then
-		set_complex_define_to_config_h HAVE_SVC_FILL_WRITE_VECTOR
-	else
-		unset_complex_define_to_config_h HAVE_SVC_FILL_WRITE_VECTOR
 	fi
 
 # Define HAVE_GET_USER_PAGES_GUP_FLAGS from other flags

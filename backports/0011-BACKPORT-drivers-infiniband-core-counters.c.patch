@@ -1,0 +1,29 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/counters.c
+
+Change-Id: Ibae19ce51b4239edf6f89db200aae66e7ce68555
+---
+ drivers/infiniband/core/counters.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/counters.c
++++ b/drivers/infiniband/core/counters.c
+@@ -40,8 +40,8 @@ static int __counter_set_mode(struct rdm
+  *
+  */
+ int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
+-			       enum rdma_nl_counter_mask mask,
+-			       struct netlink_ext_ack *extack)
++			       enum rdma_nl_counter_mask mask
++			       , struct netlink_ext_ack *extack)
+ {
+ 	struct rdma_port_counter *port_counter;
+ 	enum rdma_nl_counter_mode mode;
+@@ -63,7 +63,6 @@ int rdma_counter_set_auto_mode(struct ib
+ 		ret = 0;
+ 		goto out;
+ 	}
+-
+ 	ret = __counter_set_mode(port_counter, mode, mask);
+ 
+ out:

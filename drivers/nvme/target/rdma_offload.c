@@ -399,7 +399,7 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 		}
 	}
 	if (be_ctrl->ofl)
-		nvme_peer_put_resource(be_ctrl->ofl, be_ctrl->restart);
+		nvme_peer_put_resource(be_ctrl->ofl);
 	kref_put(&be_ctrl->xrq->ref, nvmet_rdma_destroy_xrq);
 	kfree(be_ctrl);
 }
@@ -654,7 +654,7 @@ out_put_resource:
 	 * here, since there is no traffic on it.
 	 */
 	nvme_peer_flush_resource(be_ctrl->ofl, true);
-	nvme_peer_put_resource(be_ctrl->ofl, true);
+	nvme_peer_put_resource(be_ctrl->ofl);
 out_free_be_ctrl:
 	kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
 	kfree(be_ctrl);

@@ -1,0 +1,32 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
+
+Change-Id: Ia12c6f439d51240eece630394580aa6972025197
+---
+ .../mellanox/mlx5/core/diag/fw_tracer_tracepoint.h        | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
+@@ -55,12 +55,20 @@ TRACE_EVENT(mlx5_fw,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(dev_name,
+ 			     dev_name(tracer->dev->device));
++#else
++		__assign_str(dev_name);
++#endif
+ 		__entry->trace_timestamp = trace_timestamp;
+ 		__entry->lost = lost;
+ 		__entry->event_id = event_id;
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(msg, msg);
++#else
++		__assign_str(msg);
++#endif
+ 	),
+ 
+ 	TP_printk("%s [0x%llx] %d [0x%x] %s",

@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/dr_action.c
+
+Change-Id: I5eaa68a29c7f006843899b4547cf4d50f50f0260
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/dr_action.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_action.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_action.c
+@@ -1185,7 +1185,7 @@ mlx5dr_action_create_mult_dest_tbl(struc
+ 	u16 num_dst_ft = 0;
+ 	u32 num_of_ref = 0;
+ 	u32 ref_act_cnt;
+-	u16 last_dest;
++	u16 last_dest = 0;
+ 	int ret;
+ 	int i;
+ 

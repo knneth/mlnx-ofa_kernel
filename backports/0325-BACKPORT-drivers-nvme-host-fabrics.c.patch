@@ -1,0 +1,143 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
+
+Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
+---
+ drivers/nvme/host/fabrics.c | 47 ++++++++++++++++++++++++++++++++++---
+ 1 file changed, 44 insertions(+), 3 deletions(-)
+
+--- a/drivers/nvme/host/fabrics.c
++++ b/drivers/nvme/host/fabrics.c
+@@ -15,7 +15,9 @@
+ #include <linux/seq_file.h>
+ #include "nvme.h"
+ #include "fabrics.h"
++#ifdef CONFIG_NVME_TCP_TLS
+ #include <linux/nvme-keyring.h>
++#endif
+ 
+ static LIST_HEAD(nvmf_transports);
+ static DECLARE_RWSEM(nvmf_transports_rwsem);
+@@ -28,6 +30,7 @@ static struct nvmf_host *nvmf_default_ho
+ static struct nvmf_host *nvmf_host_alloc(const char *hostnqn, uuid_t *id)
+ {
+ 	struct nvmf_host *host;
++	ssize_t res;
+ 
+ 	host = kmalloc(sizeof(*host), GFP_KERNEL);
+ 	if (!host)
+@@ -35,8 +38,7 @@ static struct nvmf_host *nvmf_host_alloc
+ 
+ 	kref_init(&host->ref);
+ 	uuid_copy(&host->id, id);
+-	strscpy(host->nqn, hostnqn, NVMF_NQN_SIZE);
+-
++	res = strscpy(host->nqn, hostnqn, NVMF_NQN_SIZE);
+ 	return host;
+ }
+ 
+@@ -1067,6 +1069,7 @@ out:
+ 	return ret;
+ }
+ 
++#ifdef HAVE_BLK_MQ_HCTX_TYPE
+ void nvmf_set_io_queues(struct nvmf_ctrl_options *opts, u32 nr_io_queues,
+ 			u32 io_queues[HCTX_MAX_TYPES])
+ {
+@@ -1142,6 +1145,7 @@ void nvmf_map_queues(struct blk_mq_tag_s
+ 		io_queues[HCTX_TYPE_POLL]);
+ }
+ EXPORT_SYMBOL_GPL(nvmf_map_queues);
++#endif /* HAVE_BLK_MQ_HCTX_TYPE */
+ 
+ static int nvmf_check_required_opts(struct nvmf_ctrl_options *opts,
+ 		unsigned int required_opts)
+@@ -1322,9 +1326,13 @@ out_free_opts:
+ 	return ERR_PTR(ret);
+ }
+ 
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ static const struct class nvmf_class = {
+ 	.name = "nvme-fabrics",
+ };
++#else
++static struct class *nvmf_class;
++#endif
+ 
+ static struct device *nvmf_device;
+ static DEFINE_MUTEX(nvmf_dev_mutex);
+@@ -1445,14 +1453,33 @@ static int __init nvmf_init(void)
+ 	if (!nvmf_default_host)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	ret = class_register(&nvmf_class);
+ 	if (ret) {
+ 		pr_err("couldn't register class nvme-fabrics\n");
+ 		goto out_free_host;
+ 	}
++#else
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
++	nvmf_class = class_create("nvme-fabrics");
++#else
++	nvmf_class = class_create(THIS_MODULE, "nvme-fabrics");
++#endif
++	if (IS_ERR(nvmf_class)) {
++		pr_err("couldn't register class nvme-fabrics\n");
++		ret = PTR_ERR(nvmf_class);
++		goto out_free_host;
++	}
++#endif
+ 
+ 	nvmf_device =
+-		device_create(&nvmf_class, NULL, MKDEV(0, 0), NULL, "ctl");
++		device_create(
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
++			&nvmf_class,
++#else
++			nvmf_class,
++#endif
++			NULL, MKDEV(0, 0), NULL, "ctl");
+ 	if (IS_ERR(nvmf_device)) {
+ 		pr_err("couldn't create nvme-fabrics device!\n");
+ 		ret = PTR_ERR(nvmf_device);
+@@ -1468,9 +1495,15 @@ static int __init nvmf_init(void)
+ 	return 0;
+ 
+ out_destroy_device:
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	device_destroy(&nvmf_class, MKDEV(0, 0));
+ out_destroy_class:
+ 	class_unregister(&nvmf_class);
++#else
++	device_destroy(nvmf_class, MKDEV(0, 0));
++out_destroy_class:
++	class_unregister(nvmf_class);
++#endif
+ out_free_host:
+ 	nvmf_host_put(nvmf_default_host);
+ 	return ret;
+@@ -1479,8 +1512,13 @@ out_free_host:
+ static void __exit nvmf_exit(void)
+ {
+ 	misc_deregister(&nvmf_misc);
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	device_destroy(&nvmf_class, MKDEV(0, 0));
+ 	class_unregister(&nvmf_class);
++#else
++	device_destroy(nvmf_class, MKDEV(0, 0));
++	class_unregister(nvmf_class);
++#endif
+ 	nvmf_host_put(nvmf_default_host);
+ 
+ 	BUILD_BUG_ON(sizeof(struct nvmf_common_command) != 64);
+@@ -1498,6 +1536,9 @@ static void __exit nvmf_exit(void)
+ }
+ 
+ MODULE_LICENSE("GPL v2");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ MODULE_DESCRIPTION("NVMe host fabrics library");
+ 
+ module_init(nvmf_init);

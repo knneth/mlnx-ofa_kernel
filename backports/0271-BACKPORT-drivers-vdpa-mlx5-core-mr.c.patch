@@ -1,0 +1,43 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vdpa/mlx5/core/mr.c
+
+Change-Id: I3eba8e41ed6bb587b65c2c4ef54f808722767371
+---
+ drivers/vdpa/mlx5/core/mr.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+--- a/drivers/vdpa/mlx5/core/mr.c
++++ b/drivers/vdpa/mlx5/core/mr.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2020 Mellanox Technologies Ltd. */
+ 
++#ifdef HAVE_VDPA_SUPPORT
+ #include <linux/vhost_types.h>
+ #include <linux/vdpa.h>
+ #include <linux/gcd.h>
+@@ -581,7 +582,9 @@ static void mlx5_vdpa_show_mr_leaks(stru
+ 
+ void mlx5_vdpa_destroy_mr_resources(struct mlx5_vdpa_dev *mvdev)
+ {
+-	for (int i = 0; i < MLX5_VDPA_NUM_AS; i++)
++	int i;
++
++	for (i = 0; i < MLX5_VDPA_NUM_AS; i++)
+ 		mlx5_vdpa_update_mr(mvdev, NULL, i);
+ 
+ 	prune_iotlb(mvdev->cvq.iotlb);
+@@ -687,6 +690,7 @@ int mlx5_vdpa_create_dma_mr(struct mlx5_
+ 	return mlx5_vdpa_update_cvq_iotlb(mvdev, NULL, 0);
+ }
+ 
++#ifdef HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP
+ int mlx5_vdpa_reset_mr(struct mlx5_vdpa_dev *mvdev, unsigned int asid)
+ {
+ 	if (asid >= MLX5_VDPA_NUM_AS)
+@@ -703,3 +707,5 @@ int mlx5_vdpa_reset_mr(struct mlx5_vdpa_
+ 
+ 	return 0;
+ }
++#endif /* HAVE_STRUCT_VDPA_CONFIG_OPS_HAS_COMAPT_RESET_AND_VQ_DESC_GROUP */
++#endif

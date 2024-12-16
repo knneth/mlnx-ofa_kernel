@@ -1,0 +1,242 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
+
+Change-Id: Ie357ae6c4219b93c62bfc23feb46341d3bf78d0a
+---
+ .../mellanox/mlx5/core/diag/fw_tracer.c       | 103 +++++++++++++++++-
+ 1 file changed, 98 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer.c
+@@ -29,10 +29,13 @@
+  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  * SOFTWARE.
+  */
++#ifndef MLX_DISABLE_TRACEPOINTS
+ #define CREATE_TRACE_POINTS
+-#include "lib/eq.h"
+-#include "fw_tracer.h"
+ #include "fw_tracer_tracepoint.h"
++#endif
++#include "fw_tracer.h"
++
++#include "lib/eq.h"
+ 
+ static int mlx5_query_mtrc_caps(struct mlx5_fw_tracer *tracer)
+ {
+@@ -442,8 +445,9 @@ static struct tracer_string_format *mlx5
+ 							     u8 event_id, u32 tmsn)
+ {
+ 	struct tracer_string_format *message;
++	COMPAT_HL_NODE
+ 
+-	hlist_for_each_entry(message, head, hlist)
++	compat_hlist_for_each_entry(message, head, hlist)
+ 		if (message->event_id == event_id && message->tmsn == tmsn)
+ 			return message;
+ 
+@@ -528,10 +532,11 @@ static void mlx5_fw_tracer_clean_print_h
+ {
+ 	struct tracer_string_format *str_frmt;
+ 	struct hlist_node *n;
++	COMPAT_HL_NODE
+ 	int i;
+ 
+ 	for (i = 0; i < MESSAGE_HASH_SIZE; i++) {
+-		hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
++		compat_hlist_for_each_entry_safe(str_frmt, n, &tracer->hash[i], hlist)
+ 			mlx5_tracer_clean_message(str_frmt);
+ 	}
+ }
+@@ -556,7 +561,11 @@ static void mlx5_fw_tracer_save_trace(st
+ 	trace_data->timestamp = timestamp;
+ 	trace_data->lost = lost;
+ 	trace_data->event_id = event_id;
++#ifdef HAVE_STRSCPY_PAD
+ 	strscpy_pad(trace_data->msg, msg, TRACE_STR_MSG);
++#else
++	strncpy(trace_data->msg, msg, TRACE_STR_MSG);
++#endif
+ 
+ 	tracer->st_arr.saved_traces_index =
+ 		(tracer->st_arr.saved_traces_index + 1) & (SAVED_TRACES_NUM - 1);
+@@ -579,8 +588,14 @@ void mlx5_tracer_print_trace(struct trac
+ 		 str_frmt->params[5],
+ 		 str_frmt->params[6]);
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5_fw(dev->tracer, trace_timestamp, str_frmt->lost,
+ 		      str_frmt->event_id, tmp);
++#else
++	pr_debug("%s %llu %d %d %s\n", dev_name(&dev->pdev->dev),
++		 trace_timestamp, str_frmt->lost,
++		 str_frmt->event_id, tmp);
++#endif
+ 
+ 	mlx5_fw_tracer_save_trace(dev->tracer, trace_timestamp,
+ 				  str_frmt->lost, str_frmt->event_id, tmp);
+@@ -855,6 +870,7 @@ static void mlx5_fw_tracer_ownership_cha
+ 	mlx5_fw_tracer_start(tracer);
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static int mlx5_fw_tracer_set_core_dump_reg(struct mlx5_core_dev *dev,
+ 					    u32 *in, int size_in)
+ {
+@@ -889,16 +905,49 @@ int mlx5_fw_tracer_trigger_core_dump_gen
+ 	return 0;
+ }
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ static void
++#else
++static int
++#endif
+ mlx5_devlink_fmsg_fill_trace(struct devlink_fmsg *fmsg,
+ 			     struct mlx5_fw_trace_data *trace_data)
+ {
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	devlink_fmsg_obj_nest_start(fmsg);
+ 	devlink_fmsg_u64_pair_put(fmsg, "timestamp", trace_data->timestamp);
+ 	devlink_fmsg_bool_pair_put(fmsg, "lost", trace_data->lost);
+ 	devlink_fmsg_u8_pair_put(fmsg, "event_id", trace_data->event_id);
+ 	devlink_fmsg_string_pair_put(fmsg, "msg", trace_data->msg);
+ 	devlink_fmsg_obj_nest_end(fmsg);
++#else
++	int err;
++
++	err = devlink_fmsg_obj_nest_start(fmsg);
++	if (err)
++		return err;
++
++	err = devlink_fmsg_u64_pair_put(fmsg, "timestamp", trace_data->timestamp);
++	if (err)
++		return err;
++
++	err = devlink_fmsg_bool_pair_put(fmsg, "lost", trace_data->lost);
++	if (err)
++		return err;
++
++	err = devlink_fmsg_u8_pair_put(fmsg, "event_id", trace_data->event_id);
++	if (err)
++		return err;
++
++	err = devlink_fmsg_string_pair_put(fmsg, "msg", trace_data->msg);
++	if (err)
++		return err;
++
++	err = devlink_fmsg_obj_nest_end(fmsg);
++	if (err)
++		return err;
++	return 0;
++#endif
+ }
+ 
+ int mlx5_fw_tracer_get_saved_traces_objects(struct mlx5_fw_tracer *tracer,
+@@ -907,6 +956,9 @@ int mlx5_fw_tracer_get_saved_traces_obje
+ 	struct mlx5_fw_trace_data *straces = tracer->st_arr.straces;
+ 	u32 index, start_index, end_index;
+ 	u32 saved_traces_index;
++#ifdef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++	int err;
++#endif
+ 
+ 	if (!straces[0].timestamp)
+ 		return -ENOMSG;
+@@ -919,24 +971,51 @@ int mlx5_fw_tracer_get_saved_traces_obje
+ 		start_index = 0;
+ 	end_index = (saved_traces_index - 1) & (SAVED_TRACES_NUM - 1);
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	devlink_fmsg_arr_pair_nest_start(fmsg, "dump fw traces");
++#else
++	err = devlink_fmsg_arr_pair_nest_start(fmsg, "dump fw traces");
++	if (err)
++		goto unlock;
++#endif
+ 	index = start_index;
+ 	while (index != end_index) {
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 		mlx5_devlink_fmsg_fill_trace(fmsg, &straces[index]);
++#else
++		err = mlx5_devlink_fmsg_fill_trace(fmsg, &straces[index]);
++		if (err)
++			goto unlock;
++#endif
+ 
+ 		index = (index + 1) & (SAVED_TRACES_NUM - 1);
+ 	}
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	devlink_fmsg_arr_pair_nest_end(fmsg);
++#else
++	err = devlink_fmsg_arr_pair_nest_end(fmsg);
++unlock:
++#endif
+ 	mutex_unlock(&tracer->st_arr.lock);
+ 
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ 	return 0;
++#else
++	return err;
++#endif
+ }
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 
+ static void mlx5_fw_tracer_update_db(struct work_struct *work)
+ {
+ 	struct mlx5_fw_tracer *tracer =
+-			container_of(work, struct mlx5_fw_tracer, update_db_work);
++#ifdef HAVE_CANCEL_WORK_EXPORTED
++			container_of(work,
++#else
++			container_of(to_delayed_work(work),
++#endif
++				     struct mlx5_fw_tracer, update_db_work);
+ 
+ 	mlx5_fw_tracer_reload(tracer);
+ }
+@@ -968,7 +1047,11 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
+ 	INIT_WORK(&tracer->ownership_change_work, mlx5_fw_tracer_ownership_change);
+ 	INIT_WORK(&tracer->read_fw_strings_work, mlx5_tracer_read_strings_db);
+ 	INIT_WORK(&tracer->handle_traces_work, mlx5_fw_tracer_handle_traces);
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 	INIT_WORK(&tracer->update_db_work, mlx5_fw_tracer_update_db);
++#else
++	INIT_DELAYED_WORK(&tracer->update_db_work, mlx5_fw_tracer_update_db);
++#endif
+ 	mutex_init(&tracer->state_lock);
+ 
+ 
+@@ -1078,7 +1161,11 @@ void mlx5_fw_tracer_cleanup(struct mlx5_
+ 	/* It is valid to get here from update_db_work. Hence, don't wait for
+ 	 * update_db_work to finished.
+ 	 */
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 	cancel_work(&tracer->update_db_work);
++#else
++	cancel_delayed_work(&tracer->update_db_work);
++#endif
+ 
+ 	if (tracer->owner)
+ 		mlx5_fw_tracer_ownership_release(tracer);
+@@ -1177,7 +1264,11 @@ static int fw_tracer_event(struct notifi
+ 		queue_work(tracer->work_queue, &tracer->handle_traces_work);
+ 		break;
+ 	case MLX5_TRACER_SUBTYPE_STRINGS_DB_UPDATE:
++#ifdef HAVE_CANCEL_WORK_EXPORTED
+ 		queue_work(tracer->work_queue, &tracer->update_db_work);
++#else
++		queue_delayed_work(tracer->work_queue, &tracer->update_db_work, 0);
++#endif
+ 		break;
+ 	default:
+ 		mlx5_core_dbg(dev, "FWTracer: Event with unrecognized subtype: sub_type %d\n",
+@@ -1187,4 +1278,6 @@ static int fw_tracer_event(struct notifi
+ 	return NOTIFY_OK;
+ }
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ EXPORT_TRACEPOINT_SYMBOL(mlx5_fw);
++#endif

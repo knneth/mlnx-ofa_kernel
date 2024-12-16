@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw.c
+
+Change-Id: I2d6ce635c3dff190ca35d71deac16e98638df054
+---
+ drivers/net/ethernet/mellanox/mlx5/core/fw.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fw.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
+@@ -709,8 +709,8 @@ static const struct mlxfw_dev_ops mlx5_m
+ };
+ 
+ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
+-			const struct firmware *firmware,
+-			struct netlink_ext_ack *extack)
++			const struct firmware *firmware
++			, struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_mlxfw_dev mlx5_mlxfw_dev = {
+ 		.mlxfw_dev = {
+@@ -731,7 +731,7 @@ int mlx5_firmware_flash(struct mlx5_core
+ 	}
+ 
+ 	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev,
+-				    firmware, extack);
++				    firmware , extack);
+ }
+ 
+ static int mlx5_reg_mcqi_version_query(struct mlx5_core_dev *dev,

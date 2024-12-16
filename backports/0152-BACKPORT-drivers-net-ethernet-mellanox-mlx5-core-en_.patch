@@ -1,0 +1,209 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+
+Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
+---
+ .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 69 +++++++++++++++++--
+ 1 file changed, 65 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+@@ -31,11 +31,19 @@
+  */
+ 
+ #include <linux/irq.h>
++#ifdef HAVE_NDO_XSK_WAKEUP
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
++#endif
+ #include "en.h"
+ #include "en/txrx.h"
+ #include "en/xdp.h"
++#ifdef HAVE_NDO_XSK_WAKEUP
+ #include "en/xsk/rx.h"
++#endif
+ #include "en/xsk/tx.h"
+ #include "en_accel/ktls_txrx.h"
+ 
+@@ -90,9 +98,16 @@ void mlx5e_trigger_irq(struct mlx5e_icos
+ 	mlx5e_notify_hw(wq, sq->pc, sq->uar_map, &nopwqe->ctrl);
+ }
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskrq)
+ {
++#ifdef HAVE_NDO_XSK_WAKEUP
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 	bool need_wakeup = xsk_uses_need_wakeup(xskrq->xsk_pool);
++#else
++	bool need_wakeup = xsk_umem_uses_need_wakeup(xskrq->umem);
++#endif /*HAVE_NETDEV_BPF_XSK_BUFF_POOL */
++
+ 	bool busy_xsk = false, xsk_rx_alloc_err;
+ 
+ 	/* If SQ is empty, there are no TX completions to trigger NAPI, so set
+@@ -100,17 +115,29 @@ static bool mlx5e_napi_xsk_post(struct m
+ 	 * condition with userspace.
+ 	 */
+ 	if (need_wakeup && xsksq->pc == xsksq->cc)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_set_tx_need_wakeup(xsksq->xsk_pool);
++#else
++		xsk_set_tx_need_wakeup(xsksq->umem);
++#endif
+ 	busy_xsk |= mlx5e_xsk_tx(xsksq, MLX5E_TX_XSK_POLL_BUDGET);
+ 	/* If we queued some packets for TX, no need for wakeup anymore. */
+ 	if (need_wakeup && xsksq->pc != xsksq->cc)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_clear_tx_need_wakeup(xsksq->xsk_pool);
++#else
++		xsk_clear_tx_need_wakeup(xsksq->umem);
++#endif
+ 
+ 	/* If WQ is empty, RX won't trigger NAPI, so set need_wakeup. Do it
+ 	 * before refilling to avoid race condition with userspace.
+ 	 */
+ 	if (need_wakeup && !mlx5e_rqwq_get_cur_sz(xskrq))
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_set_rx_need_wakeup(xskrq->xsk_pool);
++#else
++		xsk_set_rx_need_wakeup(xskrq->umem);
++#endif
+ 	xsk_rx_alloc_err = INDIRECT_CALL_2(xskrq->post_wqes,
+ 					   mlx5e_post_rx_mpwqes,
+ 					   mlx5e_post_rx_wqes,
+@@ -119,35 +146,58 @@ static bool mlx5e_napi_xsk_post(struct m
+ 	if (!need_wakeup)
+ 		busy_xsk |= xsk_rx_alloc_err;
+ 	else if (xsk_rx_alloc_err)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_set_rx_need_wakeup(xskrq->xsk_pool);
++#else
++		xsk_set_rx_need_wakeup(xskrq->umem);
++#endif
+ 	else
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_clear_rx_need_wakeup(xskrq->xsk_pool);
++#else
++		xsk_clear_rx_need_wakeup(xskrq->umem);
++#endif
++
++#else
++	bool busy_xsk = false;
+ 
++	busy_xsk |= mlx5e_xsk_tx(xsksq, MLX5E_TX_XSK_POLL_BUDGET);
++	busy_xsk |= xskrq->post_wqes(xskrq);
++#endif /* HAVE_NDO_XSK_WAKEUP*/
+ 	return busy_xsk;
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */
+ 
+ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
+ {
+ 	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel,
+ 					       napi);
+ 	struct mlx5e_ch_stats *ch_stats = c->stats;
+-	struct mlx5e_xdpsq *xsksq = &c->xsksq;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
++       struct mlx5e_xdpsq *xsksq = &c->xsksq;
++       struct mlx5e_rq *xskrq = &c->xskrq;
++#endif
+ 	struct mlx5e_txqsq __rcu **qos_sqs;
+-	struct mlx5e_rq *xskrq = &c->xskrq;
+ 	struct mlx5e_rq *rq = &c->rq;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	bool aff_change = false;
+ 	bool busy_xsk = false;
++#endif
+ 	bool busy = false;
+ 	int work_done = 0;
+-	u16 qos_sqs_size;
++	u16 qos_sqs_size = 0;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	bool xsk_open;
++#endif
+ 	int i;
+ 
+ 	rcu_read_lock();
+ 
+ 	qos_sqs = rcu_dereference(c->qos_sqs);
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	xsk_open = test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
++#endif
+ 
+ 	ch_stats->poll++;
+ 
+@@ -170,13 +220,17 @@ int mlx5e_napi_poll(struct napi_struct *
+ 	if (unlikely(!budget))
+ 		goto out;
+ 
++#ifdef HAVE_XDP_SUPPORT
+ 	busy |= mlx5e_poll_xdpsq_cq(&c->xdpsq.cq);
+ 
+ 	if (c->xdp)
+ 		busy |= mlx5e_poll_xdpsq_cq(&c->rq_xdpsq.cq);
++#endif
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk_open)
+ 		work_done = mlx5e_poll_rx_cq(&xskrq->cq, budget);
++#endif
+ 
+ 	if (likely(budget - work_done))
+ 		work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
+@@ -198,12 +252,14 @@ int mlx5e_napi_poll(struct napi_struct *
+ 				mlx5e_post_rx_mpwqes,
+ 				mlx5e_post_rx_wqes,
+ 				rq);
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk_open) {
+ 		busy |= mlx5e_poll_xdpsq_cq(&xsksq->cq);
+ 		busy_xsk |= mlx5e_napi_xsk_post(xsksq, xskrq);
+ 	}
+ 
+ 	busy |= busy_xsk;
++#endif
+ 
+ 	if (busy) {
+ 		if (likely(mlx5e_channel_no_affinity_change(c))) {
+@@ -211,14 +267,15 @@ int mlx5e_napi_poll(struct napi_struct *
+ 			goto out;
+ 		}
+ 		ch_stats->aff_change++;
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 		aff_change = true;
++#endif
+ 		if (work_done == budget)
+ 			work_done--;
+ 	}
+ 
+ 	if (unlikely(!napi_complete_done(napi, work_done)))
+ 		goto out;
+-
+ 	ch_stats->arm++;
+ 
+ 	for (i = 0; i < c->num_tc; i++) {
+@@ -239,8 +296,11 @@ int mlx5e_napi_poll(struct napi_struct *
+ 	mlx5e_rx_dim_cq_rearm(c->priv, rq);
+ 	mlx5e_cq_arm(&c->icosq.cq);
+ 	mlx5e_cq_arm(&c->async_icosq.cq);
++#ifdef HAVE_XDP_SUPPORT
+ 	mlx5e_cq_arm(&c->xdpsq.cq);
++#endif
+ 
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ 	if (xsk_open) {
+ 		mlx5e_rx_dim_cq_rearm(c->priv, xskrq);
+ 		mlx5e_cq_arm(&xsksq->cq);
+@@ -250,6 +310,7 @@ int mlx5e_napi_poll(struct napi_struct *
+ 		mlx5e_trigger_irq(&c->icosq);
+ 		ch_stats->force_irq++;
+ 	}
++#endif
+ 
+ out:
+ 	rcu_read_unlock();

@@ -352,11 +352,12 @@ fi
 GEN1_UNLOAD_MODULES="ib_srp_target scsi_target ib_srp kdapltest_module ib_kdapl ib_sdp eth_ipoib ib_useraccess ib_useraccess_cm ib_cm ib_dapl_srv ib_ip2pr ib_ipoib ib_mlnx_bx ib_tavor mod_thh mod_rhh ib_dm_client ib_sa_client ib_client_query ib_poll ib_mad ib_core ib_services"
 
 UNLOAD_MODULES="ib_mthca mlx5_fpga_tools mlx5_ib mlx5_core mlx4_ib ib_ipath ipath_core ib_ehca iw_nes cxgb3i iw_cxgb3 cxgb3 iw_cxgb4 cxgb4i cxgb4"
-UNLOAD_MODULES="$UNLOAD_MODULES ib_qib mana_ib rnbd_client"
+UNLOAD_MODULES="$UNLOAD_MODULES ib_qib mana_ib rnbd_client rnbd_server"
 UNLOAD_MODULES="$UNLOAD_MODULES eth_ipoib ib_ipoib mlx4_vnic ib_madeye ib_rds hns_roce"
 UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
 UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
 UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa mlx5_vfio_pci"
+UNLOAD_MODULES="$UNLOAD_MODULES mlx5_fwctl fwctl"
 UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
 
 STATUS_MODULES="rdma_ucm ib_srp qlgc_vnic ib_sdp rdma_cm ib_local_sa findex ib_ipoib mlx4_core mlx4_ib mlx4_en mlx4_vnic mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core eth_ipoib mlxfw"

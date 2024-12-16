@@ -1,0 +1,26 @@
+From: Israel Rukshin <israelr@nvidia.com>
+Subject: [PATCH] BACKPORTS: drivers/nvme/common/auth.c
+
+Change-Id: I5163e166cef5ec00fd8ff490900de14bb2620633
+Signed-off-by: Israel Rukshin <israelr@nvidia.com>
+---
+ drivers/nvme/common/auth.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/nvme/common/auth.c
++++ b/drivers/nvme/common/auth.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Linux
+  */
+ 
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
+ #include <linux/module.h>
+ #include <linux/crc32.h>
+ #include <linux/base64.h>
+@@ -472,4 +473,6 @@ int nvme_auth_generate_key(u8 *secret, s
+ EXPORT_SYMBOL_GPL(nvme_auth_generate_key);
+ 
+ MODULE_DESCRIPTION("NVMe Authentication framework");
++
++#endif /* HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP */
+ MODULE_LICENSE("GPL v2");

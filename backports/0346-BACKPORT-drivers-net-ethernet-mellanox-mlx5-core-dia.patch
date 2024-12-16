@@ -1,0 +1,30 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
+
+Change-Id: I35ad314b24ade2b77e154a705a693adda1f0cbb2
+---
+ .../net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
+@@ -22,10 +22,18 @@ TRACE_EVENT(mlx5_cmd,
+ 			    __field(u32, syndrome)
+ 			    __field(int, err)
+ 			    ),
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(command_str, command_str);
++#else
++	    TP_fast_assign(__assign_str(command_str);
++#endif
+ 			__entry->opcode = opcode;
+ 			__entry->op_mod = op_mod;
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 			__assign_str(status_str, status_str);
++#else
++			__assign_str(status_str);
++#endif
+ 			__entry->status = status;
+ 			__entry->syndrome = syndrome;
+ 			__entry->err = err;

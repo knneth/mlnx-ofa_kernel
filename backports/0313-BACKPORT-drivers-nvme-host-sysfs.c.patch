@@ -1,0 +1,56 @@
+From: Itay Alroy <ialroy@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
+
+Change-Id: I4141890d86f299123dc8f01056adb3917db6f661
+---
+ drivers/nvme/host/sysfs.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+--- a/drivers/nvme/host/sysfs.c
++++ b/drivers/nvme/host/sysfs.c
+@@ -5,7 +5,9 @@
+  * Copyright (c) 2011-2014, Intel Corporation.
+  */
+ 
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
+ #include <linux/nvme-auth.h>
++#endif
+ 
+ #include "nvme.h"
+ #include "fabrics.h"
+@@ -233,13 +235,12 @@ static ssize_t nuse_show(struct device *
+ {
+ 	struct nvme_ns_head *head = dev_to_ns_head(dev);
+ 	struct gendisk *disk = dev_to_disk(dev);
+-	struct block_device *bdev = disk->part0;
+ 	int ret;
+ 
+-	if (nvme_disk_is_ns_head(bdev->bd_disk))
++	if (nvme_disk_is_ns_head(disk))
+ 		ret = ns_head_update_nuse(head);
+ 	else
+-		ret = ns_update_nuse(bdev->bd_disk->private_data);
++		ret = ns_update_nuse(disk->private_data);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -295,7 +296,11 @@ static umode_t nvme_ns_attrs_are_visible
+ 	return a->mode;
+ }
+ 
++#ifdef HAVE_DEVICE_ADD_DISK_3_ARGS
+ static const struct attribute_group nvme_ns_attr_group = {
++#else
++const struct attribute_group nvme_ns_attr_group = {
++#endif
+ 	.attrs		= nvme_ns_attrs,
+ 	.is_visible	= nvme_ns_attrs_are_visible,
+ };
+@@ -347,6 +352,7 @@ static ssize_t nvme_sysfs_delete(struct
+ 		nvme_delete_ctrl_sync(ctrl);
+ 	return count;
+ }
++
+ static DEVICE_ATTR(delete_controller, S_IWUSR, NULL, nvme_sysfs_delete);
+ 
+ static ssize_t nvme_sysfs_show_transport(struct device *dev,

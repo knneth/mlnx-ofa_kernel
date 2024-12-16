@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm_trace.c
+
+Change-Id: I91406fcf80c407272bbaf85114e9d393e0a63813
+---
+ drivers/infiniband/core/cm_trace.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/cm_trace.c
++++ b/drivers/infiniband/core/cm_trace.c
+@@ -11,5 +11,6 @@
+ #include "cma_priv.h"
+ 
+ #define CREATE_TRACE_POINTS
+-
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ #include "cm_trace.h"
++#endif

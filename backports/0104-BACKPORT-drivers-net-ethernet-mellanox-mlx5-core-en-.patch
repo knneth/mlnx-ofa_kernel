@@ -1,63 +1,29 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
 
+Change-Id: I4f0cb666a0cc62541c89873a8400066882817646
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c   | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
-@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5
- 			     int act_index,
- 			     struct mlx5_flow_attr *attr)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+@@ -10,6 +10,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+ 		   struct mlx5e_priv *priv,
+ 		   struct mlx5_flow_attr *attr)
  {
-+#ifdef HAVE_FLOW_ACTION_MPLS
++#ifdef HAVE_FLOW_ACTION_PTYPE
  	struct netlink_ext_ack *extack = parse_state->extack;
- 	struct mlx5e_priv *priv = parse_state->flow->priv;
  
-@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5
- 	}
+ 	if (act->ptype != PACKET_HOST) {
+@@ -19,6 +20,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
  
- 	return true;
+ 	parse_state->ptype_host = true;
+ 	return 0;
 +#else
-+	return false;
++	return -EOPNOTSUPP;
 +#endif
  }
  
- static void
- copy_mpls_info(struct mlx5e_mpls_info *mpls_info,
- 	       const struct flow_action_entry *act)
- {
-+#ifdef HAVE_FLOW_ACTION_MPLS
- 	mpls_info->label = act->mpls_push.label;
- 	mpls_info->tc = act->mpls_push.tc;
- 	mpls_info->bos = act->mpls_push.bos;
- 	mpls_info->ttl = act->mpls_push.ttl;
-+#endif
- }
- 
- static int
-@@ -67,10 +73,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e
- 		return false;
- 	}
- 
-+#ifdef HAVE_NETIF_IS_BAREDUDP
- 	if (!netif_is_bareudp(filter_dev)) {
- 		NL_SET_ERR_MSG_MOD(extack, "mpls pop supported only on bareudp devices");
- 		return false;
- 	}
-+#endif
- 
- 	return true;
- }
-@@ -81,7 +89,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_ac
- 		      struct mlx5e_priv *priv,
- 		      struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_MPLS
- 	attr->esw_attr->eth.h_proto = act->mpls_pop.proto;
-+#endif
- 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
- 	flow_flag_set(parse_state->flow, L3_TO_L2_DECAP);
- 
+ struct mlx5e_tc_act mlx5e_tc_act_ptype = {

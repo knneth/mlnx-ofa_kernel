@@ -40,6 +40,9 @@
 #define DIAG_GET_NEXT_BLK(dump_hdr) \
 	((struct mlx5_diag_blk *)(dump_hdr->dump + dump_hdr->total_length))
 
+int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff);
+int mlx5e_diag_fill_driver_version(void *buff);
+
 int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;

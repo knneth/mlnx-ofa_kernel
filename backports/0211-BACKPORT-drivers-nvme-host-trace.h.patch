@@ -1,0 +1,50 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/trace.h
+
+Change-Id: I155eb501b880f6e60684b33f17b3e357bba7e091
+---
+ drivers/nvme/host/trace.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/nvme/host/trace.h
++++ b/drivers/nvme/host/trace.h
+@@ -68,9 +68,15 @@ TRACE_EVENT(nvme_setup_cmd,
+ 		__entry->nsid = le32_to_cpu(cmd->common.nsid);
+ 		__entry->metadata = !!blk_integrity_rq(req);
+ 		__entry->fctype = cmd->fabrics.fctype;
++#ifdef HAVE_REQ_RQ_DISK
++		__assign_disk_name(__entry->disk, req->rq_disk);
++#else
+ 		__assign_disk_name(__entry->disk, req->q->disk);
++#endif
++#ifdef struct_group
+ 		memcpy(__entry->cdw10, &cmd->common.cdws,
+ 			sizeof(__entry->cdw10));
++#endif
+ 	    ),
+ 	    TP_printk("nvme%d: %sqid=%d, cmdid=%u, nsid=%u, flags=0x%x, meta=0x%x, cmd=(%s %s)",
+ 		      __entry->ctrl_id, __print_disk_name(__entry->disk),
+@@ -103,7 +109,11 @@ TRACE_EVENT(nvme_complete_rq,
+ 		__entry->retries = nvme_req(req)->retries;
+ 		__entry->flags = nvme_req(req)->flags;
+ 		__entry->status = nvme_req(req)->status;
++#ifdef HAVE_REQ_RQ_DISK
++		__assign_disk_name(__entry->disk, req->rq_disk);
++#else
+ 		__assign_disk_name(__entry->disk, req->q->disk);
++#endif
+ 	    ),
+ 	    TP_printk("nvme%d: %sqid=%d, cmdid=%u, res=%#llx, retries=%u, flags=0x%x, status=%#x",
+ 		      __entry->ctrl_id, __print_disk_name(__entry->disk),
+@@ -150,7 +160,11 @@ TRACE_EVENT(nvme_sq,
+ 	),
+ 	TP_fast_assign(
+ 		__entry->ctrl_id = nvme_req(req)->ctrl->instance;
++#ifdef HAVE_REQ_RQ_DISK
++		__assign_disk_name(__entry->disk, req->rq_disk);
++#else
+ 		__assign_disk_name(__entry->disk, req->q->disk);
++#endif
+ 		__entry->qid = nvme_req_qid(req);
+ 		__entry->sq_head = le16_to_cpu(sq_head);
+ 		__entry->sq_tail = sq_tail;

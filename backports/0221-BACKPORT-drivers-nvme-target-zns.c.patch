@@ -1,0 +1,255 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
+
+Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
+---
+ drivers/nvme/target/zns.c | 119 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 118 insertions(+), 1 deletion(-)
+
+--- a/drivers/nvme/target/zns.c
++++ b/drivers/nvme/target/zns.c
+@@ -3,11 +3,15 @@
+  * NVMe ZNS-ZBD command implementation.
+  * Copyright (C) 2021 Western Digital Corporation or its affiliates.
+  */
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/nvme.h>
+ #include <linux/blkdev.h>
+ #include "nvmet.h"
+ 
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ /*
+  * We set the Memory Page Size Minimum (MPSMIN) for target controller to 0
+  * which gets added by 12 in the nvme_enable_ctrl() which results in 2^12 = 4k
+@@ -34,7 +38,12 @@ static int validate_conv_zones_cb(struct
+ 
+ bool nvmet_bdev_zns_enable(struct nvmet_ns *ns)
+ {
++#ifdef HAVE_BDEV_MAX_ZONE_APPEND_SECTORS
+ 	u8 zasl = nvmet_zasl(bdev_max_zone_append_sectors(ns->bdev));
++#else
++	struct request_queue *q = ns->bdev->bd_disk->queue;
++	u8 zasl = nvmet_zasl(queue_max_zone_append_sectors(q));
++#endif
+ 	struct gendisk *bd_disk = ns->bdev->bd_disk;
+ 	int ret;
+ 
+@@ -57,11 +66,20 @@ bool nvmet_bdev_zns_enable(struct nvmet_
+ 	 * zones, reject the device. Otherwise, use report zones to detect if
+ 	 * the device has conventional zones.
+ 	 */
++#ifdef HAVE_GENDISK_CONV_ZONES_BITMAP
+ 	if (ns->bdev->bd_disk->conv_zones_bitmap)
++#else
++	if (ns->bdev->bd_disk->queue->conv_zones_bitmap)
++#endif
+ 		return false;
+ 
++#ifdef HAVE_BDEV_NR_ZONES
+ 	ret = blkdev_report_zones(ns->bdev, 0, bdev_nr_zones(ns->bdev),
+ 				  validate_conv_zones_cb, NULL);
++#else
++	ret = blkdev_report_zones(ns->bdev, 0, blkdev_nr_zones(bd_disk),
++				  validate_conv_zones_cb, NULL);
++#endif
+ 	if (ret < 0)
+ 		return false;
+ 
+@@ -256,7 +274,16 @@ static unsigned long nvmet_req_nr_zones_
+ {
+ 	unsigned int sect = nvmet_lba_to_sect(req->ns, req->cmd->zmr.slba);
+ 
+-	return bdev_nr_zones(req->ns->bdev) - bdev_zone_no(req->ns->bdev, sect);
++#ifdef HAVE_BDEV_NR_ZONES
++	return bdev_nr_zones(req->ns->bdev) -
++#else
++	return blkdev_nr_zones(req->ns->bdev->bd_disk) -
++#endif
++#ifdef HAVE_BLK_ZONE_NO
++		bdev_zone_no(req->ns->bdev, sect);
++#else
++		(sect >> ilog2(bdev_zone_sectors(req->ns->bdev)));
++#endif
+ }
+ 
+ static unsigned long get_nr_zones_from_buf(struct nvmet_req *req, u32 bufsize)
+@@ -322,7 +349,11 @@ void nvmet_bdev_execute_zone_mgmt_recv(s
+ 	queue_work(zbd_wq, &req->z.zmgmt_work);
+ }
+ 
++#ifdef HAVE_BLK_TYPES_REQ_OPF
++ static inline enum req_opf zsa_req_op(u8 zsa)
++#else
+ static inline enum req_op zsa_req_op(u8 zsa)
++#endif
+ {
+ 	switch (zsa) {
+ 	case NVME_ZONE_OPEN:
+@@ -397,10 +428,34 @@ static int zmgmt_send_scan_cb(struct blk
+ 	return 0;
+ }
+ 
++#ifndef HAVE_BLK_NEXT_BIO_3_PARAMS
++#ifndef HAVE_BIO_INIT_5_PARAMS
++static struct bio *blk_next_bio(struct bio *bio,
++				unsigned int nr_pages, gfp_t gfp)
++{
++	struct bio *new = bio_alloc(gfp, nr_pages);
++
++	if (bio) {
++		bio_chain(bio, new);
++		submit_bio(bio);
++	}
++
++	return new;
++}
++#endif
++#endif
++
+ static u16 nvmet_bdev_zone_mgmt_emulate_all(struct nvmet_req *req)
+ {
+ 	struct block_device *bdev = req->ns->bdev;
++#ifdef HAVE_BDEV_NR_ZONES
+ 	unsigned int nr_zones = bdev_nr_zones(bdev);
++#else
++	unsigned int nr_zones = blkdev_nr_zones(bdev->bd_disk);
++#endif
++#ifndef HAVE_GENDISK_CONV_ZONES_BITMAP
++	struct request_queue *q = bdev_get_queue(bdev);
++#endif
+ 	struct bio *bio = NULL;
+ 	sector_t sector = 0;
+ 	int ret;
+@@ -426,16 +481,35 @@ static u16 nvmet_bdev_zone_mgmt_emulate_
+ 		ret = 0;
+ 	}
+ 
++#ifdef HAVE_BLK_QUEUE_ZONE_SECTORS
++	while (sector < get_capacity(bdev->bd_disk)) {
++#else
+ 	while (sector < bdev_nr_sectors(bdev)) {
++#endif
++#ifdef HAVE_GENDISK_CONV_ZONES_BITMAP
+ 		if (test_bit(disk_zone_no(bdev->bd_disk, sector), d.zbitmap)) {
++#else
++		if (test_bit(blk_queue_zone_no(q, sector), d.zbitmap)) {
++#endif
++#ifdef HAVE_BIO_INIT_5_PARAMS
+ 			bio = blk_next_bio(bio, bdev, 0,
+ 				zsa_req_op(req->cmd->zms.zsa) | REQ_SYNC,
+ 				GFP_KERNEL);
+ 			bio->bi_iter.bi_sector = sector;
++#else
++			bio = blk_next_bio(bio, 0, GFP_KERNEL);
++			bio->bi_opf = zsa_req_op(req->cmd->zms.zsa) | REQ_SYNC;
++			bio->bi_iter.bi_sector = sector;
++			bio_set_dev(bio, bdev);
++#endif
+ 			/* This may take a while, so be nice to others */
+ 			cond_resched();
+ 		}
++#ifdef HAVE_BLK_QUEUE_ZONE_SECTORS
++		sector += blk_queue_zone_sectors(q);
++#else
+ 		sector += bdev_zone_sectors(bdev);
++#endif
+ 	}
+ 
+ 	if (bio) {
+@@ -455,8 +529,13 @@ static u16 nvmet_bdev_execute_zmgmt_send
+ 
+ 	switch (zsa_req_op(req->cmd->zms.zsa)) {
+ 	case REQ_OP_ZONE_RESET:
++#ifdef HAVE_BLKDEV_ZONE_MGMT_5_PARAMS
++		ret = blkdev_zone_mgmt(req->ns->bdev, REQ_OP_ZONE_RESET, 0,
++				       get_capacity(req->ns->bdev->bd_disk), GFP_KERNEL);
++#else
+ 		ret = blkdev_zone_mgmt(req->ns->bdev, REQ_OP_ZONE_RESET, 0,
+ 				       get_capacity(req->ns->bdev->bd_disk));
++#endif
+ 		if (ret < 0)
+ 			return blkdev_zone_mgmt_errno_to_nvme_status(ret);
+ 		break;
+@@ -477,7 +556,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+ {
+ 	struct nvmet_req *req = container_of(w, struct nvmet_req, z.zmgmt_work);
+ 	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->zms.slba);
++#ifdef HAVE_BLK_TYPES_REQ_OPF
++	enum req_opf op = zsa_req_op(req->cmd->zms.zsa);
++#else
+ 	enum req_op op = zsa_req_op(req->cmd->zms.zsa);
++#endif
+ 	struct block_device *bdev = req->ns->bdev;
+ 	sector_t zone_sectors = bdev_zone_sectors(bdev);
+ 	u16 status = NVME_SC_SUCCESS;
+@@ -507,7 +590,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_BLKDEV_ZONE_MGMT_5_PARAMS
++	ret = blkdev_zone_mgmt(bdev, op, sect, zone_sectors, GFP_KERNEL);
++#else
+ 	ret = blkdev_zone_mgmt(bdev, op, sect, zone_sectors);
++#endif
+ 	if (ret < 0)
+ 		status = blkdev_zone_mgmt_errno_to_nvme_status(ret);
+ 
+@@ -537,7 +624,13 @@ static void nvmet_bdev_zone_append_bio_d
+ void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
+ {
+ 	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->rw.slba);
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 	const blk_opf_t opf = REQ_OP_ZONE_APPEND | REQ_SYNC | REQ_IDLE;
++#else
++	const unsigned int op = REQ_OP_ZONE_APPEND | REQ_SYNC | REQ_IDLE;
++#endif
++#endif
+ 	u16 status = NVME_SC_SUCCESS;
+ 	unsigned int total_len = 0;
+ 	struct scatterlist *sg;
+@@ -567,13 +660,36 @@ void nvmet_bdev_execute_zone_append(stru
+ 
+ 	if (nvmet_use_inline_bvec(req)) {
+ 		bio = &req->z.inline_bio;
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 		bio_init(bio, req->ns->bdev, req->inline_bvec,
+ 			 ARRAY_SIZE(req->inline_bvec), opf);
++#else
++		bio_init(bio, req->ns->bdev, req->inline_bvec,
++			 ARRAY_SIZE(req->inline_bvec), op);
++#endif
++#else
++		bio_init(bio, req->inline_bvec, ARRAY_SIZE(req->inline_bvec));
++#endif
+ 	} else {
++#ifdef HAVE_BIO_INIT_5_PARAMS
++#ifdef HAVE_BLK_OPF_T
+ 		bio = bio_alloc(req->ns->bdev, req->sg_cnt, opf, GFP_KERNEL);
++#else
++		bio = bio_alloc(req->ns->bdev, req->sg_cnt, op, GFP_KERNEL);
++#endif
++#else
++		bio = bio_alloc(GFP_KERNEL, req->sg_cnt);
++#endif
+ 	}
+ 
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio->bi_opf = REQ_OP_ZONE_APPEND | REQ_SYNC | REQ_IDLE;
++#endif
+ 	bio->bi_end_io = nvmet_bdev_zone_append_bio_done;
++#ifndef HAVE_BIO_INIT_5_PARAMS
++	bio_set_dev(bio, req->ns->bdev);
++#endif
+ 	bio->bi_iter.bi_sector = sect;
+ 	bio->bi_private = req;
+ 	if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
+@@ -625,3 +741,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct n
+ 		return nvmet_bdev_parse_io_cmd(req);
+ 	}
+ }
++#endif /* HAVE_BIO_ADD_ZONE_APPEND_PAGE */

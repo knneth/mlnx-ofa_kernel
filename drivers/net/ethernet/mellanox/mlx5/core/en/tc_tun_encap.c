@@ -24,7 +24,8 @@ static int mlx5e_set_int_port_tunnel(struct mlx5e_priv *priv,
 
 	route_dev = dev_get_by_index(dev_net(e->out_dev), e->route_dev_ifindex);
 
-	if (!route_dev || !netif_is_ovs_master(route_dev))
+	if (!route_dev || !netif_is_ovs_master(route_dev) ||
+	    attr->parse_attr->filter_dev == e->out_dev)
 		goto out;
 
 	err = mlx5e_set_fwd_to_int_port_actions(priv, attr, e->route_dev_ifindex,
@@ -151,18 +152,9 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 	struct mlx5_flow_spec *spec;
 	struct mlx5e_tc_flow *flow;
 	int err;
-	int count = 0, ok = 0, skip = 0;
 
-	if (e->flags & MLX5_ENCAP_ENTRY_NO_ROUTE) {
-		list_for_each_entry(flow, flow_list, tmp_list) {
-			if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW))
-				continue;
-			count++;
-		}
-		mlx5_core_warn(priv->mdev, "Skip %d flows for e %p dst %pI4, no route.\n",
-			       count, e, &e->tun_info->key.u.ipv4.dst);
+	if (e->flags & MLX5_ENCAP_ENTRY_NO_ROUTE)
 		return;
-	}
 
 	memset(&reformat_params, 0, sizeof(reformat_params));
 	reformat_params.type = e->reformat_type;
@@ -180,11 +172,8 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 	mlx5e_rep_queue_neigh_stats_work(priv);
 
 	list_for_each_entry(flow, flow_list, tmp_list) {
-		count++;
-		if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW)) {
-			skip++;
+		if (!mlx5e_is_offloaded_flow(flow) || !flow_flag_test(flow, SLOW))
 			continue;
-		}
 
 		spec = &flow->attr->parse_attr->spec;
 
@@ -194,12 +183,8 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 		esw_attr->dests[flow->tmp_entry_index].flags |= MLX5_ESW_DEST_ENCAP_VALID;
 
 		/* Do not offload flows with unresolved neighbors */
-		if (!mlx5e_tc_flow_all_encaps_valid(esw_attr)) {
-			mlx5_core_warn(priv->mdev, "Not all encaps are valid for flow %p e %p dst %pI4\n",
-				       flow, e, &e->tun_info->key.u.ipv4.dst);
-			skip++;
+		if (!mlx5e_tc_flow_all_encaps_valid(esw_attr))
 			continue;
-		}
 
 		err = mlx5e_tc_offload_flow_post_acts(flow);
 		if (err) {
@@ -215,7 +200,6 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 			err = PTR_ERR(rule);
 			mlx5_core_warn(priv->mdev, "Failed to update cached encapsulation flow, %d\n",
 				       err);
-			skip++;
 			continue;
 		}
 
@@ -223,12 +207,7 @@ void mlx5e_tc_encap_flows_add(struct mlx5e_priv *priv,
 		flow->rule[0] = rule;
 		/* was unset when slow path rule removed */
 		flow_flag_set(flow, OFFLOADED);
-		ok++;
 	}
-
-	if (count != ok || skip > 0 || (count == 0 && count == ok))
-		mlx5_core_warn(priv->mdev, "Skip stats for e %p dst %pI4, count %d, ok %d, skip %d\n",
-			       e, &e->tun_info->key.u.ipv4.dst, count, ok, skip);
 }
 
 void mlx5e_tc_encap_flows_del(struct mlx5e_priv *priv,

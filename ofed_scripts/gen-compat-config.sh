@@ -84,41 +84,6 @@ if [[ ! -z ${RHEL_MAJOR} ]]; then
 	done
 fi
 
-SLES_12_3_KERNEL=$(echo ${KVERSION} | sed -n 's/^\(4\.4\.73\)\-\([0-9]*\)\-\(.*\)/\1-\2-\3/p')
-if [[ ! -z ${SLES_12_3_KERNEL} ]]; then
-	SLES_MAJOR="12"
-	SLES_MINOR="3"
-	set_config CONFIG_COMPAT_SLES_12 y
-	set_config CONFIG_COMPAT_SLES_12_3 y
-fi
-
-RHEL7_2=$(echo ${KVERSION} | grep 3.10.0-327)
-if [[ ! -z ${RHEL7_2} ]]; then
-   set_config CONFIG_COMPAT_RHEL_7_1 y
-   set_config CONFIG_COMPAT_RHEL_7_2 y
-fi
-
-RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
-
-if [[ ! -z ${RHEL7_4_JD} ]]; then
-	set_config CONFIG_COMPAT_RHEL_JD y
-	set_config CONFIG_COMPAT_NFT_GEN_FLOW_OFFLOAD y
-fi
-
-if [[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]; then
-	set_config CONFIG_COMPAT_TCF_PEDIT_MOD m
-fi
-
-KERNEL4_14=$(echo ${KVERSION} | grep ^4\.14)
-if [[ ! -z ${KERNEL4_14} ]]; then
-	set_config CONFIG_COMPAT_KERNEL_4_14 y
-fi
-
-KERNEL3_10_0_327=$(echo ${KVERSION} | grep ^3\.10\.0\-327)
-if [[ ! -z ${KERNEL3_10_0_327} ]]; then
-	set_config CONFIG_COMPAT_KERNEL3_10_0_327 y
-fi
-
 if [ -e /etc/debian_version ]; then
 	DEBIAN6=$(cat /etc/debian_version | grep 6\.0)
 	if [[ ! -z ${DEBIAN6} ]]; then
@@ -645,23 +610,6 @@ if (grep -qw "static.* fib_lookup" ${KLIB_BUILD}/include/net/ip_fib.h > /dev/nul
 	set_config CONFIG_COMPAT_IS_FIB_LOOKUP_STATIC_AND_EXTERN y
 fi
 
-HASH_TYPES=${KLIB_BUILD}/include/linux/rhashtable-types.h
-HASH_TYPES2=${KSRC}/include/linux/rhashtable-types.h
-
-if (test ! -f "$HASH_TYPES" -a ! -f "$HASH_TYPES2"); then
-	if (grep -E -A10 "struct rhashtable \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw rhlist || grep -A5 "struct rhashtable \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw rhlist); then
-		if (grep -E -A5 "if \(\!key \|\|" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw pprev || grep -A5 "if \(\!key \|\|" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw pprev); then
-			set_config CONFIG_COMPAT_RHASHTABLE_FIXED y
-		fi
-		if (grep -E -A5 "struct rhashtable \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw nelems || grep -A5 "struct rhashtable \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw nelems); then
-			set_config CONFIG_COMPAT_RHASHTABLE_NOT_REORG y
-		fi
-		if (grep -E -A2 "struct rhashtable_params \{" ${KLIB_BUILD}/include/linux/rhashtable.h 2>&1 | grep -qw u16 || grep -A2 "struct rhashtable_params \{" ${KSRC}/include/linux/rhashtable 2>&1 | grep -qw u16); then
-			set_config CONFIG_COMPAT_RHASHTABLE_PARAM_COMPACT y
-		fi
-	fi
-fi
-
 if (grep -q "^int hmm_range_fault" ${KLIB_BUILD}/include/linux/hmm.h > /dev/null 2>&1 || grep -q "^int hmm_range_fault" ${KSRC}/include/linux/hmm.h > /dev/null 2>&1); then
 	set_config CONFIG_COMPAT_HMM_RANGE_FAULT_RETURNS_INT y
 fi
@@ -736,4 +684,8 @@ fi
 
 if (look_exists "vfio_notify_iova_map" include/linux/vfio.h); then
 	set_config CONFIG_COMPAT_NVME_SNAP_VFIO_PCI m
+fi
+
+if (look_exists "struct sk_buff;" include/net/psample.h); then
+	set_config CONFIG_COMPAT_PSAMPLE_H_HAS_SK_BUFF_FWD_REF y
 fi

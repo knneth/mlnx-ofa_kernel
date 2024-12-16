@@ -1143,7 +1143,7 @@ static int mlx5e_update_trust_state_hw(struct mlx5e_priv *priv, void *context)
 
 static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
 {
-	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
+	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5_MAX_NUM_TC};
 	struct mlx5e_params new_params;
 	bool reset = true;
 	int err;
@@ -1204,7 +1204,7 @@ static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	u8 trust_state;
 	int err;
-	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5E_MAX_NUM_TC};
+	struct tc_mqprio_qopt_offload mqprio = {.qopt.num_tc = MLX5_MAX_NUM_TC};
 	const bool take_rtnl = priv->netdev->reg_state == NETREG_REGISTERED;
 
 	if (!MLX5_DSCP_SUPPORTED(mdev)) {
@@ -1229,6 +1229,7 @@ static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 
 	mlx5e_params_calc_trust_tx_min_inline_mode(priv->mdev, &priv->channels.params,
 						   priv->dcbx_dp.trust_state);
+
 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
 		if (take_rtnl)
 			rtnl_lock();

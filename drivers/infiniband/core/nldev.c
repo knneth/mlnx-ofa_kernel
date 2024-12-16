@@ -245,11 +245,11 @@ int rdma_nl_put_driver_u64_hex(struct sk_buff *msg, const char *name, u64 value)
 }
 EXPORT_SYMBOL(rdma_nl_put_driver_u64_hex);
 
-bool ib_uverbs_get_privileged_qkey(void)
+bool rdma_nl_get_privileged_qkey(void)
 {
 	return privileged_qkey || capable(CAP_NET_RAW);
 }
-EXPORT_SYMBOL(ib_uverbs_get_privileged_qkey);
+EXPORT_SYMBOL(rdma_nl_get_privileged_qkey);
 
 static int fill_nldev_handle(struct sk_buff *msg, struct ib_device *device)
 {
@@ -371,8 +371,7 @@ static int fill_port_info(struct sk_buff *msg,
 	}
 
 out:
-	if (netdev)
-		dev_put(netdev);
+	dev_put(netdev);
 	return ret;
 }
 
@@ -832,6 +831,7 @@ static int fill_res_srq_entry(struct sk_buff *msg, bool has_cap_net_admin,
 			      struct rdma_restrack_entry *res, uint32_t port)
 {
 	struct ib_srq *srq = container_of(res, struct ib_srq, res);
+	struct ib_device *dev = srq->device;
 
 	if (nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_SRQN, srq->res.id))
 		goto err;
@@ -851,10 +851,27 @@ static int fill_res_srq_entry(struct sk_buff *msg, bool has_cap_net_admin,
 	if (fill_res_srq_qps(msg, srq))
 		goto err;
 
-	return fill_res_name_pid(msg, res);
+	if (fill_res_name_pid(msg, res))
+		goto err;
+
+	if (dev->ops.fill_res_srq_entry)
+		return dev->ops.fill_res_srq_entry(msg, srq);
+
+	return 0;
 
 err:
 	return -EMSGSIZE;
+}
+
+static int fill_res_srq_raw_entry(struct sk_buff *msg, bool has_cap_net_admin,
+				 struct rdma_restrack_entry *res, uint32_t port)
+{
+	struct ib_srq *srq = container_of(res, struct ib_srq, res);
+	struct ib_device *dev = srq->device;
+
+	if (!dev->ops.fill_res_srq_entry_raw)
+		return -EINVAL;
+	return dev->ops.fill_res_srq_entry_raw(msg, srq);
 }
 
 static int fill_stat_counter_mode(struct sk_buff *msg,
@@ -1666,6 +1683,7 @@ RES_GET_FUNCS(mr_raw, RDMA_RESTRACK_MR);
 RES_GET_FUNCS(counter, RDMA_RESTRACK_COUNTER);
 RES_GET_FUNCS(ctx, RDMA_RESTRACK_CTX);
 RES_GET_FUNCS(srq, RDMA_RESTRACK_SRQ);
+RES_GET_FUNCS(srq_raw, RDMA_RESTRACK_SRQ);
 
 static LIST_HEAD(link_ops);
 static DECLARE_RWSEM(link_ops_rwsem);
@@ -2603,6 +2621,11 @@ static const struct rdma_nl_cbs nldev_cb_table[RDMA_NLDEV_NUM_OPS] = {
 	[RDMA_NLDEV_CMD_RES_MR_GET_RAW] = {
 		.doit = nldev_res_get_mr_raw_doit,
 		.dump = nldev_res_get_mr_raw_dumpit,
+		.flags = RDMA_NL_ADMIN_PERM,
+	},
+	[RDMA_NLDEV_CMD_RES_SRQ_GET_RAW] = {
+		.doit = nldev_res_get_srq_raw_doit,
+		.dump = nldev_res_get_srq_raw_dumpit,
 		.flags = RDMA_NL_ADMIN_PERM,
 	},
 	[RDMA_NLDEV_CMD_STAT_GET_STATUS] = {

@@ -1,0 +1,115 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
+
+Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
+---
+ .../net/ethernet/mellanox/mlx5/core/en/htb.c  | 28 +++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
+@@ -89,6 +89,7 @@ mlx5e_htb_node_create_leaf(struct mlx5e_
+ 	return node;
+ }
+ 
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ static struct mlx5e_qos_node *mlx5e_htb_node_create_root(struct mlx5e_htb *htb)
+ {
+ 	struct mlx5e_qos_node *node;
+@@ -103,6 +104,7 @@ static struct mlx5e_qos_node *mlx5e_htb_
+ 
+ 	return node;
+ }
++#endif
+ 
+ static struct mlx5e_qos_node *mlx5e_htb_node_find(struct mlx5e_htb *htb, u32 classid)
+ {
+@@ -171,6 +173,7 @@ out:
+ 
+ /* HTB TC handlers */
+ 
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ static int
+ mlx5e_htb_root_add(struct mlx5e_htb *htb, u16 htb_maj_id, u16 htb_defcls,
+ 		   struct netlink_ext_ack *extack)
+@@ -217,6 +220,7 @@ err_cancel_selq:
+ 	mlx5e_selq_cancel(htb->selq);
+ 	return err;
+ }
++#endif
+ 
+ static int mlx5e_htb_root_del(struct mlx5e_htb *htb)
+ {
+@@ -440,8 +444,13 @@ static struct mlx5e_qos_node *mlx5e_htb_
+ 	return node;
+ }
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
+ 		       struct netlink_ext_ack *extack)
++#else
++int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack)
++#endif
+ {
+ 	struct mlx5e_priv *priv = htb->priv;
+ 	struct mlx5e_qos_node *node;
+@@ -450,9 +459,17 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+ 	bool opened;
+ 	int err;
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID /*will be base code next rebase*/
+ 	qos_dbg(htb->mdev, "TC_HTB_LEAF_DEL classid %04x\n", *classid);
+ 
+ 	node = mlx5e_htb_node_find(htb, *classid);
++#else
++	qos_dbg(priv->mdev, "TC_HTB_LEAF_DEL classid %04x\n", classid);
++
++	*old_qid = *new_qid = 0;
++
++	node = mlx5e_htb_node_find(htb, classid);
++#endif
+ 	if (!node)
+ 		return -ENOENT;
+ 
+@@ -470,7 +487,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+ 	err = mlx5_qos_destroy_node(htb->mdev, node->hw_id);
+ 	if (err) /* Not fatal. */
+ 		qos_warn(htb->mdev, "Failed to destroy leaf node %u (class %04x), err = %d\n",
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ 			 node->hw_id, *classid, err);
++#else
++			 node->hw_id, classid, err);
++#endif
+ 
+ 	mlx5e_htb_node_delete(htb, node);
+ 
+@@ -532,7 +553,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+ 	if (opened)
+ 		mlx5e_reactivate_qos_sq(priv, moved_qid, txq);
+ 
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ 	*classid = node->classid;
++#else
++	*old_qid = mlx5e_qid_from_qos(&priv->channels, moved_qid);
++	*new_qid = mlx5e_qid_from_qos(&priv->channels, qid);
++#endif
+ 	return 0;
+ }
+ 
+@@ -702,6 +728,7 @@ void mlx5e_htb_free(struct mlx5e_htb *ht
+ 	kvfree(htb);
+ }
+ 
++#ifdef HAVE_ENUM_TC_HTB_COMMAND
+ int mlx5e_htb_init(struct mlx5e_htb *htb, struct tc_htb_qopt_offload *htb_qopt,
+ 		   struct net_device *netdev, struct mlx5_core_dev *mdev,
+ 		   struct mlx5e_selq *selq, struct mlx5e_priv *priv)
+@@ -714,6 +741,7 @@ int mlx5e_htb_init(struct mlx5e_htb *htb
+ 	return mlx5e_htb_root_add(htb, htb_qopt->parent_classid, htb_qopt->classid,
+ 				  htb_qopt->extack);
+ }
++#endif
+ 
+ void mlx5e_htb_cleanup(struct mlx5e_htb *htb)
+ {

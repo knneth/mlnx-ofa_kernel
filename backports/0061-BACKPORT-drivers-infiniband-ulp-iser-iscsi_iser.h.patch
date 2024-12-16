@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.h
+
+Change-Id: I634138718d7d56021a98451431e9b77f0b0347c4
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/infiniband/ulp/iser/iscsi_iser.h
++++ b/drivers/infiniband/ulp/iser/iscsi_iser.h
+@@ -59,6 +59,9 @@
+ #include <linux/mutex.h>
+ #include <linux/mempool.h>
+ #include <linux/uio.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/sizes.h>
++#endif
+ 
+ #include <linux/socket.h>
+ #include <linux/in.h>

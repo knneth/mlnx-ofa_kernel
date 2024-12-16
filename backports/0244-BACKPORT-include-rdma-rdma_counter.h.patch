@@ -1,0 +1,33 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/rdma_counter.h
+
+Change-Id: Id0a5793aa9592d7432b4aef5b251f07dd56b569f
+---
+ include/rdma/rdma_counter.h | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+--- a/include/rdma/rdma_counter.h
++++ b/include/rdma/rdma_counter.h
+@@ -6,9 +6,10 @@
+ #ifndef _RDMA_COUNTER_H_
+ #define _RDMA_COUNTER_H_
+ 
++#include "../../compat/config.h"
++
+ #include <linux/mutex.h>
+ #include <linux/pid_namespace.h>
+-
+ #include <rdma/restrack.h>
+ #include <rdma/rdma_netlink.h>
+ 
+@@ -46,8 +47,8 @@ struct rdma_counter {
+ void rdma_counter_init(struct ib_device *dev);
+ void rdma_counter_release(struct ib_device *dev);
+ int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
+-			       enum rdma_nl_counter_mask mask,
+-			       struct netlink_ext_ack *extack);
++			       enum rdma_nl_counter_mask mask
++			       , struct netlink_ext_ack *extack);
+ int rdma_counter_bind_qp_auto(struct ib_qp *qp, u32 port);
+ int rdma_counter_unbind_qp(struct ib_qp *qp, bool force);
+ 

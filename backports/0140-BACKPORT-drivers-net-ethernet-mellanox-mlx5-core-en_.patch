@@ -1,26 +1,43 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
 
+Change-Id: I03aed7240070838fbdcb382f020e10d7d5a7dd00
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c | 2 ++
- 1 file changed, 2 insertions(+)
+ .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
-@@ -40,6 +40,7 @@ fill_static_params(struct mlx5_wqe_tls_s
- 		EXTRACT_INFO_FIELDS;
- 		break;
- 	}
-+#ifdef TLS_CIPHER_AES_GCM_256
- 	case TLS_CIPHER_AES_GCM_256: {
- 		struct tls12_crypto_info_aes_gcm_256 *info =
- 			&crypto_info->crypto_info_256;
-@@ -47,6 +48,7 @@ fill_static_params(struct mlx5_wqe_tls_s
- 		EXTRACT_INFO_FIELDS;
- 		break;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+@@ -19,9 +19,21 @@ enum {
+ 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
+ };
+ 
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
++#else
++static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
++				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
++{
++}
 +#endif
- 	default:
- 		WARN_ONCE(1, "Unsupported cipher type %u\n",
- 			  crypto_info->crypto_info.cipher_type);
+ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
+@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
+ union mlx5e_crypto_info {
+ 	struct tls_crypto_info crypto_info;
+ 	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	struct tls12_crypto_info_aes_gcm_256 crypto_info_256;
++#endif
+ };
+ 
+ struct mlx5e_set_tls_static_params_wqe {

@@ -1,87 +1,66 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 
-Change-Id: Id56bfe90cfff09fb8dc08cb9d7d152ef37a020a7
+Change-Id: Ifcd47ea39a9244444b41472b40a69ffca86c3087
 ---
- .../mellanox/mlx5/core/en/tc/act_stats.c      | 43 ++++++++++++++++++-
- 1 file changed, 42 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.h   | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
-@@ -3,6 +3,7 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+@@ -47,10 +47,13 @@
  
- #include <linux/rhashtable.h>
- #include <net/flow_offload.h>
-+#include <net/act_api.h>
- #include "en/tc_priv.h"
- #include "act_stats.h"
- #include "en/fs.h"
-@@ -169,11 +170,18 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
- {
- 	struct rhashtable *ht = &handle->ht;
- 	struct mlx5e_tc_act_stats *item;
-+	struct mlx5e_tc_act_stats key;
- 	u64 pkts, bytes, lastused;
- 	int err = 0;
- 
-+#if defined(HAVE_FLOW_ACTION_ENTRY_COOKIE)
-+	key.tc_act_cookie = fl_act->cookie;
-+#else
-+	return -EOPNOTSUPP;
+ struct mlx5e_xdp_buff {
+ 	struct xdp_buff xdp;
++#ifdef HAVE_XDP_METADATA_OPS
+ 	struct mlx5_cqe64 *cqe;
+ 	struct mlx5e_rq *rq;
 +#endif
-+
- 	rcu_read_lock();
--	item = rhashtable_lookup(ht, &fl_act->cookie, act_counters_ht_params);
-+	item = rhashtable_lookup(ht, &key, act_counters_ht_params);
- 	if (!item) {
- 		rcu_read_unlock();
- 		err = -ENOENT;
-@@ -183,10 +191,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
- 	mlx5_fc_query_cached_raw(item->counter,
- 				 &bytes, &pkts, &lastused);
+ };
  
-+#if defined(HAVE_FLOW_OFFLOAD_ACTION)
- 	flow_stats_update(&fl_act->stats,
- 			  bytes - item->lastbytes,
- 			  pkts - item->lastpackets,
- 			  0, lastused, FLOW_ACTION_HW_STATS_DELAYED);
-+#elif defined(HAVE_TCF_ACTION_STATS_UPDATE_5_PARAMS)
-+	tcf_action_stats_update((struct tc_action *) fl_act,
-+			  bytes - item->lastbytes,
-+			  pkts - item->lastpackets,
-+			  lastused, true);
-+#elif defined(HAVE_TCF_ACTION_STATS_UPDATE)
-+	tcf_action_stats_update((struct tc_action *) fl_act,
-+			  bytes - item->lastbytes,
-+			  pkts - item->lastpackets,
-+			  lastused);
++#ifdef HAVE_XDP_SUPPORT
+ /* XDP packets can be transmitted in different ways. On completion, we need to
+  * distinguish between them to clean up things in a proper way.
+  */
+@@ -96,15 +99,28 @@ union mlx5e_xdp_info {
+ 	union {
+ 		struct mlx5e_rq *rq;
+ 		u8 num;
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 		struct page *page;
 +#else
-+	{
-+		struct tc_action *a = (struct tc_action *) fl_act;
-+
-+		tcf_action_update_stats(a, bytes - item->lastbytes, pkts - item->lastpackets,
-+				        0, true);
-+		a->tcfa_tm.lastuse = max_t(u64, a->tcfa_tm.lastuse, lastused);
-+	}
++		struct mlx5e_alloc_unit au;
 +#endif
+ 	} page;
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 	struct xsk_tx_metadata_compl xsk_meta;
++#endif
+ };
  
- 	item->lastpackets = pkts;
- 	item->lastbytes = bytes;
-@@ -197,3 +225,16 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
- err_out:
- 	return err;
+ struct mlx5e_xsk_param;
+ int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk);
+ bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++		      struct mlx5e_alloc_unit *au,
++#endif
+ 		      struct bpf_prog *prog, struct mlx5e_xdp_buff *mlctx);
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xdp_handle_old(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
++		      struct bpf_prog *prog, struct xdp_buff *xdp);
++#endif
+ void mlx5e_xdp_mpwqe_complete(struct mlx5e_xdpsq *sq);
+ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq);
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
+@@ -162,7 +178,6 @@ static inline void mlx5e_xmit_xdp_doorbe
+ 		sq->doorbell_cseg = NULL;
+ 	}
  }
-+
-+void
-+mlx5e_tc_act_stats_fill_stats_flow(struct mlx5e_tc_act_stats_handle *handle,
-+				   struct mlx5e_tc_flow *flow)
-+{
-+	struct mlx5_flow_attr *attr;
-+	int i;
-+
-+	list_for_each_entry(attr, &flow->attrs, list)
-+		for (i = 0; i < attr->tc_act_cookies_count; i++)
-+			mlx5e_tc_act_stats_fill_stats(handle,
-+						      (struct flow_offload_action *) ((void *) attr->tc_act_cookies[i]));
-+}
+-
+ /* Enable inline WQEs to shift some load from a congested HCA (HW) to
+  * a less congested cpu (SW).
+  */
+@@ -244,3 +259,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+ 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
+ }
+ #endif
++#endif

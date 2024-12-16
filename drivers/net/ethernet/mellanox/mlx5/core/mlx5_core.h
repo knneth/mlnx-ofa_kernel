@@ -41,8 +41,9 @@
 #include <linux/mlx5/cq.h>
 #include <linux/mlx5/fs.h>
 #include <linux/mlx5/driver.h>
+#include "lib/devcom.h"
 
-#define DRIVER_VERSION	"24.04-0.7.0"
+#define DRIVER_VERSION	"24.07-0.6.1"
 
 extern uint mlx5_core_debug_mask;
 
@@ -98,6 +99,22 @@ do {								\
 			     "%s:%d:(pid %d): " format,		\
 			     __func__, __LINE__, current->pid,	\
 			     ##__VA_ARGS__)
+
+#define ACCESS_KEY_LEN  32
+#define FT_ID_FT_TYPE_OFFSET 24
+
+struct mlx5_cmd_allow_other_vhca_access_attr {
+	u16 obj_type;
+	u32 obj_id;
+	u8 access_key[ACCESS_KEY_LEN];
+};
+
+struct mlx5_cmd_alias_obj_create_attr {
+	u32 obj_id;
+	u16 vhca_id;
+	u16 obj_type;
+	u8 access_key[ACCESS_KEY_LEN];
+};
 
 static inline void mlx5_printk(struct mlx5_core_dev *dev, int level, const char *format, ...)
 {
@@ -302,6 +319,7 @@ int mlx5_query_mcam_reg(struct mlx5_core_dev *dev, u32 *mcap, u8 feature_group,
 			u8 access_reg_group);
 int mlx5_query_qcam_reg(struct mlx5_core_dev *mdev, u32 *qcam,
 			u8 feature_group, u8 access_reg_group);
+int mlx5_query_mpir_reg(struct mlx5_core_dev *dev, u32 *mpir);
 
 void mlx5_lag_add_netdev(struct mlx5_core_dev *dev, struct net_device *netdev);
 void mlx5_lag_remove_netdev(struct mlx5_core_dev *dev, struct net_device *netdev);
@@ -327,10 +345,6 @@ int mlx5_register_device(struct mlx5_core_dev *dev);
 void mlx5_unregister_device(struct mlx5_core_dev *dev);
 void mlx5_dev_set_lightweight(struct mlx5_core_dev *dev);
 bool mlx5_dev_is_lightweight(struct mlx5_core_dev *dev);
-struct mlx5_core_dev *mlx5_get_next_phys_dev_lag(struct mlx5_core_dev *dev);
-void mlx5_dev_list_lock(void);
-void mlx5_dev_list_unlock(void);
-int mlx5_dev_list_trylock(void);
 
 void mlx5_fw_reporters_create(struct mlx5_core_dev *dev);
 int mlx5_query_mtpps(struct mlx5_core_dev *dev, u32 *mtpps, u32 mtpps_size);
@@ -416,20 +430,11 @@ static inline int mlx5_rescan_drivers(struct mlx5_core_dev *dev)
 {
 	int ret;
 
-	mlx5_dev_list_lock();
+	mlx5_devcom_comp_lock(dev->priv.hca_devcom_comp);
 	ret = mlx5_rescan_drivers_locked(dev);
-	mlx5_dev_list_unlock();
+	mlx5_devcom_comp_unlock(dev->priv.hca_devcom_comp);
 	return ret;
 }
-
-void mlx5_lag_update(struct mlx5_core_dev *dev);
-
-enum {
-	MLX5_NIC_IFC_FULL		= 0,
-	MLX5_NIC_IFC_DISABLED		= 1,
-	MLX5_NIC_IFC_NO_DRAM_NIC	= 2,
-	MLX5_NIC_IFC_SW_RESET		= 7
-};
 
 u8 mlx5_get_nic_state(struct mlx5_core_dev *dev);
 void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state);
@@ -468,6 +473,12 @@ bool mlx5_eth_supported(struct mlx5_core_dev *dev);
 bool mlx5_rdma_supported(struct mlx5_core_dev *dev);
 bool mlx5_vnet_supported(struct mlx5_core_dev *dev);
 bool mlx5_same_hw_devs(struct mlx5_core_dev *dev, struct mlx5_core_dev *peer_dev);
+int mlx5_cmd_allow_other_vhca_access(struct mlx5_core_dev *dev,
+				     struct mlx5_cmd_allow_other_vhca_access_attr *attr);
+int mlx5_cmd_alias_obj_create(struct mlx5_core_dev *dev,
+			      struct mlx5_cmd_alias_obj_create_attr *alias_attr,
+			      u32 *obj_id);
+int mlx5_cmd_alias_obj_destroy(struct mlx5_core_dev *dev, u32 obj_id, u16 obj_type);
 
 static inline u16 mlx5_core_ec_vf_vport_base(const struct mlx5_core_dev *dev)
 {
@@ -496,4 +507,14 @@ static inline int mlx5_vport_to_func_id(const struct mlx5_core_dev *dev, u16 vpo
 			  : vport;
 }
 
+static inline int mlx5_max_eq_cap_get(const struct mlx5_core_dev *dev)
+{
+	if (MLX5_CAP_GEN_2(dev, max_num_eqs_24b))
+		return MLX5_CAP_GEN_2(dev, max_num_eqs_24b);
+
+	if (MLX5_CAP_GEN(dev, max_num_eqs))
+		return MLX5_CAP_GEN(dev, max_num_eqs);
+
+	return 1 << MLX5_CAP_GEN(dev, log_max_eq);
+}
 #endif /* __MLX5_CORE_H__ */

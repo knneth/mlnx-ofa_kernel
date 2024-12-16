@@ -1,0 +1,155 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
+
+Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
+---
+ .../ethernet/mellanox/mlx5/core/fs_counters.c | 51 ++++++++++++++++---
+ 1 file changed, 44 insertions(+), 7 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
+@@ -106,14 +106,18 @@ static void mlx5_fc_pool_release_counter
+  *   elapsed, the thread will actually query the hardware.
+  */
+ 
++#define USE_IDR 1
++
+ static struct list_head *mlx5_fc_counters_lookup_next(struct mlx5_core_dev *dev,
+ 						      u32 id)
+ {
+ 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
+-	unsigned long next_id = (unsigned long)id + 1;
+-	struct mlx5_fc *counter;
+-	unsigned long tmp;
+-
++#ifdef USE_IDR
++       unsigned long next_id = (unsigned long)id + 1;
++#endif
++       struct mlx5_fc *counter;
++#ifdef idr_for_each_entry_continue_ul
++       unsigned long tmp;
+ 	rcu_read_lock();
+ 	/* skip counters that are in idr, but not yet in counters list */
+ 	idr_for_each_entry_continue_ul(&fc_stats->counters_idr,
+@@ -123,7 +127,24 @@ static struct list_head *mlx5_fc_counter
+ 	}
+ 	rcu_read_unlock();
+ 
+-	return counter ? &counter->list : &fc_stats->counters;
++#elif defined(USE_IDR)
++	rcu_read_lock();
++	/* skip counters that are in idr, but not yet in counters list */
++	while ((counter = idr_get_next_ul(&fc_stats->counters_idr,
++					&next_id)) != NULL &&
++			list_empty(&counter->list))
++		next_id++;
++	rcu_read_unlock();
++#else
++	list_for_each_entry(counter, &fc_stats->counters, list)
++		if (counter->id > id)
++			return &counter->list;
++#endif
++#ifdef USE_IDR
++       return counter ? &counter->list : &fc_stats->counters;
++#else
++	return &fc_stats->counters;
++#endif
+ }
+ 
+ static void mlx5_fc_stats_insert(struct mlx5_core_dev *dev,
+@@ -137,13 +158,17 @@ static void mlx5_fc_stats_insert(struct
+ static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
+ 				 struct mlx5_fc *counter)
+ {
++#ifdef USE_IDR
+ 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
++#endif
+ 
+ 	list_del(&counter->list);
+ 
++#ifdef USE_IDR
+ 	spin_lock(&fc_stats->counters_idr_lock);
+ 	WARN_ON(!idr_remove(&fc_stats->counters_idr, counter->id));
+ 	spin_unlock(&fc_stats->counters_idr_lock);
++#endif/*USE_IDR*/
+ }
+ 
+ static int get_init_bulk_query_len(struct mlx5_core_dev *dev)
+@@ -350,21 +375,27 @@ struct mlx5_fc *mlx5_fc_create_ex(struct
+ {
+ 	struct mlx5_fc *counter = mlx5_fc_acquire(dev, aging);
+ 	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
++#ifdef USE_IDR
+ 	int err;
++#endif
+ 
+ 	if (IS_ERR(counter))
+ 		return counter;
+ 
++#ifdef USE_IDR
+ 	INIT_LIST_HEAD(&counter->list);
++#endif
+ 	counter->aging = aging;
+ 
+ 	if (aging) {
++#ifdef USE_IDR
+ 		u32 id = counter->id;
+-
++#endif
+ 		counter->cache.lastuse = jiffies;
+ 		counter->lastbytes = counter->cache.bytes;
+ 		counter->lastpackets = counter->cache.packets;
+ 
++#ifdef USE_IDR
+ 		idr_preload(GFP_KERNEL);
+ 		spin_lock(&fc_stats->counters_idr_lock);
+ 
+@@ -375,15 +406,18 @@ struct mlx5_fc *mlx5_fc_create_ex(struct
+ 		idr_preload_end();
+ 		if (err)
+ 			goto err_out_alloc;
++#endif
+ 
+ 		llist_add(&counter->addlist, &fc_stats->addlist);
+ 	}
+ 
+ 	return counter;
+ 
++#ifdef USE_IDR
+ err_out_alloc:
+ 	mlx5_fc_release(dev, counter);
+ 	return ERR_PTR(err);
++#endif
+ }
+ 
+ struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
+@@ -426,8 +460,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
+ 	int init_bulk_len;
+ 	int init_out_len;
+ 
++#ifdef USE_IDR
+ 	spin_lock_init(&fc_stats->counters_idr_lock);
+ 	idr_init(&fc_stats->counters_idr);
++#endif
+ 	INIT_LIST_HEAD(&fc_stats->counters);
+ 	init_llist_head(&fc_stats->addlist);
+ 	init_llist_head(&fc_stats->dellist);
+@@ -473,7 +509,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
+ 		mlx5_fc_release(dev, counter);
+ 
+ 	mlx5_fc_pool_cleanup(&fc_stats->fc_pool);
++#ifdef USE_IDR
+ 	idr_destroy(&fc_stats->counters_idr);
++#endif
+ 	kfree(fc_stats->bulk_query_out);
+ }
+ 
+@@ -537,7 +575,6 @@ void mlx5_fc_update_sampling_interval(st
+ 	fc_stats->sampling_interval = min_t(unsigned long, interval,
+ 					    fc_stats->sampling_interval);
+ }
+-
+ /* Flow counter bluks */
+ 
+ struct mlx5_fc_bulk {

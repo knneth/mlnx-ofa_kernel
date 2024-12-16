@@ -220,6 +220,28 @@ struct mlxdevm_ops {
 				 struct netlink_ext_ack *extack);
 
 	/**
+	 * port_fn_max_io_eqs_get() - Get the maximum IO eqs of port function
+	 * @port: The mlxdevm port
+	 * @max_io_eqs: Max IO EQs
+	 * @extack: extack for reporting error messages
+	 *
+	 * Return: 0 on success, negative value otherwise.
+	 */
+	int (*port_fn_max_io_eqs_get)(struct mlxdevm_port *port,
+				      u32 *max_io_eqs,
+				      struct netlink_ext_ack *extack);
+	/**
+	 * port_fn_max_io_eqs_set() - Set the maximum IO eqs of port function
+	 * @port: The mlxdevm port
+	 * @max_io_eqs: Max IO EQs
+	 * @extack: extack for reporting error messages
+	 *
+	 * Return: 0 on success, negative value otherwise.
+	 */
+	int (*port_fn_max_io_eqs_set)(struct mlxdevm_port *port,
+				      u32 max_io_eqs,
+				      struct netlink_ext_ack *extack);
+	/**
 	 * rate_leaf_get() - Get the tx rate settings of the port function
 	 * @port: The mlxdevm port
 	 * @tx_max: rate in Mbps
@@ -445,5 +467,7 @@ void mlxdevm_param_value_str_fill(union mlxdevm_param_value *dst_val,
 
 int mlxdevm_rate_group_register(struct mlxdevm *dev, struct mlxdevm_rate_group *group);
 void mlxdevm_rate_group_unregister(struct mlxdevm *dev, struct mlxdevm_rate_group *group);
+
+struct mlxdevm_port *mlxdevm_port_get_by_index(struct mlxdevm *dev, unsigned int port_index);
 
 #endif /* _COMPAT_NET_MLXDEVM_H */

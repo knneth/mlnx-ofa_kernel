@@ -1,34 +1,63 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/health.h
 
-Change-Id: I5c36002313224140148e55da1e4c42c6bedd9fbc
+Change-Id: Ic917a22b32e3d69ec1a0fc92a7c13fbc91ee0baa
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/health.h   | 25 ++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
-@@ -43,8 +43,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
- 			     const struct flow_action_entry *act,
- 			     struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_CT
- 	if (act->ct.action & TCA_CT_ACT_CLEAR)
- 		return false;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.h
+@@ -18,13 +18,22 @@ void mlx5e_reporter_tx_create(struct mlx
+ void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv);
+ void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq);
+ int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq);
+-void mlx5e_reporter_tx_ptpsq_unhealthy(struct mlx5e_ptpsq *ptpsq);
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
+ void mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
+ void mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
+ void mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
+ void mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
+ void mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
++#else /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
++int mlx5e_health_cq_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
++int mlx5e_health_cq_common_diag_fmsg(struct mlx5e_cq *cq, struct devlink_fmsg *fmsg);
++int mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fmsg);
++int mlx5e_health_fmsg_named_obj_nest_start(struct devlink_fmsg *fmsg, char *name);
++int mlx5e_health_fmsg_named_obj_nest_end(struct devlink_fmsg *fmsg);
++#endif /*HAVE_INT_DEVLINK_FMSG_U8_PAIR*/
 +#endif
  
- 	return true;
- }
-@@ -52,7 +54,11 @@ tc_act_is_multi_table_act_ct(struct mlx5
- static bool
- tc_act_is_missable_ct(const struct flow_action_entry *act)
- {
-+#ifdef HAVE_FLOW_ACTION_ENTRY_MISS_COOKIE
- 	return !(act->ct.action & TCA_CT_ACT_CLEAR);
+ void mlx5e_reporter_rx_create(struct mlx5e_priv *priv);
+ void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv);
+@@ -38,7 +47,9 @@ void mlx5e_reporter_icosq_resume_recover
+ 
+ struct mlx5e_err_ctx {
+ 	int (*recover)(void *ctx);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	int (*dump)(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg, void *ctx);
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ 	void *ctx;
+ };
+ 
+@@ -52,8 +63,16 @@ int mlx5e_health_report(struct mlx5e_pri
+ void mlx5e_health_create_reporters(struct mlx5e_priv *priv);
+ void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv);
+ void mlx5e_health_channels_update(struct mlx5e_priv *priv);
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
++void mlx5e_reporter_tx_ptpsq_unhealthy(struct mlx5e_ptpsq *ptpsq);
+ int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key,
+ 			       struct devlink_fmsg *fmsg);
+-void mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
+-			     int queue_idx, char *lbl);
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++void
 +#else
-+	return false;
++int
 +#endif
- }
- 
- struct mlx5e_tc_act mlx5e_tc_act_ct = {
++mlx5e_health_queue_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
++			    int queue_idx, char *lbl);
++#endif
+ #endif

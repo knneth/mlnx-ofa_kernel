@@ -1,0 +1,335 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/rpc_rdma.c
+
+Change-Id: I6e6c092524b1705c035c7863158cf3eba9cc3619
+Signed-off-by: Tom Wu <tomwu@nvidia.com>
+---
+ net/sunrpc/xprtrdma/rpc_rdma.c | 103 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 102 insertions(+), 1 deletion(-)
+
+--- a/net/sunrpc/xprtrdma/rpc_rdma.c
++++ b/net/sunrpc/xprtrdma/rpc_rdma.c
+@@ -52,8 +52,15 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
+ /* Returns size of largest RPC-over-RDMA header in a Call message
+  *
+  * The largest Call header contains a full-size Read list and a
+@@ -310,8 +317,12 @@ static struct rpcrdma_mr_seg *rpcrdma_mr
+ 	return frwr_map(r_xprt, seg, nsegs, writing, req->rl_slot.rq_xid, *mr);
+ 
+ out_getmr_err:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_nomrs_err(r_xprt, req);
++#endif
++#ifdef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
+ 	xprt_wait_for_buffer_space(&r_xprt->rx_xprt);
++#endif
+ 	rpcrdma_mrs_refresh(r_xprt);
+ 	return ERR_PTR(-EAGAIN);
+ }
+@@ -361,7 +372,9 @@ static int rpcrdma_encode_read_list(stru
+ 		if (encode_read_segment(xdr, mr, pos) < 0)
+ 			return -EMSGSIZE;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_chunk_read(rqst->rq_task, pos, mr, nsegs);
++#endif
+ 		r_xprt->rx_stats.read_chunk_count++;
+ 		nsegs -= mr->mr_nents;
+ 	} while (nsegs);
+@@ -425,7 +438,9 @@ static int rpcrdma_encode_write_list(str
+ 		if (encode_rdma_segment(xdr, mr) < 0)
+ 			return -EMSGSIZE;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_chunk_write(rqst->rq_task, mr, nsegs);
++#endif
+ 		r_xprt->rx_stats.write_chunk_count++;
+ 		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
+ 		nchunks++;
+@@ -436,8 +451,10 @@ static int rpcrdma_encode_write_list(str
+ 		if (encode_rdma_segment(xdr, ep->re_write_pad_mr) < 0)
+ 			return -EMSGSIZE;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_chunk_wp(rqst->rq_task, ep->re_write_pad_mr,
+ 					nsegs);
++#endif
+ 		r_xprt->rx_stats.write_chunk_count++;
+ 		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
+ 		nchunks++;
+@@ -503,7 +520,9 @@ static int rpcrdma_encode_reply_chunk(st
+ 		if (encode_rdma_segment(xdr, mr) < 0)
+ 			return -EMSGSIZE;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_chunk_reply(rqst->rq_task, mr, nsegs);
++#endif
+ 		r_xprt->rx_stats.reply_chunk_count++;
+ 		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
+ 		nchunks++;
+@@ -625,7 +644,9 @@ static bool rpcrdma_prepare_pagelist(str
+ 	return true;
+ 
+ out_mapping_err:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_dma_maperr(sge->addr);
++#endif
+ 	return false;
+ }
+ 
+@@ -653,7 +674,9 @@ static bool rpcrdma_prepare_tail_iov(str
+ 	return true;
+ 
+ out_mapping_err:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_dma_maperr(sge->addr);
++#endif
+ 	return false;
+ }
+ 
+@@ -833,7 +856,9 @@ inline int rpcrdma_prepare_send_sges(str
+ out_unmap:
+ 	rpcrdma_sendctx_unmap(req->rl_sendctx);
+ out_nosc:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_prepsend_failed(&req->rl_slot, ret);
++#endif
+ 	return ret;
+ }
+ 
+@@ -867,15 +892,23 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+ 	__be32 *p;
+ 	int ret;
+ 
++#ifdef HAVE_XDRBUF_SPARSE_PAGES
+ 	if (unlikely(rqst->rq_rcv_buf.flags & XDRBUF_SPARSE_PAGES)) {
++#endif
+ 		ret = rpcrdma_alloc_sparse_pages(&rqst->rq_rcv_buf);
+ 		if (ret)
+ 			return ret;
++#ifdef HAVE_XDRBUF_SPARSE_PAGES
+ 	}
++#endif
+ 
+ 	rpcrdma_set_xdrlen(&req->rl_hdrbuf, 0);
++#ifdef HAVE_XDR_INIT_ENCODE_RQST_ARG
+ 	xdr_init_encode(xdr, &req->rl_hdrbuf, rdmab_data(req->rl_rdmabuf),
+ 			rqst);
++#else
++	xdr_init_encode(xdr, &req->rl_hdrbuf, rdmab_data(req->rl_rdmabuf));
++#endif
+ 
+ 	/* Fixed header fields */
+ 	ret = -EMSGSIZE;
+@@ -891,7 +924,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+ 	 * is not allowed.
+ 	 */
+ 	ddp_allowed = !test_bit(RPCAUTH_AUTH_DATATOUCH,
+-				&rqst->rq_cred->cr_auth->au_flags);
++				(const void *)&rqst->rq_cred->cr_auth->au_flags);
+ 
+ 	/*
+ 	 * Chunks needed for results?
+@@ -974,11 +1007,20 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+ 	if (ret)
+ 		goto out_err;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_marshal(req, rtype, wtype);
++#endif
+ 	return 0;
+ 
+ out_err:
++#ifndef HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG
++	if (ret == -EAGAIN)
++		xprt_wait_for_buffer_space(rqst->rq_task, NULL);
++#endif
++
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_marshal_failed(rqst, ret);
++#endif
+ 	r_xprt->rx_stats.failed_marshal_count++;
+ 	frwr_reset(req);
+ 	return ret;
+@@ -1013,7 +1055,9 @@ void rpcrdma_reset_cwnd(struct rpcrdma_x
+ 	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
+ 
+ 	spin_lock(&xprt->transport_lock);
++#ifdef HAVE_XPRT_REQUEST_GET_CONG
+ 	xprt->cong = 0;
++#endif
+ 	__rpcrdma_update_cwnd_locked(xprt, &r_xprt->rx_buf, 1);
+ 	spin_unlock(&xprt->transport_lock);
+ }
+@@ -1107,8 +1151,10 @@ rpcrdma_inline_fixup(struct rpc_rqst *rq
+ 		rqst->rq_private_buf.tail[0].iov_base = srcp;
+ 	}
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	if (fixup_copy_count)
+ 		trace_xprtrdma_fixup(rqst, fixup_copy_count);
++#endif
+ 	return fixup_copy_count;
+ }
+ 
+@@ -1176,7 +1222,9 @@ static int decode_rdma_segment(struct xd
+ 		return -EIO;
+ 
+ 	xdr_decode_rdma_segment(p, &handle, length, &offset);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_decode_seg(handle, *length, offset);
++#endif
+ 	return 0;
+ }
+ 
+@@ -1329,13 +1377,19 @@ rpcrdma_decode_error(struct rpcrdma_xprt
+ 		p = xdr_inline_decode(xdr, 2 * sizeof(*p));
+ 		if (!p)
+ 			break;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_err_vers(rqst, p, p + 1);
++#endif
+ 		break;
+ 	case err_chunk:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_err_chunk(rqst);
++#endif
+ 		break;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	default:
+ 		trace_xprtrdma_err_unrecognized(rqst, p);
++#endif
+ 	}
+ 
+ 	return -EIO;
+@@ -1358,9 +1412,17 @@ void rpcrdma_unpin_rqst(struct rpcrdma_r
+ 	req->rl_reply = NULL;
+ 	rep->rr_rqst = NULL;
+ 
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_lock(&xprt->queue_lock);
++#else
++	spin_lock(&xprt->recv_lock);
++#endif
+ 	xprt_unpin_rqst(rqst);
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#else
++	spin_unlock(&xprt->recv_lock);
++#endif
+ }
+ 
+ /**
+@@ -1395,14 +1457,27 @@ void rpcrdma_complete_rqst(struct rpcrdm
+ 		goto out_badheader;
+ 
+ out:
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_lock(&xprt->queue_lock);
++#else
++	spin_lock(&xprt->recv_lock);
++#endif
++
+ 	xprt_complete_rqst(rqst->rq_task, status);
+ 	xprt_unpin_rqst(rqst);
++
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#else
++	spin_unlock(&xprt->recv_lock);
++#endif
++
+ 	return;
+ 
+ out_badheader:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reply_hdr_err(rep);
++#endif
+ 	r_xprt->rx_stats.bad_reply_count++;
+ 	rqst->rq_task->tk_status = status;
+ 	status = 0;
+@@ -1441,8 +1516,13 @@ void rpcrdma_reply_handler(struct rpcrdm
+ 		xprt->reestablish_timeout = 0;
+ 
+ 	/* Fixed transport header fields */
++#ifdef HAVE_XDR_INIT_DECODE_RQST_ARG
+ 	xdr_init_decode(&rep->rr_stream, &rep->rr_hdrbuf,
+ 			rep->rr_hdrbuf.head[0].iov_base, NULL);
++#else
++	xdr_init_decode(&rep->rr_stream, &rep->rr_hdrbuf,
++			rep->rr_hdrbuf.head[0].iov_base);
++#endif
+ 	p = xdr_inline_decode(&rep->rr_stream, 4 * sizeof(*p));
+ 	if (unlikely(!p))
+ 		goto out_shortreply;
+@@ -1460,12 +1540,21 @@ void rpcrdma_reply_handler(struct rpcrdm
+ 	/* Match incoming rpcrdma_rep to an rpcrdma_req to
+ 	 * get context for handling any incoming chunks.
+ 	 */
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_lock(&xprt->queue_lock);
++#else
++	spin_lock(&xprt->recv_lock);
++#endif
+ 	rqst = xprt_lookup_rqst(xprt, rep->rr_xid);
+ 	if (!rqst)
+ 		goto out_norqst;
++
+ 	xprt_pin_rqst(rqst);
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#else
++	spin_unlock(&xprt->recv_lock);
++#endif
+ 
+ 	if (credits == 0)
+ 		credits = 1;	/* don't deadlock */
+@@ -1482,7 +1571,9 @@ void rpcrdma_reply_handler(struct rpcrdm
+ 	req->rl_reply = rep;
+ 	rep->rr_rqst = rqst;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reply(rqst->rq_task, rep, credits);
++#endif
+ 
+ 	if (rep->rr_wc_flags & IB_WC_WITH_INVALIDATE)
+ 		frwr_reminv(rep, &req->rl_registered);
+@@ -1494,16 +1585,26 @@ void rpcrdma_reply_handler(struct rpcrdm
+ 	return;
+ 
+ out_badversion:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reply_vers_err(rep);
++#endif
+ 	goto out;
+ 
+ out_norqst:
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#else
++	spin_unlock(&xprt->recv_lock);
++#endif
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reply_rqst_err(rep);
++#endif
+ 	goto out;
+ 
+ out_shortreply:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_reply_short_err(rep);
++#endif
+ 
+ out:
+ 	rpcrdma_rep_put(buf, rep);

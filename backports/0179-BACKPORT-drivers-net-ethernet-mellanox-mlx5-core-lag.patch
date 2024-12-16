@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
+
+Change-Id: I5aeb743604ddd60113cd1d2ddd08b08724ec45f6
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
+@@ -28,8 +28,7 @@ struct mlx5_lag_port_sel {
+ 	struct mlx5_lag_ttc inner;
+ };
+ 
+-#ifdef CONFIG_MLX5_ESWITCH
+-
++#if defined(CONFIG_MLX5_ESWITCH)
+ int mlx5_lag_port_sel_modify(struct mlx5_lag *ldev, u8 *ports);
+ void mlx5_lag_port_sel_destroy(struct mlx5_lag *ldev);
+ int mlx5_lag_port_sel_create(struct mlx5_lag *ldev,

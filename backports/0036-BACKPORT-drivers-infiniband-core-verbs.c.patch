@@ -1,0 +1,82 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
+
+Change-Id: I7fcee585b05c453fe0209e878efc3128530c7fde
+---
+ drivers/infiniband/core/verbs.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/infiniband/core/verbs.c
++++ b/drivers/infiniband/core/verbs.c
+@@ -53,7 +53,9 @@
+ #include <rdma/lag.h>
+ 
+ #include "core_priv.h"
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ #include <trace/events/rdma_core.h>
++#endif
+ 
+ static int ib_resolve_eth_dmac(struct ib_device *device,
+ 			       struct rdma_ah_attr *ah_attr);
+@@ -2015,7 +2017,11 @@ int ib_get_eth_speed(struct ib_device *d
+ 				netdev->name, netdev_speed);
+ 	}
+ 
++#ifdef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
+ 	ib_get_width_and_speed(netdev_speed, lksettings.lanes,
++#else
++	ib_get_width_and_speed(netdev_speed, 0,
++#endif
+ 			       speed, width);
+ 
+ 	return 0;
+@@ -2273,7 +2279,9 @@ int ib_dereg_mr_user(struct ib_mr *mr, s
+ 	struct ib_sig_attrs *sig_attrs = mr->sig_attrs;
+ 	int ret;
+ 
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_dereg(mr);
++#endif
+ 	rdma_restrack_del(&mr->res);
+ 	ret = mr->device->ops.dereg_mr(mr, udata);
+ 	if (!ret) {
+@@ -2332,7 +2340,9 @@ struct ib_mr *ib_alloc_mr(struct ib_pd *
+ 	rdma_restrack_parent_name(&mr->res, &pd->res);
+ 	rdma_restrack_add(&mr->res);
+ out:
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_alloc(pd, mr_type, max_num_sg, mr);
++#endif
+ 	return mr;
+ }
+ EXPORT_SYMBOL(ib_alloc_mr);
+@@ -2393,7 +2403,9 @@ struct ib_mr *ib_alloc_mr_integrity(stru
+ 	rdma_restrack_parent_name(&mr->res, &pd->res);
+ 	rdma_restrack_add(&mr->res);
+ out:
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_mr_integ_alloc(pd, max_num_data_sg, max_num_meta_sg, mr);
++#endif
+ 	return mr;
+ }
+ EXPORT_SYMBOL(ib_alloc_mr_integrity);
+@@ -2929,7 +2941,9 @@ void ib_drain_sq(struct ib_qp *qp)
+ 		qp->device->ops.drain_sq(qp);
+ 	else
+ 		__ib_drain_sq(qp);
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_drain_complete(qp->send_cq);
++#endif
+ }
+ EXPORT_SYMBOL(ib_drain_sq);
+ 
+@@ -2958,7 +2972,9 @@ void ib_drain_rq(struct ib_qp *qp)
+ 		qp->device->ops.drain_rq(qp);
+ 	else
+ 		__ib_drain_rq(qp);
++#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
+ 	trace_cq_drain_complete(qp->recv_cq);
++#endif
+ }
+ EXPORT_SYMBOL(ib_drain_rq);
+ 

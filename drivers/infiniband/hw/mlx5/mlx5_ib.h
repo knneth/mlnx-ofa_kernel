@@ -125,6 +125,19 @@ unsigned long __mlx5_umem_find_best_quantized_pgoff(
 
 extern struct workqueue_struct *mlx5_ib_sigerr_sqd_wq;
 
+static inline unsigned long
+mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf)
+{
+	/*
+	 * mkeys used for dmabuf are fixed at PAGE_SIZE because we must be able
+	 * to hold any sgl after a move operation. Ideally the mkc page size
+	 * could be changed at runtime to be optimal, but right now the driver
+	 * cannot do that.
+	 */
+	return ib_umem_find_best_pgsz(&umem_dmabuf->umem, PAGE_SIZE,
+				      umem_dmabuf->umem.iova);
+}
+
 enum {
 	MLX5_IB_MMAP_OFFSET_START = 9,
 	MLX5_IB_MMAP_OFFSET_END = 255,
@@ -353,7 +366,6 @@ struct mlx5_ib_flow_db {
  * rely on the range reserved for that use in the ib_qp_create_flags enum.
  */
 #define MLX5_IB_QP_CREATE_SQPN_QP1	IB_QP_CREATE_RESERVED_START
-#define MLX5_IB_QP_CREATE_WC_TEST	(IB_QP_CREATE_RESERVED_START << 1)
 
 struct wr_list {
 	u16	opcode;
@@ -662,7 +674,7 @@ struct mlx5_ib_mkey {
 	unsigned int ndescs;
 	struct wait_queue_head wait;
 	refcount_t usecount;
-	/* User Mkey must hold either a rb_key or a cache_ent. */
+	/* Cacheable user Mkey must hold either a rb_key or a cache_ent. */
 	struct mlx5r_cache_rb_key rb_key;
 	struct mlx5_cache_ent *cache_ent;
 	u8 cacheable : 1;
@@ -773,6 +785,24 @@ struct umr_common {
 	 */
 	struct mutex lock;
 	unsigned int state;
+	/* Protects from repeat UMR QP creation */
+	struct mutex init_lock;
+};
+
+#define NUM_MKEYS_PER_PAGE \
+	((PAGE_SIZE - sizeof(struct list_head)) / sizeof(u32))
+
+struct mlx5_mkeys_page {
+	u32 mkeys[NUM_MKEYS_PER_PAGE];
+	struct list_head list;
+};
+static_assert(sizeof(struct mlx5_mkeys_page) == PAGE_SIZE);
+
+struct mlx5_mkeys_queue {
+	struct list_head pages_list;
+	u32 num_pages;
+	unsigned long ci;
+	spinlock_t lock; /* sync list ops */
 };
 
 struct cache_order {
@@ -781,9 +811,8 @@ struct cache_order {
 };
 
 struct mlx5_cache_ent {
-	struct xarray		mkeys;
-	unsigned long		stored;
-	unsigned long		reserved;
+	struct mlx5_mkeys_queue	mkeys_queue;
+	u32			pending;
 
 	char                    name[4];
 
@@ -793,6 +822,7 @@ struct mlx5_cache_ent {
 	u8 is_tmp:1;
 	u8 disabled:1;
 	u8 fill_to_high_water:1;
+	u8 tmp_cleanup_scheduled:1;
 
 	/*
 	 * - limit is the low water mark for stored mkeys, 2* limit is the
@@ -825,10 +855,8 @@ struct mlx5_mkey_cache {
 	struct mutex		rb_lock;
 	struct dentry		*fs_root;
 	unsigned long		last_add;
-	struct delayed_work	remove_ent_dwork;
 	int			rel_timeout;
 	int			rel_imm;
-	bool			tmp_clean;
 };
 
 struct mlx5_ib_port_resources {
@@ -838,11 +866,13 @@ struct mlx5_ib_port_resources {
 
 struct mlx5_ib_resources {
 	struct ib_cq	*c0;
+	struct mutex cq_lock;
 	u32 xrcdn0;
 	u32 xrcdn1;
 	struct ib_pd	*p0;
 	struct ib_srq	*s0;
 	struct ib_srq	*s1;
+	struct mutex srq_lock;
 	struct mlx5_ib_port_resources ports[2];
 };
 
@@ -1137,7 +1167,6 @@ struct mlx5_ib_dev {
 	u8				ib_active:1;
 	u8				is_rep:1;
 	u8				lag_active:1;
-	u8				wc_support:1;
 	u8				fill_delay;
 	struct umr_common		umrc;
 	/* sync used page count stats
@@ -1174,7 +1203,6 @@ struct mlx5_ib_dev {
 	/* Array with num_ports elements */
 	struct mlx5_ib_port	*port;
 	struct mlx5_sq_bfreg	bfreg;
-	struct mlx5_sq_bfreg	wc_bfreg;
 	struct mlx5_sq_bfreg	fp_bfreg;
 	struct mlx5_ib_delay_drop	delay_drop;
 	const struct mlx5_ib_profile	*profile;
@@ -1299,6 +1327,8 @@ to_mmmap(struct rdma_user_mmap_entry *rdma_entry)
 		struct mlx5_user_mmap_entry, rdma_entry);
 }
 
+int mlx5_ib_dev_res_cq_init(struct mlx5_ib_dev *dev);
+int mlx5_ib_dev_res_srq_init(struct mlx5_ib_dev *dev);
 int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context, unsigned long virt,
 			struct mlx5_db *db);
 void mlx5_ib_db_unmap_user(struct mlx5_ib_ucontext *context, struct mlx5_db *db);
@@ -1404,7 +1434,6 @@ int mlx5_ib_query_port(struct ib_device *ibdev, u32 port,
 		       struct ib_port_attr *props);
 void mlx5_ib_populate_pas(struct ib_umem *umem, size_t page_size, __be64 *pas,
 			  u64 access_flags);
-void mlx5_ib_copy_pas(u64 *old, u64 *new, int step, int num);
 int mlx5_ib_get_cqe_size(struct ib_cq *ibcq);
 int mlx5_mkey_cache_init(struct mlx5_ib_dev *dev);
 void mlx5_mkey_cache_cleanup(struct mlx5_ib_dev *dev);

@@ -78,7 +78,6 @@ static void mlx5e_rep_get_drvinfo(struct net_device *dev,
 
 	strscpy(drvinfo->driver, mlx5e_rep_driver_name,
 		sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, UTS_RELEASE, sizeof(drvinfo->version));
 	count = snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
 			 "%d.%d.%04d (%.16s)", fw_rev_maj(mdev),
 			 fw_rev_min(mdev), fw_rev_sub(mdev), mdev->board_id);
@@ -1340,12 +1339,6 @@ static int mlx5e_init_rep_tx(struct mlx5e_priv *priv)
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	int err;
 
-	err = mlx5e_create_tises(priv);
-	if (err) {
-		mlx5_core_warn(priv->mdev, "create tises failed, %d\n", err);
-		return err;
-	}
-
 	err = mlx5e_rep_neigh_init(rpriv);
 	if (err)
 		goto err_neigh_init;
@@ -1368,7 +1361,6 @@ err_ht_init:
 err_init_tx:
 	mlx5e_rep_neigh_cleanup(rpriv);
 err_neigh_init:
-	mlx5e_destroy_tises(priv);
 	return err;
 }
 
@@ -1382,7 +1374,6 @@ static void mlx5e_cleanup_rep_tx(struct mlx5e_priv *priv)
 		mlx5e_cleanup_uplink_rep_tx(rpriv);
 
 	mlx5e_rep_neigh_cleanup(rpriv);
-	mlx5e_destroy_tises(priv);
 }
 
 static void mlx5e_rep_enable(struct mlx5e_priv *priv)
@@ -1551,8 +1542,9 @@ mlx5e_rep_vnic_reporter_diagnose(struct devlink_health_reporter *reporter,
 	struct mlx5e_rep_priv *rpriv = devlink_health_reporter_priv(reporter);
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
 
-	return mlx5_reporter_vnic_diagnose_counters(rep->esw->dev, fmsg,
-						    rep->vport, true);
+	mlx5_reporter_vnic_diagnose_counters(rep->esw->dev, fmsg, rep->vport,
+					     true);
+	return 0;
 }
 
 static const struct devlink_health_reporter_ops mlx5_rep_vnic_reporter_ops = {
@@ -1618,7 +1610,7 @@ static const struct mlx5e_profile mlx5e_uplink_rep_profile = {
 	.update_stats           = mlx5e_stats_update_ndo_stats,
 	.update_carrier	        = mlx5e_update_carrier,
 	.rx_handlers            = &mlx5e_rx_handlers_rep,
-	.max_tc			= MLX5E_MAX_NUM_TC,
+	.max_tc			= MLX5_MAX_NUM_TC,
 	.stats_grps		= mlx5e_ul_rep_stats_grps,
 	.stats_grps_num		= mlx5e_ul_rep_stats_grps_num,
 };

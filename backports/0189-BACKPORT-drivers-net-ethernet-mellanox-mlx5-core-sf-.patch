@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+
+Change-Id: Ib1737d92554580dbd7fb61a10ff2446d56d11c17
+---
+ .../ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h   | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+@@ -11,6 +11,7 @@
+ #include <linux/mlx5/driver.h>
+ #include "sf/vhca_event.h"
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ TRACE_EVENT(mlx5_sf_vhca_event,
+ 	    TP_PROTO(const struct mlx5_core_dev *dev,
+ 		     const struct mlx5_vhca_state_event *event),
+@@ -20,7 +21,11 @@ TRACE_EVENT(mlx5_sf_vhca_event,
+ 			     __field(u32, sfnum)
+ 			     __field(u8, vhca_state)
+ 			    ),
++#ifndef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#else
++	    TP_fast_assign(__assign_str(devname);
++#endif
+ 		    __entry->hw_fn_id = event->function_id;
+ 		    __entry->sfnum = event->sw_function_id;
+ 		    __entry->vhca_state = event->new_vhca_state;
+@@ -29,6 +34,7 @@ TRACE_EVENT(mlx5_sf_vhca_event,
+ 		      __get_str(devname), __entry->hw_fn_id,
+ 		      __entry->sfnum, __entry->vhca_state)
+ );
++#endif /* !defined(MLX_DISABLE_TRACEPOINTS) */
+ 
+ #endif /* _MLX5_SF_VHCA_TP_ */
+ 

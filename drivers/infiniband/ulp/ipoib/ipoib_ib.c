@@ -525,7 +525,7 @@ poll_more:
 		if (unlikely(ib_req_notify_cq(priv->recv_cq,
 					      IB_CQ_NEXT_COMP |
 					      IB_CQ_REPORT_MISSED_EVENTS)) &&
-		    napi_reschedule(napi))
+		    napi_schedule(napi))
 			goto poll_more;
 	}
 
@@ -555,7 +555,7 @@ poll_more:
 		napi_complete(napi);
 		if (unlikely(ib_req_notify_cq(priv->send_cq, IB_CQ_NEXT_COMP |
 					      IB_CQ_REPORT_MISSED_EVENTS)) &&
-		    napi_reschedule(napi))
+		    napi_schedule(napi))
 			goto poll_more;
 	}
 	return n < 0 ? 0 : n;
@@ -576,7 +576,7 @@ void ipoib_napi_schedule_work(struct work_struct *work)
 	bool ret;
 
 	do {
-		ret = napi_reschedule(&priv->send_napi);
+		ret = napi_schedule(&priv->send_napi);
 		if (!ret)
 			msleep(3);
 	} while (!ret && netif_queue_stopped(priv->dev) &&
@@ -588,7 +588,7 @@ void ipoib_ib_tx_completion(struct ib_cq *cq, void *ctx_ptr)
 	struct ipoib_dev_priv *priv = ctx_ptr;
 	bool ret;
 
-	ret = napi_reschedule(&priv->send_napi);
+	ret = napi_schedule(&priv->send_napi);
 	/*
 	 * if the queue is closed the driver must be able to schedule napi,
 	 * otherwise we can end with closed queue forever, because no new

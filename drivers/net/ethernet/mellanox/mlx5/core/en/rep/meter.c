@@ -4,6 +4,7 @@
 #include "en_rep.h"
 #include "eswitch.h"
 #include "en/tc/meter.h"
+#include "en/rep/meter.h"
 
 void
 mlx5_rep_destroy_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv)

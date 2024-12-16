@@ -1,0 +1,21 @@
+From: Jack Morgenstein <jackm@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+
+Change-Id: I60b32ad247e9fff476bc2e091cae1ea5653f2965
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+@@ -1,6 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
++#ifndef CONFIG_COMPAT_PSAMPLE_H_HAS_SK_BUFF_FWD_REF
++#include <linux/skbuff.h>
++#endif
+ #include <net/psample.h>
+ #include "act.h"
+ #include "en/tc_priv.h"

@@ -1,0 +1,153 @@
+From: Tom Wu <tomwu@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_backchannel.c
+
+Change-Id: Iae1bcade01e6e84cb154cd3182c14c1c3e438f1a
+Signed-off-by: Tom Wu <tomwu@nvidia.com>
+---
+ net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 55 +++++++++++++++++++++-
+ 1 file changed, 54 insertions(+), 1 deletion(-)
+
+--- a/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
++++ b/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
+@@ -8,7 +8,9 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ /**
+  * svc_rdma_handle_bc_reply - Process incoming backchannel Reply
+@@ -28,7 +30,13 @@ void svc_rdma_handle_bc_reply(struct svc
+ 	struct rpc_rqst *req;
+ 	u32 credits;
+ 
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_lock(&xprt->queue_lock);
++#elif defined HAVE_RPC_XPRT_RECV_LOCK
++	spin_lock(&xprt->recv_lock);
++#else /* HAVE_XPRT_PIN_RQST is undefined in this case */
++	spin_lock_bh(&xprt->transport_lock);
++#endif
+ 	req = xprt_lookup_rqst(xprt, *rdma_resp);
+ 	if (!req)
+ 		goto out_unlock;
+@@ -38,25 +46,46 @@ void svc_rdma_handle_bc_reply(struct svc
+ 	if (dst->iov_len < src->iov_len)
+ 		goto out_unlock;
+ 	memcpy(dst->iov_base, src->iov_base, src->iov_len);
++
+ 	xprt_pin_rqst(req);
++
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#else
++	spin_unlock(&xprt->recv_lock);
++#endif
+ 
+ 	credits = be32_to_cpup(rdma_resp + 2);
+ 	if (credits == 0)
+ 		credits = 1;	/* don't deadlock */
+ 	else if (credits > r_xprt->rx_buf.rb_bc_max_requests)
+ 		credits = r_xprt->rx_buf.rb_bc_max_requests;
++#if defined(HAVE_RPC_XPRT_RECV_LOCK)|| defined(HAVE_XPRT_QUEUE_LOCK)
+ 	spin_lock(&xprt->transport_lock);
++#endif
+ 	xprt->cwnd = credits << RPC_CWNDSHIFT;
++#if defined(HAVE_RPC_XPRT_RECV_LOCK)|| defined(HAVE_XPRT_QUEUE_LOCK)
+ 	spin_unlock(&xprt->transport_lock);
++#endif
+ 
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_lock(&xprt->queue_lock);
++#else
++	spin_lock(&xprt->recv_lock);
++#endif
+ 	xprt_complete_rqst(req->rq_task, rcvbuf->len);
++
+ 	xprt_unpin_rqst(req);
+ 	rcvbuf->len = 0;
+ 
+ out_unlock:
++#ifdef HAVE_XPRT_QUEUE_LOCK
+ 	spin_unlock(&xprt->queue_lock);
++#elif defined HAVE_RPC_XPRT_RECV_LOCK
++	spin_unlock(&xprt->recv_lock);
++#else
++	spin_unlock_bh(&xprt->transport_lock);
++#endif
+ }
+ 
+ /* Send a reverse-direction RPC Call.
+@@ -76,12 +105,17 @@ static int svc_rdma_bc_sendto(struct svc
+ 			      struct rpc_rqst *rqst,
+ 			      struct svc_rdma_send_ctxt *sctxt)
+ {
+-	struct svc_rdma_pcl empty_pcl;
+ 	int ret;
++#ifdef HAVE_SVC_RDMA_PCL
++	struct svc_rdma_pcl empty_pcl;
+ 
+ 	pcl_init(&empty_pcl);
+ 	ret = svc_rdma_map_reply_msg(rdma, sctxt, &empty_pcl, &empty_pcl,
+ 				     &rqst->rq_snd_buf);
++#else
++
++	ret = svc_rdma_map_reply_msg(rdma, sctxt, NULL, &rqst->rq_snd_buf);
++#endif
+ 	if (ret < 0)
+ 		return -EIO;
+ 
+@@ -90,7 +124,11 @@ static int svc_rdma_bc_sendto(struct svc
+ 	 */
+ 	get_page(virt_to_page(rqst->rq_buffer));
+ 	sctxt->sc_send_wr.opcode = IB_WR_SEND;
++#ifdef HAVE_SVC_RDMA_PCL
+ 	return svc_rdma_post_send(rdma, sctxt);
++#else
++	return svc_rdma_send(rdma, sctxt);
++#endif
+ }
+ 
+ /* Server-side transport endpoint wants a whole page for its send
+@@ -177,8 +215,14 @@ drop_connection:
+  *   %0 if the message was sent successfully
+  *   %ENOTCONN if the message was not sent
+  */
++#ifdef HAVE_XPRT_OPS_SEND_REQUEST_RQST_ARG
+ static int xprt_rdma_bc_send_request(struct rpc_rqst *rqst)
+ {
++#else
++static int xprt_rdma_bc_send_request(struct rpc_task *task)
++{
++	struct rpc_rqst *rqst = task->tk_rqstp;
++#endif
+ 	struct svc_xprt *sxprt = rqst->rq_xprt->bc_xprt;
+ 	struct svcxprt_rdma *rdma =
+ 		container_of(sxprt, struct svcxprt_rdma, sc_xprt);
+@@ -189,7 +233,11 @@ static int xprt_rdma_bc_send_request(str
+ 
+ 	ret = rpcrdma_bc_send_request(rdma, rqst);
+ 	if (ret == -ENOTCONN)
++#ifdef HAVE_SVC_XPRT_CLOSE
+ 		svc_xprt_close(sxprt);
++#else
++		svc_close_xprt(sxprt);
++#endif
+ 	return ret;
+ }
+ 
+@@ -216,7 +264,12 @@ static const struct rpc_xprt_ops xprt_rd
+ 	.buf_alloc		= xprt_rdma_bc_allocate,
+ 	.buf_free		= xprt_rdma_bc_free,
+ 	.send_request		= xprt_rdma_bc_send_request,
++#ifdef HAVE_RPC_XPRT_OPS_SET_RETRANS_TIMEOUT
++	.set_retrans_timeout	= xprt_set_retrans_timeout_def,
++#endif
++#ifdef HAVE_RPC_XPRT_OPS_WAIT_FOR_REPLY_REQUEST
+ 	.wait_for_reply_request	= xprt_wait_for_reply_request_def,
++#endif
+ 	.close			= xprt_rdma_bc_close,
+ 	.destroy		= xprt_rdma_bc_put,
+ 	.print_stats		= xprt_rdma_print_stats

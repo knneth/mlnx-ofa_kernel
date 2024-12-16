@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/wr.c
+
+Change-Id: Id6ceb882320dc733f31b53ca0daa60825000569b
+---
+ drivers/infiniband/hw/mlx5/wr.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/infiniband/hw/mlx5/wr.c
++++ b/drivers/infiniband/hw/mlx5/wr.c
+@@ -1139,6 +1139,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp
+ 			seg += sizeof(*xrc);
+ 			size += sizeof(*xrc) / 16;
+ 			fallthrough;
++
+ 		case IB_QPT_RC:
+ 			err = handle_qpt_rc(dev, qp, wr, &ctrl, &seg, &size,
+ 					    &cur_edge, &idx, nreq, fence,

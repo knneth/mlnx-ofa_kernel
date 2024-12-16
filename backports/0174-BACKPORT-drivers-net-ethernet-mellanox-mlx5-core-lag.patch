@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+
+Change-Id: I5a7bc9850a7cdae751547f740bf3f4b0cf45be2e
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_LAG_H__
+ 
+ #include <linux/debugfs.h>
++#include <linux/seq_file.h>
+ 
+ #define MLX5_LAG_MAX_HASH_BUCKETS 16
+ #include "mlx5_core.h"

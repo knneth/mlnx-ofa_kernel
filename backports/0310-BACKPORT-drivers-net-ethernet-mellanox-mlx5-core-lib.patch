@@ -1,0 +1,32 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
+
+Change-Id: I435452604a247596858318f0d853c3ea07c628b5
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
+@@ -120,8 +120,10 @@ mlx5_devcom_comp_alloc(u64 id, u64 key,
+ 	comp->key = key;
+ 	comp->handler = handler;
+ 	init_rwsem(&comp->sem);
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 	lockdep_register_key(&comp->lock_key);
+ 	lockdep_set_class(&comp->sem, &comp->lock_key);
++#endif
+ 	kref_init(&comp->ref);
+ 	INIT_LIST_HEAD(&comp->comp_dev_list_head);
+ 
+@@ -136,7 +138,9 @@ mlx5_devcom_comp_release(struct kref *re
+ 	mutex_lock(&comp_list_lock);
+ 	list_del(&comp->comp_list);
+ 	mutex_unlock(&comp_list_lock);
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 	lockdep_unregister_key(&comp->lock_key);
++#endif
+ 	kfree(comp);
+ }
+ 

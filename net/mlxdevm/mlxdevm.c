@@ -38,6 +38,7 @@ static const struct nla_policy mlxdevm_function_nl_policy[MLXDEVM_PORT_FUNCTION_
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_ROCE] = { .type = NLA_U8 },
 	[MLXDEVM_PORT_FN_ATTR_EXT_CAP_UC_LIST] = { .type = NLA_U32 },
 	[MLXDEVM_PORT_FN_ATTR_TRUST_STATE] = { .type = NLA_U8 },
+	[MLXDEVM_PORT_FN_ATTR_MAX_IO_EQS] = { .type = NLA_U32 },
 };
 
 static int mlxdevm_nl_dev_handle_fill(struct sk_buff *msg,
@@ -898,8 +899,7 @@ int mlxdevm_param_driverinit_value_set(struct mlxdevm *devm, u32 param_id,
 }
 EXPORT_SYMBOL_GPL(mlxdevm_param_driverinit_value_set);
 
-static struct mlxdevm_port *mlxdevm_port_get_by_index(struct mlxdevm *dev,
-						      unsigned int port_index)
+struct mlxdevm_port *mlxdevm_port_get_by_index(struct mlxdevm *dev, unsigned int port_index)
 {
 	struct mlxdevm_port *port;
 
@@ -909,6 +909,7 @@ static struct mlxdevm_port *mlxdevm_port_get_by_index(struct mlxdevm *dev,
 	}
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(mlxdevm_port_get_by_index);
 
 static bool mlxdevm_port_index_exists(struct mlxdevm *dev,
 				      unsigned int port_index)
@@ -1292,6 +1293,32 @@ mlxdevm_port_fn_cap_fill(const struct mlxdevm_ops *ops,
 }
 
 static int
+mlxdevm_port_fn_max_io_eqs_fill(const struct mlxdevm_ops *ops,
+				struct mlxdevm_port *port,
+				struct sk_buff *msg,
+				struct netlink_ext_ack *extack,
+				bool *msg_updated)
+{
+	u32 max_io_eqs;
+	int err;
+
+	if (!ops->port_fn_max_io_eqs_get)
+		return 0;
+
+	err = ops->port_fn_max_io_eqs_get(port, &max_io_eqs, extack);
+	if (err) {
+		if (err == -EOPNOTSUPP)
+			return 0;
+		return err;
+	}
+	err = nla_put_u32(msg, MLXDEVM_PORT_FN_ATTR_MAX_IO_EQS, max_io_eqs);
+	if (err)
+		return err;
+	*msg_updated = true;
+	return 0;
+}
+
+static int
 mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg,
 			     struct mlxdevm_port *port,
 			     struct netlink_ext_ack *extack)
@@ -1323,6 +1350,10 @@ mlxdevm_nl_port_fn_attrs_put(struct sk_buff *msg,
 	if (err)
 		goto out;
 	err = mlxdevm_port_fn_trust_fill(ops, port, msg, extack, &msg_updated);
+
+	if (err)
+		goto out;
+	err = mlxdevm_port_fn_max_io_eqs_fill(ops, port, msg, extack, &msg_updated);
 out:
 	if (err || !msg_updated)
 		nla_nest_cancel(msg, fn_attr);
@@ -2069,6 +2100,23 @@ mlxdevm_port_fn_trust_set(struct mlxdevm_port *port,
 	return ops->port_fn_trust_set(port, trust, extack);
 }
 
+static int
+mlxdevm_port_fn_max_io_eqs_set(struct mlxdevm_port *port,
+			       const struct nlattr *attr,
+			       struct netlink_ext_ack *extack)
+{
+	const struct mlxdevm_ops *ops;
+	u32 max_io_eqs;
+	max_io_eqs = nla_get_u32(attr);
+	ops = port->devm->ops;
+	if (!ops->port_fn_max_io_eqs_set) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Function does not support max_io_eqs setting");
+		return -EOPNOTSUPP;
+	}
+	return ops->port_fn_max_io_eqs_set(port, max_io_eqs, extack);
+}
+
 static int mlxdevm_port_fn_state_set(struct mlxdevm_port *port,
 				     const struct nlattr *attr,
 				     struct netlink_ext_ack *extack)
@@ -2118,6 +2166,13 @@ mlxdevm_port_fn_set(struct mlxdevm_port *port,
 	attr = tb[MLXDEVM_PORT_FN_ATTR_TRUST_STATE];
 	if (attr) {
 		err = mlxdevm_port_fn_trust_set(port, attr, extack);
+		if (err)
+			return err;
+	}
+
+	attr = tb[MLXDEVM_PORT_FN_ATTR_MAX_IO_EQS];
+	if (attr) {
+		err = mlxdevm_port_fn_max_io_eqs_set(port, attr, extack);
 		if (err)
 			return err;
 	}

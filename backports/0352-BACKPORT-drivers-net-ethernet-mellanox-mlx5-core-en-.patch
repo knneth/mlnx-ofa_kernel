@@ -1,0 +1,46 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+
+Change-Id: I4e0085808d7cc56c05b28c9cc9950e27d5493079
+---
+ .../ethernet/mellanox/mlx5/core/en/tc_tun_gre.c    | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+@@ -31,12 +31,22 @@ static int mlx5e_gen_ip_tunnel_header_gr
+ 	const struct ip_tunnel_key *tun_key  = &e->tun_info->key;
+ 	struct gre_base_hdr *greh = (struct gre_base_hdr *)(buf);
+ 	__be32 tun_id = tunnel_id_to_key32(tun_key->tun_id);
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS //forwardport
++	IP_TUNNEL_DECLARE_FLAGS(unsupp) = { };
++#endif
+ 	int hdr_len;
+ 
+ 	*ip_proto = IPPROTO_GRE;
+ 
+ 	/* the HW does not calculate GRE csum or sequences */
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS //forwardport
++	__set_bit(IP_TUNNEL_CSUM_BIT, unsupp);
++	__set_bit(IP_TUNNEL_SEQ_BIT, unsupp);
++
++	if (ip_tunnel_flags_intersect(tun_key->tun_flags, unsupp))
++#else
+ 	if (tun_key->tun_flags & (TUNNEL_CSUM | TUNNEL_SEQ))
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	greh->protocol = htons(ETH_P_TEB);
+@@ -44,7 +54,11 @@ static int mlx5e_gen_ip_tunnel_header_gr
+ 	/* GRE key */
+ 	hdr_len	= mlx5e_tc_tun_calc_hlen_gretap(e);
+ 	greh->flags = gre_tnl_flags_to_gre_flags(tun_key->tun_flags);
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS //forwardport
++	if (test_bit(IP_TUNNEL_KEY_BIT, tun_key->tun_flags)) {
++#else
+ 	if (tun_key->tun_flags & TUNNEL_KEY) {
++#endif
+ 		__be32 *ptr = (__be32 *)(((u8 *)greh) + hdr_len - 4);
+ 		*ptr = tun_id;
+ 	}

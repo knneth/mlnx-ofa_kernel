@@ -1,0 +1,18 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/fs.h
+
+Change-Id: I880b767f806afc57147580e64d40a7e40e812ba7
+---
+ include/linux/mlx5/fs.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/linux/mlx5/fs.h
++++ b/include/linux/mlx5/fs.h
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/mlx5/driver.h>
+ #include <linux/mlx5/mlx5_ifc.h>
++#include <linux/hashtable.h>
+ 
+ #define MLX5_FS_DEFAULT_FLOW_TAG 0x0
+ 

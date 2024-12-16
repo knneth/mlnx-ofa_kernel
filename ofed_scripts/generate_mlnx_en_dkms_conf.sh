@@ -44,7 +44,7 @@ echo kernel_source_dir=\${kernel_source_dir:-"/lib/modules/\$kernelver/build"}
 
 modules="compat/mlx_compat"
 if [ $with_mlx5 -eq 1 ]; then
-	modules="$modules drivers/net/ethernet/mellanox/mlx5/core/mlx5_core drivers/infiniband/hw/mlx5/mlx5_ib"
+	modules="$modules drivers/net/ethernet/mellanox/mlx5/core/mlx5_core drivers/infiniband/hw/mlx5/mlx5_ib-dummy/mlx5_ib"
 else
 	MLNX_EN_PATCH_PARAMS="$MLNX_EN_PATCH_PARAMS --without-mlx5"
 fi
@@ -78,7 +78,7 @@ do
 	esac
 done
 
-echo "MAKE=\"./scripts/mlnx_en_patch.sh --kernel \$kernelver --kernel-sources \$kernel_source_dir ${MLNX_EN_PATCH_PARAMS} -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16))) && make -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16)))\""
+echo "MAKE=\"./configure --mlnx_en --kernel-version \$kernelver --kernel-sources \$kernel_source_dir ${MLNX_EN_PATCH_PARAMS} -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16))) && make -j\$(MLXNUMC=\$(grep ^processor /proc/cpuinfo | wc -l) && echo \$((\$MLXNUMC<16?\$MLXNUMC:16)))\""
 
 echo CLEAN=\"make clean\"
 echo PACKAGE_NAME=$PACKAGE_NAME

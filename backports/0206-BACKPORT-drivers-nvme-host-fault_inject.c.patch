@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fault_inject.c
+
+Change-Id: I0f080a538cd3fb6b79b2234d65e35ebf079dc568
+---
+ drivers/nvme/host/fault_inject.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/host/fault_inject.c
++++ b/drivers/nvme/host/fault_inject.c
+@@ -56,7 +56,11 @@ void nvme_fault_inject_fini(struct nvme_
+ 
+ void nvme_should_fail(struct request *req)
+ {
++#ifdef HAVE_REQ_RQ_DISK
++	struct gendisk *disk = req->rq_disk;
++#else
+ 	struct gendisk *disk = req->q->disk;
++#endif
+ 	struct nvme_fault_inject *fault_inject = NULL;
+ 	u16 status;
+ 
