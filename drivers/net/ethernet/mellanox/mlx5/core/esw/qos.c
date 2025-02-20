@@ -1847,8 +1847,8 @@ static int esw_qos_destroy_tc_arbiter_node(struct mlx5_vport *vport, bool force,
 	return ret;
 }
 
-static int esw_qos_vport_disable_tc_arbitration(struct mlx5_vport *vport,
-						struct netlink_ext_ack *extack)
+int esw_qos_vport_disable_tc_arbitration(struct mlx5_vport *vport,
+					 struct netlink_ext_ack *extack)
 {
 	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
 
@@ -1856,6 +1856,12 @@ static int esw_qos_vport_disable_tc_arbitration(struct mlx5_vport *vport,
 
 	if (!vport->qos.tc.arbiter_node)
 		return 0;
+
+	if (!esw_qos_tc_arbitration_enabled_on_vport(vport)) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Cannot disable TC arbitration on vport assigned to a node with TC arbitration enabled");
+		return -EOPNOTSUPP;
+	}
 
 	return esw_qos_destroy_tc_arbiter_node(vport, false, extack);
 }
@@ -2458,8 +2464,11 @@ static bool esw_qos_validate_unsupported_tc_bw(struct mlx5_eswitch *esw, u32 *tc
 
 static bool esw_qos_vport_validate_unsupported_tc_bw(struct mlx5_vport *vport, u32 *tc_bw)
 {
-	struct mlx5_eswitch *esw = vport->qos.sched_node ?
-				   vport->qos.sched_node->parent->esw : vport->dev->priv.eswitch;
+	struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(vport);
+	struct mlx5_eswitch *esw = vport->dev->priv.eswitch;
+
+	if (parent)
+		esw = parent->esw;
 
 	return esw_qos_validate_unsupported_tc_bw(esw, tc_bw);
 }
@@ -2763,32 +2772,17 @@ int mlx5_esw_sysfs_rate_node_tc_bw_set(void *priv, u32 *tc_bw,
 	return rate_node_tc_bw_set(priv, tc_bw, extack);
 }
 
-int mlx5_esw_devm_rate_node_tc_bw_set(struct mlx5_eswitch *esw, const char *group_name,
+int mlx5_esw_devm_rate_node_tc_bw_set(struct mlx5_eswitch *esw,
+				      struct mlx5_esw_sched_node *node,
 				      u32 *tc_bw, struct netlink_ext_ack *extack)
 {
-	bool disable = true, found = false;
-	struct mlx5_esw_sched_node *node;
+	bool disable;
 	int err;
-
 
 	if (!refcount_read(&esw->qos.refcnt))
 		return 0;
 
 	esw_qos_lock(esw);
-	esw_assert_qos_lock_held(esw);
-	list_for_each_entry(node, &esw->qos.domain->nodes, entry) {
-		if (node->devm.name && !strcmp(node->devm.name, group_name)) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found) {
-		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
-		err = -ENODEV;
-		goto out;
-	}
-
 	if (!esw_qos_validate_unsupported_tc_bw(node->esw, tc_bw)) {
 		NL_SET_ERR_MSG_MOD(extack, "E-Switch traffic classes number is not supported");
 		err = -EOPNOTSUPP;
@@ -2812,9 +2806,9 @@ int mlx5_esw_devm_rate_node_tc_bw_set(struct mlx5_eswitch *esw, const char *grou
 		goto out;
 	}
 
-	memcpy(node->devm.tc_bw, tc_bw, sizeof(node->devm.tc_bw));
-
 out:
+	if (!err)
+		memcpy(node->devm.tc_bw, tc_bw, sizeof(node->devm.tc_bw));
 	esw_qos_unlock(esw);
 
 	return err;

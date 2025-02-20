@@ -8,7 +8,7 @@ Change-Id: I1c481de5e7447aab94370a877bbe0ee87d0d6a34
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
-@@ -177,6 +177,6 @@ int mlx5_esw_devlink_rate_parent_set(str
+@@ -180,6 +180,6 @@ int mlx5_esw_devlink_rate_parent_set(str
  
  #endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
  

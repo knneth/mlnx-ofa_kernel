@@ -142,12 +142,15 @@ int
 esw_qos_destroy_vports_tc_nodes(struct mlx5_esw_sched_node *tc_arbiter_node, bool force,
 				struct netlink_ext_ack *extack);
 int mlx5_esw_devm_rate_leaf_tc_bw_set(void *priv, u32 *tc_bw, struct netlink_ext_ack *extack);
-int mlx5_esw_devm_rate_node_tc_bw_set(struct mlx5_eswitch *esw, const char *group_name,
+int mlx5_esw_devm_rate_node_tc_bw_set(struct mlx5_eswitch *esw,
+				      struct mlx5_esw_sched_node *group,
 				      u32 *tc_bw, struct netlink_ext_ack *extack);
 int mlx5_esw_qos_set_vport_tc_min_rate(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 				       u64 tx_share, struct netlink_ext_ack *extack);
 int mlx5_esw_rate_leaf_tx_max_set(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 				  u64 tx_max, struct netlink_ext_ack *extack);
+int esw_qos_vport_disable_tc_arbitration(struct mlx5_vport *vport,
+					 struct netlink_ext_ack *extack);
 
 int esw_qos_vport_update_node(struct mlx5_vport *vport, struct mlx5_esw_sched_node *node,
 			      struct netlink_ext_ack *extack);

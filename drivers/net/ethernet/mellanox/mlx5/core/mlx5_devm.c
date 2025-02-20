@@ -162,12 +162,21 @@ static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
                          xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
+static
+int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
+				     struct devlink_port *port,
+				     const char *group_name,
+				     struct netlink_ext_ack *extack);
+
 static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 			  unsigned int port_index,
 			  struct netlink_ext_ack *extack)
 {
 	struct mlx5_devm_device *mdevm_dev;
+	struct devlink_port devport;
 	struct mlxdevm_port *port;
+	struct mlx5_eswitch *esw;
+	struct mlx5_vport *vport;
 	struct devlink *devlink;
 	int ret;
 
@@ -179,6 +188,17 @@ static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 	port = mlxdevm_port_get_by_index(devm_dev, port_index);
 	if (!port)
 		return -ENODEV;
+
+	devlink = mlxdevm_to_devlink(port->devm);
+	memset(&devport, 0, sizeof(devport));
+	devport.index = port->index;
+
+	ret = mlx5_esw_get_esw_and_vport(devlink, &devport, &esw, &vport, extack);
+	if (ret)
+		return ret;
+
+	esw_qos_vport_disable_tc_arbitration(vport, NULL);
+	mlx5_devlink_rate_leaf_group_set(devlink, &devport, "", extack);
 
 	devl_lock(devlink);
 	ret = mlx5_devlink_sf_port_del(devlink, port->dl_port, extack);
@@ -412,7 +432,7 @@ esw_qos_find_devm_group(struct mlx5_eswitch *esw, const char *group)
 
 	esw_assert_qos_lock_held(esw);
 	list_for_each_entry(tmp, &esw->qos.domain->nodes, entry) {
-		if (tmp->devm.name && !strcmp(tmp->devm.name, group))
+		if (tmp->esw == esw && tmp->devm.name && !strcmp(tmp->devm.name, group))
 			return tmp;
 	}
 
@@ -441,13 +461,11 @@ int mlx5_devlink_rate_leaf_get(struct devlink *devlink,
 	}
 
 	if (vport->qos.sched_node) {
+		struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(vport);
 		*tx_max = vport->qos.sched_node->max_rate;
 		*tx_share = vport->qos.sched_node->min_rate;
-
-		if (vport->qos.tc.arbiter_node)
-			*group = vport->qos.tc.arbiter_node->devm.name;
-		else if (vport->qos.sched_node->parent)
-			*group = vport->qos.sched_node->parent->devm.name;
+		if (parent)
+			*group = parent->devm.name;
 	}
 
 out:
@@ -570,7 +588,7 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 		new_group = esw->qos.node0;
 
 		if (esw_qos_tc_arbitration_enabled_on_vport(vport))
-			err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, NULL, extack);
+			goto unlock;
 		else if (vport->qos.tc.arbiter_node)
 			err = esw_qos_vport_tc_disable(vport, NULL, extack);
 		else
@@ -589,6 +607,12 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 		goto unlock;
 	}
 
+	if (new_group->esw != vport->dev->priv.eswitch) {
+		NL_SET_ERR_MSG_MOD(extack, "Vport and group eswitch are not the same");
+		err = -EINVAL;
+		goto unlock;
+	}
+
 	if (new_group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
 		if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
 			NL_SET_ERR_MSG_MOD(extack,
@@ -601,7 +625,12 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 		goto check_err;
 	}
 
-	err = esw_qos_vport_update_node(vport, new_group, extack);
+
+	if (esw_qos_tc_arbitration_enabled_on_vport(vport))
+		err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, new_group, extack);
+	else
+		err = esw_qos_vport_update_node(vport, new_group, extack);
+
 check_err:
 	if (!err) {
 		goto out;
@@ -709,6 +738,7 @@ unlock:
 static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm *devm_dev, const char *group_name,
 					 u32 *tc_bw, struct netlink_ext_ack *extack)
 {
+	struct mlx5_esw_sched_node *group;
 	struct mlx5_core_dev *dev;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
@@ -717,7 +747,15 @@ static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm *devm_dev, const char *g
 	dev = devlink_priv(devlink);
 	esw = dev->priv.eswitch;
 
-	return mlx5_esw_devm_rate_node_tc_bw_set(esw, group_name, tc_bw, extack);
+	esw_qos_lock(esw);
+	group = esw_qos_find_devm_group(esw, group_name);
+	esw_qos_unlock(esw);
+	if (!group) {
+		NL_SET_ERR_MSG_MOD(extack, "Can't find node");
+		return -ENODEV;
+	}
+
+	return mlx5_esw_devm_rate_node_tc_bw_set(esw, group, tc_bw, extack);
 }
 
 static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_name,

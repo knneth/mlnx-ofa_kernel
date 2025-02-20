@@ -1,4 +1,4 @@
-mlnx-ofed-kernel (24.10-OFED.24.10.1.1.4.1) unstable; urgency=low
+mlnx-ofed-kernel (24.10.OFED.24.10.1.1.4.0.105.1-1) unstable; urgency=low
 
   * Initial release (Closes: #125306)
 
