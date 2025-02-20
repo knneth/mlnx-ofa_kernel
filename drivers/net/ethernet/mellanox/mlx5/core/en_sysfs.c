@@ -1460,10 +1460,10 @@ static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 
 #else
 
-static inline int hp_sysfs_init(struct mlx5e_priv *priv)
+int hp_sysfs_init(struct mlx5e_priv *priv)
 { return 0; }
 
-static inline void hp_sysfs_cleanup(struct mlx5e_priv *priv)
+void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 {}
 
 #endif /*CONFIG_MLX5_CLS_ACT*/

@@ -111,8 +111,10 @@ enum {
 	MLX5_QP_ST_QP1				= 0x8,
 	MLX5_QP_ST_RAW_ETHERTYPE		= 0x9,
 	MLX5_QP_ST_RAW_IPV6			= 0xa,
+	MLX5_QP_ST_SNIFFER			= 0xb,
+	MLX5_QP_ST_SYNC_UMR			= 0xe,
+	MLX5_QP_ST_PTP_1588			= 0xd,
 	MLX5_QP_ST_REG_UMR			= 0xc,
-	MLX5_QP_ST_SW_CNAK			= 0x10,
 	MLX5_QP_ST_MAX
 };
 
@@ -149,6 +151,7 @@ enum {
 	MLX5_WQE_CTRL_CQ_UPDATE		= 2 << 2,
 	MLX5_WQE_CTRL_CQ_UPDATE_AND_EQE	= 3 << 2,
 	MLX5_WQE_CTRL_SOLICITED		= 1 << 1,
+	MLX5_WQE_CTRL_INITIATOR_SMALL_FENCE = 1 << 5,
 };
 
 enum {
@@ -218,21 +221,6 @@ struct mlx5_wqe_ctrl_seg {
 	};
 
 	); /* end of trailer group */
-};
-
-enum {
-	MLX5_MLX_FLAG_MASK_VL15 = 0x40,
-	MLX5_MLX_FLAG_MASK_SLR  = 0x20,
-	MLX5_MLX_FLAG_MASK_ICRC = 0x8,
-	MLX5_MLX_FLAG_MASK_FL   = 4
-};
-
-struct mlx5_mlx_seg {
-	__be32          rsvd0;
-	u8              flags;
-	u8              stat_rate_sl;
-	u8              rsvd1[8];
-	__be16          dlid;
 };
 
 #define MLX5_WQE_CTRL_DS_MASK 0x3f
@@ -556,8 +544,10 @@ static inline const char *mlx5_qp_type_str(int type)
 	case MLX5_QP_ST_QP1: return "QP1";
 	case MLX5_QP_ST_RAW_ETHERTYPE: return "RAW_ETHERTYPE";
 	case MLX5_QP_ST_RAW_IPV6: return "RAW_IPV6";
+	case MLX5_QP_ST_SNIFFER: return "SNIFFER";
+	case MLX5_QP_ST_SYNC_UMR: return "SYNC_UMR";
+	case MLX5_QP_ST_PTP_1588: return "PTP_1588";
 	case MLX5_QP_ST_REG_UMR: return "REG_UMR";
-	case MLX5_QP_ST_SW_CNAK: return "DC_CNAK";
 	default: return "Invalid transport type";
 	}
 }

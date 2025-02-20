@@ -49,8 +49,9 @@ struct nvmet_rdma_backend_ctrl {
 	struct nvme_peer_resource *ofl;
 	struct nvmet_rdma_xrq	  *xrq;
 	struct work_struct	  release_work;
-	/* Restart the nvme queue for future usage */
-	bool			  restart;
+	/* Recreate a new backend ctrl */
+	bool			  recreate_bec;
+	bool			  destroy_queues;
 	struct nvmet_offload_ctx  offload_ctx;
 };
 
@@ -108,6 +109,8 @@ static int nvmet_rdma_enable_offload_ns(struct nvmet_ctrl *ctrl,
 					struct nvmet_ns *ns);
 static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl,
 					  struct nvmet_ns *ns);
+static bool nvmet_rdma_offload_ns_is_active(struct nvmet_ctrl *ctrl,
+					    struct nvmet_ns *ns);
 static bool nvmet_rdma_peer_to_peer_capable(struct nvmet_port *nport);
 static bool nvmet_rdma_check_subsys_match_offload_port(struct nvmet_port *nport,
 						struct nvmet_subsys *subsys);

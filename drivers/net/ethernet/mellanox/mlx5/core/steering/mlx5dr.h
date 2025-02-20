@@ -153,11 +153,6 @@ int mlx5dr_action_destroy(struct mlx5dr_action *action);
 
 u32 mlx5dr_action_get_pkt_reformat_id(struct mlx5dr_action *action);
 
-int mlx5dr_definer_get(struct mlx5dr_domain *dmn, u16 format_id,
-		       u8 *dw_selectors, u8 *byte_selectors,
-		       u8 *match_mask, u32 *definer_id);
-void mlx5dr_definer_put(struct mlx5dr_domain *dmn, u32 definer_id);
-
 static inline bool
 mlx5dr_is_supported(struct mlx5_core_dev *dev)
 {
@@ -165,7 +160,7 @@ mlx5dr_is_supported(struct mlx5_core_dev *dev)
 	       (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner) ||
 		(MLX5_CAP_ESW_FLOWTABLE_FDB(dev, sw_owner_v2) &&
 		 (MLX5_CAP_GEN(dev, steering_format_version) <=
-		  MLX5_STEERING_FORMAT_CONNECTX_7)));
+		  MLX5_STEERING_FORMAT_CONNECTX_8)));
 }
 
 /* buddy functions & structure */

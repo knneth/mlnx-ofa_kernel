@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
 
-Change-Id: Icf9a7ba9c3d7f83c03977993bf7576aa8da87dff
+Change-Id: I7af69bc8927271e20e8faf56aa06fe028dd5fbdd
 ---
  drivers/net/ethernet/mellanox/mlx5/core/ecpf.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)

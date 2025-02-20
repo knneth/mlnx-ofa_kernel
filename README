@@ -108,30 +108,28 @@ $ make KBUILD_NOCMDDEP=1 2>&1 | tee log
 In case of undefined variable/function refer to:
 https://backports.wiki.kernel.org/index.php/Documentation/compat
 
-If some functionality was backported to some supported Distro need to add CONFIG_COMPAT_... flag (or even better, use autotools
-and define flags like HAVE_... see compat/config/rdma.m4):
-For example, "netdev_get_prio_tc_map" was added in 2.6.39 but backported to RHEL6.[23]
-ifeq ($(RHEL_MAJOR),6)
- CFLAGS += -DCONFIG_COMPAT_IS_PRIO_TC_MAP
- ...
-endif
+If some functionality was added to a kernel version, which ofed needs to support,
+then define flags like HAVE_... might be needed (see compat/config/rdma.m4):
 
-diff --git a/drivers/infiniband/core/cma.c b/drivers/infiniband/core/cma.c
-index 0bf5a9d..f0f75b6 100644
---- a/drivers/infiniband/core/cma.c
-+++ b/drivers/infiniband/core/cma.c
-@@ -1844,10 +1844,14 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
-        route->path_rec->reversible = 1;
-        route->path_rec->pkey = cpu_to_be16(0xffff);
-        route->path_rec->mtu_selector = IB_SA_EQ;
-+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)) || defined(CONFIG_COMPAT_IS_PRIO_TC_MAP)
-        route->path_rec->sl = netdev_get_prio_tc_map(
-                        ndev->priv_flags & IFF_802_1Q_VLAN ?
-                                vlan_dev_real_dev(ndev) : ndev,
-                        rt_tos2priority(id_priv->tos));
+For example, in v6.10 kernel, extack parameter was added to set function pointer of struct devlink_param.
+Code diff like the below adds the extack parameter (in backports)  to support the v6.10 new function signature.
+
+@@ -1315,7 +1320,12 @@ void mlx5_devlink_params_unregister(struct devlink *devlink)
+ 
+ int
+ mlx5_devlink_ct_action_on_nat_conns_set(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++                                       struct devlink_param_gset_ctx *ctx,
++                                       struct netlink_ext_ack *extack)
 +#else
-+       route->path_rec->sl = id_priv->tos >> 5;
+                                        struct devlink_param_gset_ctx *ctx)
 +#endif
+ {
+        struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 
+for full details 
+see commits
+01c0101676a2 ("BACKPORTS: KORG 6.10-rc3 support, extack parameter for devlink_param set")
 
 Create a new backport patch from the diff above:
 1. Commit the change.

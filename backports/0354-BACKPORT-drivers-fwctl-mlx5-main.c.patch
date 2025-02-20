@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
 ---
- drivers/fwctl/mlx5/main.c | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ drivers/fwctl/mlx5/main.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
 
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
@@ -16,31 +16,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  
  struct mlx5_ifc_mbox_in_hdr_bits {
  	u8 opcode[0x10];
-@@ -224,7 +225,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
- 		container_of(uctx->fwctl, struct mlx5ctl_dev, fwctl);
- 	struct mlx5ctl_uctx *mfd =
- 		container_of(uctx, struct mlx5ctl_uctx, uctx);
-+#ifdef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER
- 	void *rpc_alloc __free(kvfree) = NULL;
-+#else
-+	void *rpc_alloc __free(kvfree_wrapper) = NULL;
-+#endif
- 	void *rpc_out;
- 	int ret;
- 
-@@ -274,7 +279,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
- 		return ERR_PTR(ret);
- 	if (rpc_out == rpc_in)
- 		return rpc_in;
-+#ifdef HAVE_AUTO_TYPE
- 	return_ptr(rpc_alloc);
-+#else
-+	return rpc_alloc;
-+#endif
- }
- 
- static const struct fwctl_ops mlx5ctl_ops = {
-@@ -304,7 +313,13 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -309,7 +310,13 @@ static int mlx5ctl_probe(struct auxiliar
  	ret = fwctl_register(&mcdev->fwctl);
  	if (ret)
  		return ret;
@@ -54,13 +30,3 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	return 0;
  }
  
-@@ -330,7 +345,9 @@ static struct auxiliary_driver mlx5ctl_d
- 
- module_auxiliary_driver(mlx5ctl_driver);
- 
-+#ifdef MODULE_IMPORT_NS
- MODULE_IMPORT_NS(FWCTL);
-+#endif
- MODULE_DESCRIPTION("mlx5 ConnectX fwctl driver");
- MODULE_AUTHOR("Saeed Mahameed <saeedm@nvidia.com>");
- MODULE_LICENSE("Dual BSD/GPL");

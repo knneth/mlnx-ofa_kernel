@@ -68,7 +68,7 @@ AC_SUBST(modulenetdir)
 # ------------ RELEASE --------------------------------
 AC_MSG_CHECKING([for MLNX release])
 AC_ARG_WITH([release],
-	AC_HELP_STRING([--with-release=string],
+	AS_HELP_STRING([--with-release=string],
 		       [set the release string (default=$kvers_YYYYMMDDhhmm)]),
 	[RELEASE=$withval],
 	RELEASE=""
@@ -155,7 +155,7 @@ for DEFAULT_LINUX_OBJ in $PATHS; do
 done
 AC_MSG_CHECKING([for Linux sources])
 AC_ARG_WITH([linux],
-	AC_HELP_STRING([--with-linux=path],
+	AS_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/lib/modules/$(uname -r)/{source,build},/usr/src/linux)]),
 	[LB_ARG_CANON_PATH([linux], [LINUX])
 	DEFAULT_LINUX_OBJ=$LINUX],
@@ -170,7 +170,7 @@ LB_CHECK_FILE([$LINUX],[],
 # -------- linux objects (for 2.6) --
 AC_MSG_CHECKING([for Linux objects dir])
 AC_ARG_WITH([linux-obj],
-	AC_HELP_STRING([--with-linux-obj=path],
+	AS_HELP_STRING([--with-linux-obj=path],
 			[set path to Linux objects dir (default=/lib/modules/$(uname -r)/build,/usr/src/linux)]),
 	[LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])],
 	[LINUX_OBJ=$DEFAULT_LINUX_OBJ])
@@ -180,7 +180,7 @@ AC_SUBST(LINUX_OBJ)
 
 # -------- check for .config --------
 AC_ARG_WITH([linux-config],
-	[AC_HELP_STRING([--with-linux-config=path],
+	[AS_HELP_STRING([--with-linux-config=path],
 			[set path to Linux .conf (default=$LINUX_OBJ/include/config/auto.conf)])],
 	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
 	[LINUX_CONFIG=$LINUX_OBJ/include/config/auto.conf])
@@ -192,7 +192,7 @@ LB_CHECK_FILE([/boot/kernel.h],
 		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])])
 
 AC_ARG_WITH([kernel-source-header],
-	AC_HELP_STRING([--with-kernel-source-header=path],
+	AS_HELP_STRING([--with-kernel-source-header=path],
 			[Use a different kernel version header.  Consult build/README.kernel-source for details.]),
 	[LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])])
 
@@ -200,58 +200,6 @@ AC_ARG_WITH([kernel-source-header],
 LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
-# ----------- kconfig.h exists ---------------
-# kernel 3.1, $LINUX/include/linux/kconfig.h is added
-# see kernel commit 2a11c8ea20bf850b3a2c60db8c2e7497d28aba99
-LB_CHECK_FILE([$LINUX/include/linux/kconfig.h],
-              [CONFIG_INCLUDE=$LINUX/include/linux/kconfig.h],
-              [CONFIG_INCLUDE=$LINUX/include/generated/kconfig.h])
-	AC_SUBST(CONFIG_INCLUDE)
-
-if test -e $CONFIG_INCLUDE; then
-	CONFIG_INCLUDE_FLAG="-include $CONFIG_INCLUDE"
-fi
-
-# ------------ rhconfig.h includes runtime-generated bits --
-# red hat kernel-source checks
-
-# we know this exists after the check above.  if the user
-# tarred up the tree and ran make dep etc. in it, then
-# version.h gets overwritten with a standard linux one.
-#
-if (grep -q rhconfig $LINUX_OBJ/include/linux/version.h 2>/dev/null) ||
-   (grep -q rhconfig $LINUX_OBJ/include/generated/uapi/linux/version.h 2>/dev/null) ; then
-	# This is a clean kernel-source tree, we need to
-	# enable extensive workarounds to get this to build
-	# modules
-	LB_CHECK_FILE([$KERNEL_SOURCE_HEADER],
-		[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
-			AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
-			AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])
-			AC_MSG_WARN([Consult build/README.kernel-source for details.])
-		fi],
-		[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult build/README.kernel-source for details.])])
-	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
-fi
-
-# this is needed before we can build modules
-SET_BUILD_ARCH
-LB_LINUX_CROSS
-LB_LINUX_VERSION
-SET_XEN_INCLUDES
-
-# --- check that we can build modules at all
-AC_MSG_CHECKING([that modules can be built at all])
-LB_LINUX_TRY_COMPILE([],[],[
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-	AC_MSG_WARN([Consult config.log for details.])
-	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
-	AC_MSG_ERROR([Kernel modules cannot be built.])
-])
-
-LB_LINUX_RELEASE
 ]) # end of LB_LINUX_PATH
 
 # LB_LINUX_SYMVERFILE
@@ -307,7 +255,9 @@ AC_SUBST(CROSS_VARS)
 # --------------------------------------
 m4_define([LB_LANG_PROGRAM],
 [
+#include <linux/module.h>
 #include <linux/kernel.h>
+MODULE_LICENSE("GPL");
 $1
 int
 main (void)
@@ -438,7 +388,7 @@ AC_DEFUN([LB_CONFIG_COMPAT_RDMA],
 [AC_MSG_CHECKING([whether to use Compat RDMA])
 # set default
 AC_ARG_WITH([o2ib],
-	AC_HELP_STRING([--with-o2ib=path],
+	AS_HELP_STRING([--with-o2ib=path],
 		       [build o2iblnd against path]),
 	[
 		case $with_o2ib in

@@ -9,7 +9,6 @@
 #include <linux/version.h>
 #include <linux/kconfig.h>
 #include <linux/if.h>
-#include <linux/compat_autoconf.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/uidgid.h>

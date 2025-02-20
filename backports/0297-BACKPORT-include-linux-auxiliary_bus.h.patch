@@ -1,0 +1,90 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
+
+Change-Id: If2d5fa867cdfa6fdb94b569a8686094c8743f4d1
+---
+ include/linux/auxiliary_bus.h | 39 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+--- a/include/linux/auxiliary_bus.h
++++ b/include/linux/auxiliary_bus.h
+@@ -8,8 +8,11 @@
+ #ifndef _AUXILIARY_BUS_H_
+ #define _AUXILIARY_BUS_H_
+ 
++#include "../../compat/config.h"
++
+ #include <linux/device.h>
+ #include <linux/mod_devicetable.h>
++#include <linux/xarray.h>
+ 
+ /**
+  * DOC: DEVICE_LIFESPAN
+@@ -222,10 +225,17 @@ int __auxiliary_device_add(struct auxili
+ #define auxiliary_device_add(auxdev) __auxiliary_device_add(auxdev, KBUILD_MODNAME)
+ 
+ #ifdef CONFIG_SYSFS
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
+ int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
+ void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
+ 				       int irq);
++#else
++int mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
++void mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
++ 				       int irq);
++#endif
+ #else /* CONFIG_SYSFS */
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
+ static inline int
+ auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
+ {
+@@ -234,11 +244,21 @@ auxiliary_device_sysfs_irq_add(struct au
+ 
+ static inline void
+ auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
++#else
++static inline int
++mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
++{
++	return 0;
++}
++mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
+ #endif
++#endif /* CONFIG_SYSFS */
+ 
+ static inline void auxiliary_device_uninit(struct auxiliary_device *auxdev)
+ {
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
+ 	mutex_destroy(&auxdev->sysfs.lock);
++#endif
+ 	put_device(&auxdev->dev);
+ }
+ 
+@@ -269,8 +289,27 @@ void auxiliary_driver_unregister(struct
+ #define module_auxiliary_driver(__auxiliary_driver) \
+ 	module_driver(__auxiliary_driver, auxiliary_driver_register, auxiliary_driver_unregister)
+ 
++#ifndef device_match_t
++/* Matching function type for drivers/base APIs to find a specific device */
++typedef int (*device_match_t)(struct device *dev, const void *data);
++#endif
++
++#ifdef HAVE_LINUX_DEVICE_BUS_H
+ struct auxiliary_device *auxiliary_find_device(struct device *start,
+ 					       const void *data,
+ 					       device_match_t match);
+ 
++#else
++#ifdef HAVE_BUS_FIND_DEVICE_GET_CONST
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      const void *data,
++		      int (*match)(struct device *dev, const void *data));
++#else
++struct auxiliary_device *
++auxiliary_find_device(struct device *start, 
++		      void *data,
++		      int (*match)(struct device *dev, void *data));
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST */
++#endif /* HAVE_LINUX_DEVICE_BUS_H */
+ #endif /* _AUXILIARY_BUS_H_ */

@@ -80,6 +80,7 @@ if [ "$branch" != "$current_branch" ]; then
 fi
 /bin/rm -f backports_applied
 /bin/rm -f compat/configure
+/bin/rm -rf compat/modtest/
 /bin/rm -f compat/build/conftest.c  compat/build/modules.order  compat/build/Module.symvers compat/config.log
 /bin/rm -f compat/config/config.* compat/config/missing compat/config/install-sh  compat/aclocal.m4 compat/config/compile compat/config/ltmain.sh
 /bin/rm -rf compat/autom4te.cache compat/build/output.log compat/config.h compat/config.h.in compat/config.status compat/COPYING compat/INSTALL compat/Makefile.in

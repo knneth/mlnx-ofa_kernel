@@ -22,6 +22,10 @@ __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
 					  struct nvmet_port *nport);
 static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
 				 struct nvmet_ctrl *ctrl);
+static bool nvmet_rdma_ns_attached_to_xrq(struct nvmet_rdma_xrq *xrq,
+					  struct nvmet_ns *ns);
+static struct nvmet_rdma_backend_ctrl *nvmet_rdma_create_be_ctrl(
+			struct nvmet_rdma_xrq *xrq, struct nvmet_ns *ns);
 
 static int nvmet_rdma_fill_srq_nvmf_attrs(struct ib_srq_init_attr *srq_attr,
 					  struct nvmet_rdma_xrq *xrq)
@@ -349,7 +353,7 @@ static u16 nvmet_rdma_install_offload_queue(struct nvmet_sq *sq)
 		if (ret) {
 			pr_err("failed to get XRQ for queue (%d)\n",
 			       queue->host_qid);
-			return NVME_SC_INTERNAL | NVME_SC_DNR;
+			return NVME_SC_INTERNAL | NVME_STATUS_DNR;
 		}
 		qp_attr_mask |= IB_QP_RMPN_XRQN;
 		attr.rmpn_xrqn = queue->xrq->ofl_srq->srq->ext.xrc.srq_num;
@@ -357,17 +361,73 @@ static u16 nvmet_rdma_install_offload_queue(struct nvmet_sq *sq)
 
 	ret = ib_modify_qp(queue->cm_id->qp, &attr, qp_attr_mask);
 	if (ret)
-		return NVME_SC_INTERNAL | NVME_SC_DNR;
+		return NVME_SC_INTERNAL | NVME_STATUS_DNR;
 	return 0;
+}
+
+static void nvmet_rdma_be_ctrl_list_del_locked(struct nvmet_rdma_backend_ctrl *be_ctrl)
+{
+	list_del_init(&be_ctrl->entry);
+	be_ctrl->xrq->nr_be_ctrls--;
+}
+
+static bool nvmet_rdma_be_ctrl_list_del(struct nvmet_rdma_backend_ctrl *be_ctrl)
+{
+	struct nvmet_rdma_xrq *xrq = be_ctrl->xrq;
+	bool removed = false;
+
+	mutex_lock(&xrq->be_mutex);
+	if (!list_empty(&be_ctrl->entry)) {
+		nvmet_rdma_be_ctrl_list_del_locked(be_ctrl);
+		removed = true;
+	}
+	mutex_unlock(&xrq->be_mutex);
+
+	return removed;
+}
+
+static void
+nvmet_rdma_try_recreate_be_ctrl(struct nvmet_rdma_xrq *xrq,
+				struct nvmet_ns *ns)
+{
+	struct nvmet_subsys *subsys = xrq->subsys;
+	struct nvmet_rdma_backend_ctrl *be_ctrl;
+
+	mutex_lock(&subsys->lock);
+	mutex_lock(&xrq->offload_ctrl_mutex);
+
+	/* Don't recreate the be_ctrl in the following cases:
+	 * - No controller is connected to the XRQ
+	 * - NS is disabled
+	 * - A be_ctrl was already created during reconnect flow
+	 * Those scenarios can happen because the be_ctrl destruction flow
+	 * is asynchronous to avoid hangs when SSD is stuck.
+	 */
+	if (!xrq->offload_ctrls_cnt || !ns->enabled || !ns->pdev ||
+	    nvmet_rdma_ns_attached_to_xrq(xrq, ns))
+		goto out;
+
+	be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
+	if (IS_ERR(be_ctrl)) {
+		dev_err(&ns->pdev->dev,
+			"Failed to recreate be_ctrl for xrq %p\n", xrq);
+		goto out;
+	}
+
+	dev_info(&ns->pdev->dev,
+		 "Recreated be_ctrl %p for xrq %p\n", be_ctrl, xrq);
+
+out:
+	mutex_unlock(&xrq->offload_ctrl_mutex);
+	mutex_unlock(&subsys->lock);
 }
 
 static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 {
+	struct nvmet_rdma_xrq *xrq = be_ctrl->xrq;
+	bool has_err = false;
 	int ret;
 
-	lockdep_assert_held(&be_ctrl->xrq->be_mutex);
-	list_del_init(&be_ctrl->entry);
-	be_ctrl->xrq->nr_be_ctrls--;
 	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
 	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
 
@@ -375,16 +435,17 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 		ret = ib_detach_nvmf_ns(be_ctrl->ibns);
 		if (ret) {
 			/* Don't initialize a queue that the HW is using */
-			be_ctrl->restart = false;
+			has_err = true;
 			pr_err("Failed to detach nvmf ns be_ctrl=%p ret = %d\n",
 			       be_ctrl, ret);
 		}
 	}
 	if (be_ctrl->ofl) {
-		ret = nvme_peer_flush_resource(be_ctrl->ofl, be_ctrl->restart);
+		ret = nvme_peer_flush_resource(be_ctrl->ofl,
+					       be_ctrl->destroy_queues);
 		if (ret) {
-			/* Don't initialize a queue that we failed to destroy */
-			be_ctrl->restart = false;
+			/* Don't reuese a queue that we failed to destroy */
+			has_err = true;
 			pr_err("Failed to flush peer resource be_ctrl=%p ret = %d\n",
 			       be_ctrl, ret);
 		}
@@ -392,26 +453,33 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 	if (be_ctrl->ibctrl) {
 		ret = ib_destroy_nvmf_backend_ctrl(be_ctrl->ibctrl);
 		if (ret) {
-			/* Don't initialize a queue that the HW is using */
-			be_ctrl->restart = false;
+			/* Don't reuse a queue that the HW is using */
+			has_err = true;
 			pr_err("Failed to destroy backend ctrl %p ret = %d\n",
 			       be_ctrl, ret);
 		}
 	}
-	if (be_ctrl->ofl)
-		nvme_peer_put_resource(be_ctrl->ofl);
-	kref_put(&be_ctrl->xrq->ref, nvmet_rdma_destroy_xrq);
+
+	if (!has_err) {
+		if (be_ctrl->ofl)
+			nvme_peer_put_resource(be_ctrl->ofl);
+
+		if (be_ctrl->recreate_bec)
+			nvmet_rdma_try_recreate_be_ctrl(xrq, be_ctrl->ns);
+	}
+
+	kref_put(&xrq->ref, nvmet_rdma_destroy_xrq);
 	kfree(be_ctrl);
 }
 
-static void nvmet_rdma_release_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
+static void nvmet_rdma_release_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl,
+				       bool destroy_queues, bool recreate_bec)
 {
-	struct nvmet_rdma_xrq *xrq = be_ctrl->xrq;
-
-	mutex_lock(&xrq->be_mutex);
-	if (!list_empty(&be_ctrl->entry))
-		nvmet_rdma_free_be_ctrl(be_ctrl);
-	mutex_unlock(&xrq->be_mutex);
+	if (nvmet_rdma_be_ctrl_list_del(be_ctrl)) {
+		be_ctrl->destroy_queues = destroy_queues;
+		be_ctrl->recreate_bec = recreate_bec;
+		queue_work(nvmet_wq, &be_ctrl->release_work);
+	}
 }
 
 static void nvmet_rdma_stop_master_peer(void *priv)
@@ -421,8 +489,7 @@ static void nvmet_rdma_stop_master_peer(void *priv)
 	dev_info(&be_ctrl->pdev->dev,
 		 "Stopping master peer (be_ctrl %p)\n", be_ctrl);
 
-	be_ctrl->restart = false;
-	nvmet_rdma_release_be_ctrl(be_ctrl);
+	nvmet_rdma_release_be_ctrl(be_ctrl, false, false);
 }
 
 static void nvmet_rdma_backend_ctrl_event(struct ib_event *event, void *priv)
@@ -431,12 +498,10 @@ static void nvmet_rdma_backend_ctrl_event(struct ib_event *event, void *priv)
 
 	switch (event->event) {
 	case IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR:
-		be_ctrl->restart = false;
-		queue_work(nvmet_wq, &be_ctrl->release_work);
+		nvmet_rdma_release_be_ctrl(be_ctrl, false, false);
 		break;
 	case IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR:
-		be_ctrl->restart = true;
-		queue_work(nvmet_wq, &be_ctrl->release_work);
+		nvmet_rdma_release_be_ctrl(be_ctrl, true, true);
 		break;
 	default:
 		break;
@@ -519,7 +584,13 @@ static void nvmet_release_backend_ctrl_work(struct work_struct *w)
 	struct nvmet_rdma_backend_ctrl *be_ctrl =
 		container_of(w, struct nvmet_rdma_backend_ctrl, release_work);
 
-	nvmet_rdma_release_be_ctrl(be_ctrl);
+	nvmet_rdma_free_be_ctrl(be_ctrl);
+}
+
+static u8 __nvmet_rdma_peer_to_peer_mdts(struct ib_nvmf_caps *nvmf_caps)
+{
+        /* we assume ctrl page_size is 4K */
+        return ilog2(nvmf_caps->max_io_sz / SZ_4K);
 }
 
 static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *nport)
@@ -527,8 +598,7 @@ static u8 nvmet_rdma_peer_to_peer_mdts(struct nvmet_port *nport)
 	struct nvmet_rdma_port *port = nport->priv;
 	struct rdma_cm_id *cm_id = port->cm_id;
 
-	/* we assume ctrl page_size is 4K */
-	return ilog2(cm_id->device->attrs.nvmf_caps.max_io_sz / SZ_4K);
+	return __nvmet_rdma_peer_to_peer_mdts(&cm_id->device->attrs.nvmf_caps);
 }
 
 static struct nvmet_rdma_backend_ctrl *
@@ -539,7 +609,7 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	struct ib_nvmf_backend_ctrl_init_attr init_attr;
 	struct ib_nvmf_ns_init_attr ns_init_attr;
 	struct ib_nvmf_caps *nvmf_caps = &xrq->ndev->device->attrs.nvmf_caps;
-	int p2p_mdts = nvmet_rdma_peer_to_peer_mdts(xrq->port);
+	int p2p_mdts = __nvmet_rdma_peer_to_peer_mdts(nvmf_caps);
 	int mdts = ilog2(queue_max_hw_sectors(ns->bdev->bd_disk->queue) >> 3);
 	int err;
 	unsigned be_nsid;
@@ -586,7 +656,6 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 		err = -ENODEV;
 		goto out_free_be_ctrl;
 	}
-	be_ctrl->restart = true;
 	be_ctrl->pdev = ns->pdev;
 	be_ctrl->ns = ns;
 	be_ctrl->xrq = xrq;
@@ -672,8 +741,12 @@ static void nvmet_rdma_free_be_ctrls(struct nvmet_rdma_xrq *xrq,
 
 	mutex_lock(&xrq->be_mutex);
 	list_for_each_entry_safe(be_ctrl, next, &xrq->be_ctrls_list, entry)
-		if (!ns || be_ctrl->ns == ns)
-			nvmet_rdma_free_be_ctrl(be_ctrl);
+		if (!ns || be_ctrl->ns == ns) {
+			nvmet_rdma_be_ctrl_list_del_locked(be_ctrl);
+			be_ctrl->destroy_queues = true;
+			be_ctrl->recreate_bec = false;
+			queue_work(nvmet_wq, &be_ctrl->release_work);
+		}
 	mutex_unlock(&xrq->be_mutex);
 }
 
@@ -727,6 +800,28 @@ out_free:
 	return err;
 }
 
+static bool nvmet_rdma_offload_ns_is_active(struct nvmet_ctrl *ctrl,
+					    struct nvmet_ns *ns)
+{
+	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
+	struct nvmet_rdma_offload_ctx *offload_ctx;
+	struct nvmet_rdma_xrq *xrq;
+
+	mutex_lock(&offload_ctrl->ctx_mutex);
+	list_for_each_entry(offload_ctx, &offload_ctrl->ctx_list, entry) {
+		xrq = offload_ctx->xrq;
+		if (xrq->port == ctrl->port && xrq->subsys == ctrl->subsys &&
+		    nvmet_rdma_ns_attached_to_xrq(xrq, ns)) {
+			mutex_unlock(&offload_ctrl->ctx_mutex);
+			return true;
+		}
+	}
+
+	mutex_unlock(&offload_ctrl->ctx_mutex);
+
+	return false;
+}
+
 static void nvmet_rdma_disable_offload_ns(struct nvmet_ctrl *ctrl,
 					  struct nvmet_ns *ns)
 {
@@ -773,7 +868,6 @@ static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
 	unsigned long idx;
 	struct nvmet_rdma_backend_ctrl *be_ctrl;
 	struct nvmet_rdma_offload_ctrl *offload_ctrl = ctrl->offload_ctrl;
-	int err;
 
 	offload_ctx = kzalloc(sizeof(*offload_ctx), GFP_KERNEL);
 	if (!offload_ctx)
@@ -785,10 +879,9 @@ static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
 	xa_for_each(&ctrl->subsys->namespaces, idx, ns) {
 		if (!nvmet_rdma_ns_attached_to_xrq(xrq, ns)) {
 			be_ctrl = nvmet_rdma_create_be_ctrl(xrq, ns);
-			if (IS_ERR(be_ctrl)) {
-				err = PTR_ERR(be_ctrl);
-				goto out_free_offload_ctx;
-			}
+			if (IS_ERR(be_ctrl))
+				pr_err("Failed to create BE CTRL for device %s. Continue without it.\n",
+				       ns->device_path);
 		}
 	}
 
@@ -800,12 +893,6 @@ static int nvmet_rdma_attach_xrq(struct nvmet_rdma_xrq *xrq,
 	mutex_unlock(&offload_ctrl->ctx_mutex);
 
 	return 0;
-
-out_free_offload_ctx:
-	nvmet_rdma_free_be_ctrls(xrq, NULL);
-	kfree(offload_ctx);
-
-	return err;
 }
 
 static int nvmet_rdma_create_offload_ctrl(struct nvmet_ctrl *ctrl)

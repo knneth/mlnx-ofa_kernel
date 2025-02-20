@@ -9,6 +9,9 @@
 #include <uapi/mlxdevm/mlxdevm_netlink.h>
 #include <linux/rwsem.h>
 #include <net/devlink.h>
+#ifdef HAVE_BASECODE_EXTRAS
+#include <linux/dcbnl.h>
+#endif
 
 struct mlxdevm;
 

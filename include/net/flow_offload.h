@@ -395,4 +395,106 @@ struct flow_block_cb {
 };
 #endif
 
+#ifndef HAVE_ENCAP_CTRL_FLAG_HELPERS
+#include <linux/netlink.h>
+/**
+ * flow_rule_is_supp_enc_control_flags() - check for supported control flags
+ * @supp_enc_flags: encapsulation control flags supported by driver
+ * @enc_ctrl_flags: encapsulation control flags present in rule
+ * @extack: The netlink extended ACK for reporting errors.
+ *
+ * Return: true if only supported control flags are set, false otherwise.
+ */
+static inline bool flow_rule_is_supp_enc_control_flags(const u32 supp_enc_flags,
+						       const u32 enc_ctrl_flags,
+						       struct netlink_ext_ack *extack)
+{
+	if (likely((enc_ctrl_flags & ~supp_enc_flags) == 0))
+		return true;
+
+#ifdef NL_SET_ERR_MSG_FMT_MOD
+	NL_SET_ERR_MSG_FMT_MOD(extack,
+			       "Unsupported match on enc_control.flags %#x",
+			       enc_ctrl_flags);
+#else
+	NL_SET_ERR_MSG_MOD(extack, "Unsupported match on enc_control.flags");
+#endif
+
+	return false;
+}
+
+/*
+ * flow_rule_has_enc_control_flags() - check for presence of any control flags
+ * @enc_ctrl_flags: encapsulation control flags present in rule
+ * @extack: The netlink extended ACK for reporting errors.
+ *
+ * Return: true if control flags are set, false otherwise.
+ */
+static inline bool flow_rule_has_enc_control_flags(const u32 enc_ctrl_flags,
+						   struct netlink_ext_ack *extack)
+{
+	return !flow_rule_is_supp_enc_control_flags(0, enc_ctrl_flags, extack);
+}
+#endif /* HAVE_ENCAP_CTRL_FLAG_HELPERS */
+
+#ifndef HAVE_CTRL_FLAG_HELPERS
+/**
+ * flow_rule_is_supp_control_flags() - check for supported control flags
+ * @supp_flags: control flags supported by driver
+ * @ctrl_flags: control flags present in rule
+ * @extack: The netlink extended ACK for reporting errors.
+ *
+ * Return: true if only supported control flags are set, false otherwise.
+ */
+static inline bool flow_rule_is_supp_control_flags(const u32 supp_flags,
+						   const u32 ctrl_flags,
+						   struct netlink_ext_ack *extack)
+{
+	if (likely((ctrl_flags & ~supp_flags) == 0))
+		return true;
+
+#ifdef NL_SET_ERR_MSG_FMT_MOD
+	NL_SET_ERR_MSG_FMT_MOD(extack,
+			       "Unsupported match on control.flags %#x",
+			       ctrl_flags);
+#else
+	NL_SET_ERR_MSG_MOD(extack, "Unsupported match on control.flags");
+#endif
+
+	return false;
+}
+
+/**
+ * flow_rule_has_control_flags() - check for presence of any control flags
+ * @ctrl_flags: control flags present in rule
+ * @extack: The netlink extended ACK for reporting errors.
+ *
+ * Return: true if control flags are set, false otherwise.
+ */
+static inline bool flow_rule_has_control_flags(const u32 ctrl_flags,
+					       struct netlink_ext_ack *extack)
+{
+	return !flow_rule_is_supp_control_flags(0, ctrl_flags, extack);
+}
+
+/**
+ * flow_rule_match_has_control_flags() - match and check for any control flags
+ * @rule: The flow_rule under evaluation.
+ * @extack: The netlink extended ACK for reporting errors.
+ *
+ * Return: true if control flags are set, false otherwise.
+ */
+static inline bool flow_rule_match_has_control_flags(struct flow_rule *rule,
+						     struct netlink_ext_ack *extack)
+{
+	struct flow_match_control match;
+
+	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CONTROL))
+		return false;
+
+	flow_rule_match_control(rule, &match);
+
+	return flow_rule_has_control_flags(match.mask->flags, extack);
+}
+#endif /* HAVE_CTRL_FLAG_HELPERS */
 #endif /* _COMPAT_NET_FLOW_OFFLOAD_H */

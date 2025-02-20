@@ -407,7 +407,8 @@ check_complex_defines()
 	fi
 
 # Define HAVE_XDP_SUPPORT from other flags
-        if [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
+	if check_compat_config_h_var HAVE_XDP_REDIRECT &&
+				[ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_XDP_SUPPORT
 	else
@@ -443,17 +444,9 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_XDP_CONVERT_TO_XDP_FRAME
 	fi
 
-#define HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON from other flags
+#define HAVE_UDP_TUNNEL_NIC_INFO_FULL from other flags
 	check_autofconf CONFIG_VXLAN
 	if [ "${CONFIG_VXLAN}" == "1" ]; then
-		if check_compat_config_h_var HAVE_NDO_UDP_TUNNEL_ADD ||
-		   check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO
-		then
-			set_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-		else
-			unset_complex_define_to_config_h HAVE_KERNEL_WITH_VXLAN_SUPPORT_ON
-		fi
-
 		if (check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO) &&
 		   check_compat_config_h_var HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN
 		then
@@ -520,13 +513,13 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BIO_INTEGRITY_MAP_USER
 	fi
 
-# define HAVE_DEVLINK_PORT_TYPE_ETH_SET from other flags
-	if check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM ||
-	   check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM
+# Define HAVE_PAGE_FRAG_CACHE_DRAIN from other flags
+	if check_compat_config_h_var HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H ||
+	   check_compat_config_h_var HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H
 	then
-		set_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
+		set_complex_define_to_config_h HAVE_PAGE_FRAG_CACHE_DRAIN
 	else
-		unset_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
+		unset_complex_define_to_config_h HAVE_PAGE_FRAG_CACHE_DRAIN
 	fi
 
 # Define HAVE_DEVLINK_PER_AUXDEV from other flags
@@ -535,24 +528,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
 	else
 		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
-	fi
-
-# define HAVE_TC_CLS_OFFLOAD_EXTACK from other flags
-	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
-	   check_compat_config_h_var HAVE_TC_CLS_OFFLOAD_EXTACK_FIX
-	then
-		set_complex_define_to_config_h HAVE_TC_CLS_OFFLOAD_EXTACK
-	else
-		unset_complex_define_to_config_h HAVE_TC_CLS_OFFLOAD_EXTACK
-	fi
-
-# define HAVE_TC_CLSFLOWER_STATS from other flags
-	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
-		check_compat_config_h_var HAVE_TC_CLSFLOWER_STATS_FIX
-	then
-		set_complex_define_to_config_h HAVE_TC_CLSFLOWER_STATS
-	else
-		unset_complex_define_to_config_h HAVE_TC_CLSFLOWER_STATS
 	fi
 
 # define HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD from other flags
@@ -607,23 +582,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
 	else
 		unset_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
-	fi
-
-# define HAVE_NET_PAGE_POOL_H from other flags
-	if check_compat_config_h_var HAVE_NET_PAGE_POOL_OLD_H ||
-	   check_compat_config_h_var HAVE_NET_PAGE_POOL_TYPES_H
-	then
-		set_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
-	else
-		unset_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
-	fi
-
-# Define HAVE_SHAMPO_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_NET_PAGE_POOL_H
-	then
-		set_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
-	else
-		unset_complex_define_to_config_h HAVE_SHAMPO_SUPPORT
 	fi
 
 # define HAVE_PAGE_POOL_GET_DMA_ADDR from other flags
@@ -719,15 +677,36 @@ check_complex_defines()
 			unset_config_mk_kernel CONFIG_MLX5_DPLL
 	    fi
 	fi
+# Define CONFIG_NF_FLOW_TABLE based on kernel config and HAVE_FLOW_RULE_MATCH_CT
+	check_autofconf CONFIG_NF_FLOW_TABLE
+	if [ "${CONFIG_NF_FLOW_TABLE}" != "1" ] || ! check_compat_config_h_var HAVE_FLOW_RULE_MATCH_CT; then
+		CONFIG_MLX5_TC_CT=
+		unset_config_mk_kernel CONFIG_MLX5_TC_CT
+	fi
+# Define CONFIG_COMPAT_NVME_SNAP_VFIO_PCI  based on HAVE_VFIO_NOTIFY_IOVA_MAP
+	if check_compat_config_h_var HAVE_VFIO_NOTIFY_IOVA_MAP; then
+		CONFIG_COMPAT_NVME_SNAP_VFIO_PCI="m"
+		set_config_mk_kernel_module CONFIG_COMPAT_NVME_SNAP_VFIO_PCI
+	fi
 
-# Define HAVE_LIGHT_SFS from other flags
-        if check_compat_config_h_var HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
-        then
-                set_complex_define_to_config_h HAVE_JACK_5_4_FIX
-        else
-                unset_complex_define_to_config_h HAVE_JACK_5_4_FIX
-        fi
+# Define HAVE_BLK_RQ_INTEGRITY_MAP_USER from other flags
+	if check_compat_config_h_var HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM ||
+	   check_compat_config_h_var HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM
+	then
+		set_complex_define_to_config_h HAVE_BLK_RQ_INTEGRITY_MAP_USER
+	else
+		unset_complex_define_to_config_h HAVE_BLK_RQ_INTEGRITY_MAP_USER
+	fi
 
+# Define HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR from other flags
+	if check_compat_config_h_var HAVE_TC_SETUP_CB_ADD ||
+	   check_compat_config_h_var HAVE_NFT_CHAIN_OFFLOAD_SUPPORT ||
+	   check_compat_config_h_var HAVE_NFT_CHAIN_OFFLOAD_PRIORITY
+	then
+		set_complex_define_to_config_h HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR
+	else
+		unset_complex_define_to_config_h HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR
+	fi
 }
 
 check_kerver_rh_cls()
@@ -882,6 +861,8 @@ CONFIG_MLXDEVM=${CONFIG_MLXDEVM:-'m'}
 CONFIG_MLX5_SF_CFG=${CONFIG_MLX5_SF_CFG:-''}
 CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
 CONFIG_MLX5_MACSEC=${CONFIG_MLX5_MACSEC:-''}
+# unset HW steering until it is ready upstream (korg >= v6.13 at least)
+CONFIG_MLX5_HW_STEERING=""
 
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
 CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION:-''}
@@ -910,7 +891,8 @@ CONFIG_NVME_RDMA=${CONFIG_NVME_RDMA:-''}
 CONFIG_NVME_TCP=${CONFIG_NVME_TCP:-''}
 CONFIG_NVME_APPLE=${CONFIG_NVME_APPLE:-''}
 CONFIG_NVME_HOST_AUTH=${CONFIG_NVME_HOST_AUTH:-''}
-CONFIG_NVME_COMMON=${CONFIG_NVME_COMMON:-''}
+CONFIG_NVME_AUTH=${CONFIG_NVME_AUTH:-''}
+CONFIG_NVME_KEYRING=${CONFIG_NVME_KEYRING:-''}
 CONFIG_NVME_MULTIPATH=${CONFIG_NVME_MULTIPATH:-''}
 CONFIG_NVME_HOST_DUMMY=${CONFIG_NVME_HOST_DUMMY:-''}
 CONFIG_NVME_TARGET=${CONFIG_NVME_TARGET:-''}
@@ -948,7 +930,7 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.9"
+OFED_BASE_KVERSION="6.12"
 MIN_KVERSION="4.18"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
@@ -960,31 +942,31 @@ NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.18.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="4.18.0"
 ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 GDS_SUPPORTED_KVERSION="4.18.0"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
 
 #ODP
 ODP_SUPPORTED_KVERSION="4.18.0"
@@ -996,6 +978,7 @@ IPSEC_SUPPORTED_KVERSION="4.18.0"
 MLXDEVM_SUPPORTED_KVERSION="4.18.0"
 
 KVERSION=${KVERSION:-$(uname -r)}
+GCC_VERSION=${GCC_VERSION:-$(gcc --version)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
 ignored_autofconf_vars=""
@@ -1023,30 +1006,15 @@ main()
         ofed_patch_params=
         # Parsing parameters
         # When a new flag is added, it should be added to the list of flags under "--all" flag.
-        # Also programmer should decide if the new flag is needed for mlnx_en, and add it
-        # accordingly (--with-new-flag/--without-new-flag)
         while [ ! -z "$1" ]
         do
                 case $1 in
-		--mlnx_en)
-                                CONFIG_MLNX_EN=m
-                                CONFIG_MLXSW_CORE=
-				shift
-                                set -- "--mlnx_en" "--with-mlx5-mod" "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-mlxfw-mod" "--with-sf-cfg-drv" \
-                                        "--without-memtrack" "--without-core-mod" "--without-user_mad-mod" "--without-user_access-mod" "--without-addr_trans-mod" \
-                                        "--without-ipoib-mod" "--without-srp-mod" "--without-iser-mod" "--without-isert-mod" \
-                                        "--without-nvmf_host-mod" "--without-nvmf_target-mod" "--without-gds" "--without-nfsrdma-mod" "$@"
-				print_line
-				echo "configuring MLNX_OFED_EN with the flags below:"
-				echo "${@:2}"
-				print_line
-                        ;;
 		--all)
 				shift
                                 set -- "--all" "--with-memtrack" "--with-core-mod" "--with-user_mad-mod" "--with-user_access-mod" "--with-addr_trans-mod" \
                                         "--with-mlx5-mod" "--with-ipoib-mod" "--with-mlxfw-mod" "--with-srp-mod" "--with-iser-mod" "--with-isert-mod" \
                                         "--with-nvmf_host-mod" "--with-nvmf_target-mod" "--with-gds" "--with-nfsrdma-mod" \
-                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-sf-cfg-drv" "--with-fwctl""$@"
+                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-sf-cfg-drv" "--with-fwctl" "$@"
 				print_line
 				echo "configuring MLNX_OFED with all the flags:"
 				echo "${@:2}"
@@ -1593,7 +1561,8 @@ main()
 			CONFIG_NVME_TCP="m"
 			CONFIG_NVME_APPLE="m"
 			CONFIG_NVME_HOST_AUTH="y"
-			CONFIG_NVME_COMMON="m"
+			CONFIG_NVME_AUTH="m"
+			CONFIG_NVME_KEYRING="m"
 			CONFIG_NVME_MULTIPATH="y"
 			CONFIG_NVME_HOST_WITHOUT_FC=
 			;;
@@ -1606,7 +1575,8 @@ main()
 			CONFIG_NVME_TCP=
 			CONFIG_NVME_APPLE=
 			CONFIG_NVME_HOST_AUTH=
-			CONFIG_NVME_COMMON=
+			CONFIG_NVME_AUTH=
+			CONFIG_NVME_KEYRING=
 			CONFIG_NVME_MULTIPATH=
 			CONFIG_NVME_HOST_WITHOUT_FC=
 			;;
@@ -1620,7 +1590,8 @@ main()
 			CONFIG_NVME_TCP="m"
 			CONFIG_NVME_APPLE="m"
 			CONFIG_NVME_HOST_AUTH="y"
-			CONFIG_NVME_COMMON="m"
+			CONFIG_NVME_AUTH="m"
+			CONFIG_NVME_KEYRING="m"
 			CONFIG_NVME_MULTIPATH="y"
 			CONFIG_NVME_TARGET=
 			CONFIG_NVME_TARGET_LOOP=
@@ -1639,7 +1610,8 @@ main()
 			CONFIG_NVME_TCP=
 			CONFIG_NVME_APPLE=
 			CONFIG_NVME_HOST_AUTH=
-			CONFIG_NVME_COMMON=
+			CONFIG_NVME_AUTH=
+			CONFIG_NVME_KEYRING=
 			CONFIG_NVME_MULTIPATH=
 			CONFIG_NVME_TARGET=
 			CONFIG_NVME_TARGET_LOOP=
@@ -1907,7 +1879,8 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_TCP=
 		CONFIG_NVME_APPLE=
 		CONFIG_NVME_HOST_AUTH=
-		CONFIG_NVME_COMMON=
+		CONFIG_NVME_AUTH=
+		CONFIG_NVME_KEYRING=
 		CONFIG_NVME_MULTIPATH=
 		CONFIG_NVME_HOST_WITHOUT_FC=
 		echo "Warning: NVMF HOST requires RHEL7.2 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
@@ -1933,7 +1906,8 @@ if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_NVME_TCP=
         CONFIG_NVME_APPLE=
         CONFIG_NVME_HOST_AUTH=
-        CONFIG_NVME_COMMON=
+        CONFIG_NVME_AUTH=
+        CONFIG_NVME_KEYRING=
         CONFIG_NVME_MULTIPATH=
         CONFIG_NVME_HOST_WITHOUT_FC=
         CONFIG_NVME_TARGET=
@@ -2077,11 +2051,35 @@ if [ "X${CONFIG_NVME_HOST_AUTH}" == "Xy" ]; then
     fi
 fi
 
-# Enable nvme-common only when it is enabled in the kernel
-if [ "X${CONFIG_NVME_COMMON}" == "Xm" ]; then
-    check_autofconf CONFIG_NVME_COMMON
-    if [ X${CONFIG_NVME_COMMON} == "X1" ]; then
-        CONFIG_NVME_COMMON=m
+# Enable nvme-auth only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_AUTH}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_AUTH
+    if [ X${CONFIG_NVME_AUTH} == "X1" ]; then
+        CONFIG_NVME_AUTH=m
+    fi
+fi
+
+# Enable nvme-auth only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_AUTH}" == "Xy" ]; then
+    check_autofconf CONFIG_NVME_AUTH
+    if [ X${CONFIG_NVME_AUTH} == "X1" ]; then
+        CONFIG_NVME_AUTH=y
+    fi
+fi
+
+# Enable nvme-keyring only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_KEYRING}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_KEYRING
+    if [ X${CONFIG_NVME_KEYRING} == "X1" ]; then
+        CONFIG_NVME_KEYRING=m
+    fi
+fi
+
+# Enable nvme-keyring only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_KEYRING}" == "Xy" ]; then
+    check_autofconf CONFIG_NVME_KEYRING
+    if [ X${CONFIG_NVME_KEYRING} == "X1" ]; then
+        CONFIG_NVME_KEYRING=y
     fi
 fi
 
@@ -2116,11 +2114,6 @@ if [ "X${CONFIG_MLX5_SF}" == "X" ]; then
 	CONFIG_MLX5_SF_CFG=
 fi
 
-check_autofconf CONFIG_NF_FLOW_TABLE
-if [ "${CONFIG_NF_FLOW_TABLE}" != "1" ]; then
-	CONFIG_MLX5_TC_CT=
-	echo "Warning: CONFIG_MLX5_TC_CT not supported in kernel once CONFIG_NF_FLOW_TABLE not set."
-fi
 #
 # Dummy modules for ULPs and storage:
 # Used for ofa_kernel RPM build, the actual drivers will be
@@ -2156,7 +2149,8 @@ if [ "X$BUILD_DUMMY_MODS" == "X1" ]; then
    CONFIG_NVME_RDMA=
    CONFIG_NVME_TCP=
    CONFIG_NVME_APPLE=
-   CONFIG_NVME_COMMON=
+   CONFIG_NVME_AUTH=
+   CONFIG_NVME_KEYRING=
    CONFIG_NVME_MULTIPATH=
 
    # nvmf target
@@ -2168,7 +2162,8 @@ if [ "X$BUILD_DUMMY_MODS" == "X1" ]; then
    CONFIG_NVME_TARGET_FC=
    CONFIG_NVME_TARGET_FCLOOP=
 
-   CONFIG_NVME_COMMON=
+   CONFIG_NVME_AUTH=
+   CONFIG_NVME_KEYRING=
 
     # rxe
     CONFIG_RDMA_RXE_DUMMY="m"
@@ -2272,12 +2267,12 @@ fi
 if [ ! -e backports_applied ]; then
 	echo "backports_applied does not exist. running ofed_patch.sh"
 	ex ${CWD}/ofed_scripts/ofed_patch.sh ${ofed_patch_params}
-	if [ ! -z "$CONFIG_COMPAT_VERSION" ]; then
-		# if it's SLES10, then apply 2.6.18 backport patches first
-		if [ "X$CONFIG_COMPAT_VERSION" == "X-2.6.16" ]; then
-			ex ${CWD}/ofed_scripts/ofed_patch.sh --with-patchdir=backports-2.6.18 ${ofed_patch_params}
-		fi
-		ex ${CWD}/ofed_scripts/ofed_patch.sh --with-patchdir=backports${CONFIG_COMPAT_VERSION} ${ofed_patch_params}
+
+	XEN_KERNEL_GCC="Red Hat 4.8.5"
+	# Perform the check directly if XEN kernel
+	if [[ "${GCC_VERSION}" == *"${XEN_KERNEL_GCC}"* ]]; then
+		rm -f "${CWD}/compat/configure"
+		ex "${CWD}/ofed_scripts/ofed_patch.sh" --with-patchdir="${CWD}/compat/xenserver_4_19"
 	fi
 fi
 

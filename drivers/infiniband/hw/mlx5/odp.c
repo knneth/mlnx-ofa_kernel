@@ -110,9 +110,9 @@ static void populate_klm(struct mlx5_klm *pklm, size_t idx, size_t nentries,
 	struct mlx5_core_dev *dev = mr_to_mdev(imr)->mdev;
 	struct mlx5_klm *end = pklm + nentries;
 	int step = MLX5_CAP_ODP(dev, mem_page_fault) ? MLX5_IMR_MTT_SIZE : 0;
-	u32 key = MLX5_CAP_ODP(dev, mem_page_fault) ?
-			  cpu_to_be32(imr->null_mmkey.key) :
-			  mr_to_mdev(imr)->mkeys.null_mkey;
+	__be32 key = MLX5_CAP_ODP(dev, mem_page_fault) ?
+			     cpu_to_be32(imr->null_mmkey.key) :
+			     mr_to_mdev(imr)->mkeys.null_mkey;
 	u64 va =
 		MLX5_CAP_ODP(dev, mem_page_fault) ? idx * MLX5_IMR_MTT_SIZE : 0;
 
@@ -268,6 +268,8 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
 	if (!umem_odp->npages)
 		goto out;
 	mr = umem_odp->private;
+	if (!mr)
+		goto out;
 
 	start = max_t(u64, ib_umem_start(umem_odp), range->start);
 	end = min_t(u64, ib_umem_end(umem_odp), range->end);
@@ -503,7 +505,8 @@ static struct mlx5_ib_mr *implicit_get_child_mr(struct mlx5_ib_mr *imr,
 	xa_unlock(&imr->implicit_children);
 
 	if (MLX5_CAP_ODP(dev->mdev, mem_page_fault)) {
-		ret = xa_store(&dev->odp_mkeys, mlx5_base_mkey(mr->mmkey.key), &mr->mmkey, GFP_KERNEL);
+		ret = xa_store(&dev->odp_mkeys, mlx5_base_mkey(mr->mmkey.key),
+			       &mr->mmkey, GFP_KERNEL);
 		if (xa_is_err(ret)) {
 			ret = ERR_PTR(xa_err(ret));
 			xa_erase(&imr->implicit_children, idx);
@@ -805,7 +808,7 @@ static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
 	struct ib_umem_dmabuf *umem_dmabuf = to_ib_umem_dmabuf(mr->umem);
 	u32 xlt_flags = 0;
 	int err;
-	unsigned int page_size;
+	unsigned long page_size;
 
 	if (flags & MLX5_PF_FLAGS_ENABLE)
 		xlt_flags |= MLX5_IB_UPD_XLT_ENABLE;
@@ -943,8 +946,7 @@ out:
 /*
  * Handle a single data segment in a page-fault WQE or RDMA region.
  *
- * Returns number of OS pages retrieved on success. The caller may continue to
- * the next data segment.
+ * Returns zero on success. The caller may continue to the next data segment.
  * Can return the following error codes:
  * -EAGAIN to designate a temporary error. The caller will abort handling the
  *  page fault and resolve it.
@@ -957,7 +959,7 @@ static int pagefault_single_data_segment(struct mlx5_ib_dev *dev,
 					 u32 *bytes_committed,
 					 u32 *bytes_mapped)
 {
-	int npages = 0, ret, i, outlen, cur_outlen = 0, depth = 0;
+	int ret, i, outlen, cur_outlen = 0, depth = 0, pages_in_range;
 	struct pf_frame *head = NULL, *frame;
 	struct mlx5_ib_mkey *mmkey;
 	struct mlx5_ib_mr *mr;
@@ -979,9 +981,9 @@ next_mr:
 			if (bytes_mapped)
 				*bytes_mapped += bcnt;
 			/*
-			 * The user could specify a SGL with multiple lkeys and only
-			 * some of them are ODP. Treat the non-ODP ones as fully
-			 * faulted.
+			 * The user could specify a SGL with multiple lkeys and
+			 * only some of them are ODP. Treat the non-ODP ones as
+			 * fully faulted.
 			 */
 			ret = 0;
 		}
@@ -992,13 +994,20 @@ next_mr:
 	case MLX5_MKEY_MR:
 		mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
 
+		pages_in_range = (ALIGN(io_virt + bcnt, PAGE_SIZE) -
+				  (io_virt & PAGE_MASK)) >>
+				 PAGE_SHIFT;
 		ret = pagefault_mr(mr, io_virt, bcnt, bytes_mapped, 0, false);
 		if (ret < 0)
 			goto end;
 
 		mlx5_update_odp_stats(mr, faults, ret);
 
-		npages += ret;
+		if (ret < pages_in_range) {
+			ret = -EFAULT;
+			goto end;
+		}
+
 		ret = 0;
 		break;
 
@@ -1089,7 +1098,7 @@ end:
 	kfree(out);
 
 	*bytes_committed = 0;
-	return ret ? ret : npages;
+	return ret;
 }
 
 /*
@@ -1108,8 +1117,7 @@ end:
  *                   the committed bytes).
  * @receive_queue: receive WQE end of sg list
  *
- * Returns the number of pages loaded if positive, zero for an empty WQE, or a
- * negative error code.
+ * Returns zero for success or a negative error code.
  */
 static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 				   struct mlx5_pagefault *pfault,
@@ -1117,7 +1125,7 @@ static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 				   void *wqe_end, u32 *bytes_mapped,
 				   u32 *total_wqe_bytes, bool receive_queue)
 {
-	int ret = 0, npages = 0;
+	int ret = 0;
 	u64 io_virt;
 	__be32 key;
 	u32 byte_count;
@@ -1174,10 +1182,9 @@ static int pagefault_data_segments(struct mlx5_ib_dev *dev,
 						    bytes_mapped);
 		if (ret < 0)
 			break;
-		npages += ret;
 	}
 
-	return ret < 0 ? ret : npages;
+	return ret;
 }
 
 /*
@@ -1413,12 +1420,6 @@ resolve_page_fault:
 	free_page((unsigned long)wqe_start);
 }
 
-static int pages_in_range(u64 address, u32 length)
-{
-	return (ALIGN(address + length, PAGE_SIZE) -
-		(address & PAGE_MASK)) >> PAGE_SHIFT;
-}
-
 static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 					   struct mlx5_pagefault *pfault)
 {
@@ -1457,7 +1458,7 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 	if (ret == -EAGAIN) {
 		/* We're racing with an invalidation, don't prefetch */
 		prefetch_activated = 0;
-	} else if (ret < 0 || pages_in_range(address, length) > ret) {
+	} else if (ret < 0) {
 		mlx5_ib_page_fault_resume(dev, pfault, 1);
 		if (ret != -ENOENT)
 			mlx5_ib_dbg(dev, "PAGE FAULT error %d. QP 0x%llx, type: 0x%x\n",
@@ -1492,19 +1493,20 @@ static void mlx5_ib_mr_rdma_pfault_handler(struct mlx5_ib_dev *dev,
 static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 					     struct mlx5_pagefault *pfault)
 {
-	u64 prefetch_va = pfault->memory.va - pfault->memory.prefetch_before_byte_count;
+	u64 prefetch_va =
+		pfault->memory.va - pfault->memory.prefetch_before_byte_count;
 	size_t prefetch_size = pfault->memory.prefetch_before_byte_count +
 			       pfault->memory.fault_byte_count +
 			       pfault->memory.prefetch_after_byte_count;
-	struct mlx5_ib_mr *mr, *child_mr;
 	struct mlx5_ib_mkey *mmkey;
+	struct mlx5_ib_mr *mr, *child_mr;
 	int ret = 0;
 
 	mmkey = find_odp_mkey(dev, pfault->memory.mkey);
 	if (IS_ERR(mmkey))
 		goto err;
 
-	switch(mmkey->type) {
+	switch (mmkey->type) {
 	case MLX5_MKEY_IMPLICIT_CHILD:
 		child_mr = container_of(mmkey, struct mlx5_ib_mr, mmkey);
 		mr = child_mr->parent;
@@ -1521,7 +1523,8 @@ static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 	ret = pagefault_mr(mr, prefetch_va, prefetch_size, NULL, 0, true);
 	if (ret < 0) {
 		ret = pagefault_mr(mr, pfault->memory.va,
-				   pfault->memory.fault_byte_count, NULL, 0, true);
+				   pfault->memory.fault_byte_count, NULL, 0,
+				   true);
 		if (ret < 0)
 			goto err;
 	}
@@ -1586,6 +1589,7 @@ static void mlx5_ib_eqe_pf_action(struct work_struct *work)
 	mempool_free(pfault, eq->pool);
 }
 
+#define MEMORY_SCHEME_PAGE_FAULT_GRANULARITY 4096
 static void mlx5_ib_eq_pf_process(struct mlx5_ib_pf_eq *eq)
 {
 	struct mlx5_eqe_page_fault *pf_eqe;
@@ -1663,13 +1667,8 @@ static void mlx5_ib_eq_pf_process(struct mlx5_ib_pf_eq *eq)
 				be32_to_cpu(pf_eqe->memory.token31_0) |
 				((u64)be16_to_cpu(pf_eqe->memory.token47_32)
 				 << 32);
-			pfault->memory.va = be64_to_cpu(pf_eqe->memory.fault_va);
+			pfault->memory.va = be64_to_cpu(pf_eqe->memory.va);
 			pfault->memory.mkey = be32_to_cpu(pf_eqe->memory.mkey);
-			/* This field was previously a 32 bit field of fault byte count and was
-			 * changed to num of page fault pages in 4k granularity, on the 24 MSB of
-			 * the previous field. This keeps backward compatability as can be seen in
-			 * the calculation below.
-			 */
 			pfault->memory.fault_byte_count = (be32_to_cpu(
 				pf_eqe->memory.demand_fault_pages) >> 12) *
 				MEMORY_SCHEME_PAGE_FAULT_GRANULARITY;
@@ -1684,14 +1683,14 @@ static void mlx5_ib_eq_pf_process(struct mlx5_ib_pf_eq *eq)
 			pfault->memory.flags = pf_eqe->memory.flags;
 			mlx5_ib_dbg(
 				eq->dev,
-				"PAGE_FAULT: subtype: 0x%02x, token: 0x%06llx, mkey: 0x%06x, fault_byte_count: 0x%08x, va: 0x%016llx, flags: 0x%02x\n",
+				"PAGE_FAULT: subtype: 0x%02x, token: 0x%06llx, mkey: 0x%06x, fault_byte_count: 0x%06x, va: 0x%016llx, flags: 0x%02x\n",
 				eqe->sub_type, pfault->token,
 				pfault->memory.mkey,
 				pfault->memory.fault_byte_count,
 				pfault->memory.va, pfault->memory.flags);
 			mlx5_ib_dbg(
 				eq->dev,
-				"PAGE_FAULT: prefetch size: before: 0x%08x, after 0x%08x\n",
+				"PAGE_FAULT: prefetch size: before: 0x%06x, after 0x%06x\n",
 				pfault->memory.prefetch_before_byte_count,
 				pfault->memory.prefetch_after_byte_count);
 			break;

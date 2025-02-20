@@ -1,50 +1,120 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
 
-Change-Id: I3abf9ca40a38bb0c60dc56389928fc4143e2674b
+Change-Id: I3cd5c023d79984d121d60e0af37d7d0fb567c152
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h | 11 +++++++++--
- 1 file changed, 9 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en/tc/post_meter.c     | 46 +++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
-@@ -8,8 +8,9 @@
- #include <linux/mlx5/fs.h>
- #include <net/pkt_cls.h>
- #include <linux/netlink.h>
--#include "en.h"
--#include "en_rep.h"
-+#include "../en.h"
-+#include "../en_rep.h"
-+#include "../eswitch.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+@@ -1,12 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  
- #ifdef CONFIG_MLX5_ESWITCH
- 
-@@ -36,6 +37,7 @@ struct mlx5e_tc_tunnel {
- 			       struct mlx5e_priv *priv,
- 			       struct mlx5e_encap_entry *e,
- 			       struct netlink_ext_ack *extack);
-+
- 	int (*generate_ip_tun_hdr)(char buf[],
- 				   __u8 *ip_proto,
- 				   struct mlx5e_encap_entry *e);
-@@ -44,6 +46,7 @@ struct mlx5e_tc_tunnel {
- 			       struct flow_cls_offload *f,
- 			       void *headers_c,
- 			       void *headers_v);
-+
- 	int (*parse_tunnel)(struct mlx5e_priv *priv,
- 			    struct mlx5_flow_spec *spec,
- 			    struct flow_cls_offload *f,
-@@ -117,7 +120,11 @@ bool mlx5e_tc_tun_encap_info_equal_gener
- 
- bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
- 					   struct mlx5e_encap_key *b,
-+#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS //forwardport
-+					   u32 tun_type);
-+#else
- 					   __be16 tun_flags);
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
 +#endif
- #endif /* CONFIG_MLX5_ESWITCH */
+ #include "post_meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
  
- #endif //__MLX5_EN_TC_TUNNEL_H__
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #define MLX5_PACKET_COLOR_BITS MLX5_REG_MAPPING_MBITS(PACKET_COLOR_TO_REG)
+ #define MLX5_PACKET_COLOR_MASK MLX5_REG_MAPPING_MASK(PACKET_COLOR_TO_REG)
++#endif
+ 
+ struct mlx5e_post_meter_rate_table {
+ 	struct mlx5_flow_table *ft;
+@@ -15,6 +23,9 @@ struct mlx5e_post_meter_rate_table {
+ 	struct mlx5_flow_attr *green_attr;
+ 	struct mlx5_flow_handle *red_rule;
+ 	struct mlx5_flow_attr *red_attr;
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	struct mlx5_flow_attr attr[2];
++#endif
+ };
+ 
+ struct mlx5e_post_meter_mtu_table {
+@@ -154,6 +165,10 @@ mlx5e_post_meter_rate_rules_create(struc
+ 	struct mlx5e_post_meter_rate_table *table = &post_meter->rate_steering_table;
+ 	struct mlx5_flow_handle *rule;
+ 	struct mlx5_flow_spec *spec;
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	struct mlx5_flow_destination dest[2] = {};
++	struct mlx5_flow_act flow_act = {};
++#endif
+ 	int err;
+ 
+ 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
+@@ -162,9 +177,20 @@ mlx5e_post_meter_rate_rules_create(struc
+ 
+ 	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
+ 				    MLX5_FLOW_METER_COLOR_RED, MLX5_PACKET_COLOR_MASK);
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	red_attr->ft = post_meter->rate_steering_table.ft;
+ 	rule = mlx5e_post_meter_add_rule(priv, post_meter, spec, red_attr,
+ 					 act_counter, drop_counter);
++#else
++	(void) (mlx5e_post_meter_add_rule); /* supress unused */
++	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_DROP |
++			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
++	flow_act.flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
++	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
++	dest[0].counter_id = mlx5_fc_id(drop_counter);
++
++	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 1);
++#endif
+ 	if (IS_ERR(rule)) {
+ 		mlx5_core_warn(priv->mdev, "Failed to create post_meter exceed rule\n");
+ 		err = PTR_ERR(rule);
+@@ -175,9 +201,20 @@ mlx5e_post_meter_rate_rules_create(struc
+ 
+ 	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
+ 				    MLX5_FLOW_METER_COLOR_GREEN, MLX5_PACKET_COLOR_MASK);
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	green_attr->ft = post_meter->rate_steering_table.ft;
+ 	rule = mlx5e_post_meter_add_rule(priv, post_meter, spec, green_attr,
+ 					 act_counter, drop_counter);
++#else
++	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
++			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
++	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
++	dest[0].ft = mlx5e_tc_post_act_get_ft(post_act);
++	dest[1].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
++	dest[1].counter_id = mlx5_fc_id(act_counter);
++
++	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 2);
++#endif
+ 	if (IS_ERR(rule)) {
+ 		mlx5_core_warn(priv->mdev, "Failed to create post_meter notexceed rule\n");
+ 		err = PTR_ERR(rule);
+@@ -202,8 +239,13 @@ mlx5e_post_meter_rate_rules_destroy(stru
+ {
+ 	struct mlx5e_post_meter_rate_table *rate_table = &post_meter->rate_steering_table;
+ 
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	mlx5_eswitch_del_offloaded_rule(esw, rate_table->red_rule, rate_table->red_attr);
+ 	mlx5_eswitch_del_offloaded_rule(esw, rate_table->green_rule, rate_table->green_attr);
++#else
++	mlx5_del_flow_rules(rate_table->red_rule);
++	mlx5_del_flow_rules(rate_table->green_rule);
++#endif
+ }
+ 
+ static void
+@@ -345,6 +387,10 @@ mlx5e_post_meter_mtu_create(struct mlx5e
+ 	struct mlx5_flow_handle *rule;
+ 	int err;
+ 
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	return -EOPNOTSUPP;
++#endif
++
+ 	post_meter->type = MLX5E_POST_METER_MTU;
+ 
+ 	err = mlx5e_post_meter_create_mtu_table(priv, ns_type, &mtu_tables->green_table);

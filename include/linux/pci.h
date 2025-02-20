@@ -6,6 +6,52 @@
 #include <linux/version.h>
 #include_next <linux/pci.h>
 
+#ifndef HAVE_PCI_ENABLE_PTM
+#ifdef CONFIG_PCIE_PTM
+int pci_enable_ptm(struct pci_dev *dev, u8 *granularity);
+#else /* CONFIG_PCIE_PTM */
+static inline int pci_enable_ptm(struct pci_dev *dev, u8 *granularity) { return 0; }
+#endif
+#endif
+
+#ifndef HAVE_PCI_DISABLE_PTM
+#ifdef CONFIG_PCIE_PTM
+static inline void __pci_disable_ptm(struct pci_dev *dev)
+{
+	u32 ctrl;
+	int ptm;
+
+	if (!pci_is_pcie(dev))
+		return;
+
+	ptm = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_PTM);
+	if (!ptm)
+		return;
+
+	pci_read_config_dword(dev, ptm + PCI_PTM_CTRL, &ctrl);
+	ctrl &= ~(PCI_PTM_CTRL_ENABLE | PCI_PTM_CTRL_ROOT);
+	pci_write_config_dword(dev, ptm + PCI_PTM_CTRL, ctrl);
+}
+
+/**
+ * pci_disable_ptm() - Disable Precision Time Measurement
+ * @dev: PCI device
+ *
+ * Disable Precision Time Measurement for @dev.
+ */
+static inline void pci_disable_ptm(struct pci_dev *dev)
+{
+	if (dev->ptm_enabled) {
+		__pci_disable_ptm(dev);
+		dev->ptm_enabled = 0;
+	}
+}
+#else /* CONFIG_PCIE_PTM */
+static inline void pci_disable_ptm(struct pci_dev *dev)
+{}
+#endif /* CONFIG_PCIE_PTM */
+#endif /* HAVE_PCI_DISABLE_PTM */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || \
     (defined(RHEL_MAJOR) && RHEL_MAJOR -0 == 7 && RHEL_MINOR -0 >= 2)
 #ifndef HAVE_PCI_IRQ_GET_NODE

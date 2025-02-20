@@ -1,48 +1,41 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
 
-Change-Id: Ie14db75c08363dbe0831b6d122cff0d8102637e3
+Change-Id: I14cbeddf3a53ff3d02e9a6f9256b0d535e60e59b
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
- 
- void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
- {
-+#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
- 	u32 trunc_size = mapped_obj->sample.trunc_size;
- 	struct psample_group psample_group = {};
- 	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
- 	skb_push(skb, skb->mac_len);
- 
- 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
-+#else
-+	u32 trunc_size = mapped_obj->sample.trunc_size;
-+	struct psample_group psample_group = {};
-+	int iif = skb->dev->ifindex;
-+	u32 size;
-+
-+	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
-+	psample_group.group_num = mapped_obj->sample.group_id;
-+	psample_group.net = &init_net;
-+	skb_push(skb, skb->mac_len);
-+
-+	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+@@ -68,6 +68,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
+ 		else
+ 			*action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
+ 		break;
++#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
+ 	case FLOW_ACTION_VLAN_POP_ETH:
+ 		parse_state->eth_pop = true;
+ 		break;
+@@ -78,6 +79,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
+ 		memcpy(attr->eth.h_dest, act->vlan_push_eth.dst, ETH_ALEN);
+ 		memcpy(attr->eth.h_source, act->vlan_push_eth.src, ETH_ALEN);
+ 		break;
 +#endif
- }
+ 	default:
+ 		NL_SET_ERR_MSG_MOD(extack, "Unexpected action id for VLAN");
+ 		return -EINVAL;
+@@ -127,10 +129,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
+ 	struct flow_action_entry vlan_act = {
+ 		.id = FLOW_ACTION_VLAN_POP,
+ 	};
+-	int nest_level, err = 0;
++	int nest_level = 1, err = 0;
  
- static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
- 	struct mlx5e_sample_attr *sample_attr;
- 	struct mlx5_flow_attr *pre_attr;
- 	struct mlx5_eswitch *esw;
--	u32 default_tbl_id;
-+	u32 default_tbl_id = 0;
- 	u32 obj_id;
- 	int err;
- 
++#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
+ 	nest_level = attr->parse_attr->filter_dev->lower_level -
+ 						priv->netdev->lower_level;
++#endif
+ 	while (nest_level--) {
+ 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
+ 					   extack, NULL);

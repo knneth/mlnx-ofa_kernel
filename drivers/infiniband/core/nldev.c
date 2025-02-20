@@ -137,6 +137,8 @@ static const struct nla_policy nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_RES_SUMMARY_ENTRY_NAME]= { .type = NLA_NUL_STRING,
 					.len = RDMA_NLDEV_ATTR_EMPTY_STRING },
 	[RDMA_NLDEV_ATTR_RES_TYPE]		= { .type = NLA_U8 },
+	[RDMA_NLDEV_ATTR_RES_SUBTYPE]		= { .type = NLA_NUL_STRING,
+					.len = RDMA_NLDEV_ATTR_EMPTY_STRING },
 	[RDMA_NLDEV_ATTR_RES_UNSAFE_GLOBAL_RKEY]= { .type = NLA_U32 },
 	[RDMA_NLDEV_ATTR_RES_USECNT]		= { .type = NLA_U64 },
 	[RDMA_NLDEV_ATTR_RES_SRQ]		= { .type = NLA_NESTED },
@@ -164,6 +166,7 @@ static const struct nla_policy nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_STAT_HWCOUNTER_INDEX]	= { .type = NLA_U32 },
 	[RDMA_NLDEV_ATTR_STAT_HWCOUNTER_DYNAMIC] = { .type = NLA_U8 },
 	[RDMA_NLDEV_SYS_ATTR_PRIVILEGED_QKEY_MODE] = { .type = NLA_U8 },
+	[RDMA_NLDEV_ATTR_DRIVER_DETAILS]	= { .type = NLA_U8 },
 	[RDMA_NLDEV_ATTR_DEV_TYPE]		= { .type = NLA_U8 },
 	[RDMA_NLDEV_ATTR_PARENT_NAME]		= { .type = NLA_NUL_STRING },
 	[RDMA_NLDEV_ATTR_NAME_ASSIGN_TYPE]	= { .type = NLA_U8 },
@@ -416,7 +419,8 @@ err:
 	return -EMSGSIZE;
 }
 
-static int fill_res_info(struct sk_buff *msg, struct ib_device *device)
+static int fill_res_info(struct sk_buff *msg, struct ib_device *device,
+			 bool show_details)
 {
 	static const char * const names[RDMA_RESTRACK_MAX] = {
 		[RDMA_RESTRACK_PD] = "pd",
@@ -441,7 +445,7 @@ static int fill_res_info(struct sk_buff *msg, struct ib_device *device)
 	for (i = 0; i < RDMA_RESTRACK_MAX; i++) {
 		if (!names[i])
 			continue;
-		curr = rdma_restrack_count(device, i);
+		curr = rdma_restrack_count(device, i, show_details);
 		ret = fill_res_info_entry(msg, names[i], curr);
 		if (ret)
 			goto err;
@@ -1071,8 +1075,8 @@ static int nldev_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 index;
 	int err;
 
-	err = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
 		return -EINVAL;
 
@@ -1120,8 +1124,8 @@ static int nldev_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 index;
 	int err;
 
-	err = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, extack);
 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
 		return -EINVAL;
 
@@ -1212,8 +1216,8 @@ static int nldev_port_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 port;
 	int err;
 
-	err = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (err ||
 	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
 	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
@@ -1272,8 +1276,8 @@ static int nldev_port_get_dumpit(struct sk_buff *skb,
 	int err;
 	unsigned int p;
 
-	err = nlmsg_parse_deprecated(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, NULL);
+	err = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
 		return -EINVAL;
 
@@ -1322,13 +1326,14 @@ static int nldev_res_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 			      struct netlink_ext_ack *extack)
 {
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
+	bool show_details = false;
 	struct ib_device *device;
 	struct sk_buff *msg;
 	u32 index;
 	int ret;
 
-	ret = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
 		return -EINVAL;
 
@@ -1336,6 +1341,9 @@ static int nldev_res_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	device = ib_device_get_by_index(sock_net(skb->sk), index);
 	if (!device)
 		return -EINVAL;
+
+	if (tb[RDMA_NLDEV_ATTR_DRIVER_DETAILS])
+		show_details = nla_get_u8(tb[RDMA_NLDEV_ATTR_DRIVER_DETAILS]);
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg) {
@@ -1351,7 +1359,7 @@ static int nldev_res_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 		goto err_free;
 	}
 
-	ret = fill_res_info(msg, device);
+	ret = fill_res_info(msg, device, show_details);
 	if (ret)
 		goto err_free;
 
@@ -1381,7 +1389,7 @@ static int _nldev_res_get_dumpit(struct ib_device *device,
 			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV, RDMA_NLDEV_CMD_RES_GET),
 			0, NLM_F_MULTI);
 
-	if (!nlh || fill_res_info(skb, device)) {
+	if (!nlh || fill_res_info(skb, device, false)) {
 		nlmsg_cancel(skb, nlh);
 		goto out;
 	}
@@ -1474,8 +1482,8 @@ static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct sk_buff *msg;
 	int ret;
 
-	ret = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] || !fe->id || !tb[fe->id])
 		return -EINVAL;
 
@@ -1551,6 +1559,7 @@ static int res_get_common_dumpit(struct sk_buff *skb,
 	struct rdma_restrack_entry *res;
 	struct rdma_restrack_root *rt;
 	int err, ret = 0, idx = 0;
+	bool show_details = false;
 	struct nlattr *table_attr;
 	struct nlattr *entry_attr;
 	struct ib_device *device;
@@ -1561,8 +1570,8 @@ static int res_get_common_dumpit(struct sk_buff *skb,
 	u32 index, port = 0;
 	bool filled = false;
 
-	err = nlmsg_parse_deprecated(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, NULL);
+	err = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
 	/*
 	 * Right now, we are expecting the device index to get res information,
 	 * but it is possible to extend this code to return all devices in
@@ -1578,6 +1587,9 @@ static int res_get_common_dumpit(struct sk_buff *skb,
 	device = ib_device_get_by_index(sock_net(skb->sk), index);
 	if (!device)
 		return -EINVAL;
+
+	if (tb[RDMA_NLDEV_ATTR_DRIVER_DETAILS])
+		show_details = nla_get_u8(tb[RDMA_NLDEV_ATTR_DRIVER_DETAILS]);
 
 	/*
 	 * If no PORT_INDEX is supplied, we will return all QPs from that device
@@ -1616,6 +1628,9 @@ static int res_get_common_dumpit(struct sk_buff *skb,
 	 * objects.
 	 */
 	xa_for_each(&rt->xa, id, res) {
+		if (xa_get_mark(&rt->xa, res->id, RESTRACK_DD) && !show_details)
+			goto next;
+
 		if (idx < start || !rdma_restrack_get(res))
 			goto next;
 
@@ -1748,8 +1763,8 @@ static int nldev_newlink(struct sk_buff *skb, struct nlmsghdr *nlh,
 	char type[IFNAMSIZ];
 	int err;
 
-	err = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, extack);
 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_NAME] ||
 	    !tb[RDMA_NLDEV_ATTR_LINK_TYPE] || !tb[RDMA_NLDEV_ATTR_NDEV_NAME])
 		return -EINVAL;
@@ -1792,8 +1807,8 @@ static int nldev_dellink(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 index;
 	int err;
 
-	err = nlmsg_parse_deprecated(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-				     nldev_policy, extack);
+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, extack);
 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
 		return -EINVAL;
 
@@ -1822,8 +1837,8 @@ static int nldev_get_chardev(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 index;
 	int err;
 
-	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1, nldev_policy,
-			  extack);
+	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1, nldev_policy,
+			    NL_VALIDATE_LIBERAL, extack);
 	if (err || !tb[RDMA_NLDEV_ATTR_CHARDEV_TYPE])
 		return -EINVAL;
 
@@ -1906,8 +1921,8 @@ static int nldev_sys_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct sk_buff *msg;
 	int err;
 
-	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-			  nldev_policy, extack);
+	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (err)
 		return err;
 
@@ -2412,8 +2427,8 @@ static int nldev_stat_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
 	int ret;
 
-	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-			  nldev_policy, extack);
+	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (ret)
 		return -EINVAL;
 
@@ -2442,8 +2457,8 @@ static int nldev_stat_get_dumpit(struct sk_buff *skb,
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
 	int ret;
 
-	ret = nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-			  nldev_policy, NULL);
+	ret = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
 	if (ret || !tb[RDMA_NLDEV_ATTR_STAT_RES])
 		return -EINVAL;
 
@@ -2474,8 +2489,8 @@ static int nldev_stat_get_counter_status_doit(struct sk_buff *skb,
 	u32 devid, port;
 	int ret, i;
 
-	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-			  nldev_policy, extack);
+	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
+			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
 	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
 		return -EINVAL;
@@ -2714,6 +2729,25 @@ static const struct rdma_nl_cbs nldev_cb_table[RDMA_NLDEV_NUM_OPS] = {
 	},
 };
 
+static int fill_mon_netdev_rename(struct sk_buff *msg,
+				  struct ib_device *device, u32 port,
+				  const struct net *net)
+{
+	struct net_device *netdev = ib_device_get_netdev(device, port);
+	int ret = 0;
+
+	if (!netdev || !net_eq(dev_net(netdev), net))
+		goto out;
+
+	ret = nla_put_u32(msg, RDMA_NLDEV_ATTR_NDEV_INDEX, netdev->ifindex);
+	if (ret)
+		goto out;
+	ret = nla_put_string(msg, RDMA_NLDEV_ATTR_NDEV_NAME, netdev->name);
+out:
+	dev_put(netdev);
+	return ret;
+}
+
 static int fill_mon_netdev_association(struct sk_buff *msg,
 				       struct ib_device *device, u32 port,
 				       const struct net *net)
@@ -2778,17 +2812,29 @@ static void rdma_nl_notify_err_msg(struct ib_device *device, u32 port_num,
 				     "Failed to send RDMA monitor netdev detach event: port %d\n",
 				     port_num);
 		break;
+	case RDMA_RENAME_EVENT:
+		dev_warn_ratelimited(&device->dev,
+				     "Failed to send RDMA monitor rename device event\n");
+		break;
+
+	case RDMA_NETDEV_RENAME_EVENT:
+		netdev = ib_device_get_netdev(device, port_num);
+		dev_warn_ratelimited(&device->dev,
+				     "Failed to send RDMA monitor netdev rename event: port %d netdev %d\n",
+				     port_num, netdev->ifindex);
+		dev_put(netdev);
+		break;
 	default:
 		break;
-	};
+	}
 }
 
 int rdma_nl_notify_event(struct ib_device *device, u32 port_num,
 			  enum rdma_nl_notify_event_type type)
 {
 	struct sk_buff *skb;
+	int ret = -EMSGSIZE;
 	struct net *net;
-	int ret = 0;
 	void *nlh;
 
 	net = read_pnet(&device->coredev.rdma_net);
@@ -2807,14 +2853,19 @@ int rdma_nl_notify_event(struct ib_device *device, u32 port_num,
 	switch (type) {
 	case RDMA_REGISTER_EVENT:
 	case RDMA_UNREGISTER_EVENT:
+	case RDMA_RENAME_EVENT:
 		ret = fill_nldev_handle(skb, device);
 		if (ret)
 			goto err_free;
 		break;
 	case RDMA_NETDEV_ATTACH_EVENT:
 	case RDMA_NETDEV_DETACH_EVENT:
-		ret = fill_mon_netdev_association(skb, device,
-						  port_num, net);
+		ret = fill_mon_netdev_association(skb, device, port_num, net);
+		if (ret)
+			goto err_free;
+		break;
+	case RDMA_NETDEV_RENAME_EVENT:
+		ret = fill_mon_netdev_rename(skb, device, port_num, net);
 		if (ret)
 			goto err_free;
 		break;

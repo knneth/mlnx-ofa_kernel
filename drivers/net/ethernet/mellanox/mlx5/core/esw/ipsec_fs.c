@@ -150,7 +150,7 @@ void mlx5_esw_ipsec_restore_dest_uplink(struct mlx5_core_dev *mdev)
 	unsigned long i;
 	int err;
 
-	xa_for_each(&esw->offloads.vport_reps, i, rep) {
+	mlx5_esw_for_each_rep(esw, i, rep) {
 		if (atomic_read(&rep->rep_data[REP_ETH].state) != REP_LOADED)
 			continue;
 

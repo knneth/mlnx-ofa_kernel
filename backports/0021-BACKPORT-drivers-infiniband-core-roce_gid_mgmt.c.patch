@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
 
-Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
+Change-Id: I04b0691264536b7270246d2811226418e2d43b76
 ---
  drivers/infiniband/core/roce_gid_mgmt.c | 125 ++++++++++++++++++------
  1 file changed, 93 insertions(+), 32 deletions(-)
@@ -157,7 +157,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  
  	handle_netdev(ib_dev, port, ndev);
  	list_for_each_entry_safe(upper_iter, upper_temp, &upper_list,
-@@ -695,11 +713,32 @@ static const struct netdev_event_work_cm
+@@ -694,11 +712,32 @@ static const struct netdev_event_work_cm
  	.filter	= is_eth_port_of_netdev_filter
  };
  
@@ -193,7 +193,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  static void
  ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
  		  struct netdev_event_work_cmd *cmds)
-@@ -715,9 +754,9 @@ ndev_event_unlink(struct netdev_notifier
+@@ -714,9 +753,9 @@ ndev_event_unlink(struct netdev_notifier
  	cmds[1] = add_cmd;
  }
  
@@ -206,7 +206,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  };
  
  static void
-@@ -781,8 +820,17 @@ static int netdevice_event(struct notifi
+@@ -780,8 +819,17 @@ static int netdevice_event(struct notifi
  			};
  	static const struct netdev_event_work_cmd bonding_event_ips_del_cmd = {
  		.cb = del_netdev_upper_ips, .filter = upper_device_filter};
@@ -225,7 +225,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  
  	if (ndev->type != ARPHRD_ETHER)
  		return NOTIFY_DONE;
-@@ -926,6 +974,13 @@ static struct notifier_block nb_inet6add
+@@ -925,6 +973,13 @@ static struct notifier_block nb_inet6add
  	.notifier_call = inet6addr_event
  };
  
@@ -239,7 +239,7 @@ Change-Id: Iad2213a0ba355612d1073c0dc9a392ada0f98188
  int __init roce_gid_mgmt_init(void)
  {
  	gid_cache_wq = alloc_ordered_workqueue("gid-cache-wq", 0);
-@@ -942,11 +997,17 @@ int __init roce_gid_mgmt_init(void)
+@@ -941,11 +996,17 @@ int __init roce_gid_mgmt_init(void)
  	 */
  	register_netdevice_notifier(&nb_netdevice);
  

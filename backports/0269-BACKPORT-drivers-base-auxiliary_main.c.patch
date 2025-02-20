@@ -1,0 +1,132 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary_main.c
+
+Change-Id: I5265319b33e70e9c5bdddfd716f6b657356f4fb7
+---
+ drivers/base/auxiliary_main.c | 56 ++++++++++++++++++++++++++++++-----
+ 1 file changed, 49 insertions(+), 7 deletions(-)
+
+--- a/drivers/base/auxiliary_main.c
++++ b/drivers/base/auxiliary_main.c
+@@ -18,7 +18,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/string.h>
+ #include <linux/auxiliary_bus.h>
+-#include "base.h"
++#include <linux/acpi.h>
+ 
+ /**
+  * DOC: PURPOSE
+@@ -180,7 +180,11 @@ static const struct auxiliary_device_id
+ 	return NULL;
+ }
+ 
++#ifdef HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE
+ static int auxiliary_match(struct device *dev, const struct device_driver *drv)
++#else
++static int auxiliary_match(struct device *dev, struct device_driver *drv)
++#endif
+ {
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(drv);
+@@ -188,7 +192,7 @@ static int auxiliary_match(struct device
+ 	return !!auxiliary_match_id(auxdrv->id_table, auxdev);
+ }
+ 
+-static int auxiliary_uevent(const struct device *dev, struct kobj_uevent_env *env)
++static int auxiliary_uevent(struct device *dev, struct kobj_uevent_env *env)
+ {
+ 	const char *name, *p;
+ 
+@@ -229,7 +233,11 @@ static int auxiliary_bus_probe(struct de
+ 	return ret;
+ }
+ 
++#ifdef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
+ static void auxiliary_bus_remove(struct device *dev)
++#else
++static int auxiliary_bus_remove(struct device *dev)
++#endif
+ {
+ 	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+@@ -237,6 +245,9 @@ static void auxiliary_bus_remove(struct
+ 	if (auxdrv->remove)
+ 		auxdrv->remove(auxdev);
+ 	dev_pm_domain_detach(dev, true);
++#ifndef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
++	return 0;
++#endif
+ }
+ 
+ static void auxiliary_bus_shutdown(struct device *dev)
+@@ -253,7 +264,11 @@ static void auxiliary_bus_shutdown(struc
+ 		auxdrv->shutdown(auxdev);
+ }
+ 
++#ifdef HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE
+ static const struct bus_type auxiliary_bus_type = {
++#else
++static struct bus_type auxiliary_bus_type = {
++#endif
+ 	.name = "auxiliary",
+ 	.probe = auxiliary_bus_probe,
+ 	.remove = auxiliary_bus_remove,
+@@ -296,7 +311,9 @@ int auxiliary_device_init(struct auxilia
+ 
+ 	dev->bus = &auxiliary_bus_type;
+ 	device_initialize(&auxdev->dev);
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
+ 	mutex_init(&auxdev->sysfs.lock);
++#endif
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_device_init);
+@@ -359,9 +376,20 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add
+  * if it does.  If the callback returns non-zero, this function will
+  * return to the caller and not iterate over any more devices.
+  */
+-struct auxiliary_device *auxiliary_find_device(struct device *start,
+-					       const void *data,
+-					       device_match_t match)
++
++#if defined(HAVE_LINUX_DEVICE_BUS_H) || defined(HAVE_BUS_FIND_DEVICE_GET_CONST)
++typedef int (*device_match_t)(struct device *dev, const void *data);
++
++struct auxiliary_device *
++auxiliary_find_device(struct device *start,
++		      const void *data,
++		      device_match_t match)
++#else
++struct auxiliary_device *
++auxiliary_find_device(struct device *start,
++		      void *data,
++		      int (*match)(struct device *dev, void *data))
++#endif /* HAVE_BUS_FIND_DEVICE_GET_CONST || HAVE_LINUX_DEVICE_BUS_H */
+ {
+ 	struct device *dev;
+ 
+@@ -423,7 +451,21 @@ void auxiliary_driver_unregister(struct
+ }
+ EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
+ 
+-void __init auxiliary_bus_init(void)
++static int __init auxiliary_bus_init(void)
++{
++	return bus_register(&auxiliary_bus_type);
++}
++
++static void __exit auxiliary_bus_exit(void)
+ {
+-	WARN_ON(bus_register(&auxiliary_bus_type));
++	bus_unregister(&auxiliary_bus_type);
+ }
++
++module_init(auxiliary_bus_init);
++module_exit(auxiliary_bus_exit);
++
++MODULE_LICENSE("GPL v2");
++MODULE_DESCRIPTION("Auxiliary Bus");
++MODULE_INFO(supported, "external");
++MODULE_AUTHOR("David Ertman <david.m.ertman@intel.com>");
++MODULE_AUTHOR("Kiran Patil <kiran.patil@intel.com>");

@@ -1233,7 +1233,9 @@ static int mlx5e_trust_initialize(struct mlx5e_priv *priv)
 	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
 		if (take_rtnl)
 			rtnl_lock();
+		mutex_lock(&priv->state_lock);
 		mlx5e_setup_tc_mqprio(priv, &mqprio);
+		mutex_unlock(&priv->state_lock);
 		if (take_rtnl)
 			rtnl_unlock();
 	}

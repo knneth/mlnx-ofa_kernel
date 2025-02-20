@@ -1,36 +1,137 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 
-Change-Id: Ia046503d46ac9224512dc3b9227136a91588e3f8
+Change-Id: I4d2c9b97d550aef0105a2f7faec77eba1185558d
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 29 +++++++++++++++++--
+ 1 file changed, 26 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
-@@ -3,8 +3,12 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+@@ -141,11 +141,13 @@ mlx5e_ptp_metadata_map_remove(struct mlx
+ 	return skb;
+ }
  
- #include <linux/netdevice.h>
- #include <linux/list.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <net/bonding.h>
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static bool mlx5e_ptp_metadata_map_unhealthy(struct mlx5e_ptp_metadata_map *map)
+ {
+ 	/* Considered beginning unhealthy state if size * 15 / 2^4 cannot be reclaimed. */
+ 	return map->undelivered_counter > (map->capacity >> 4) * 15;
+ }
 +#endif
-+#ifdef HAVE_NET_LAG_H
- #include <net/lag.h>
+ 
+ static void mlx5e_ptpsq_mark_ts_cqes_undelivered(struct mlx5e_ptpsq *ptpsq,
+ 						 ktime_t port_tstamp)
+@@ -215,9 +217,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
+ out:
+ 	napi_consume_skb(skb, budget);
+ 	md_buff[(*md_buff_sz)++] = metadata_id;
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	if (unlikely(mlx5e_ptp_metadata_map_unhealthy(&ptpsq->metadata_map)) &&
+ 	    !test_and_set_bit(MLX5E_SQ_STATE_RECOVERING, &sq->state))
+ 		queue_work(ptpsq->txqsq.priv->wq, &ptpsq->report_unhealthy_work);
++#endif
+ }
+ 
+ static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int napi_budget)
+@@ -295,7 +299,6 @@ static int mlx5e_ptp_napi_poll(struct na
+ 
+ 	if (unlikely(!napi_complete_done(napi, work_done)))
+ 		goto out;
 -
-+#endif
- #include "mlx5_core.h"
- #include "eswitch.h"
- #include "esw/acl/ofld.h"
-@@ -212,8 +216,10 @@ static void mlx5e_rep_changelowerstate_e
- 	if (!lag_dev)
- 		return;
+ 	ch_stats->arm++;
  
-+#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
- 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
- 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
+ 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
+@@ -445,6 +448,7 @@ static void mlx5e_ptp_free_traffic_db(st
+ 	kvfree(ptpsq->ts_cqe_pending_list);
+ }
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ static void mlx5e_ptpsq_unhealthy_work(struct work_struct *work)
+ {
+ 	struct mlx5e_ptpsq *ptpsq =
+@@ -452,6 +456,7 @@ static void mlx5e_ptpsq_unhealthy_work(s
+ 
+ 	mlx5e_reporter_tx_ptpsq_unhealthy(ptpsq);
+ }
 +#endif
  
- 	/* Point everyone's egress acl to the vport of the active representor */
- 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
+ static int mlx5e_ptp_open_txqsq(struct mlx5e_ptp *c, u32 tisn,
+ 				int txq_ix, struct mlx5e_ptp_params *cparams,
+@@ -482,7 +487,9 @@ static int mlx5e_ptp_open_txqsq(struct m
+ 	if (err)
+ 		goto err_free_txqsq;
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	INIT_WORK(&ptpsq->report_unhealthy_work, mlx5e_ptpsq_unhealthy_work);
++#endif
+ 
+ 	return 0;
+ 
+@@ -497,8 +504,10 @@ static void mlx5e_ptp_close_txqsq(struct
+ 	struct mlx5e_txqsq *sq = &ptpsq->txqsq;
+ 	struct mlx5_core_dev *mdev = sq->mdev;
+ 
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ 	if (current_work() != &ptpsq->report_unhealthy_work)
+ 		cancel_work_sync(&ptpsq->report_unhealthy_work);
++#endif
+ 	mlx5e_ptp_free_traffic_db(ptpsq);
+ 	cancel_work_sync(&sq->recover_work);
+ 	mlx5e_ptp_destroy_sq(mdev, sq->sqn);
+@@ -621,7 +630,14 @@ static int mlx5e_init_ptp_rq(struct mlx5
+ 	if (err)
+ 		return err;
+ 
+-	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
++#ifdef HAVE_XDP_SUPPORT
++#ifdef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
++	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
++#else
++	err = xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix);
++#endif
++#endif /* HAVE_XDP_SUPPORT */
++	return err;
+ }
+ 
+ static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
+@@ -638,7 +654,6 @@ static int mlx5e_ptp_open_rq(struct mlx5
+ 	ccp.ch_stats = c->stats;
+ 	ccp.napi     = &c->napi;
+ 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
+-
+ 	err = mlx5e_init_ptp_rq(c, params, &c->rq);
+ 	if (err)
+ 		return err;
+@@ -872,7 +887,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+ 	if (err)
+ 		goto err_free;
+ 
++#ifdef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS
+ 	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll);
++#else
++	netif_napi_add(netdev, &c->napi, mlx5e_ptp_napi_poll, 64);
++#endif
+ 
+ 	mlx5e_ptp_build_params(c, cparams, params);
+ 
+@@ -918,7 +937,9 @@ void mlx5e_ptp_activate_channel(struct m
+ 	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
+ 		mlx5e_ptp_rx_set_fs(c->priv);
+ 		mlx5e_activate_rq(&c->rq);
++#ifdef HAVE_QUEUE_AND_NAPI_ASSOCIATION
+ 		netif_queue_set_napi(c->netdev, c->rq.ix, NETDEV_QUEUE_TYPE_RX, &c->napi);
++#endif
+ 	}
+ 	mlx5e_trigger_napi_sched(&c->napi);
+ }
+@@ -928,7 +949,9 @@ void mlx5e_ptp_deactivate_channel(struct
+ 	int tc;
+ 
+ 	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
++#ifdef HAVE_QUEUE_AND_NAPI_ASSOCIATION
+ 		netif_queue_set_napi(c->netdev, c->rq.ix, NETDEV_QUEUE_TYPE_RX, NULL);
++#endif
+ 		mlx5e_deactivate_rq(&c->rq);
+ 	}
+ 

@@ -1,164 +1,102 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
 
-Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
+Change-Id: Ifa6796a604869b2270bda0126f3486a050525e2e
 ---
- .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 87 ++++++++++++++++++-
- 1 file changed, 84 insertions(+), 3 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 62 +++++++++++++++++--
+ 1 file changed, 57 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
-@@ -32,6 +32,9 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
+@@ -14,18 +14,34 @@ struct mlx5e_accel_tx_tls_state {
+ 	u32 tls_tisn;
+ };
  
- #include <linux/device.h>
- #include <linux/netdevice.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/dcbnl.h>
++#ifdef HAVE_KTLS_STRUCTS
+ u16 mlx5e_ktls_get_stop_room(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
+-
+ bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
+-			      struct sk_buff *skb,
+-			      struct mlx5e_accel_tx_tls_state *state);
++		struct sk_buff *skb,
++		struct mlx5e_accel_tx_tls_state *state);
++#else
++static inline bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
++		struct sk_buff *skb,
++		struct mlx5e_accel_tx_tls_state *state)
++{
++	return false;
++}
++
++static inline u16 mlx5e_ktls_get_stop_room(struct mlx5_core_dev *mdev,
++		struct mlx5e_params *params)
++{
++	return 0;
++}
 +#endif
- #include "en.h"
- #include "en_tc.h"
- #include "eswitch.h"
-@@ -64,7 +67,7 @@ static ssize_t mlx5e_store_tc_num(struct
++#ifdef HAVE_KTLS_RX_SUPPORT
+ void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
+ 			      struct mlx5_cqe64 *cqe, u32 *cqe_bcnt);
+-
++#endif
+ void mlx5e_ktls_handle_ctx_completion(struct mlx5e_icosq_wqe_info *wi);
+ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
+ 					  struct mlx5e_icosq *sq);
+ 
++#ifdef HAVE_KTLS_STRUCTS
+ void mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
+ 					   struct mlx5e_tx_wqe_info *wi,
+ 					   u32 *dma_fifo_cc);
+@@ -40,7 +56,16 @@ mlx5e_ktls_tx_try_handle_resync_dump_com
+ 	}
+ 	return false;
+ }
+-
++#else
++static inline bool
++mlx5e_ktls_tx_try_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
++					  struct mlx5e_tx_wqe_info *wi,
++					  u32 *dma_fifo_cc)
++{
++	return false;
++}
++#endif
++#ifdef HAVE_KTLS_RX_SUPPORT
+ bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget);
+ 
+ static inline bool
+@@ -48,6 +73,33 @@ mlx5e_ktls_rx_pending_resync_list(struct
  {
- 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
- 	struct net_device *netdev = priv->netdev;
--	struct tc_mqprio_qopt_offload mqprio = { 0 };
-+	struct tc_mqprio_qopt_offload mqprio = {{ 0 }};
- 	int tc_num;
- 	int err = 0;
- 
-@@ -944,11 +947,9 @@ static ssize_t mlx5e_store_force_local_l
- 	struct mlx5_core_dev *mdev = priv->mdev;
- 	bool disable;
- 	int err;
--
- 	err = kstrtobool(buf, &disable);
- 	if (err)
- 		return -EINVAL;
--
- 	if (mdev->local_lb.user_force_disable != disable) {
- 		mdev->local_lb.user_force_disable = disable;
- 		mlx5_nic_vport_update_local_lb(mdev,
-@@ -962,6 +963,64 @@ static DEVICE_ATTR(force_local_lb_disabl
- 		   mlx5e_show_force_local_lb,
- 		   mlx5e_store_force_local_lb);
- 
-+#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
-+static ssize_t mlx5e_show_log_rx_page_cache_mult_limit(struct device *device,
-+						       struct device_attribute *attr,
-+						       char *buf)
+ 	return budget && test_bit(MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC, &c->async_icosq.state);
+ }
++#else
++static inline bool
++mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget)
 +{
-+	struct net_device *dev = to_net_dev(device);
-+	struct mlx5e_priv *priv = netdev_priv(dev);
-+	int len;
-+
-+	mutex_lock(&priv->state_lock);
-+	len = sprintf(buf, "log rx page cache mult limit is %u\n",
-+		      priv->channels.params.log_rx_page_cache_mult);
-+	mutex_unlock(&priv->state_lock);
-+
-+	return len;
++	return false;
 +}
 +
-+static ssize_t mlx5e_store_log_rx_page_cache_mult_limit(struct device *device,
-+							struct device_attribute *attr,
-+							const char *buf,
-+							size_t count)
++static inline bool
++mlx5e_ktls_rx_pending_resync_list(struct mlx5e_channel *c, int budget)
 +{
-+	struct net_device *dev = to_net_dev(device);
-+	struct mlx5e_priv *priv = netdev_priv(dev);
-+	int err, udata;
-+
-+	err = kstrtoint(buf, 0, &udata);
-+	if (err)
-+		return -EINVAL;
-+
-+	if (udata > MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT || udata < 0) {
-+		netdev_err(priv->netdev, "log rx page cache mult limit cannot exceed above %d or below 0\n",
-+			   MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT);
-+		return -EINVAL;
-+	}
-+
-+	mutex_lock(&priv->state_lock);
-+	priv->channels.params.log_rx_page_cache_mult = (u8)udata;
-+	mutex_unlock(&priv->state_lock);
-+
-+	return count;
++	return false;
 +}
 +
-+static DEVICE_ATTR(log_mult_limit, S_IRUGO | S_IWUSR,
-+		   mlx5e_show_log_rx_page_cache_mult_limit,
-+		   mlx5e_store_log_rx_page_cache_mult_limit);
++static inline void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq,
++					    struct sk_buff *skb,
++					    struct mlx5_cqe64 *cqe,
++					    u32 *cqe_bcnt)
++{
++}
++#endif
 +
-+static struct attribute *mlx5e_log_rx_page_cache_attrs[] = {
-+	&dev_attr_log_mult_limit.attr,
-+	NULL,
-+};
-+
-+static struct attribute_group rx_page_cache_group = {
-+	.name = "rx_page_cache",
-+	.attrs = mlx5e_log_rx_page_cache_attrs,
-+};
-+#endif /*HAVE_PAGE_POOL_DEFRAG_PAGE*/
-+
- static struct attribute *mlx5e_settings_attrs[] = {
- 	&dev_attr_hfunc.attr,
- 	&dev_attr_pfc_stall_prevention.attr,
-@@ -1176,11 +1235,17 @@ static struct attribute *prio_hp_attrs[]
- 	NULL
- };
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(prio_hp);
++#ifndef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
++static inline bool mlx5e_ktls_skb_offloaded(struct sk_buff *skb)
++{
++	        return skb->sk && tls_is_sk_tx_device_offloaded(skb->sk);
++}
 +#endif
  
- static struct kobj_type prio_hp_sysfs = {
- 	.sysfs_ops     = &prio_hp_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = prio_hp_groups
-+#else
-+	.default_attrs = prio_hp_attrs
-+#endif
- };
- 
- int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
-@@ -1502,9 +1567,18 @@ int mlx5e_sysfs_create(struct net_device
- 	if (err)
- 		goto remove_debug_group;
- 
-+#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
-+	err = sysfs_create_group(&dev->dev.kobj, &rx_page_cache_group);
-+	if (err)
-+		goto remove_phy_stat_group;
-+#endif
- 	err = hp_sysfs_init(priv);
- 	if (err)
-+#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
-+		goto remove_rx_page_cache_group;
-+#else
- 		goto remove_phy_stat_group;
-+#endif
- 
- 	mlx5_eswitch_compat_sysfs_init(dev);
- 
-@@ -1522,6 +1596,10 @@ int mlx5e_sysfs_create(struct net_device
- 
- 	return 0;
- 
-+#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
-+remove_rx_page_cache_group:
-+	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
-+#endif
- remove_phy_stat_group:
- 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
- remove_debug_group:
-@@ -1549,6 +1627,9 @@ void mlx5e_sysfs_remove(struct net_devic
- 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
- 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
- 	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
-+#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
-+	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
-+#endif
- 	hp_sysfs_cleanup(priv);
- 
- 	if (mlx5_core_is_vf(priv->mdev))
+ static inline void
+ mlx5e_ktls_handle_tx_wqe(struct mlx5_wqe_ctrl_seg *cseg,

@@ -489,7 +489,6 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 	kfree(__memtrack_addr);							\
 })
 
-#ifdef CONFIG_COMPAT_RCU
 #ifdef kfree_rcu
 	#undef kfree_rcu
 #endif
@@ -606,7 +605,6 @@ do {                                                            \
 
 #define kvfree_rcu_arg_2(ptr, rhf) kfree_rcu_2(ptr, rhf)
 
-#endif /* CONFIG_COMPAT_RCU */
 
 #undef vmalloc
 #define vmalloc(size) ({							\

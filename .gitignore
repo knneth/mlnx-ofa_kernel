@@ -105,6 +105,7 @@ compat/build/Module.symvers
 compat/build/output.log
 compat/config.h
 compat/config.status
+compat/modtest/
 compat/stamp-h1
 
 compat/Makefile

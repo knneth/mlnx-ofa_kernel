@@ -1,58 +1,25 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
 
-Change-Id: Ib14cf033d0678339dd38b00fb5ba3b7c5b23d0ed
+Change-Id: I5e065384f07c893570a6a746e85c9625fd919868
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/pool.h | 27 ++++++++++++++++++-
- 1 file changed, 26 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
-@@ -4,8 +4,10 @@
- #ifndef __MLX5_EN_XSK_POOL_H__
- #define __MLX5_EN_XSK_POOL_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2018 Mellanox Technologies. */
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "en.h"
- 
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *params,
- 						       struct mlx5e_xsk *xsk, u16 ix)
- {
-@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5
- 
- 	return xsk->pools[ix];
- }
-+#else
-+static inline struct xdp_umem *mlx5e_xsk_get_pool(struct mlx5e_params *params,
-+						       struct mlx5e_xsk *xsk, u16 ix)
-+{
-+	if (!xsk || !xsk->umems)
-+		return NULL;
++#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
 +
-+	if (unlikely(ix >= params->num_channels))
-+		return NULL;
-+
-+	return xsk->umems[ix];
-+}
-+#endif
- 
- struct mlx5e_xsk_param;
--void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
- 
- /* .ndo_bpf callback. */
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
- int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16 qid);
-+#else
-+void mlx5e_build_xsk_param(struct xdp_umem *umem, struct mlx5e_xsk_param *xsk);
-+int mlx5e_xsk_setup_pool(struct net_device *dev, struct xdp_umem *pool, u16 qid);
-+#endif
-+
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries);
-+#endif
- 
-+#endif
- #endif /* __MLX5_EN_XSK_POOL_H__ */
+ #include <net/bareudp.h>
+ #include <net/mpls.h>
+ #include "en/tc_tun.h"
+@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
+ 	.parse_tunnel         = parse_tunnel,
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+ };
++#endif /* HAVE_NET_BAREUDP_H */

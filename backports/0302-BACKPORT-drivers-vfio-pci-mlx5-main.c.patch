@@ -1,0 +1,67 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
+
+Change-Id: I6c4e7f4a9ac65c83ee2d6b013360042f99f2c9c7
+---
+ drivers/vfio/pci/mlx5/main.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/vfio/pci/mlx5/main.c
++++ b/drivers/vfio/pci/mlx5/main.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_VFIO_SUPPORT
+ #include <linux/device.h>
+ #include <linux/eventfd.h>
+ #include <linux/file.h>
+@@ -587,6 +588,9 @@ static const struct file_operations mlx5
+ 	.unlocked_ioctl = mlx5vf_precopy_ioctl,
+ 	.compat_ioctl = compat_ptr_ioctl,
+ 	.release = mlx5vf_release_file,
++#ifdef no_llseek
++	.llseek = no_llseek,
++#endif
+ };
+ 
+ static int mlx5vf_pci_save_device_inc_data(struct mlx5vf_pci_core_device *mvdev)
+@@ -999,6 +1003,9 @@ static const struct file_operations mlx5
+ 	.owner = THIS_MODULE,
+ 	.write = mlx5vf_resume_write,
+ 	.release = mlx5vf_release_file,
++#ifdef no_llseek
++	.llseek = no_llseek,
++#endif
+ };
+ 
+ static struct mlx5_vf_migration_file *
+@@ -1387,10 +1394,14 @@ static const struct vfio_device_ops mlx5
+ 	.mmap = vfio_pci_core_mmap,
+ 	.request = vfio_pci_core_request,
+ 	.match = vfio_pci_core_match,
++#ifdef HAVE_SUPPORT_IOMMUFD_VFIO_PHYS_DEVICES
+ 	.bind_iommufd = vfio_iommufd_physical_bind,
+ 	.unbind_iommufd = vfio_iommufd_physical_unbind,
+ 	.attach_ioas = vfio_iommufd_physical_attach_ioas,
++#endif
++#ifdef HAVE_DETACH_IOAS_NDO
+ 	.detach_ioas = vfio_iommufd_physical_detach_ioas,
++#endif
+ };
+ 
+ static int mlx5vf_pci_probe(struct pci_dev *pdev,
+@@ -1441,10 +1452,13 @@ static struct pci_driver mlx5vf_pci_driv
+ 	.probe = mlx5vf_pci_probe,
+ 	.remove = mlx5vf_pci_remove,
+ 	.err_handler = &mlx5vf_err_handlers,
++#ifdef HAVE_PCI_DRIVER_MANAGED_DMA
+ 	.driver_managed_dma = true,
++#endif
+ };
+ 
+ module_pci_driver(mlx5vf_pci_driver);
++#endif /* HAVE_VFIO_SUPPORT */
+ 
+ MODULE_IMPORT_NS("IOMMUFD");
+ MODULE_LICENSE("GPL");

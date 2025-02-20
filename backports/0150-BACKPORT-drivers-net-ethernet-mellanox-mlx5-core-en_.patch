@@ -1,80 +1,43 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
 
-Change-Id: Ifde4558c9dc917780ea71ddf0f43df16de0d53e0
+Change-Id: Idec2f080ffc2c4326e0e6585a10e6582c45e0fb0
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tc.h   | 42 ++++++++++++++++++-
- 1 file changed, 41 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
-@@ -197,6 +197,8 @@ int mlx5e_delete_flower(struct net_devic
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+@@ -19,9 +19,21 @@ enum {
+ 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
+ };
  
- int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
- 		       struct flow_cls_offload *f, unsigned long flags);
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
++#else
++static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
++				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
++{
++	return -EOPNOTSUPP;
++}
 +
-+struct flow_offload_action;
- int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
- 			       struct flow_offload_action *fl_act);
- 
-@@ -300,6 +302,15 @@ void mlx5e_tc_set_ethertype(struct mlx5_
- 			    struct flow_match_basic *match, bool outer,
- 			    void *headers_c, void *headers_v);
- 
-+#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
-+int mlx5e_setup_tc_block(struct net_device *dev, struct tc_block_offload *f);
-+#endif
-+#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
-+int mlx5e_setup_tc_cls_flower(struct net_device *dev,
-+			      struct flow_cls_offload *cls_flower,
-+			      unsigned long flags);
-+#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
-+
- int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
- void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
- 
-@@ -341,7 +352,21 @@ static inline void mlx5e_tc_ht_cleanup(s
- static inline int
- mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
- { return -EOPNOTSUPP; }
--
-+#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
-+static inline int mlx5e_setup_tc_block(struct net_device *dev,
-+				       struct tc_block_offload *f)
++static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
 +{
-+	return -EOPNOTSUPP;
 +}
 +#endif
-+#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
-+static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
-+					    struct flow_cls_offload *cls_flower,
-+					    unsigned long flags)
-+{
-+	return -EOPNOTSUPP;
-+}
-+#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
- #endif /* CONFIG_MLX5_CLS_ACT */
- 
- struct mlx5_flow_attr *mlx5_alloc_flow_attr(enum mlx5_flow_namespace_type type);
-@@ -366,6 +391,21 @@ static inline int  mlx5e_tc_num_filters(
- static inline int
- mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
- { return -EOPNOTSUPP; }
-+#if !defined(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE) && defined(HAVE_TC_BLOCK_OFFLOAD)
-+static inline int mlx5e_setup_tc_block(struct net_device *dev,
-+				       struct tc_block_offload *f)
-+{
-+	return -EOPNOTSUPP;
-+}
+ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
+@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
+ union mlx5e_crypto_info {
+ 	struct tls_crypto_info crypto_info;
+ 	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;
++#ifdef TLS_CIPHER_AES_GCM_256
+ 	struct tls12_crypto_info_aes_gcm_256 crypto_info_256;
 +#endif
-+#if !defined(HAVE_TC_BLOCK_OFFLOAD) && !defined(HAVE_FLOW_BLOCK_OFFLOAD)
-+static inline int mlx5e_setup_tc_cls_flower(struct net_device *dev,
-+					    struct flow_cls_offload *cls_flower,
-+					    unsigned long flags)
-+{
-+	return -EOPNOTSUPP;
-+}
-+#endif /* !HAVE_TC_BLOCK_OFFLOAD && !HAVE_FLOW_BLOCK_OFFLOAD */
- #endif
+ };
  
- #if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ struct mlx5e_set_tls_static_params_wqe {

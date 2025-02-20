@@ -48,24 +48,26 @@ static inline bool mlx5e_channel_no_affinity_change(struct mlx5e_channel *c)
 
 static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
 {
-	struct dim_sample *sample = &sq->dim_obj.sample;
+	struct mlx5e_sq_stats *stats = sq->stats;
+	struct dim_sample dim_sample = {};
 
 	if (unlikely(!test_bit(MLX5E_SQ_STATE_DIM, &sq->state)))
 		return;
 
-	dim_update_sample(sq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
-	net_dim(&sq->dim_obj.dim, *sample);
+	dim_update_sample(sq->cq.event_ctr, stats->packets, stats->bytes, &dim_sample);
+	net_dim(sq->dim, dim_sample);
 }
 
 static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
 {
-	struct dim_sample *sample = &rq->dim_obj.sample;
+	struct mlx5e_rq_stats *stats = rq->stats;
+	struct dim_sample dim_sample = {};
 
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_DIM, &rq->state)))
 		return;
 
-	dim_update_sample(rq->cq.event_ctr, sample->pkt_ctr, sample->byte_ctr, sample);
-	net_dim(&rq->dim_obj.dim, *sample);
+	dim_update_sample(rq->cq.event_ctr, stats->packets, stats->bytes, &dim_sample);
+	net_dim(rq->dim, dim_sample);
 }
 
 static void mlx5e_rx_dim_cq_rearm(struct mlx5e_priv *priv, struct mlx5e_rq *rq)

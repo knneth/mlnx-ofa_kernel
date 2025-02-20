@@ -3,7 +3,7 @@
 
 #include "../../../compat/config.h"
 
-#ifdef CONFIG_COMPAT_KERNEL_CT
+#ifdef HAVE_FLOW_RULE_MATCH_CT
 #include_next <net/netfilter/nf_flow_table.h>
 #endif
 

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 #
 
-#ACKPORTS: Added to support 5.17 and below
+#BACKPORTS: Added to support 5.17 and below
 ccflags-y := -std=gnu11 -Wno-declaration-after-statement
 
 ifeq ($(CONFIG_IS_MARINER), y)

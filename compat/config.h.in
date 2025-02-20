@@ -171,6 +171,9 @@
 /* blk_execute_rq_nowait has 5 params */
 #undef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
 
+/* BLK_FEAT_ZONED is defined */
+#undef HAVE_BLK_FEAT_ZONED
+
 /* linux/blk-mq.h has struct blk_holder_ops */
 #undef HAVE_BLK_HOLDER_OPS
 
@@ -294,11 +297,17 @@
 /* blkdev.h has blk_queue_zone_sectors */
 #undef HAVE_BLK_QUEUE_ZONE_SECTORS
 
+/* blk_revalidate_disk_zones get 1 param */
+#undef HAVE_BLK_REVALIDATE_DISK_ZONES_1_PARAM
+
 /* if blk-mq.h has blk_rq_bio_prep */
 #undef HAVE_BLK_RQ_BIO_PREP
 
 /* blk_rq_integrity_map_user exists */
-#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER
+#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM
+
+/* blk_rq_integrity_map_user exists */
+#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM
 
 /* blk_rq_map_integrity_sg get 2 params */
 #undef HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS
@@ -401,6 +410,9 @@
 
 /* struct ctl_table have "child" field */
 #undef HAVE_CTL_TABLE_CHILD
+
+/* kernel provides control flag checking helpers */
+#undef HAVE_CTRL_FLAG_HELPERS
 
 /* DEFINE_SEQ_ATTRIBUTE is defined */
 #undef HAVE_DEFINE_SEQ_ATTRIBUTE
@@ -606,9 +618,6 @@
 /* devlink_port_type_eth_set get 1 param */
 #undef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM
 
-/* devlink_port_type_eth_set exist */
-#undef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM
-
 /* devlink.h has devlink_register get 1 params */
 #undef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
 
@@ -756,8 +765,17 @@
 /* have struct dpll_pin_ops */
 #undef HAVE_DPLL_STRUCTS
 
+/* kernel provides encapsulation control flag helpers */
+#undef HAVE_ENCAP_CTRL_FLAG_HELPERS
+
 /* struct enum has member BIO_REMAPPED */
 #undef HAVE_ENUM_BIO_REMAPPED
+
+/* enum blk_unique_id is defined */
+#undef HAVE_ENUM_BLK_UNIQUE_ID
+
+/* clocksource_ids has CSID_X86_ART */
+#undef HAVE_ENUM_CSID_X86_ART
 
 /* enum flow_block_binder_type exists */
 #undef HAVE_ENUM_FLOW_BLOCK_BINDER_TYPE
@@ -771,20 +789,26 @@
 /* ethtool supprts 50G-pre-lane link modes */
 #undef HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES
 
-/* get/set_settings is defined */
-#undef HAVE_ETHTOOL_GET_SET_SETTINGS
-
 /* ethtool_link_ksettings has lanes */
 #undef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
 
 /* linux/ethtool_netlink.h exists */
 #undef HAVE_ETHTOOL_NETLINK_H
 
+/* rxfh_per_ctx_key is defined */
+#undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY
+
 /* ethtool_pause_stats is defined */
 #undef HAVE_ETHTOOL_PAUSE_STATS
 
+/* ethtool.h has ethtool_puts */
+#undef HAVE_ETHTOOL_PUTS
+
 /* ethtool_rmon_hist_range is defined */
 #undef HAVE_ETHTOOL_RMON_HIST_RANGE
+
+/* ethtool_sprintf is defined */
+#undef HAVE_ETHTOOL_SPRINTF
 
 /* eth_get_headlen is defined with 2 params */
 #undef HAVE_ETH_GET_HEADLEN_2_PARAMS
@@ -809,9 +833,6 @@
 
 /* function fib_info_nh exists */
 #undef HAVE_FIB_INFO_NH
-
-/* fib_lookup is exported by the kernel */
-#undef HAVE_FIB_LOOKUP_EXPORTED
 
 /* fib_nh has fib_nh_dev */
 #undef HAVE_FIB_NH_DEV
@@ -927,11 +948,17 @@
 /* flow_indr_dev_unregister receive flow_setup_cb_t parameter */
 #undef HAVE_FLOW_INDR_DEV_UNREGISTER_FLOW_SETUP_CB_T
 
+/* struct flow_dissector_key_meta has l2_miss */
+#undef HAVE_FLOW_MATCH_META_L2_MISS
+
 /* HAVE_FLOW_OFFLOAD_ACTION exists */
 #undef HAVE_FLOW_OFFLOAD_ACTION
 
 /* flow_offload_has_one_action exists */
 #undef HAVE_FLOW_OFFLOAD_HAS_ONE_ACTION
+
+/* flow_rule_match_ct exists */
+#undef HAVE_FLOW_RULE_MATCH_CT
 
 /* flow_rule_match_cvlan is exported by the kernel */
 #undef HAVE_FLOW_RULE_MATCH_CVLAN
@@ -965,6 +992,9 @@
 
 /* net/macsec.h has function macsec_netdev_priv */
 #undef HAVE_FUNC_MACSEC_NETDEV_PRIV
+
+/* GD_SUPPRESS_PART_SCAN is defined */
+#undef HAVE_GD_SUPPRESS_PART_SCAN
 
 /* struct gendisk has conv_zones_bitmap */
 #undef HAVE_GENDISK_CONV_ZONES_BITMAP
@@ -1051,6 +1081,9 @@
 /* have hmm_pfn_to_map_order */
 #undef HAVE_HMM_PFN_TO_MAP_ORDER
 
+/* have hmm_pfn_to_page */
+#undef HAVE_HMM_PFN_TO_PAGE
+
 /* hmm_range_fault has one param */
 #undef HAVE_HMM_RANGE_FAULT_HAS_ONE_PARAM
 
@@ -1081,9 +1114,6 @@
 /* interval_tree functions exported by the kernel */
 #undef HAVE_INTERVAL_TREE_EXPORTED
 
-/* Define to 1 if you have the <inttypes.h> header file. */
-#undef HAVE_INTTYPES_H
-
 /* devlink_fmsg_u8_pair_put returns int */
 #undef HAVE_INT_DEVLINK_FMSG_U8_PAIR
 
@@ -1098,6 +1128,9 @@
 
 /* linux/io_uring/cmd.h exists */
 #undef HAVE_IO_URING_CMD_H
+
+/* linux/io_uring/cmd.h has io_uring_cmd_iopoll_done */
+#undef HAVE_IO_URING_CMD_IOPOLL_DONE
 
 /* ip6_dst_hoplimit is exported by the kernel */
 #undef HAVE_IP6_DST_HOPLIMIT
@@ -1222,23 +1255,20 @@
 /* linux/unaligned.h exists */
 #undef HAVE_LINUX_UNALIGNED_H
 
+/* list_bulk_move_tail is defined */
+#undef HAVE_LIST_BULK_MOVE_TAIL
+
 /* list_is_first is defined */
 #undef HAVE_LIST_IS_FIRST
 
 /* linux/lockdep.h has lockdep_unregister_key */
 #undef HAVE_LOCKDEP_UNREGISTER_KEY
 
-/* linux/lockdep.h has lockdep_assert_held_exclusive */
-#undef HAVE_LOCKUP_ASSERT_HELD_EXCLUSIVE
-
 /* linux/lockdep.h has lockdep_assert_held_write */
 #undef HAVE_LOCKUP_ASSERT_HELD_WRITE
 
 /* net/macsec.h exists */
 #undef HAVE_MACSEC_H
-
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
 
 /* map_lock has mmap_read_lock */
 #undef HAVE_MMAP_READ_LOCK
@@ -1320,6 +1350,9 @@
 
 /* ndo_select_queue has 3 params with no fallback */
 #undef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+
+/* get_ts_stats is defined */
+#undef HAVE_NDO_STATS_TS_GET
 
 /* ndo_tx_timeout get 2 params */
 #undef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
@@ -1438,6 +1471,12 @@
 /* net/tc_act/tc_mpls.h exists */
 #undef HAVE_NET_TC_ACT_TC_MPLS_H
 
+/* nft_chain_offload_priority is defined */
+#undef HAVE_NFT_CHAIN_OFFLOAD_PRIORITY
+
+/* nft_chain_offload_support is defined */
+#undef HAVE_NFT_CHAIN_OFFLOAD_SUPPORT
+
 /* nla_nest_start_noflag exist */
 #undef HAVE_NLA_NEST_START_NOFLAG
 
@@ -1472,7 +1511,10 @@
 #undef HAVE_PAGE_DMA_ADDR_ARRAY
 
 /* linux/gfp.h has page_frag_cache_drain */
-#undef HAVE_PAGE_FRAG_CACHE_DRAIN
+#undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H
+
+/* linux/page_frag_cache.h has page_frag_cache_drain */
+#undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H
 
 /* net/page_pool/helpers.h has page_pool_nid_changed */
 #undef HAVE_PAGE_POLL_NID_CHANGED_HELPERS
@@ -1528,11 +1570,17 @@
 /* pci_dev has link_active_reporting */
 #undef HAVE_PCI_DEV_LINK_ACTIVE_REPORTING
 
+/* include/linux/pci.h has pci_disable_ptm */
+#undef HAVE_PCI_DISABLE_PTM
+
 /* struct pci_driver has member driver_managed_dma */
 #undef HAVE_PCI_DRIVER_MANAGED_DMA
 
 /* linux/aer.h has pci_enable_pcie_error_reporting */
 #undef HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING
+
+/* include/linux/pci.h has pci_enable_ptm */
+#undef HAVE_PCI_ENABLE_PTM
 
 /* pci_iov_get_pf_drvdata is defined */
 #undef HAVE_PCI_IOV_GET_PF_DRVDATA
@@ -1555,9 +1603,6 @@
 /* pci_p2pdma_unmap_sg defined */
 #undef HAVE_PCI_P2PDMA_UNMAP_SG
 
-/* pci_pool_zalloc is defined */
-#undef HAVE_PCI_POOL_ZALLOC
-
 /* PCI_VENDOR_ID_REDHAT is defined */
 #undef HAVE_PCI_VENDOR_ID_REDHAT
 
@@ -1570,8 +1615,14 @@
 /* linux/proc_fs.h has pde_data */
 #undef HAVE_PDE_DATA
 
+/* kernel supports v6.9 per queue netdev-genl stats */
+#undef HAVE_PER_QUEUE_NETDEV_GENL_STATS
+
 /* pinned_vm is defined */
 #undef HAVE_PINNED_VM
+
+/* struct platform_driver has remove_new */
+#undef HAVE_PLATFORM_DEVICE_REMOVE_NEW
 
 /* dev_pm_qos_update_user_latency_tolerance is exported by the kernel */
 #undef HAVE_PM_QOS_UPDATE_USER_LATENCY_TOLERANCE_EXPORTED
@@ -1633,6 +1684,9 @@
 /* kernel supports queue and napi association */
 #undef HAVE_QUEUE_AND_NAPI_ASSOCIATION
 
+/* queue_atomic_write_boundary_bytes exists */
+#undef HAVE_QUEUE_ATOMIC_WRITE_BOUNDARY_BYTES
+
 /* QUEUE_FLAG_DISCARD is defined */
 #undef HAVE_QUEUE_FLAG_DISCARD
 
@@ -1690,6 +1744,9 @@
 /* genhd.h has revalidate_disk_size */
 #undef HAVE_REVALIDATE_DISK_SIZE
 
+/* rpcrdma_rn_register has defined */
+#undef HAVE_RPCRDMA_RN_REGISTER
+
 /* rpc_task_gfp_mask is exported by the kernel */
 #undef HAVE_RPC_TASK_GPF_MASK_EXPORTED
 
@@ -1723,6 +1780,10 @@
 /* rq_integrity_vec returns struct bio_vec */
 #undef HAVE_RQ_INTEGRITY_RETURN_BIO_VEC
 
+/* kernel supports v6.12 'setting different RSS key for each additional
+   context' */
+#undef HAVE_RSS_KEY_PER_CONTEXT
+
 /* rt_gw_family is defined */
 #undef HAVE_RT_GW_FAMILY
 
@@ -1731,6 +1792,12 @@
 
 /* macsec_ops has boolean field rx_uses_md_dst */
 #undef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
+
+/* linux/sbitmap.h has sbitmap_get with 1 param */
+#undef HAVE_SBITMAP_GET_1_PARAM
+
+/* linux/sbitmap.h has sbitmap_get with 2 params */
+#undef HAVE_SBITMAP_GET_2_PARAMS
 
 /* scsi_block_targets is defined */
 #undef HAVE_SCSI_BLOCK_TARGETS
@@ -1780,6 +1847,9 @@
 /* ndo_select_queue has a second net_device parameter */
 #undef HAVE_SELECT_QUEUE_NET_DEVICE
 
+/* linux/net.h has sendpages_ok */
+#undef HAVE_SENDPAGES_OK
+
 /* linux/net.h has sendpage_ok */
 #undef HAVE_SENDPAGE_OK
 
@@ -1815,6 +1885,9 @@
 
 /* linux/skbuff.h skb_frag_off_set is defined */
 #undef HAVE_SKB_FRAG_OFF_SET
+
+/* linux/skbuff.h skb_is_gso_tcp is defined */
+#undef HAVE_SKB_IS_GSO_TCP
 
 /* linux/skbuff.h has skb_queue_empty_lockless */
 #undef HAVE_SKB_QUEUE_EMPTY_LOCKLESS
@@ -1856,20 +1929,11 @@
 /* build_bug.h has static_assert */
 #undef HAVE_STATIC_ASSERT
 
-/* Define to 1 if you have the <stdint.h> header file. */
-#undef HAVE_STDINT_H
-
-/* Define to 1 if you have the <stdlib.h> header file. */
-#undef HAVE_STDLIB_H
+/* kernel is build with -std=gnu99 */
+#undef HAVE_STD_GNU_99
 
 /* fs.h has stream_open */
 #undef HAVE_STREAM_OPEN
-
-/* Define to 1 if you have the <strings.h> header file. */
-#undef HAVE_STRINGS_H
-
-/* Define to 1 if you have the <string.h> header file. */
-#undef HAVE_STRING_H
 
 /* strscpy_pad is defined */
 #undef HAVE_STRSCPY_PAD
@@ -1894,6 +1958,9 @@
 
 /* net/psample.h has struct psample_metadata */
 #undef HAVE_STRUCT_PSAMPLE_METADATA
+
+/* linux/blkdev.h has struct rq_list */
+#undef HAVE_STRUCT_RQ_LIST
 
 /* linux/overflow.h has struct_size_t */
 #undef HAVE_STRUCT_SIZE_T
@@ -1970,12 +2037,6 @@
 /* sysfs_emit is defined */
 #undef HAVE_SYSFS_EMIT
 
-/* Define to 1 if you have the <sys/stat.h> header file. */
-#undef HAVE_SYS_STAT_H
-
-/* Define to 1 if you have the <sys/types.h> header file. */
-#undef HAVE_SYS_TYPES_H
-
 /* t10_pi_prepare is defined */
 #undef HAVE_T10_PI_PREPARE
 
@@ -2021,9 +2082,6 @@
 /* struct tc_block_offload has extack */
 #undef HAVE_TC_BLOCK_OFFLOAD_EXTACK
 
-/* pkt_cls.h enum enum tc_fl_command has TC_CLSFLOWER_STATS */
-#undef HAVE_TC_CLSFLOWER_STATS_FIX
-
 /* TC_CLSMATCHALL_STATS is defined */
 #undef HAVE_TC_CLSMATCHALL_STATS
 
@@ -2032,9 +2090,6 @@
 
 /* struct tc_cls_flower_offload has stats field */
 #undef HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD_FIX
-
-/* struct tc_cls_common_offload has extack */
-#undef HAVE_TC_CLS_OFFLOAD_EXTACK_FIX
 
 /* struct tc_cls_flower_offload is defined */
 #undef HAVE_TC_FLOWER_OFFLOAD
@@ -2047,6 +2102,12 @@
 
 /* tc_htb_qopt_offload has quantum */
 #undef HAVE_TC_HTB_OPT_QUANTUM
+
+/* struct tc_mqprio_qopt_offload has extack */
+#undef HAVE_TC_MQPRIO_EXTACK
+
+/* tc_setup_cb_add is defined */
+#undef HAVE_TC_SETUP_CB_ADD
 
 /* tc_setup_cb_egdev_register is defined */
 #undef HAVE_TC_SETUP_CB_EGDEV_REGISTER
@@ -2099,9 +2160,6 @@
 /* trace_block_bio_remap has 4 param */
 #undef HAVE_TRACE_BLOCK_BIO_REMAP_4_PARAM
 
-/* trace/events/rdma_core.h exists */
-#undef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
-
 /* trace/events/sock.h has trace_sk_data_ready */
 #undef HAVE_TRACE_EVENTS_TRACE_SK_DATA_READY
 
@@ -2129,9 +2187,6 @@
 /* net/xdp.h has __xdp_rxq_info_reg */
 #undef HAVE_UNDERSCORE_XDP_RXQ_INFO_REG
 
-/* Define to 1 if you have the <unistd.h> header file. */
-#undef HAVE_UNISTD_H
-
 /* include/linux/units.h exists */
 #undef HAVE_UNITS_H
 
@@ -2158,6 +2213,9 @@
 
 /* has vfio_combine_iova_ranges exists */
 #undef HAVE_VFIO_COMBINE_IOVA_RANGES
+
+/* has vfio_notify_iova_map exists */
+#undef HAVE_VFIO_NOTIFY_IOVA_MAP
 
 /* linux/vfio_pci_core.h exists */
 #undef HAVE_VFIO_PCI_CORE_H
@@ -2240,6 +2298,9 @@
 
 /* xdp_metadata_ops has xmo_rx_vlan_tag */
 #undef HAVE_XDP_METADATA_OPS_HAS_VLAN_TAG
+
+/* XDP_REDIRECT is defined */
+#undef HAVE_XDP_REDIRECT
 
 /* net/xdp.h has xdp_rxq_info_reg get 4 params */
 #undef HAVE_XDP_RXQ_INFO_REG_4_PARAMS
@@ -2391,8 +2452,14 @@
 /* netdevice.h has __netdev_tx_sent_queue */
 #undef HAVE___NETDEV_TX_SENT_QUEUE
 
+/* __nlmsg_parse exist */
+#undef HAVE___NLMSG_PARSE
+
 /* __tc_indr_block_cb_register is defined */
 #undef HAVE___TC_INDR_BLOCK_CB_REGISTER
+
+/* building a kernel module works */
+#undef KBUILD_WORKS
 
 /* Name of package */
 #undef PACKAGE
@@ -2414,12 +2481,6 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
-
-/* The size of `unsigned long long', as computed by sizeof. */
-#undef SIZEOF_UNSIGNED_LONG_LONG
-
-/* Define to 1 if you have the ANSI C header files. */
-#undef STDC_HEADERS
 
 /* Version number of package */
 #undef VERSION

@@ -239,6 +239,7 @@ enum mlx5_ib_flow_matcher_create_attrs {
 	MLX5_IB_ATTR_FLOW_MATCHER_MATCH_CRITERIA,
 	MLX5_IB_ATTR_FLOW_MATCHER_FLOW_FLAGS,
 	MLX5_IB_ATTR_FLOW_MATCHER_FT_TYPE,
+	MLX5_IB_ATTR_FLOW_MATCHER_IB_PORT,
 };
 
 enum mlx5_ib_flow_matcher_destroy_attrs {
@@ -270,12 +271,12 @@ enum mlx5_ib_device_query_context_attrs {
 	MLX5_IB_ATTR_QUERY_CONTEXT_RESP_UCTX = (1U << UVERBS_ID_NS_SHIFT),
 };
 
-enum mlx5_ib_reg_dmabuf_mr_attrs {
-	MLX5_IB_ATTR_REG_DMABUF_MR_ACCESS_FLAGS = (1U << UVERBS_ID_NS_SHIFT),
-};
-
 enum mlx5_ib_create_cq_attrs {
 	MLX5_IB_ATTR_CREATE_CQ_UAR_INDEX = UVERBS_ID_DRIVER_NS_WITH_UHW,
+};
+
+enum mlx5_ib_reg_dmabuf_mr_attrs {
+	MLX5_IB_ATTR_REG_DMABUF_MR_ACCESS_FLAGS = (1U << UVERBS_ID_NS_SHIFT),
 };
 
 #define MLX5_IB_DW_MATCH_PARAM 0xA0

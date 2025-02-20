@@ -1,19 +1,53 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 
-Change-Id: Icc16157bcb290b6994d907de8ad6cd415a59c966
+Change-Id: Id6691aa47e90830948cfda0718830795d4c239ae
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
- 1 file changed, 1 insertion(+)
+ .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
-@@ -6,6 +6,7 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+@@ -30,8 +30,12 @@ struct mlx5e_tc_int_port_priv {
  
- #include "en_tc.h"
- #include "en/tc/act/act.h"
-+#include <uapi/linux/tc_act/tc_pedit.h>
+ bool mlx5e_tc_int_port_supported(const struct mlx5_eswitch *esw)
+ {
++#ifdef HAVE_FLOW_BLOCK_OFFLOAD
+ 	return mlx5_eswitch_vport_match_metadata_enabled(esw) &&
+ 	       MLX5_CAP_GEN(esw->dev, reg_c_preserve);
++#else
++	return false;
++#endif
+ }
  
- #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
+ u32 mlx5e_tc_int_port_get_metadata(struct mlx5e_tc_int_port *int_port)
+@@ -291,7 +295,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
+ 		mlx5_del_flow_rules(int_port->rx_rule);
+ 	mapping_remove(ctx, int_port->mapping);
+ 	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(int_port);
++#else
++	kfree_rcu(int_port, rcu_head);
++#endif
+ 	priv->num_ports--;
+ }
+ 
+@@ -493,12 +501,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
+ 
+ 	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
+ 		skb->pkt_type = PACKET_HOST;
++#ifdef HAVE_SKB_SET_REDIRECTED
+ 		skb_set_redirected(skb, true);
++#endif
+ 		*forward_tx = false;
+ 	} else {
+ 		skb_reset_network_header(skb);
+ 		skb_push_rcsum(skb, skb->mac_len);
++#ifdef HAVE_SKB_SET_REDIRECTED
+ 		skb_set_redirected(skb, false);
++#endif
+ 		*forward_tx = true;
+ 	}
  

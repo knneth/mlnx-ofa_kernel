@@ -511,7 +511,8 @@ static void mlx5_devlink_hairpin_params_init_values(struct devlink *devlink)
 }
 
 static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
-						   struct devlink_param_gset_ctx *ctx)
+						   struct devlink_param_gset_ctx *ctx,
+						   struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
@@ -529,12 +530,6 @@ static int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 
 }
 
 static const struct devlink_param mlx5_devlink_params[] = {
-	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_ACTION_ON_NAT_CONNS,
-			     "ct_action_on_nat_conns", DEVLINK_PARAM_TYPE_BOOL,
-			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
-			     mlx5_devlink_ct_action_on_nat_conns_get,
-			     mlx5_devlink_ct_action_on_nat_conns_set,
-			     NULL),
 	DEVLINK_PARAM_GENERIC(ENABLE_ROCE, BIT(DEVLINK_PARAM_CMODE_DRIVERINIT),
 			      NULL, NULL, mlx5_devlink_enable_roce_validate),
 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
@@ -893,26 +888,6 @@ void mlx5_devlink_params_unregister(struct devlink *devlink)
 	mlx5_devlink_auxdev_params_unregister(devlink);
 	devl_params_unregister(devlink, mlx5_devlink_params,
 			       ARRAY_SIZE(mlx5_devlink_params));
-}
-
-int
-mlx5_devlink_ct_action_on_nat_conns_set(struct devlink *devlink, u32 id,
-					struct devlink_param_gset_ctx *ctx)
-{
-	struct mlx5_core_dev *dev = devlink_priv(devlink);
-
-	dev->mlx5e_res.ct.ct_action_on_nat_conns = ctx->val.vbool;
-	return 0;
-}
-
-int
-mlx5_devlink_ct_action_on_nat_conns_get(struct devlink *devlink, u32 id,
-					struct devlink_param_gset_ctx *ctx)
-{
-	struct mlx5_core_dev *dev = devlink_priv(devlink);
-
-	ctx->val.vbool = dev->mlx5e_res.ct.ct_action_on_nat_conns;
-	return 0;
 }
 
 int

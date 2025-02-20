@@ -5,6 +5,14 @@
 
 #include_next <linux/ethtool.h>
 
+#ifndef HAVE_ETHTOOL_PUTS
+static inline void ethtool_puts(u8 **data, const char *str)
+{
+	strscpy(*data, str, ETH_GSTRING_LEN);
+	*data += ETH_GSTRING_LEN;
+}
+#endif
+
 /* EEPROM Standards for plug in modules */
 #ifndef ETH_MODULE_SFF_8079
 #define ETH_MODULE_SFF_8079		0x1

@@ -162,21 +162,12 @@ static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
                          xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
-static
-int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
-				     struct devlink_port *port,
-				     const char *group_name,
-				     struct netlink_ext_ack *extack);
-
 static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 			  unsigned int port_index,
 			  struct netlink_ext_ack *extack)
 {
 	struct mlx5_devm_device *mdevm_dev;
-	struct devlink_port devport;
 	struct mlxdevm_port *port;
-	struct mlx5_eswitch *esw;
-	struct mlx5_vport *vport;
 	struct devlink *devlink;
 	int ret;
 
@@ -188,17 +179,6 @@ static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 	port = mlxdevm_port_get_by_index(devm_dev, port_index);
 	if (!port)
 		return -ENODEV;
-
-	devlink = mlxdevm_to_devlink(port->devm);
-	memset(&devport, 0, sizeof(devport));
-	devport.index = port->index;
-
-	ret = mlx5_esw_get_esw_and_vport(devlink, &devport, &esw, &vport, extack);
-	if (ret)
-		return ret;
-
-	esw_qos_vport_disable_tc_arbitration(vport, NULL);
-	mlx5_devlink_rate_leaf_group_set(devlink, &devport, "", extack);
 
 	devl_lock(devlink);
 	ret = mlx5_devlink_sf_port_del(devlink, port->dl_port, extack);
@@ -461,11 +441,11 @@ int mlx5_devlink_rate_leaf_get(struct devlink *devlink,
 	}
 
 	if (vport->qos.sched_node) {
-		struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(vport);
 		*tx_max = vport->qos.sched_node->max_rate;
 		*tx_share = vport->qos.sched_node->min_rate;
-		if (parent)
-			*group = parent->devm.name;
+
+		if (vport->qos.sched_node->parent)
+			*group = vport->qos.sched_node->parent->devm.name;
 	}
 
 out:
@@ -505,7 +485,13 @@ static int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_port *port,
 	if (err)
 		return err;
 
-	return mlx5_esw_rate_leaf_tx_max_set(esw, vport, tx_max, extack);
+	esw_qos_lock(esw);
+	if (!vport->qos.sched_node && !tx_max)
+		goto unlock;
+	err = mlx5_esw_qos_set_vport_max_rate(vport, tx_max, extack);
+unlock:
+	esw_qos_unlock(esw);
+	return err;
 }
 
 static
@@ -526,22 +512,9 @@ int mlx5_devlink_rate_leaf_tx_share_set(struct devlink *devlink,
 		return -EPERM;
 
 	esw_qos_lock(esw);
-
-	if (vport->qos.tc.arbiter_node) {
-		err = mlx5_esw_qos_set_vport_tc_min_rate(esw, vport, tx_share, extack);
-		if (!err)
-			vport->qos.sched_node->min_rate = tx_share;
-		goto unlock;
-	}
-
 	if (!vport->qos.sched_node && !tx_share)
 		goto unlock;
-
-	err = esw_qos_vport_enable(vport, 0, 0, extack);
-	if (err)
-		goto unlock;
-
-	err = esw_qos_set_vport_min_rate(vport, tx_share, extack);
+	err = mlx5_esw_qos_set_vport_min_rate(vport, tx_share, extack);
 unlock:
 	esw_qos_unlock(esw);
 	return err;
@@ -565,7 +538,7 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 				     const char *group_name,
 				     struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_sched_node *curr_group, *new_group;
+	struct mlx5_esw_sched_node *group;
 	struct mlx5_eswitch *esw;
 	struct mlx5_vport *vport;
 	int err;
@@ -574,77 +547,21 @@ int mlx5_devlink_rate_leaf_group_set(struct devlink *devlink,
 	if (err)
 		return err;
 
-	esw_qos_lock(esw);
 	if (!vport->qos.sched_node && !strlen(group_name))
-		goto unlock;
+		return 0;
 
-	err = esw_qos_vport_enable(vport, 0, 0, extack);
-	if (err)
-		goto unlock;
+	if (!strlen(group_name))
+		return mlx5_esw_qos_vport_update_parent(vport, NULL, extack);
 
-	curr_group = mlx5_esw_qos_vport_get_parent(vport);
-	/* remove SF from group */
-	if (!strlen(group_name)) {
-		new_group = esw->qos.node0;
-
-		if (esw_qos_tc_arbitration_enabled_on_vport(vport))
-			goto unlock;
-		else if (vport->qos.tc.arbiter_node)
-			err = esw_qos_vport_tc_disable(vport, NULL, extack);
-		else
-			err = esw_qos_vport_update_node(vport, NULL, extack);
-		if (err) {
-			NL_SET_ERR_MSG_MOD(extack, "Failed to remove SF from group");
-			goto unlock;
-		}
-		goto out;
-	}
-
-	new_group = esw_qos_find_devm_group(esw, group_name);
-	if (!new_group) {
+	esw_qos_lock(esw);
+	group = esw_qos_find_devm_group(esw, group_name);
+	if (!group) {
 		NL_SET_ERR_MSG_MOD(extack, "Group doesn't exist, can't add SF to it");
 		err = -EINVAL;
-		goto unlock;
 	}
-
-	if (new_group->esw != vport->dev->priv.eswitch) {
-		NL_SET_ERR_MSG_MOD(extack, "Vport and group eswitch are not the same");
-		err = -EINVAL;
-		goto unlock;
-	}
-
-	if (new_group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
-		if (esw_qos_tc_arbitration_enabled_on_vport(vport)) {
-			NL_SET_ERR_MSG_MOD(extack,
-					   "TC arbitration already enabled for vport");
-			err = -EOPNOTSUPP;
-			goto unlock;
-		}
-
-		err = esw_qos_vport_tc_update_node(vport, new_group, extack);
-		goto check_err;
-	}
-
-
-	if (esw_qos_tc_arbitration_enabled_on_vport(vport))
-		err = mlx5_esw_qos_vport_tc_update_tc_arbitration_node(vport, new_group, extack);
-	else
-		err = esw_qos_vport_update_node(vport, new_group, extack);
-
-check_err:
-	if (!err) {
-		goto out;
-	} else {
-		NL_SET_ERR_MSG_MOD(extack, "Failed to add SF to group");
-		goto unlock;
-	}
-
-out:
-	new_group->num_vports++;
-	curr_group->num_vports--;
-unlock:
 	esw_qos_unlock(esw);
-	return err;
+
+	return err ? : mlx5_esw_qos_vport_update_parent(vport, group, extack);
 }
 
 static int mlx5_devm_rate_leaf_group_set(struct mlxdevm_port *port,
@@ -727,7 +644,7 @@ static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm *devm_dev, const char *
 		err = -ENODEV;
 		goto unlock;
 	}
-	err = esw_qos_set_node_max_rate(group, tx_max, extack);
+	err = esw_qos_sched_elem_config(group, tx_max, group->bw_share, extack);
 	if (!err)
 		group->devm.tx_max = tx_max;
 unlock:
@@ -794,8 +711,7 @@ static int mlx5_devm_rate_node_new(struct mlxdevm *devm_dev, const char *group_n
 	}
 
 	group->devm.name = kstrdup(group_name, GFP_KERNEL);
-	err = mlxdevm_rate_group_register(devm_dev,
-					  &group->devm);
+	err = mlxdevm_rate_group_register(devm_dev, &group->devm);
 
 unlock:
 	esw_qos_unlock(esw);
@@ -808,7 +724,7 @@ static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_n
 	struct mlx5_esw_sched_node *group;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
-	int err, ret = 0;
+	int err = 0;
 
 	devlink = mlxdevm_to_devlink(devm_dev);
 
@@ -829,22 +745,17 @@ static int mlx5_devm_rate_node_del(struct mlxdevm *devm_dev, const char *group_n
 		NL_SET_ERR_MSG_MOD(extack, "Node has children. Cannot delete node.");
 		goto unlock;
 	}
-	mlxdevm_rate_group_unregister(devm_dev,
-				      &group->devm);
+
+	mlxdevm_rate_group_unregister(devm_dev, &group->devm);
 	kfree(group->devm.name);
 
-	if (group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR) {
-		err = esw_qos_destroy_vports_tc_nodes(group, true, NULL);
-		if (err)
-			ret = err;
-	}
+	if (group->type == SCHED_NODE_TYPE_TC_ARBITER_TSAR)
+		esw_qos_destroy_vports_tc_nodes(group, NULL);
 
-	err = esw_qos_destroy_node(group, extack);
-	if (err)
-		ret = err;
+	sysfs_esw_qos_destroy_node(group, extack);
 unlock:
 	esw_qos_unlock(esw);
-	return ret;
+	return err;
 }
 
 static const struct mlxdevm_ops mlx5_devm_ops = {

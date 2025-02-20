@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/sysfs.c
 
-Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
+Change-Id: I7409f346159cd6a6a823fb8e8e5540122e474386
 ---
- drivers/infiniband/core/sysfs.c | 29 +++++++++++++++--------------
- 1 file changed, 15 insertions(+), 14 deletions(-)
+ drivers/infiniband/core/sysfs.c | 21 +++++++--------------
+ 1 file changed, 7 insertions(+), 14 deletions(-)
 
 --- a/drivers/infiniband/core/sysfs.c
 +++ b/drivers/infiniband/core/sysfs.c
@@ -28,33 +28,15 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  struct ib_device *ib_port_sysfs_get_ibdev_kobj(struct kobject *kobj,
  					       u32 *port_num)
  {
-@@ -138,9 +125,12 @@ struct ib_device *ib_port_sysfs_get_ibde
- }
- EXPORT_SYMBOL(ib_port_sysfs_get_ibdev_kobj);
+@@ -140,7 +127,6 @@ EXPORT_SYMBOL(ib_port_sysfs_get_ibdev_ko
  
-+#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
  static const struct sysfs_ops port_sysfs_ops = {
-+#else
-+static struct sysfs_ops port_sysfs_ops = {
-+#endif
  	.show	= port_attr_show,
 -	.store	= port_attr_store
  };
  
  static ssize_t hw_stat_device_show(struct device *dev,
-@@ -206,7 +196,11 @@ static ssize_t gid_attr_show(struct kobj
- 	return port_attr->show(p->ibdev, p->port_num, port_attr, buf);
- }
- 
-+#ifdef CONFIG_COMPAT_IS_CONST_KOBJECT_SYSFS_OPS
- static const struct sysfs_ops gid_attr_sysfs_ops = {
-+#else
-+static struct sysfs_ops gid_attr_sysfs_ops = {
-+#endif
- 	.show = gid_attr_show
- };
- 
-@@ -455,7 +449,10 @@ static struct attribute *port_default_at
+@@ -455,7 +441,10 @@ static struct attribute *port_default_at
  	&ib_port_attr_link_layer.attr,
  	NULL
  };
@@ -65,7 +47,7 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  
  static ssize_t print_ndev(const struct ib_gid_attr *gid_attr, char *buf)
  {
-@@ -805,7 +802,11 @@ static void ib_port_gid_attr_release(str
+@@ -805,7 +794,11 @@ static void ib_port_gid_attr_release(str
  static struct kobj_type port_type = {
  	.release       = ib_port_release,
  	.sysfs_ops     = &port_sysfs_ops,

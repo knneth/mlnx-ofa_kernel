@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_trace.h
+
+Change-Id: Ie36e1c4c9d3ba00761f09e29fdfeef1ec534517d
+---
+ drivers/infiniband/core/cma_trace.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/infiniband/core/cma_trace.h
++++ b/drivers/infiniband/core/cma_trace.h
+@@ -84,7 +84,11 @@ TRACE_EVENT(cm_id_attach,
+ 		       sizeof(struct sockaddr_in6));
+ 		memcpy(__entry->dstaddr, &id_priv->id.route.addr.dst_addr,
+ 		       sizeof(struct sockaddr_in6));
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(devname);
++#else
++		__assign_str(devname, device->name);
++#endif
+ 	),
+ 
+ 	TP_printk("cm.id=%u src=%pISpc dst=%pISpc device=%s",
+@@ -334,7 +338,11 @@ DECLARE_EVENT_CLASS(cma_client_class,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name);
++#else
++		__assign_str(name, device->name);
++#endif
+ 	),
+ 
+ 	TP_printk("device name=%s",

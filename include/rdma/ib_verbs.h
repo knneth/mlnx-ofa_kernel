@@ -764,6 +764,7 @@ enum ib_event_type {
 	IB_EXP_EVENT_XRQ_QP_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR,
+	IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED,
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event);
@@ -1816,6 +1817,7 @@ struct ib_qp {
 	struct list_head	rdma_mrs;
 	struct list_head	sig_mrs;
 	struct ib_srq	       *srq;
+	struct completion	srq_completion;
 	struct ib_xrcd	       *xrcd; /* XRC TGT QPs only */
 	struct list_head	xrcd_list;
 
@@ -1825,6 +1827,7 @@ struct ib_qp {
 	struct ib_qp           *real_qp;
 	struct ib_uqp_object   *uobject;
 	void                  (*event_handler)(struct ib_event *, void *);
+	void                  (*registered_event_handler)(struct ib_event *, void *);
 	void		       *qp_context;
 	/* sgid_attrs associated with the AV's */
 	const struct ib_gid_attr *av_sgid_attr;
@@ -2699,13 +2702,6 @@ struct ib_device_ops {
 	 */
 	int (*get_numa_node)(struct ib_device *dev);
 
-	struct ib_nvmf_ctrl *   (*create_nvmf_backend_ctrl)(struct ib_srq *srq,
-			struct ib_nvmf_backend_ctrl_init_attr *init_attr);
-	int                     (*destroy_nvmf_backend_ctrl)(struct ib_nvmf_ctrl *ctrl);
-	struct ib_nvmf_ns *     (*attach_nvmf_ns)(struct ib_nvmf_ctrl *ctrl,
-			struct ib_nvmf_ns_init_attr *init_attr);
-	int                     (*detach_nvmf_ns)(struct ib_nvmf_ns *ns);
-
 	/**
 	 * add_sub_dev - Add a sub IB device
 	 */
@@ -2717,6 +2713,19 @@ struct ib_device_ops {
 	 * del_sub_dev - Delete a sub IB device
 	 */
 	void (*del_sub_dev)(struct ib_device *sub_dev);
+
+	struct ib_nvmf_ctrl *   (*create_nvmf_backend_ctrl)(struct ib_srq *srq,
+			struct ib_nvmf_backend_ctrl_init_attr *init_attr);
+	int                     (*destroy_nvmf_backend_ctrl)(struct ib_nvmf_ctrl *ctrl);
+	struct ib_nvmf_ns *     (*attach_nvmf_ns)(struct ib_nvmf_ctrl *ctrl,
+			struct ib_nvmf_ns_init_attr *init_attr);
+	int                     (*detach_nvmf_ns)(struct ib_nvmf_ns *ns);
+
+	/**
+	 * ufile_cleanup - Attempt to cleanup ubojects HW resources inside
+	 * the ufile.
+	 */
+	void (*ufile_hw_cleanup)(struct ib_uverbs_file *ufile);
 
 	DECLARE_RDMA_OBJ_SIZE(ib_ah);
 	DECLARE_RDMA_OBJ_SIZE(ib_counters);
@@ -4013,13 +4022,11 @@ int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata);
  *
  * NOTE: for user cq use ib_destroy_cq_user with valid udata!
  */
-static inline int ib_destroy_cq(struct ib_cq *cq)
+static inline void ib_destroy_cq(struct ib_cq *cq)
 {
 	int ret = ib_destroy_cq_user(cq, NULL);
 
 	WARN_ONCE(ret, "Destroy of kernel CQ shouldn't fail");
-
-	return ret;
 }
 
 /**

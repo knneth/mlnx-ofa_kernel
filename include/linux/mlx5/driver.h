@@ -159,6 +159,8 @@ enum {
 	MLX5_REG_MSECQ		 = 0x9155,
 	MLX5_REG_MSEES		 = 0x9156,
 	MLX5_REG_MIRC		 = 0x9162,
+	MLX5_REG_MTPTM		 = 0x9180,
+	MLX5_REG_MTCTR		 = 0x9181,
 	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
 	MLX5_REG_TRUST_LEVEL     = 0xC007,
@@ -633,6 +635,7 @@ enum {
 	 * creation/deletion on drivers rescan. Unset during device attach.
 	 */
 	MLX5_PRIV_FLAGS_DETACH = 1 << 2,
+	MLX5_PRIV_FLAGS_SWITCH_LEGACY = 1 << 3,
 };
 
 struct mlx5_adev {
@@ -829,7 +832,6 @@ struct mlx5e_resources {
 	struct net_device *uplink_netdev;
 	struct mutex uplink_netdev_lock;
  	struct {
-		bool ct_action_on_nat_conns;
 		bool ct_labels_mapping;
 		u32 max_offloaded_conns;
  	} ct;
@@ -931,6 +933,12 @@ struct mlx5_hca_cap {
 	u32 max[MLX5_UN_SZ_DW(hca_cap_union)];
 };
 
+enum mlx5_wc_state {
+	MLX5_WC_STATE_UNINITIALIZED,
+	MLX5_WC_STATE_UNSUPPORTED,
+	MLX5_WC_STATE_SUPPORTED,
+};
+
 struct mlx5_diag_cnt_id {
 	u16                     id;
 	bool                    enabled;
@@ -950,12 +958,6 @@ struct mlx5_diag_cnt {
 struct mlx5_local_lb {
 	bool user_force_disable;
 	bool driver_state;
-};
-
-enum mlx5_wc_state {
-	MLX5_WC_STATE_UNINITIALIZED,
-	MLX5_WC_STATE_UNSUPPORTED,
-	MLX5_WC_STATE_SUPPORTED,
 };
 
 struct mlx5_core_dev {
@@ -1286,8 +1288,6 @@ int mlx5_core_detach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn)
 struct dentry *mlx5_debugfs_get_dev_root(struct mlx5_core_dev *dev);
 void mlx5_qp_debugfs_init(struct mlx5_core_dev *dev);
 void mlx5_qp_debugfs_cleanup(struct mlx5_core_dev *dev);
-int mlx5_core_set_dc_cnak_trace(struct mlx5_core_dev *dev, int enable,
-				u64 addr);
 int mlx5_access_reg(struct mlx5_core_dev *dev, void *data_in, int size_in,
 		    void *data_out, int size_out, u16 reg_id, int arg,
 		    int write, bool verbose);
@@ -1414,8 +1414,6 @@ int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
 void mlx5_sriov_blocking_notifier_unregister(struct mlx5_core_dev *mdev,
 					     int vf_id,
 					     struct notifier_block *nb);
-int mlx5_lag_modify_cong_params(struct mlx5_core_dev *dev,
-				void *in, int in_size);
 int mlx5_rdma_rn_get_params(struct mlx5_core_dev *mdev,
 			    struct ib_device *device,
 			    struct rdma_netdev_alloc_params *params);
@@ -1432,6 +1430,12 @@ static inline bool mlx5_core_is_pf(const struct mlx5_core_dev *dev)
 static inline bool mlx5_core_is_vf(const struct mlx5_core_dev *dev)
 {
 	return dev->coredev_type == MLX5_COREDEV_VF;
+}
+
+static inline bool mlx5_core_same_coredev_type(const struct mlx5_core_dev *dev1,
+					       const struct mlx5_core_dev *dev2)
+{
+	return dev1->coredev_type == dev2->coredev_type;
 }
 
 static inline bool mlx5_core_is_ecpf(const struct mlx5_core_dev *dev)
@@ -1589,14 +1593,7 @@ enum {
 	MLX5_OCTWORD = 16,
 };
 
-struct msi_map mlx5_msix_alloc(struct mlx5_core_dev *dev,
-			       irqreturn_t (*handler)(int, void *),
-			       const struct irq_affinity_desc *affdesc,
-			       const char *name);
-void mlx5_msix_free(struct mlx5_core_dev *dev, struct msi_map map);
-
 bool mlx5_wc_support_get(struct mlx5_core_dev *mdev);
-
 
 /* MLX5 Diagnostics */
 

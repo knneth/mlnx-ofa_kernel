@@ -1,10 +1,10 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
 
-Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
+Change-Id: I660316d1cec3e88ae8078954b231f05cad4e4970
 ---
- drivers/infiniband/core/umem_dmabuf.c | 33 +++++++++++++++++++++++++++
- 1 file changed, 33 insertions(+)
+ drivers/infiniband/core/umem_dmabuf.c | 31 +++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
 
 --- a/drivers/infiniband/core/umem_dmabuf.c
 +++ b/drivers/infiniband/core/umem_dmabuf.c
@@ -16,15 +16,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  #include <linux/dma-buf.h>
  #include <linux/dma-resv.h>
  #include <linux/dma-mapping.h>
-@@ -10,15 +11,22 @@
- 
- #include "uverbs.h"
- 
-+#ifdef MODULE_IMPORT_NS
- MODULE_IMPORT_NS(DMA_BUF);
-+#endif
- 
- int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
+@@ -16,9 +17,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
  {
  	struct sg_table *sgt;
  	struct scatterlist *sg;
@@ -39,7 +31,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	int i;
  
  	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
-@@ -62,8 +70,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+@@ -62,8 +68,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
  		cur += sg_dma_len(sg);
  	}
  
@@ -54,7 +46,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	umem_dmabuf->sgt = sgt;
  
  wait_fence:
-@@ -72,14 +86,30 @@ wait_fence:
+@@ -72,14 +84,30 @@ wait_fence:
  	 * may be not up-to-date. Wait for the exporter to finish
  	 * the migration.
  	 */
@@ -85,7 +77,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  }
  EXPORT_SYMBOL(ib_umem_dmabuf_map_pages);
  
-@@ -194,7 +224,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
+@@ -194,7 +222,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
  }
  
  static struct dma_buf_attach_ops ib_umem_dmabuf_attach_pinned_ops = {
@@ -95,7 +87,7 @@ Change-Id: Id4c28c5cddc6b4f8d5d48e8dd4b68f54b18d890a
  	.move_notify = ib_umem_dmabuf_unsupported_move_notify,
  };
  
-@@ -273,3 +305,4 @@ void ib_umem_dmabuf_release(struct ib_um
+@@ -273,3 +303,4 @@ void ib_umem_dmabuf_release(struct ib_um
  	dma_buf_put(dmabuf);
  	kfree(umem_dmabuf);
  }

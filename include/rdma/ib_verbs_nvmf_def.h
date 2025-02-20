@@ -44,6 +44,7 @@ struct ib_nvmf_caps {
 	u32 min_cmd_timeout_us; /* 0 means use HCA default value */
 	u32 max_cmd_timeout_us; /* 0 means use HCA default value */
 	u32 max_frontend_nsid; /* 0 means any frontend nsid is allowed */
+	u8 qp_last_nvme_cqe_reached;
 };
 
 enum ib_qp_offload_type {

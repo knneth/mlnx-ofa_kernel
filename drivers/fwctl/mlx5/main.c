@@ -149,8 +149,9 @@ static bool mlx5ctl_validate_rpc(const void *in, enum fwctl_rpc_scope scope)
 	 * Currently the driver can't keep track of commands that allocate
 	 * objects in the FW, these commands are safe from a security
 	 * perspective but nothing will free the memory when the FD is closed.
-	 * For now permit only query commands. Also the caps for the scope have
-	 * not been defined yet, filter commands manually for now.
+	 * For now permit only query commands and set commands that don't alter
+	 * objects. Also the caps for the scope have not been defined yet,
+	 * filter commands manually for now.
 	 */
 	switch (opcode) {
 	case MLX5_CMD_OP_POSTPONE_CONNECTED_QP_TIMEOUT:
@@ -160,6 +161,10 @@ static bool mlx5ctl_validate_rpc(const void *in, enum fwctl_rpc_scope scope)
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_QUERY_ROCE_ADDRESS:
 	case MLX5_CMD_OPCODE_QUERY_VUID:
+	/*
+	 * FW limits SET_HCA_CAP on the tools UID to only the other function
+	 * mode which is used for function pre-configuration
+	 */
 	case MLX5_CMD_OP_SET_HCA_CAP:
 		return scope <= FWCTL_RPC_CONFIGURATION;
 
@@ -224,7 +229,6 @@ static void *mlx5ctl_fw_rpc(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
 		container_of(uctx->fwctl, struct mlx5ctl_dev, fwctl);
 	struct mlx5ctl_uctx *mfd =
 		container_of(uctx, struct mlx5ctl_uctx, uctx);
-	void *rpc_alloc __free(kvfree) = NULL;
 	void *rpc_out;
 	int ret;
 
@@ -251,8 +255,8 @@ static void *mlx5ctl_fw_rpc(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
 	if (*out_len <= in_len) {
 		rpc_out = rpc_in;
 	} else {
-		rpc_out = rpc_alloc = kvzalloc(*out_len, GFP_KERNEL);
-		if (!rpc_alloc)
+		rpc_out = kvzalloc(*out_len, GFP_KERNEL);
+		if (!rpc_out)
 			return ERR_PTR(-ENOMEM);
 	}
 
@@ -270,11 +274,12 @@ static void *mlx5ctl_fw_rpc(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
 	 * but an error code was returned inside out. Everything else
 	 * means the RPC did not make it to the device.
 	 */
-	if (ret && ret != -EREMOTEIO)
+	if (ret && ret != -EREMOTEIO) {
+		if (rpc_out != rpc_in)
+			kfree(rpc_out);
 		return ERR_PTR(ret);
-	if (rpc_out == rpc_in)
-		return rpc_in;
-	return_ptr(rpc_alloc);
+	}
+	return rpc_out;
 }
 
 static const struct fwctl_ops mlx5ctl_ops = {
@@ -310,14 +315,15 @@ static int mlx5ctl_probe(struct auxiliary_device *adev,
 
 static void mlx5ctl_remove(struct auxiliary_device *adev)
 {
-	struct mlx5ctl_dev *mcdev __free(mlx5ctl) = auxiliary_get_drvdata(adev);
+	struct mlx5ctl_dev *mcdev = auxiliary_get_drvdata(adev);
 
 	fwctl_unregister(&mcdev->fwctl);
+	fwctl_put(&mcdev->fwctl);
 }
 
 static const struct auxiliary_device_id mlx5ctl_id_table[] = {
 	{.name = MLX5_ADEV_NAME ".fwctl",},
-	{},
+	{}
 };
 MODULE_DEVICE_TABLE(auxiliary, mlx5ctl_id_table);
 
@@ -330,7 +336,7 @@ static struct auxiliary_driver mlx5ctl_driver = {
 
 module_auxiliary_driver(mlx5ctl_driver);
 
-MODULE_IMPORT_NS(FWCTL);
+MODULE_IMPORT_NS("FWCTL");
 MODULE_DESCRIPTION("mlx5 ConnectX fwctl driver");
 MODULE_AUTHOR("Saeed Mahameed <saeedm@nvidia.com>");
 MODULE_LICENSE("Dual BSD/GPL");

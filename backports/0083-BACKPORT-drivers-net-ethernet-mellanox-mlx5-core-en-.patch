@@ -1,24 +1,33 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 
-Change-Id: I4e2d70cec002148c6dc04568034952bf0df049b6
+Change-Id: I39075c2e735703ed580bd02b32e4bd3d065d85f4
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 5 +++++
  1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
- int
- mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
- 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
-+#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
- int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
- 		       struct netlink_ext_ack *extack);
-+#else
-+int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
-+		       u16 *new_qid, struct netlink_ext_ack *extack);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -6,6 +6,9 @@
+ 
+ #include "mod_hdr.h"
+ #include "lib/fs_ttc.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/rhashtable.h>
 +#endif
- int
- mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
- 			struct netlink_ext_ack *extack);
+ 
+ struct mlx5_prio_hp {
+ 	u32 rate;
+@@ -272,10 +275,12 @@ void mlx5e_fs_set_state_destroy(struct m
+ void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
+ 
+ struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_flow_steering *fs);
+ int mlx5e_add_mac_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_flow_steering *fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
+ int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
+ 			     struct net_device *netdev,

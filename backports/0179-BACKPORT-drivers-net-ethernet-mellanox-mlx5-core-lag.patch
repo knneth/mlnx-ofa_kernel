@@ -1,21 +1,46 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
 
-Change-Id: I5aeb743604ddd60113cd1d2ddd08b08724ec45f6
+Change-Id: Iea62ad5b7939494c848c05729857d107566b7bbd
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h | 3 +--
- 1 file changed, 1 insertion(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
-@@ -28,8 +28,7 @@ struct mlx5_lag_port_sel {
- 	struct mlx5_lag_ttc inner;
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_LAG_H__
  
--#ifdef CONFIG_MLX5_ESWITCH
--
-+#if defined(CONFIG_MLX5_ESWITCH)
- int mlx5_lag_port_sel_modify(struct mlx5_lag *ldev, u8 *ports);
- void mlx5_lag_port_sel_destroy(struct mlx5_lag *ldev);
- int mlx5_lag_port_sel_create(struct mlx5_lag *ldev,
+ #include <linux/debugfs.h>
++#include <linux/seq_file.h>
+ 
+ #define MLX5_LAG_MAX_HASH_BUCKETS 16
+ #include "mlx5_core.h"
+@@ -135,14 +136,27 @@ static inline bool mlx5_lag_is_supported
+ 	return true;
+ }
+ 
++#ifdef HAVE_STD_GNU_99
+ #define ldev_for_each(i, start_index, ldev) \
+ 	for (int tmp = start_index; tmp = get_next_ldev_func(ldev, tmp), \
+ 	     i = tmp, tmp < MLX5_MAX_PORTS; tmp++)
++#else
++#define ldev_for_each(i, start_index, ldev) \
++	for (tmp = start_index; tmp = get_next_ldev_func(ldev, tmp), \
++	     i = tmp, tmp < MLX5_MAX_PORTS; tmp++)
++#endif
+ 
++#ifdef HAVE_STD_GNU_99
+ #define ldev_for_each_reverse(i, start_index, end_index, ldev)      \
+ 	for (int tmp = start_index, tmp1 = end_index; \
+ 	     tmp = get_pre_ldev_func(ldev, tmp, tmp1), \
+ 	     i = tmp, tmp >= tmp1; tmp--)
++#else
++#define ldev_for_each_reverse(i, start_index, end_index, ldev)      \
++	for (tmp = start_index, tmp1 = end_index; \
++	     tmp = get_pre_ldev_func(ldev, tmp, tmp1), \
++	     i = tmp, tmp >= tmp1; tmp--)
++#endif
+ 
+ int get_pre_ldev_func(struct mlx5_lag *ldev, int start_idx, int end_idx);
+ int get_next_ldev_func(struct mlx5_lag *ldev, int start_idx);

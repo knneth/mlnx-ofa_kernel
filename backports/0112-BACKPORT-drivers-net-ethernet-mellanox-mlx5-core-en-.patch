@@ -1,19 +1,21 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
 
-Change-Id: Ifa9d9e03795daf696328a2059ce947c0a4208882
+Change-Id: I1974c0569e400bb43d355883e4e0696a47c9b24a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-@@ -4,6 +4,7 @@
- #ifndef __MLX5_EN_POST_METER_H__
- #define __MLX5_EN_POST_METER_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+@@ -1,6 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  
-+
- #define packet_color_to_reg { \
- 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
- 	.moffset = 0, \
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/skbuff.h>
++#endif
+ #include <net/psample.h>
+ #include "act.h"
+ #include "en/tc_priv.h"

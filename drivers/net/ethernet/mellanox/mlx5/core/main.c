@@ -80,7 +80,7 @@ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRIVER_VERSION);
-MODULE_INFO(basedon, "Korg 6.8-rc4");
+MODULE_INFO(basedon, "Korg 6.12-rc2");
 
 unsigned int mlx5_core_debug_mask;
 module_param_named(debug_mask, mlx5_core_debug_mask, uint, 0644);
@@ -644,7 +644,7 @@ static int handle_hca_cap_atomic(struct mlx5_core_dev *dev, void *set_ctx)
 static int handle_hca_cap_odp(struct mlx5_core_dev *dev, void *set_ctx)
 {
 	struct mlx5_profile *prof = &dev->profile;
-	bool do_set = false, mem_page_fault;
+	bool do_set = false, mem_page_fault = false;
 	void *set_hca_cap;
 	int err;
 
@@ -660,15 +660,18 @@ static int handle_hca_cap_odp(struct mlx5_core_dev *dev, void *set_ctx)
 	memcpy(set_hca_cap, dev->caps.hca[MLX5_CAP_ODP]->cur,
 	       MLX5_ST_SZ_BYTES(odp_cap));
 
-        mem_page_fault =
-            MLX5_CAP_ODP_MAX(dev, mem_page_fault) &&
-            ((prof->mask & MLX5_PROF_MASK_ODPV2) ||
-             MLX5_CAP_ODP_MAX(dev, memory_page_fault_scheme_cap.page_prefetch));
-        if (mem_page_fault) {
+	/* For best performance, enable memory scheme ODP only when
+	 * it has page prefetch enabled or
+	 * it was explecitly requested via mlx profile (profile 4).
+	 */
+	if (MLX5_CAP_ODP_MAX(dev, mem_page_fault) &&
+	   (MLX5_CAP_ODP_MAX(dev, memory_page_fault_scheme_cap.page_prefetch) ||
+	   prof->mask & MLX5_PROF_MASK_ODPV2)) {
+		mem_page_fault = true;
 		do_set = true;
 		MLX5_SET(odp_cap, set_hca_cap, mem_page_fault, mem_page_fault);
 		goto set;
-	};
+	}
 
 #define ODP_CAP_SET_MAX(dev, field)                                            \
 	do {                                                                   \
@@ -679,29 +682,20 @@ static int handle_hca_cap_odp(struct mlx5_core_dev *dev, void *set_ctx)
 		}                                                              \
 	} while (0)
 
-	ODP_CAP_SET_MAX(
-		dev, transport_page_fault_scheme_cap.ud_odp_caps.srq_receive);
-	ODP_CAP_SET_MAX(
-		dev, transport_page_fault_scheme_cap.rc_odp_caps.srq_receive);
-	ODP_CAP_SET_MAX(
-		dev, transport_page_fault_scheme_cap.xrc_odp_caps.srq_receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.ud_odp_caps.srq_receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.rc_odp_caps.srq_receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.srq_receive);
 	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.send);
-	ODP_CAP_SET_MAX(dev,
-			transport_page_fault_scheme_cap.xrc_odp_caps.receive);
-	ODP_CAP_SET_MAX(dev,
-			transport_page_fault_scheme_cap.xrc_odp_caps.write);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.write);
 	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.read);
-	ODP_CAP_SET_MAX(dev,
-			transport_page_fault_scheme_cap.xrc_odp_caps.atomic);
-	ODP_CAP_SET_MAX(
-		dev, transport_page_fault_scheme_cap.dc_odp_caps.srq_receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.xrc_odp_caps.atomic);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.srq_receive);
 	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.send);
-	ODP_CAP_SET_MAX(dev,
-			transport_page_fault_scheme_cap.dc_odp_caps.receive);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.receive);
 	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.write);
 	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.read);
-	ODP_CAP_SET_MAX(dev,
-			transport_page_fault_scheme_cap.dc_odp_caps.atomic);
+	ODP_CAP_SET_MAX(dev, transport_page_fault_scheme_cap.dc_odp_caps.atomic);
 
 set:
 	if (do_set)
@@ -867,6 +861,10 @@ static int handle_hca_cap(struct mlx5_core_dev *dev, void *set_ctx)
 	if (max_uc_list > 0)
 		MLX5_SET(cmd_hca_cap, set_hca_cap, log_max_current_uc_list,
 			 ilog2(max_uc_list));
+
+	/* enable absolute native port num */
+	if (MLX5_CAP_GEN_MAX(dev, abs_native_port_num))
+		MLX5_SET(cmd_hca_cap, set_hca_cap, abs_native_port_num, 1);
 
 	return set_caps(dev, set_ctx, MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
 }
@@ -1194,6 +1192,9 @@ static int mlx5_pci_init(struct mlx5_core_dev *dev, struct pci_dev *pdev,
 	}
 
 	mlx5_pci_vsc_init(dev);
+
+	pci_enable_ptm(pdev, NULL);
+
 	return 0;
 
 err_clr_master:
@@ -1213,6 +1214,7 @@ static void mlx5_pci_close(struct mlx5_core_dev *dev)
 	 * before removing the pci bars
 	 */
 	mlx5_drain_health_wq(dev);
+	pci_disable_ptm(dev->pdev);
 	iounmap(dev->iseg);
 	release_bar(dev->pdev);
 	mlx5_pci_disable_device(dev);
@@ -2142,6 +2144,7 @@ static const int types[] = {
 	MLX5_CAP_MACSEC,
 	MLX5_CAP_ADV_VIRTUALIZATION,
 	MLX5_CAP_CRYPTO,
+	MLX5_CAP_ADV_RDMA,
 };
 
 static void mlx5_hca_caps_free(struct mlx5_core_dev *dev)
@@ -2514,7 +2517,6 @@ static const struct pci_error_handlers mlx5_err_handler = {
 	.slot_reset	= mlx5_pci_slot_reset,
 	.resume		= mlx5_pci_resume
 };
-
 
 static void shutdown(struct pci_dev *pdev)
 {

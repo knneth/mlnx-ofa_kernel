@@ -162,11 +162,6 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.map_size = ARRAY_SIZE(vport_match_to_str),
 		.compat_name = "vport_match_mode",
 	},
-	{
-	 	.read_param_bool = mlx5_devlink_ct_action_on_nat_conns_get,
-		.write_param_bool = mlx5_devlink_ct_action_on_nat_conns_set,
-		.compat_name = "ct_action_on_nat_conns",
-	},
  	{
 		.read_lag_port_select_mode =
 			mlx5_devlink_eswitch_lag_port_select_mode_get,

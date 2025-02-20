@@ -7,7 +7,6 @@ all:
 
 include ./configure.mk.kernel
 
-export COMPAT_CONFIG=$(CWD)/compat.config
 export COMPAT_AUTOCONF=$(CWD)/include/linux/compat_autoconf.h
 export KSRC
 export KSRC_OBJ
@@ -15,7 +14,6 @@ export KLIB_BUILD
 export KVERSION
 export MAKE
 
--include $(COMPAT_CONFIG)
 
 data_dir = /usr/share/mlnx_ofed
 
@@ -95,12 +93,6 @@ endif
 
 export OPEN_ISCSI_MODULES = iscsi_tcp.ko libiscsi.ko scsi_transport_iscsi.ko
 
-$(COMPAT_AUTOCONF): $(COMPAT_CONFIG)
-	+@$(CWD)/ofed_scripts/gen-compat-autoconf.sh $(COMPAT_CONFIG) > $(COMPAT_AUTOCONF)
-
-$(COMPAT_CONFIG):
-	+@$(CWD)/ofed_scripts/gen-compat-config.sh > $(COMPAT_CONFIG)
-
 configure.mk.kernel:
 	@echo Please run ./configure
 	@exit 1
@@ -138,16 +130,16 @@ LINUXINCLUDE=\
 		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
 		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
-		-Iinclude \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated \
+		-I$$(objtree)/include \
 		-I$$(srctree)/arch/$$(SRCARCH)/include/uapi \
-		-Iarch/$$(SRCARCH)/include/generated/uapi \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated/uapi \
 		-I$$(srctree)/include \
 		-I$$(srctree)/include/uapi \
-		-Iinclude/generated/uapi \
-		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
+		-I$$(objtree)/include/generated/uapi \
+		$$(if $$(KBUILD_SRC),-I$$(objtree)/include2 -I$$(srctree)/include) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated \
 		#
 
 #########################
@@ -156,7 +148,7 @@ LINUXINCLUDE=\
 #NB: The LINUXINCLUDE value comes from main kernel Makefile
 #    with local directories prepended. This eventually affects
 #    CPPFLAGS in the kernel Makefile
-kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
+kernel: autoversion
 	@echo "Building kernel modules"
 	@echo "Kernel version: $(KVERSION)"
 	@echo "Modules directory: $(INSTALL_MOD_PATH)/lib/modules/$(KVERSION)/$(INSTALL_MOD_DIR)"
@@ -199,7 +191,8 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_NVME_TARGET_FC=$(CONFIG_NVME_TARGET_FC) \
 		CONFIG_NVME_TARGET_FCLOOP=$(CONFIG_NVME_TARGET_FCLOOP) \
 		CONFIG_NVME_TARGET_DUMMY=$(CONFIG_NVME_TARGET_DUMMY) \
-		CONFIG_NVME_COMMON=$(CONFIG_NVME_COMMON) \
+		CONFIG_NVME_KEYRING=$(CONFIG_NVME_KEYRING) \
+		CONFIG_NVME_AUTH=$(CONFIG_NVME_AUTH) \
 		CONFIG_SCSI_SRP_ATTRS=$(CONFIG_SCSI_SRP_ATTRS) \
 		CONFIG_INFINIBAND_USER_MAD=$(CONFIG_INFINIBAND_USER_MAD) \
 		CONFIG_INFINIBAND_USER_ACCESS=$(CONFIG_INFINIBAND_USER_ACCESS) \
@@ -242,6 +235,7 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_MLX5_SF=$(CONFIG_MLX5_SF) \
 		CONFIG_MLX5_SF_MANAGER=$(CONFIG_MLX5_SF_MANAGER) \
 		CONFIG_MLX5_SW_STEERING=$(CONFIG_MLX5_SW_STEERING) \
+		CONFIG_MLX5_HW_STEERING=$(CONFIG_MLX5_HW_STEERING) \
 		CONFIG_MLX5_CORE_IPOIB=$(CONFIG_MLX5_CORE_IPOIB) \
 		CONFIG_MLX5_INFINIBAND=$(CONFIG_MLX5_INFINIBAND) \
 		CONFIG_MLX5_DEBUG=$(CONFIG_MLX5_DEBUG) \
@@ -262,7 +256,6 @@ kernel: $(COMPAT_CONFIG) $(COMPAT_AUTOCONF) autoversion
 		CONFIG_MLX5_TC_SAMPLE=$(CONFIG_MLX5_TC_SAMPLE) \
 		CONFIG_MLX5_MACSEC=$(CONFIG_MLX5_MACSEC) \
 		CONFIG_MLX5_DPLL=$(CONFIG_MLX5_DPLL) \
-		CONFIG_MLNX_EN=$(CONFIG_MLNX_EN) \
 		CONFIG_GCC_VERSION=$(CONFIG_GCC_VERSION) \
 		CONFIG_IS_MARINER=$(CONFIG_IS_MARINER) \
 		CONFIG_IS_AZURELINUX=$(CONFIG_IS_AZURELINUX) \

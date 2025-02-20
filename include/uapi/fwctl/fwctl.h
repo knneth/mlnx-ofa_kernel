@@ -13,7 +13,7 @@
  * DOC: General ioctl format
  *
  * The ioctl interface follows a general format to allow for extensibility. Each
- * ioctl is passed in a structure pointer as the argument providing the size of
+ * ioctl is passed a structure pointer as the argument providing the size of
  * the structure in the first u32. The kernel checks that any structure space
  * beyond what it understands is 0. This allows userspace to use the backward
  * compatible portion while consistently using the newer, larger, structures.
@@ -43,6 +43,7 @@ enum {
 enum fwctl_device_type {
 	FWCTL_DEVICE_TYPE_ERROR = 0,
 	FWCTL_DEVICE_TYPE_MLX5 = 1,
+	FWCTL_DEVICE_TYPE_BNXT = 3,
 };
 
 /**
@@ -70,13 +71,15 @@ struct fwctl_info {
 
 /**
  * enum fwctl_rpc_scope - Scope of access for the RPC
+ *
+ * Refer to fwctl.rst for a more detailed discussion of these scopes.
  */
 enum fwctl_rpc_scope {
 	/**
 	 * @FWCTL_RPC_CONFIGURATION: Device configuration access scope
 	 *
 	 * Read/write access to device configuration. When configuration
-	 * is written to the device remains in a fully supported state.
+	 * is written to the device it remains in a fully supported state.
 	 */
 	FWCTL_RPC_CONFIGURATION = 0,
 	/**
@@ -97,7 +100,7 @@ enum fwctl_rpc_scope {
 	 */
 	FWCTL_RPC_DEBUG_WRITE = 2,
 	/**
-	 * @FWCTL_RPC_DEBUG_WRITE_FULL: Writable access to all debug information
+	 * @FWCTL_RPC_DEBUG_WRITE_FULL: Write access to all debug information
 	 *
 	 * Allows read/write access to everything. Requires CAP_SYS_RAW_IO, so
 	 * it is not required to follow lockdown principals. If in doubt

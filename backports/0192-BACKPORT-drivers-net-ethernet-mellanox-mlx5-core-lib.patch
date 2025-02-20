@@ -1,0 +1,22 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
+
+Change-Id: I90a423ded75a950f342bd6d27caa0d148f1721eb
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
+@@ -442,7 +442,11 @@ int mlx5_sd_init(struct mlx5_core_dev *d
+ 	primary = mlx5_sd_get_primary(dev);
+ 
+ 	for (i = 0; i < ACCESS_KEY_LEN; i++)
++#ifdef HAVE_GET_RANDOM_U8
+ 		alias_key[i] = get_random_u8();
++#else
++		alias_key[i] =(u8)(get_random_u32() && 0xffU);
++#endif /* HAVE_GET_RANDOM_U8 */
+ 
+ 	err = sd_cmd_set_primary(primary, alias_key);
+ 	if (err)

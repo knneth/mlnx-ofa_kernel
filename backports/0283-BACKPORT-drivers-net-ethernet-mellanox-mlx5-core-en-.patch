@@ -1,0 +1,133 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+
+Change-Id: I8241b70a18cfd1ad26bd9e2502ae30b5d07e600f
+---
+ .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 61 ++++++++++++++++++-
+ 1 file changed, 59 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+@@ -18,6 +18,7 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+ 
+ static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
+ 					      struct flow_cls_offload *f)
++
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+ 	struct netlink_ext_ack *extack = f->common.extack;
+@@ -80,6 +81,31 @@ static int mlx5e_tc_tun_init_encap_attr_
+ 	return 0;
+ }
+ 
++#ifndef HAVE_CHECK_VXLAN_BUILD_GBP_HDR
++static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_metadata *md)
++{
++	struct vxlanhdr_gbp *gbp;
++
++	if (!md->gbp)
++		return;
++
++	gbp = (struct vxlanhdr_gbp *)vxh;
++	vxh->vx_flags |= VXLAN_HF_GBP;
++
++	if (md->gbp & VXLAN_GBP_DONT_LEARN)
++		gbp->dont_learn = 1;
++
++	if (md->gbp & VXLAN_GBP_POLICY_APPLIED)
++		gbp->policy_applied = 1;
++
++	gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
++}
++#endif
++#ifndef HAVE_CHECK_VXLAN_GBP_MASK
++#define VXLAN_GBP_MASK (VXLAN_GBP_DONT_LEARN | VXLAN_GBP_POLICY_APPLIED | \
++			VXLAN_GBP_ID_MASK)
++#endif
++
+ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
+ 					    __u8 *ip_proto,
+ 					    struct mlx5e_encap_entry *e)
+@@ -90,7 +116,11 @@ static int mlx5e_gen_ip_tunnel_header_vx
+ 	const struct vxlan_metadata *md;
+ 	struct vxlanhdr *vxh;
+ 
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (test_bit(IP_TUNNEL_VXLAN_OPT_BIT, tun_key->tun_flags) &&
++#else
++	if ((tun_key->tun_flags & TUNNEL_VXLAN_OPT) &&
++#endif
+ 	    e->tun_info->options_len != sizeof(*md))
+ 		return -EOPNOTSUPP;
+ 	vxh = (struct vxlanhdr *)((char *)udp + sizeof(struct udphdr));
+@@ -99,9 +129,13 @@ static int mlx5e_gen_ip_tunnel_header_vx
+ 	udp->dest = tun_key->tp_dst;
+ 	vxh->vx_flags = VXLAN_HF_VNI;
+ 	vxh->vx_vni = vxlan_vni_field(tun_id);
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (test_bit(IP_TUNNEL_VXLAN_OPT_BIT, tun_key->tun_flags)) {
+-		md = ip_tunnel_info_opts(e->tun_info);
+-		vxlan_build_gbp_hdr(vxh, md);
++#else
++ 	if (tun_key->tun_flags & TUNNEL_VXLAN_OPT) {
++#endif
++		md = ip_tunnel_info_opts((struct ip_tunnel_info *)e->tun_info);
++		vxlan_build_gbp_hdr(vxh, (struct vxlan_metadata *)md);
+ 	}
+ 
+ 	return 0;
+@@ -125,7 +159,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 		return -EOPNOTSUPP;
+ 	}
+ 
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (enc_opts.key->dst_opt_type != IP_TUNNEL_VXLAN_OPT_BIT) {
++#else
++	if (enc_opts.key->dst_opt_type != TUNNEL_VXLAN_OPT) {
++#endif
+ 		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN option type: not GBP");
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -140,7 +178,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+ 	gbp_mask = (u32 *)&enc_opts.mask->data[0];
+ 
+ 	if (*gbp_mask & ~VXLAN_GBP_MASK) {
++#ifdef NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT_MOD(extack, "Wrong VxLAN GBP mask(0x%08X)\n", *gbp_mask);
++#else
++		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN GBP mask\n");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -208,14 +250,29 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+ static bool mlx5e_tc_tun_encap_info_equal_vxlan(struct mlx5e_encap_key *a,
+ 						struct mlx5e_encap_key *b)
+ {
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	return mlx5e_tc_tun_encap_info_equal_options(a, b,
+ 						     IP_TUNNEL_VXLAN_OPT_BIT);
++#else
++	return mlx5e_tc_tun_encap_info_equal_options(a, b, TUNNEL_VXLAN_OPT);
++#endif
+ }
+ 
+ static int mlx5e_tc_tun_get_remote_ifindex(struct net_device *mirred_dev)
+ {
+ 	const struct vxlan_dev *vxlan = netdev_priv(mirred_dev);
+ 	const struct vxlan_rdst *dst = &vxlan->default_dst;
++#ifdef HAVE_BASECODE_EXTRAS
++	int i;
++
++	for (i = 0; i < 5; i++) {
++		if ((int) dst->remote_ifindex >= 0)
++			break;
++		msleep(1);
++	}
++	if ((int) dst->remote_ifindex < 0)
++		return 0;
++#endif
+ 
+ 	return dst->remote_ifindex;
+ }

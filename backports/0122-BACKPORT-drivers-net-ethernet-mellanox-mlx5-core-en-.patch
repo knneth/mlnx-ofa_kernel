@@ -1,25 +1,20 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
 
-Change-Id: Ie50052aa62a7d3361b24084ef41fab0d41579391
+Change-Id: I6e1073de1eeddb3b7b922b7db540aa8a828e6ee9
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
-@@ -1,6 +1,8 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2018 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+@@ -4,7 +4,7 @@
+ #ifndef __MLX5_EN_TC_SAMPLE_H__
+ #define __MLX5_EN_TC_SAMPLE_H__
  
-+#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
-+
- #include <net/bareudp.h>
- #include <net/mpls.h>
- #include "en/tc_tun.h"
-@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
- 	.parse_tunnel         = parse_tunnel,
- 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
- };
-+#endif /* HAVE_NET_BAREUDP_H */
+-#include "eswitch.h"
++#include "../../eswitch.h"
+ 
+ struct mlx5_flow_attr;
+ struct mlx5e_tc_psample;

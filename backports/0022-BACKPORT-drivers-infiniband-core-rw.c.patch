@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
 
-Change-Id: I552d905d46549bcbff1ae6ff91b160c6d3bf6628
+Change-Id: I468982f72cd9350423deed3cbf67a55e21f40d2f
 ---
  drivers/infiniband/core/rw.c | 129 +++++++++++++++++++++++++++++++++++
  1 file changed, 129 insertions(+)

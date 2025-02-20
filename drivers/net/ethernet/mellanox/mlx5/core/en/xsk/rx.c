@@ -32,16 +32,8 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
 
 	XSK_CHECK_PRIV_TYPE(struct mlx5e_xdp_buff);
 	xsk_buffs = (struct xdp_buff **)wi->alloc_units.xsk_buffs;
-	batch = xsk_buff_alloc_batch(rq->xsk_pool, xsk_buffs,
-				     rq->mpwqe.pages_per_wqe);
 
-	/* If batch < pages_per_wqe, either:
-	 * 1. Some (or all) descriptors were invalid.
-	 * 2. dma_need_sync is true, and it fell back to allocating one frame.
-	 * In either case, try to continue allocating frames one by one, until
-	 * the first error, which will mean there are no more valid descriptors.
-	 */
-	for (; batch < rq->mpwqe.pages_per_wqe; batch++) {
+	for (batch = 0; batch < rq->mpwqe.pages_per_wqe; batch++) {
 		xsk_buffs[batch] = xsk_buff_alloc(rq->xsk_pool);
 		if (unlikely(!xsk_buffs[batch]))
 			goto err_reuse_batch;
@@ -157,44 +149,6 @@ err:
 	return -ENOMEM;
 }
 
-int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
-{
-	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct xdp_buff **buffs;
-	u32 contig, alloc;
-	int i;
-
-	/* Each rq->wqe.frags->xskp is 1:1 mapped to an element inside the
-	 * rq->wqe.alloc_units->xsk_buffs array allocated here.
-	 */
-	buffs = rq->wqe.alloc_units->xsk_buffs;
-	contig = mlx5_wq_cyc_get_size(wq) - ix;
-	if (wqe_bulk <= contig) {
-		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, wqe_bulk);
-	} else {
-		alloc = xsk_buff_alloc_batch(rq->xsk_pool, buffs + ix, contig);
-		if (likely(alloc == contig))
-			alloc += xsk_buff_alloc_batch(rq->xsk_pool, buffs, wqe_bulk - contig);
-	}
-
-	for (i = 0; i < alloc; i++) {
-		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
-		struct mlx5e_wqe_frag_info *frag;
-		struct mlx5e_rx_wqe_cyc *wqe;
-		dma_addr_t addr;
-
-		wqe = mlx5_wq_cyc_get_wqe(wq, j);
-		/* Assumes log_num_frags == 0. */
-		frag = &rq->wqe.frags[j];
-
-		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
-		wqe->data[0].addr = cpu_to_be64(addr + rq->buff.headroom);
-		frag->flags &= ~BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
-	}
-
-	return alloc;
-}
-
 int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
@@ -270,7 +224,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
 	/* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
 	mxbuf->cqe = cqe;
 	xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
-	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
+	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
 	net_prefetch(mxbuf->xdp.data);
 
 	/* Possible flows:
@@ -319,7 +273,7 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
 	/* mxbuf->rq is set on allocation, but cqe is per-packet so set it here */
 	mxbuf->cqe = cqe;
 	xsk_buff_set_size(&mxbuf->xdp, cqe_bcnt);
-	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp, rq->xsk_pool);
+	xsk_buff_dma_sync_for_cpu(&mxbuf->xdp);
 	net_prefetch(mxbuf->xdp.data);
 
 	prog = rcu_dereference(rq->xdp_prog);

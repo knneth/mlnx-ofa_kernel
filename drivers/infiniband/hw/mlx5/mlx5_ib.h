@@ -66,22 +66,6 @@ __mlx5_log_page_size_to_bitmap(unsigned int log_pgsz_bits,
 	return GENMASK(largest_pg_shift, pgsz_shift);
 }
 
-/*
- * For mkc users, instead of a page_offset the command has a start_iova which
- * specifies both the page_offset and the on-the-wire IOVA
- *
- * log_page_size field size is limited to 5 bits until we protect the usage of
- * larger sizes with a capability bit and fully test it.
- */
-#define mlx5_umem_find_best_pgsz(umem, typ, log_pgsz_fld, pgsz_shift, iova)    \
-	ib_umem_find_best_pgsz(umem,                                           \
-			       __mlx5_log_page_size_to_bitmap(                 \
-				       min_t(unsigned long,		       \
-					     __mlx5_bit_sz(typ, log_pgsz_fld), \
-					     5),			       \
-				       pgsz_shift),                            \
-			       iova)
-
 static __always_inline unsigned long
 __mlx5_page_offset_to_bitmask(unsigned int page_offset_bits,
 			      unsigned int offset_shift)
@@ -123,8 +107,6 @@ unsigned long __mlx5_umem_find_best_quantized_pgoff(
 		__mlx5_bit_sz(typ, page_offset_fld), 0, scale,                 \
 		page_offset_quantized)
 
-extern struct workqueue_struct *mlx5_ib_sigerr_sqd_wq;
-
 static inline unsigned long
 mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf)
 {
@@ -137,6 +119,8 @@ mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf)
 	return ib_umem_find_best_pgsz(&umem_dmabuf->umem, PAGE_SIZE,
 				      umem_dmabuf->umem.iova);
 }
+
+extern struct workqueue_struct *mlx5_ib_sigerr_sqd_wq;
 
 enum {
 	MLX5_IB_MMAP_OFFSET_START = 9,
@@ -297,6 +281,7 @@ struct mlx5_ib_flow_matcher {
 	struct mlx5_core_dev	*mdev;
 	atomic_t		usecnt;
 	u8			match_criteria_enable;
+	u32			ib_port;
 };
 
 struct mlx5_ib_steering_anchor {
@@ -328,6 +313,8 @@ struct mlx5_ib_flow_db {
 	struct mlx5_ib_flow_prio	rdma_tx[MLX5_IB_NUM_FLOW_FT];
 	struct mlx5_ib_flow_prio	opfcs[MLX5_IB_OPCOUNTER_MAX];
 	struct mlx5_flow_table		*lag_demux_ft;
+	struct mlx5_ib_flow_prio        *rdma_transport_rx;
+	struct mlx5_ib_flow_prio        *rdma_transport_tx;
 	/* Protect flow steering bypass flow tables
 	 * when add/del flow rules.
 	 * only single add/removal of flow steering rule could be done
@@ -614,7 +601,6 @@ struct mlx5_ib_cq {
 struct mlx5_ib_wc {
 	struct ib_wc wc;
 	struct list_head list;
-	atomic_t in_use;
 };
 
 struct mlx5_ib_srq {
@@ -742,11 +728,11 @@ struct mlx5_ib_mr {
 			} odp_destroy;
 			struct ib_odp_counters odp_stats;
 			bool is_odp_implicit;
-			struct mlx5_ib_mkey null_mmkey;
 			/* The affilated data direct crossed mr */
 			struct mlx5_ib_mr *dd_crossed_mr;
 			struct list_head dd_node;
 			u8 revoked :1;
+			struct mlx5_ib_mkey null_mmkey;
 		};
 	};
 };
@@ -1006,7 +992,6 @@ enum mlx5_ib_stages {
 	MLX5_IB_STAGE_QP,
 	MLX5_IB_STAGE_SRQ,
 	MLX5_IB_STAGE_DEVICE_RESOURCES,
-	MLX5_IB_STAGE_DEVICE_NOTIFIER,
 	MLX5_IB_STAGE_ODP,
 	MLX5_IB_STAGE_COUNTERS,
 	MLX5_IB_STAGE_CONG_DEBUGFS,
@@ -1015,9 +1000,9 @@ enum mlx5_ib_stages {
 	MLX5_IB_STAGE_PRE_IB_REG_UMR,
 	MLX5_IB_STAGE_WHITELIST_UID,
 	MLX5_IB_STAGE_IB_REG,
+	MLX5_IB_STAGE_DEVICE_NOTIFIER,
 	MLX5_IB_STAGE_POST_IB_REG_UMR,
 	MLX5_IB_STAGE_DELAY_DROP,
-	MLX5_IB_STAGE_DC_TRACER,
 	MLX5_IB_STAGE_RESTRACK,
 	MLX5_IB_STAGE_TTL_SYSFS,
 	MLX5_IB_STAGE_TC_SYSFS,
@@ -1204,17 +1189,11 @@ struct mlx5_ib_dev {
 	/* protect resources needed as part of reset flow */
 	spinlock_t		reset_flow_resource_lock;
 	struct list_head	qp_list;
-	struct list_head data_direct_mr_list;
-	struct mlx5_dc_tracer   dctr;
-	u32                     num_dc_cnak_qps;
-	u32                     max_dc_cnak_qps;
-	struct mlx5_dc_stats    dc_stats[MLX5_MAX_PORTS];
-	struct mlx5_dc_data     *dcd[MLX5_MAX_PORTS];
 	struct mlx5_ttl_data	ttld[MLX5_MAX_PORTS];
 	struct mlx5_tc_data	tcd[MLX5_MAX_PORTS];
-	struct kobject          *dc_kobj;
 	struct kobject		*ttl_kobj;
 	struct kobject		*tc_kobj;
+	struct list_head data_direct_mr_list;
 	/* Array with num_ports elements */
 	struct mlx5_ib_port	*port;
 	struct mlx5_sq_bfreg	bfreg;
@@ -1412,7 +1391,6 @@ int mlx5_ib_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
 int mlx5_ib_dealloc_mw(struct ib_mw *mw);
 struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
 					     int access_flags);
-void mlx5_ib_free_implicit_mr(struct mlx5_ib_mr *mr);
 void mlx5_ib_free_odp_mr(struct mlx5_ib_mr *mr);
 struct ib_mr *mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
 				    u64 length, u64 virt_addr, int access_flags,
@@ -1577,7 +1555,7 @@ int mlx5_ib_gsi_post_recv(struct ib_qp *qp, const struct ib_recv_wr *wr,
 			  const struct ib_recv_wr **bad_wr);
 void mlx5_ib_gsi_pkey_change(struct mlx5_ib_gsi_qp *gsi);
 
-void mlx5_ib_generate_wc(struct ib_cq *ibcq, struct mlx5_ib_wc *soft_wc);
+int mlx5_ib_generate_wc(struct ib_cq *ibcq, struct ib_wc *wc);
 
 void mlx5_ib_free_bfreg(struct mlx5_ib_dev *dev, struct mlx5_bfreg_info *bfregi,
 			int bfregn);
@@ -1693,8 +1671,6 @@ static inline void mlx5r_deref_wait_odp_mkey(struct mlx5_ib_mkey *mmkey)
 	wait_event(mmkey->wait, refcount_read(&mmkey->usecount) == 0);
 }
 
-int mlx5_ib_test_wc(struct mlx5_ib_dev *dev);
-
 static inline bool mlx5_ib_lag_should_assign_affinity(struct mlx5_ib_dev *dev)
 {
 	/*
@@ -1765,6 +1741,21 @@ int set_roce_addr(struct mlx5_ib_dev *dev, u32 port_num,
 static inline u32 smi_to_native_portnum(struct mlx5_ib_dev *dev, u32 port)
 {
 	return (port - 1) / dev->num_ports + 1;
+}
+
+/*
+ * For mkc users, instead of a page_offset the command has a start_iova which
+ * specifies both the page_offset and the on-the-wire IOVA
+ */
+static __always_inline unsigned long
+mlx5_umem_mkc_find_best_pgsz(struct mlx5_ib_dev *dev, struct ib_umem *umem,
+			     u64 iova)
+{
+	int page_size_bits = 5;
+	unsigned long bitmap =
+		__mlx5_log_page_size_to_bitmap(page_size_bits, 0);
+
+	return ib_umem_find_best_pgsz(umem, bitmap, iova);
 }
 
 #endif /* MLX5_IB_H */

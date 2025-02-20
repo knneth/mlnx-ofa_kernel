@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"24.10-1.1.4.0.105"
+#define DRIVER_VERSION	"25.01-0.6.0"
 
 extern uint mlx5_core_debug_mask;
 
@@ -273,7 +273,7 @@ int mlx5_cmd_enable(struct mlx5_core_dev *dev);
 void mlx5_cmd_disable(struct mlx5_core_dev *dev);
 void mlx5_cmd_set_state(struct mlx5_core_dev *dev,
 			enum mlx5_cmdif_state cmdif_state);
-int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id);
+int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, u32 *sw_owner_id);
 int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev);

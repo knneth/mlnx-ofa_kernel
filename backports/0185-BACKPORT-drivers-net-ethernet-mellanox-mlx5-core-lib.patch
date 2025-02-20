@@ -1,33 +1,40 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
 
-Change-Id: I9d74f55d8c78ea51bcbdf281fd6f3859a34f617f
+Change-Id: I6a4f3ef221dff72bfc7cc911dfa38b1239d33c57
 ---
- .../net/ethernet/mellanox/mlx5/core/lib/tout.c   | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
-@@ -52,6 +52,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
- 	kfree(dev->timeouts);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -68,12 +68,14 @@ static inline ktime_t mlx5_timecounter_c
+ 	struct mlx5_timer *timer = &clock->timer;
+ 	unsigned int seq;
+ 	u64 nsec;
+-
++#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	do {
+ 		seq = read_seqbegin(&clock->lock);
+ 		nsec = timecounter_cyc2time(&timer->tc, timestamp);
+ 	} while (read_seqretry(&clock->lock, seq));
+-
++#else
++	nsec = 0;
++#endif
+ 	return ns_to_ktime(nsec);
  }
  
-+#ifndef HAVE_INT_POW
-+static u64 int_pow(u64 base, unsigned int exp)
-+{
-+	u64 result = 1;
-+
-+	while (exp) {
-+		if (exp & 1)
-+			result *= base;
-+		exp >>= 1;
-+		base *= base;
-+	}
-+
-+	return result;
-+}
+@@ -82,8 +84,11 @@ static inline ktime_t mlx5_timecounter_c
+ static inline ktime_t mlx5_real_time_cyc2time(struct mlx5_clock *clock,
+ 					      u64 timestamp)
+ {
++#if (defined (CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE))
+ 	u64 time = REAL_TIME_TO_NS(timestamp >> 32, timestamp & 0xFFFFFFFF);
+-
++#else
++	u64 time = 0;
 +#endif
-+
- /* Time register consists of two fields to_multiplier(time out multiplier)
-  * and to_value(time out value). to_value is the quantity of the time units and
-  * to_multiplier is the type and should be one off these four values.
+ 	return ns_to_ktime(time);
+ }
+ #else

@@ -3,12 +3,7 @@
 
 #include "../../../compat/config.h"
 
-#ifdef CONFIG_COMPAT_KERNEL_4_14
 #include_next <uapi/linux/pkt_cls.h>
-#else
-#include_next <uapi/linux/pkt_cls.h>
-
-#endif /* CONFIG_COMPAT_KERNEL_4_14 */
 
 #ifdef CONFIG_MLX5_TC_CT
 #ifndef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR

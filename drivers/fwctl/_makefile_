@@ -85,16 +85,16 @@ LINUXINCLUDE=\
 		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
 		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
-		-Iinclude \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated \
+		-I$$(objtree)/include \
 		-I$$(srctree)/arch/$$(SRCARCH)/include/uapi \
-		-Iarch/$$(SRCARCH)/include/generated/uapi \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated/uapi \
 		-I$$(srctree)/include \
 		-I$$(srctree)/include/uapi \
-		-Iinclude/generated/uapi \
-		$$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) \
+		-I$$(objtree)/include/generated/uapi \
+		$$(if $$(KBUILD_SRC),-I$$(objtree)/include2 -I$$(srctree)/include) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
-		-Iarch/$$(SRCARCH)/include/generated \
+		-I$$(objtree)/arch/$$(SRCARCH)/include/generated \
 		#
 
 default:

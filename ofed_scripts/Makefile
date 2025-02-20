@@ -1,4 +1,3 @@
-ifneq ($(CONFIG_MLNX_EN),m)
 EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		$(KERNEL_MEMTRACK_CFLAGS) \
 		-I$(CWD)/include \
@@ -37,7 +36,8 @@ obj-$(CONFIG_NVME_RDMA)         += drivers/nvme/host/
 obj-$(CONFIG_NVME_TCP)          += drivers/nvme/host/
 obj-$(CONFIG_NVME_APPLE)        += drivers/nvme/host/
 obj-$(CONFIG_NVME_HOST_AUTH)         += drivers/nvme/host/
-obj-$(CONFIG_NVME_COMMON)       += drivers/nvme/common/
+obj-$(CONFIG_NVME_AUTH)         += drivers/nvme/common/
+obj-$(CONFIG_NVME_KEYRING)      += drivers/nvme/common/
 obj-$(CONFIG_NVME_MULTIPATH)    += drivers/nvme/host/
 obj-$(CONFIG_NVME_HOST_DUMMY)   += drivers/nvme/host/
 obj-$(CONFIG_NVME_TARGET)       += drivers/nvme/target/
@@ -55,22 +55,3 @@ obj-$(CONFIG_FWCTL)     	+= drivers/fwctl/
 obj-$(CONFIG_CIFS_SMB_DIRECT)		+= fs/cifs/
 obj-$(CONFIG_MLX5_VDPA_NET)	+= drivers/vdpa/mlx5/
 obj-$(CONFIG_MLX5_VFIO_PCI) += drivers/vfio/pci/mlx5/
-
-else
-
-EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
-		$(KERNEL_MEMTRACK_CFLAGS) \
-		$(KERNEL_SYSTUNE_CFLAGS) \
-		-I$(CWD)/include \
-		-I$(CWD)/drivers/net/ethernet/mellanox/mlx5 \
-		-I$(CWD)/drivers/net/ethernet/mellanox/mlxfw \
-
-obj-y := compat$(CONFIG_COMPAT_VERSION)/
-obj-$(CONFIG_MLX5_CORE)         += drivers/net/ethernet/mellanox/mlx5/core/
-obj-$(CONFIG_MLX5_CORE)         += drivers/infiniband/hw/mlx5/mlx5_ib-dummy/
-obj-$(CONFIG_MLXFW)             += drivers/net/ethernet/mellanox/mlxfw/
-obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
-obj-$(CONFIG_FWCTL)   		+= drivers/fwctl/
-obj-$(CONFIG_MEMTRACK)          += drivers/net/ethernet/mellanox/debug/
-obj-$(CONFIG_MLXDEVM)		+= net/mlxdevm/
-endif

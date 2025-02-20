@@ -1,7 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
 
-Change-Id: Ie35b6e7e1f952d00c955717e4b1d5f609f1e3f7d
+Change-Id: I4141f6c456c0c24b56448e9857f6d3e6d7310e2b
 ---
  drivers/infiniband/core/sa_query.c | 25 ++++++++++++++++++++++---
  1 file changed, 22 insertions(+), 3 deletions(-)

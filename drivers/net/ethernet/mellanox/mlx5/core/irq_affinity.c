@@ -188,8 +188,8 @@ out:
 unlock:
 	mutex_unlock(&pool->lock);
 	if (mlx5_irq_pool_is_sf_pool(pool)) {
-		ret = mlx5_compat_sf_auxiliary_device_sysfs_irq_add(mlx5_sf_coredev_to_adev(dev),
-							    mlx5_irq_get_irq(least_loaded_irq));
+		ret = auxiliary_device_sysfs_irq_add(mlx5_sf_coredev_to_adev(dev),
+						     mlx5_irq_get_irq(least_loaded_irq));
 		if (ret) {
 			mlx5_core_err(dev, "Failed to create sysfs entry for irq %d, ret = %d\n",
 				      mlx5_irq_get_irq(least_loaded_irq), ret);
@@ -209,8 +209,8 @@ void mlx5_irq_affinity_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *i
 	synchronize_irq(pci_irq_vector(pool->dev->pdev,
 				       mlx5_irq_get_index(irq)));
 	if (mlx5_irq_pool_is_sf_pool(pool))
-		mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(mlx5_sf_coredev_to_adev(dev),
-								 mlx5_irq_get_irq(irq));
+		auxiliary_device_sysfs_irq_remove(mlx5_sf_coredev_to_adev(dev),
+						  mlx5_irq_get_irq(irq));
 	if (mlx5_irq_put(irq))
 		if (pool->irqs_per_cpu)
 			cpu_put(pool, cpu);

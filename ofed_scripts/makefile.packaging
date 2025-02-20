@@ -140,9 +140,7 @@ dist:
 	      COPYING \
 	      scripts \
 	      $(rpmroot)/$(PACKAGE)/
-	@/bin/rm -f $(rpmroot)/$(PACKAGE)/ofed_scripts/mlnx_en/mlnx_en.spec
 	@/bin/rm -f $(rpmroot)/$(PACKAGE)/configure.mk.kernel
-	@/bin/rm -f $(rpmroot)/$(PACKAGE)/compat.config
 	@/bin/cp -f ofed_scripts/mlnx-ofa_kernel.spec $(rpmspec)
 	@sed -i 's/@VERSION@/$(VERSION)/g' $(rpmspec)
 	@sed -i 's/@RELEASE@/$(RELEASE)/g' $(rpmspec)

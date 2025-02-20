@@ -9,11 +9,12 @@
 
 #define pr_fmt(fmt) "fwctl: " fmt
 #include <linux/fwctl.h>
-#include <linux/module.h>
-#include <linux/slab.h>
+
 #include <linux/container_of.h>
 #include <linux/fs.h>
+#include <linux/module.h>
 #include <linux/sizes.h>
+#include <linux/slab.h>
 
 #include <uapi/fwctl/fwctl.h>
 
@@ -24,9 +25,6 @@ enum {
 static dev_t fwctl_dev;
 static DEFINE_IDA(fwctl_ida);
 static unsigned long fwctl_tainted;
-
-DEFINE_FREE(kfree_errptr, void *, if (!IS_ERR_OR_NULL(_T)) kfree(_T));
-DEFINE_FREE(kvfree_errptr, void *, if (!IS_ERR_OR_NULL(_T)) kvfree(_T));
 
 struct fwctl_ucmd {
 	struct fwctl_uctx *uctx;
@@ -68,7 +66,7 @@ static int fwctl_cmd_info(struct fwctl_ucmd *ucmd)
 		return -EOPNOTSUPP;
 
 	if (cmd->device_data_len) {
-		void *driver_info __free(kfree_errptr) =
+		void *driver_info __free(kfree) =
 			fwctl->ops->info(ucmd->uctx, &driver_info_len);
 		if (IS_ERR(driver_info))
 			return PTR_ERR(driver_info);
@@ -113,17 +111,16 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
 		break;
 	default:
 		return -EOPNOTSUPP;
-	};
+	}
 
-	void *inbuf __free(kvfree) =
-		kvzalloc(cmd->in_len, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
+	void *inbuf __free(kvfree) = kvzalloc(cmd->in_len, GFP_KERNEL_ACCOUNT);
 	if (!inbuf)
 		return -ENOMEM;
 	if (copy_from_user(inbuf, u64_to_user_ptr(cmd->in), cmd->in_len))
 		return -EFAULT;
 
 	out_len = cmd->out_len;
-	void *outbuf __free(kvfree_errptr) = fwctl->ops->fw_rpc(
+	void *outbuf __free(kvfree) = fwctl->ops->fw_rpc(
 		ucmd->uctx, cmd->scope, inbuf, cmd->in_len, &out_len);
 	if (IS_ERR(outbuf))
 		return PTR_ERR(outbuf);
@@ -180,6 +177,7 @@ static long fwctl_fops_ioctl(struct file *filp, unsigned int cmd,
 	nr = _IOC_NR(cmd);
 	if ((nr - FWCTL_CMD_BASE) >= ARRAY_SIZE(fwctl_ioctl_ops))
 		return -ENOIOCTLCMD;
+
 	op = &fwctl_ioctl_ops[nr - FWCTL_CMD_BASE];
 	if (op->ioctl_num != cmd)
 		return -ENOIOCTLCMD;
@@ -216,7 +214,7 @@ static int fwctl_fops_open(struct inode *inode, struct file *filp)
 		return -ENODEV;
 
 	struct fwctl_uctx *uctx __free(kfree) =
-		kzalloc(fwctl->ops->uctx_size, GFP_KERNEL | GFP_KERNEL_ACCOUNT);
+		kzalloc(fwctl->ops->uctx_size, GFP_KERNEL_ACCOUNT);
 	if (!uctx)
 		return -ENOMEM;
 
@@ -247,6 +245,10 @@ static int fwctl_fops_release(struct inode *inode, struct file *filp)
 	struct fwctl_device *fwctl = uctx->fwctl;
 
 	scoped_guard(rwsem_read, &fwctl->registration_lock) {
+		/*
+		 * fwctl_unregister() has already removed the driver and
+		 * destroyed the uctx.
+		 */
 		if (fwctl->ops) {
 			guard(mutex)(&fwctl->uctx_list_lock);
 			fwctl_destroy_uctx(uctx);
@@ -294,16 +296,17 @@ _alloc_device(struct device *parent, const struct fwctl_ops *ops, size_t size)
 
 	if (!fwctl)
 		return NULL;
-	fwctl->dev.class = &fwctl_class;
-	fwctl->dev.parent = parent;
-	init_rwsem(&fwctl->registration_lock);
-	mutex_init(&fwctl->uctx_list_lock);
-	INIT_LIST_HEAD(&fwctl->uctx_list);
 
 	devnum = ida_alloc_max(&fwctl_ida, FWCTL_MAX_DEVICES - 1, GFP_KERNEL);
 	if (devnum < 0)
 		return NULL;
 	fwctl->dev.devt = fwctl_dev + devnum;
+
+	fwctl->dev.class = &fwctl_class;
+	fwctl->dev.parent = parent;
+	init_rwsem(&fwctl->registration_lock);
+	mutex_init(&fwctl->uctx_list_lock);
+	INIT_LIST_HEAD(&fwctl->uctx_list);
 
 	device_initialize(&fwctl->dev);
 	return_ptr(fwctl);
@@ -321,6 +324,10 @@ struct fwctl_device *_fwctl_alloc_device(struct device *parent,
 		return NULL;
 
 	cdev_init(&fwctl->cdev, &fwctl_fops);
+	/*
+	 * The driver module is protected by fwctl_register/unregister(),
+	 * unregister won't complete until we are done with the driver's module.
+	 */
 	fwctl->cdev.owner = THIS_MODULE;
 
 	if (dev_set_name(&fwctl->dev, "fwctl%d", fwctl->dev.devt - fwctl_dev))
@@ -329,7 +336,7 @@ struct fwctl_device *_fwctl_alloc_device(struct device *parent,
 	fwctl->ops = ops;
 	return_ptr(fwctl);
 }
-EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, FWCTL);
+EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, "FWCTL");
 
 /**
  * fwctl_register - Register a new device to the subsystem
@@ -340,14 +347,9 @@ EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, FWCTL);
  */
 int fwctl_register(struct fwctl_device *fwctl)
 {
-	int ret;
-
-	ret = cdev_device_add(&fwctl->cdev, &fwctl->dev);
-	if (ret)
-		return ret;
-	return 0;
+	return cdev_device_add(&fwctl->cdev, &fwctl->dev);
 }
-EXPORT_SYMBOL_NS_GPL(fwctl_register, FWCTL);
+EXPORT_SYMBOL_NS_GPL(fwctl_register, "FWCTL");
 
 /**
  * fwctl_unregister - Unregister a device from the subsystem
@@ -385,7 +387,7 @@ void fwctl_unregister(struct fwctl_device *fwctl)
 	 */
 	fwctl->ops = NULL;
 }
-EXPORT_SYMBOL_NS_GPL(fwctl_unregister, FWCTL);
+EXPORT_SYMBOL_NS_GPL(fwctl_unregister, "FWCTL");
 
 static int __init fwctl_init(void)
 {

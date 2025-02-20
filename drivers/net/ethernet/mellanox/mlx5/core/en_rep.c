@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include <linux/dim.h>
 #include <linux/debugfs.h>
 #include <linux/mlx5/fs.h>
 #include <net/switchdev.h>
@@ -41,6 +42,7 @@
 #include "eswitch.h"
 #include "mlx5_esw_devm.h"
 #include "en.h"
+#include "en/dim.h"
 #include "en_rep.h"
 #include "en/params.h"
 #include "en/txrx.h"
@@ -138,9 +140,7 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(sw_rep)
 	int i;
 
 	for (i = 0; i < NUM_VPORT_REP_SW_COUNTERS; i++)
-		strcpy(data + (idx++) * ETH_GSTRING_LEN,
-		       sw_rep_stats_desc[i].format);
-	return idx;
+		ethtool_puts(data, sw_rep_stats_desc[i].format);
 }
 
 static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(sw_rep)
@@ -148,9 +148,9 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(sw_rep)
 	int i;
 
 	for (i = 0; i < NUM_VPORT_REP_SW_COUNTERS; i++)
-		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->stats.sw,
-						   sw_rep_stats_desc, i);
-	return idx;
+		mlx5e_ethtool_put_stat(
+			data, MLX5E_READ_CTR64_CPU(&priv->stats.sw,
+						   sw_rep_stats_desc, i));
 }
 
 static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(sw_rep)
@@ -179,11 +179,9 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(vport_rep)
 	int i;
 
 	for (i = 0; i < NUM_VPORT_REP_HW_COUNTERS; i++)
-		strcpy(data + (idx++) * ETH_GSTRING_LEN, vport_rep_stats_desc[i].format);
+		ethtool_puts(data, vport_rep_stats_desc[i].format);
 	for (i = 0; i < NUM_VPORT_REP_LOOPBACK_COUNTERS(priv->mdev); i++)
-		strcpy(data + (idx++) * ETH_GSTRING_LEN,
-		       vport_rep_loopback_stats_desc[i].format);
-	return idx;
+		ethtool_puts(data, vport_rep_loopback_stats_desc[i].format);
 }
 
 static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(vport_rep)
@@ -191,12 +189,14 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(vport_rep)
 	int i;
 
 	for (i = 0; i < NUM_VPORT_REP_HW_COUNTERS; i++)
-		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->stats.rep_stats,
-						   vport_rep_stats_desc, i);
+		mlx5e_ethtool_put_stat(
+			data, MLX5E_READ_CTR64_CPU(&priv->stats.rep_stats,
+						   vport_rep_stats_desc, i));
 	for (i = 0; i < NUM_VPORT_REP_LOOPBACK_COUNTERS(priv->mdev); i++)
-		data[idx++] = MLX5E_READ_CTR64_CPU(&priv->stats.rep_stats,
-						   vport_rep_loopback_stats_desc, i);
-	return idx;
+		mlx5e_ethtool_put_stat(
+			data,
+			MLX5E_READ_CTR64_CPU(&priv->stats.rep_stats,
+					     vport_rep_loopback_stats_desc, i));
 }
 
 static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(vport_rep)
@@ -316,7 +316,7 @@ static void mlx5e_rep_update_vport_q_counter(struct mlx5e_priv *priv)
 }
 
 static void mlx5e_rep_get_strings(struct net_device *dev,
-				  u32 stringset, uint8_t *data)
+				  u32 stringset, u8 *data)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
@@ -366,7 +366,7 @@ mlx5e_rep_set_ringparam(struct net_device *dev,
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
-	return mlx5e_ethtool_set_ringparam(priv, param);
+	return mlx5e_ethtool_set_ringparam(priv, param, extack);
 }
 
 static void mlx5e_rep_get_channels(struct net_device *dev,
@@ -392,7 +392,7 @@ static int mlx5e_rep_get_coalesce(struct net_device *netdev,
 {
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 
-	return mlx5e_ethtool_get_coalesce(priv, coal, kernel_coal);
+	return mlx5e_ethtool_get_coalesce(priv, coal, kernel_coal, extack);
 }
 
 static int mlx5e_rep_set_coalesce(struct net_device *netdev,
@@ -436,6 +436,8 @@ static const struct ethtool_ops mlx5e_rep_ethtool_ops = {
 	.set_channels      = mlx5e_rep_set_channels,
 	.get_coalesce      = mlx5e_rep_get_coalesce,
 	.set_coalesce      = mlx5e_rep_set_coalesce,
+	.get_per_queue_coalesce = mlx5e_get_per_queue_coalesce,
+	.set_per_queue_coalesce = mlx5e_set_per_queue_coalesce,
 	.get_rxfh_key_size   = mlx5e_rep_get_rxfh_key_size,
 	.get_rxfh_indir_size = mlx5e_rep_get_rxfh_indir_size,
 };
@@ -858,10 +860,6 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_params *params;
 
-	u8 cq_period_mode = MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) ?
-					 MLX5_CQ_PERIOD_MODE_START_FROM_CQE :
-					 MLX5_CQ_PERIOD_MODE_START_FROM_EQE;
-
 	params = &priv->channels.params;
 
 	params->num_channels = MLX5E_REP_PARAMS_DEF_NUM_CHANNELS;
@@ -886,7 +884,7 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 
 	/* CQ moderation params */
 	params->rx_dim_enabled = MLX5_CAP_GEN(mdev, cq_moderation);
-	mlx5e_set_rx_cq_mode_params(params, cq_period_mode);
+	params->rx_moder_use_cqe_mode = !!MLX5_CAP_GEN(mdev, cq_period_start_from_cqe);
 
 	params->mqprio.num_tc       = 1;
 	if (rep->vport != MLX5_VPORT_UPLINK)
@@ -925,7 +923,8 @@ static void mlx5e_build_rep_netdev(struct net_device *netdev,
 	netdev->hw_features    |= NETIF_F_RXCSUM;
 
 	netdev->features |= netdev->hw_features;
-	netdev->features |= NETIF_F_NETNS_LOCAL;
+
+	netdev->netns_local = true;
 }
 
 static int mlx5e_init_rep(struct mlx5_core_dev *mdev,
@@ -1660,11 +1659,28 @@ mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
 	xa_destroy(&rpriv->vport_rep_map);
 
 	mlx5_smartnic_sysfs_cleanup(netdev);
+
 	if (test_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
 		mlx5e_detach_netdev(priv);
 		priv->profile->cleanup(priv);
 		mlx5e_destroy_mdev_resources(priv->mdev);
 	} else {
+
+		/* This bit is set when using devlink to change eswitch mode from
+		 * switchdev to legacy. As need to keep uplink netdev ifindex, we
+		 * detach uplink representor profile and attach NIC profile only.
+		 * The netdev will be unregistered later when unload NIC auxiliary
+		 * driver for this case.
+		 * We explicitly block devlink eswitch mode change if any IPSec rules
+		 * offloaded, but can't block other cases, such as driver unload
+		 * and devlink reload. We have to unregister netdev before profile
+		 * change for those cases. This is to avoid resource leak because
+		 * the offloaded rules don't have the chance to be unoffloaded before
+		 * cleanup which is triggered by detach uplink representor profile.
+		 */
+		if (!(priv->mdev->priv.flags & MLX5_PRIV_FLAGS_SWITCH_LEGACY))
+			unregister_netdev(netdev);
+
 		mlx5e_netdev_attach_nic_profile(priv);
 	}
 }

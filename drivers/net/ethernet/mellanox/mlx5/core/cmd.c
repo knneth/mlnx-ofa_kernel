@@ -351,7 +351,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_DESTROY_EQ:
 	case MLX5_CMD_OP_DESTROY_CQ:
 	case MLX5_CMD_OP_DESTROY_QP:
-	case MLX5_CMD_OP_SET_DC_CNAK_TRACE:
 	case MLX5_CMD_OP_DESTROY_PSV:
 	case MLX5_CMD_OP_DESTROY_SRQ:
 	case MLX5_CMD_OP_DESTROY_XRC_SRQ:
@@ -608,7 +607,6 @@ const char *mlx5_command_str(int command)
 	MLX5_COMMAND_STR_CASE(DESTROY_DCT);
 	MLX5_COMMAND_STR_CASE(DRAIN_DCT);
 	MLX5_COMMAND_STR_CASE(QUERY_DCT);
-	MLX5_COMMAND_STR_CASE(SET_DC_CNAK_TRACE);
 	MLX5_COMMAND_STR_CASE(ARM_DCT_FOR_KEY_VIOLATION);
 	MLX5_COMMAND_STR_CASE(QUERY_VPORT_STATE);
 	MLX5_COMMAND_STR_CASE(MODIFY_VPORT_STATE);
@@ -1037,6 +1035,7 @@ static void cmd_work_handler(struct work_struct *work)
 				complete(&ent->done);
 			}
 			up(&cmd->vars.sem);
+			complete(&ent->slotted);
 			return;
 		}
 	} else {
@@ -1945,10 +1944,12 @@ static int cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 
 	throttle_op = mlx5_cmd_is_throttle_opcode(opcode);
 	if (throttle_op) {
-		/* atomic context may not sleep */
-		if (callback)
-			return -EINVAL;
-		down(&dev->cmd.vars.throttle_sem);
+		if (callback) {
+			if (down_trylock(&dev->cmd.vars.throttle_sem))
+				return -EBUSY;
+		} else {
+			down(&dev->cmd.vars.throttle_sem);
+		}
 	}
 
 	pages_queue = is_manage_pages(in);
@@ -2154,10 +2155,19 @@ static void mlx5_cmd_exec_cb_handler(int status, void *_work)
 {
 	struct mlx5_async_work *work = _work;
 	struct mlx5_async_ctx *ctx;
+	struct mlx5_core_dev *dev;
+	u16 opcode;
 
 	ctx = work->ctx;
-	status = cmd_status_err(ctx->dev, status, work->opcode, work->op_mod, work->out);
+	dev = ctx->dev;
+	opcode = work->opcode;
+	status = cmd_status_err(dev, status, work->opcode, work->op_mod, work->out);
 	work->user_callback(status, work);
+	/* Can't access "work" from this point on. It could have been freed in
+	 * the callback.
+	 */
+	if (mlx5_cmd_is_throttle_opcode(opcode))
+		up(&dev->cmd.vars.throttle_sem);
 	if (atomic_dec_and_test(&ctx->num_inflight))
 		complete(&ctx->inflight_done);
 }

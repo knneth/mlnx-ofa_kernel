@@ -112,6 +112,7 @@ static int rsc_event_notifier(struct notifier_block *nb,
 	struct mlx5_core_rsc_common *common;
 	struct mlx5_eqe *eqe = data;
 	u8 event_type = (u8)type;
+	int event_info = event_type;
 	struct mlx5_core_qp *qp;
 	u32 rsn;
 
@@ -135,11 +136,13 @@ static int rsc_event_notifier(struct notifier_block *nb,
 
 			eqe = data;
 			error_type = be32_to_cpu(eqe->data.xrq.type_xrqn) >> 24;
-			if (error_type != MLX5_XRQ_ERROR_TYPE_QP_ERROR)
+			if (error_type != MLX5_XRQ_ERROR_TYPE_QP_ERROR &&
+			    error_type != MLX5_XRQ_ERROR_TYPE_QP_LAST_NVME_CQE_REACHED)
 				return NOTIFY_DONE;
 			rsn = be32_to_cpu(eqe->data.xrq.qpn_id_handle) &
 				MLX5_24BIT_MASK;
 			rsn |= (MLX5_EVENT_QUEUE_TYPE_QP << MLX5_USER_INDEX_LEN);
+			event_info |= error_type << 8;
 		}
 		break;
 	default:
@@ -158,7 +161,7 @@ static int rsc_event_notifier(struct notifier_block *nb,
 	case MLX5_RES_RQ:
 	case MLX5_RES_SQ:
 		qp = (struct mlx5_core_qp *)common;
-		qp->event(qp, event_type);
+		qp->event(qp, event_info);
 		/* Need to put resource in event handler */
 		return NOTIFY_OK;
 	default:
@@ -197,9 +200,6 @@ static void destroy_resource_common(struct mlx5_ib_dev *dev,
 {
 	struct mlx5_qp_table *table = &dev->qp_table;
 	unsigned long flags;
-
-	if (refcount_read(&qp->common.refcount) == 0)
-		return;
 
 	spin_lock_irqsave(&table->lock, flags);
 	radix_tree_delete(&table->tree,

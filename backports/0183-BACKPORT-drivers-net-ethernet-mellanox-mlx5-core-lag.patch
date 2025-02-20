@@ -1,0 +1,66 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+
+Change-Id: I0617b442c22467d20633a0ee6d15de4de3e2667e
+---
+ .../net/ethernet/mellanox/mlx5/core/lag/port_sel.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+@@ -46,6 +46,9 @@ static int mlx5_lag_create_port_sel_tabl
+ 	struct mlx5_flow_namespace *ns;
+ 	struct mlx5_core_dev *dev;
+ 	int err, i, j, k, idx;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	if (first_idx < 0)
+ 		return -EINVAL;
+@@ -90,6 +93,9 @@ static int mlx5_lag_create_port_sel_tabl
+ 								      NULL, &flow_act,
+ 								      &dest, 1);
+ 			if (IS_ERR(lag_definer->rules[idx])) {
++#ifndef HAVE_STD_GNU_99
++				int tmp1;
++#endif
+ 				err = PTR_ERR(lag_definer->rules[idx]);
+ 				ldev_for_each_reverse(k, i, 0, ldev) {
+ 					while (j--) {
+@@ -275,12 +281,14 @@ static int mlx5_lag_set_definer(u32 *mat
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_smac_15_0);
+ 
++#ifdef HAVE_NETDEV_LAG_HASH_VLAN_SRCMAC
+ 		if (hash == NETDEV_LAG_HASH_VLAN_SRCMAC) {
+ 			MLX5_SET_TO_ONES(match_definer_format_0,
+ 					 match_definer_mask,
+ 					 outer_first_vlan_vid);
+ 			break;
+ 		}
++#endif
+ 
+ 		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
+ 				 outer_ethertype);
+@@ -352,6 +360,9 @@ static void mlx5_lag_destroy_definer(str
+ 	int first_idx = mlx5_lag_get_dev_index_by_seq(ldev, MLX5_LAG_P1);
+ 	struct mlx5_core_dev *dev;
+ 	int idx, i, j;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	if (first_idx < 0)
+ 		return;
+@@ -598,6 +609,9 @@ static int __mlx5_lag_modify_definers_de
+ 	int err;
+ 	int i;
+ 	int j;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	dest.type = MLX5_FLOW_DESTINATION_TYPE_UPLINK;
+ 	dest.vport.flags |= MLX5_FLOW_DEST_VPORT_VHCA_ID;

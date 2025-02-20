@@ -1,0 +1,176 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/user_mad.c
+
+Change-Id: If0fbe173d515abec8fd814e9c6f97e8730dc99da
+---
+ drivers/infiniband/core/user_mad.c | 55 +++++++++++++++++++++++++++---
+ 1 file changed, 50 insertions(+), 5 deletions(-)
+
+--- a/drivers/infiniband/core/user_mad.c
++++ b/drivers/infiniband/core/user_mad.c
+@@ -65,6 +65,9 @@
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("InfiniBand userspace MAD packet access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ #define MAX_UMAD_RECV_LIST_SIZE 200000
+ 
+@@ -151,7 +154,11 @@ static const dev_t base_issm_dev = MKDEV
+ static dev_t dynamic_umad_dev;
+ static dev_t dynamic_issm_dev;
+ 
++#ifdef HAVE_IDA_ALLOC_MAX
+ static DEFINE_IDA(umad_ida);
++#else
++static DECLARE_BITMAP(dev_map, IB_UMAD_MAX_PORTS);
++#endif
+ 
+ static int ib_umad_add_one(struct ib_device *device);
+ static void ib_umad_remove_one(struct ib_device *device, void *client_data);
+@@ -354,9 +361,9 @@ static ssize_t copy_recv_mad(struct ib_u
+ 				return -EFAULT;
+ 		}
+ 	}
+-
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_ib_umad_read_recv(file, &packet->mad.hdr, &recv_buf->mad->mad_hdr);
+-
++#endif
+ 	return hdr_size(file) + packet->length;
+ }
+ 
+@@ -375,10 +382,10 @@ static ssize_t copy_send_mad(struct ib_u
+ 
+ 	if (copy_to_user(buf, packet->mad.data, packet->length))
+ 		return -EFAULT;
+-
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_ib_umad_read_send(file, &packet->mad.hdr,
+ 				(struct ib_mad_hdr *)&packet->mad.data);
+-
++#endif
+ 	return size;
+ }
+ 
+@@ -546,8 +553,10 @@ static ssize_t ib_umad_write(struct file
+ 
+ 	mutex_lock(&file->mutex);
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_ib_umad_write(file, &packet->mad.hdr,
+ 			    (struct ib_mad_hdr *)&packet->mad.data);
++#endif
+ 
+ 	agent = __get_agent(file, packet->mad.hdr.id);
+ 	if (!agent) {
+@@ -1033,8 +1042,11 @@ static int ib_umad_open(struct inode *in
+ 	filp->private_data = file;
+ 
+ 	list_add_tail(&file->port_list, &port->file_list);
+-
++#ifdef HAVE_STREAM_OPEN
+ 	stream_open(inode, filp);
++#else
++	nonseekable_open(inode, filp);
++#endif
+ out:
+ 	mutex_unlock(&port->file_mutex);
+ 	return ret;
+@@ -1085,6 +1097,9 @@ static const struct file_operations umad
+ #endif
+ 	.open		= ib_umad_open,
+ 	.release	= ib_umad_close,
++#ifdef no_llseek
++	.llseek		= no_llseek,
++#endif
+ };
+ 
+ static int ib_umad_sm_open(struct inode *inode, struct file *filp)
+@@ -1152,6 +1167,9 @@ static const struct file_operations umad
+ 	.owner	 = THIS_MODULE,
+ 	.open	 = ib_umad_sm_open,
+ 	.release = ib_umad_sm_close,
++#ifdef no_llseek
++	.llseek	 = no_llseek,
++#endif
+ };
+ 
+ static struct ib_umad_port *get_port(struct ib_device *ibdev,
+@@ -1239,13 +1257,22 @@ static struct attribute *umad_class_dev_
+ };
+ ATTRIBUTE_GROUPS(umad_class_dev);
+ 
++#ifdef HAVE_DEVNODE_GET_CONST_DEVICE
+ static char *umad_devnode(const struct device *dev, umode_t *mode)
++#else
++static char *umad_devnode(struct device *dev, umode_t *mode)
++#endif
+ {
+ 	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
+ }
+ 
++#ifdef HAVE_SHOW_CLASS_ATTR_STRING_GET_CONST
+ static ssize_t abi_version_show(const struct class *class,
+ 				const struct class_attribute *attr, char *buf)
++#else
++static ssize_t abi_version_show(struct class *class,
++				struct class_attribute *attr, char *buf)
++#endif /* HAVE_SHOW_CLASS_ATTR_STRING_GET_CONST */
+ {
+ 	return sysfs_emit(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
+ }
+@@ -1264,6 +1291,7 @@ static struct class umad_class = {
+ 	.dev_groups	= umad_class_dev_groups,
+ };
+ 
++
+ static void ib_umad_release_port(struct device *device)
+ {
+ 	struct ib_umad_port *port = dev_get_drvdata(device);
+@@ -1293,10 +1321,19 @@ static int ib_umad_init_port(struct ib_d
+ 	dev_t base_issm;
+ 	int ret;
+ 
++#ifdef HAVE_IDA_ALLOC_MAX
+ 	devnum = ida_alloc_max(&umad_ida, IB_UMAD_MAX_PORTS - 1, GFP_KERNEL);
+ 	if (devnum < 0)
+ 		return -1;
++#else
++	devnum = find_first_zero_bit(dev_map, IB_UMAD_MAX_PORTS);
++	if (devnum >= IB_UMAD_MAX_PORTS)
++ 		return -1;
++#endif
+ 	port->dev_num = devnum;
++#ifndef HAVE_IDA_ALLOC_MAX
++	set_bit(devnum, dev_map);
++#endif
+ 	if (devnum >= IB_UMAD_NUM_FIXED_MINOR) {
+ 		base_umad = dynamic_umad_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
+ 		base_issm = dynamic_issm_dev + devnum - IB_UMAD_NUM_FIXED_MINOR;
+@@ -1341,7 +1378,11 @@ err_dev:
+ 	cdev_device_del(&port->cdev, &port->dev);
+ err_cdev:
+ 	put_device(&port->dev);
++#ifndef HAVE_IDA_ALLOC_MAX
++	clear_bit(devnum, dev_map);
++#else
+ 	ida_free(&umad_ida, devnum);
++#endif
+ 	return ret;
+ }
+ 
+@@ -1377,7 +1418,11 @@ static void ib_umad_kill_port(struct ib_
+ 
+ 	mutex_unlock(&port->file_mutex);
+ 
++#ifndef HAVE_IDA_ALLOC_MAX
++	clear_bit(port->dev_num, dev_map);
++#else
+ 	ida_free(&umad_ida, port->dev_num);
++#endif
+ 
+ 	/* balances device_initialize() */
+ 	if (has_smi)

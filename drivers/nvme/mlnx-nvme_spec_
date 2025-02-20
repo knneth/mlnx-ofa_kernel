@@ -194,7 +194,7 @@ mod_path=${mod_path/\/${ko_name}}
         fi
     done
 %else
-    %if 0%{?fedora}
+    %if 0%{?fedora} || ("%{_vendor}" == "ctyunos")
         echo "override ${mod_name} * updates/%{name}${mod_path}" >> %{buildroot}%{_sysconfdir}/depmod.d/zz02-%{name}-${mod_name}.conf
     %else
         %if "%{_vendor}" == "redhat" || ("%{_vendor}" == "openEuler")

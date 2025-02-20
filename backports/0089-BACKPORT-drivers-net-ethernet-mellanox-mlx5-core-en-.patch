@@ -1,26 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 
-Change-Id: I11623dc953aff3accd3bbaa8ce45f2b6f2fd147f
+Change-Id: I5142baa6e86483a8bab7095bf9e1a0c1a0fcf674
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 6 +++---
- 1 file changed, 3 insertions(+), 3 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 2 ++
+ 1 file changed, 2 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -71,12 +71,12 @@ struct mlx5e_ptp {
- static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+@@ -31,6 +31,7 @@
+  */
+ #include "port_buffer.h"
+ 
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
+ 			    struct mlx5e_port_buffer *port_buffer)
  {
- 	struct flow_keys fk;
--
- 	if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
- 		return false;
+@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(stru
  
--	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
--		return false;
-+        if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
-+                return unlikely(vlan_get_protocol(skb) == htons(ETH_P_1588) ||
-+                                ptp_classify_raw(skb) != PTP_CLASS_NONE);
- 
- 	if (fk.basic.n_proto == htons(ETH_P_1588))
- 		return true;
+ 	return err;
+ }
++#endif

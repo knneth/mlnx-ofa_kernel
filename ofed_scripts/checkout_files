@@ -18,6 +18,7 @@ drivers/scsi/scsi_priv.h
 drivers/scsi/scsi_transport_srp.c
 drivers/base/Makefile
 drivers/base/auxiliary.c
+drivers/base/auxiliary_sysfs.c
 drivers/vfio/pci/mlx5
 net/sunrpc/xprtrdma
 include/linux/mlx5/
@@ -28,6 +29,7 @@ include/scsi/srp.h
 include/scsi/iser.h
 include/linux/nvme.h
 include/linux/nvme-rdma.h
+include/linux/nvme-keyring.h
 include/linux/nvme-fc-driver.h
 include/linux/nvme-fc.h
 include/linux/sunrpc/svc_rdma.h

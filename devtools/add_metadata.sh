@@ -55,7 +55,7 @@ Options:
     -f, --feature <NAME>            Feature name to assign to new commits.
                                     Must exist in: 'metadata/features_metadata_db.csv'
     -s, --upstream-status <STATUS>  Upstream status to assign to new commits.
-                                    Valid values: [NA, ignore, in_progress, sent, accepted, rejected]
+                                    Valid values: [NA, ignore, in_progress, accepted, rejected, planning]
     -g, --general <TAG>	     add current upsream delta tag to general(f.e v5.6-rc2).
 
     --dry-run                Just print, don't really change anything.
@@ -64,9 +64,9 @@ Description for upstream status:
     "NA" -----------> Patch is not applicable for upstream (scripts, Exp. API, etc..).
     "ignore" -------> Patch that should be automatically dropped at next rebase (scripts changes).
     "in_progress" --> Being prepared for Upstream submission.
-    "sent" ---------> Sent upstream, but not accepted yet.
     "accepted" -----> Accepted upstream, should be automatically dropped at next rebase.
     "rejected" -----> Sent upstream and got rejected, will be taken again to OFED at next rebase.
+    "planning"------> Applicable upstream, work is pending commitment"
 EOF
 }
 
@@ -340,9 +340,9 @@ if [ -z "$commitIDs" ]; then
 fi
 if [ ! -z "$def_ustatus" ]; then
 	case $def_ustatus in
-		NA|rejected|accepted|in_progress|ignore)
+		NA|rejected|accepted|in_progress|ignore|planning)
 			;; # Valid status
-		*)	echo "-E- Valid status is one of the follow options: 'NA'|'rejected'|'accepted'|'in_progress'|'ignore'"
+		*)	echo "-E- Valid status is one of the follow options: 'NA'|'rejected'|'accepted'|'in_progress'|'ignore'|'planning'"
 			exit 1
 			;;
 	esac

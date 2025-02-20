@@ -1,27 +1,19 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
 
-Change-Id: I2127d730d93320da37e6436caaf2420a0d83b70a
+Change-Id: I5a006c4bd7b13b53c32e12e4eede7fc5cb352d3c
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
+ 1 file changed, 1 insertion(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
-@@ -29,9 +29,16 @@ struct mlx5e_trap {
- 	struct mlx5e_rq_param      rq_param;
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+@@ -6,6 +6,7 @@
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- void mlx5e_close_trap(struct mlx5e_trap *trap);
- void mlx5e_deactivate_trap(struct mlx5e_priv *priv);
- int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx);
- int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable);
-+#else
-+void mlx5e_close_trap(struct mlx5e_trap *trap) {}
-+void mlx5e_deactivate_trap(struct mlx5e_priv *priv) {}
-+int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_ctx) { return 0; }
-+int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable) { return 0; }
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ #include "en_tc.h"
+ #include "en/tc/act/act.h"
++#include <uapi/linux/tc_act/tc_pedit.h>
  
- #endif
+ #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
+ 

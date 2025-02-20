@@ -1,24 +1,32 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
-Change-Id: Ic810ed699ae906404a319e660205ce0937d08ccf
+Change-Id: I1b09d4c0628c056d2b4428918ad16e3ffd79f92b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c | 2 ++
- 1 file changed, 2 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
-@@ -121,10 +121,12 @@ tc_act_can_offload_mirred(struct mlx5e_t
- 		return false;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
+ void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
+ 				  struct mlx5e_encap_entry *e);
  
-+#ifdef HAVE_NETIF_IS_BAREDUDP
- 	if (parse_state->mpls_push && !netif_is_bareudp(out_dev)) {
- 		NL_SET_ERR_MSG_MOD(extack, "mpls is supported only through a bareudp device");
- 		return false;
- 	}
++#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
+ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		       void *type_data);
 +#endif
  
- 	if (parse_state->eth_pop && !parse_state->mpls_push) {
- 		NL_SET_ERR_MSG_MOD(extack, "vlan pop eth is supported only with mpls push");
+ void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
+ 			  struct sk_buff *skb);
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
++
++int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
++				void *cb_priv);
++#endif
++
+ #else /* CONFIG_MLX5_CLS_ACT */
+ 
+ struct mlx5e_rep_priv;

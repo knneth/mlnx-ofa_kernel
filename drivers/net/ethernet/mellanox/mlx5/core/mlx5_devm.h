@@ -30,6 +30,7 @@ void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
 void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev);
 bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum);
 void mlx5_devm_sfs_clean(struct mlx5_core_dev *dev);
+void mlx5_devm_params_publish(struct mlx5_core_dev *dev);
 
 #else
 static inline int mlx5_devm_register(struct mlx5_core_dev *dev)
@@ -63,5 +64,8 @@ mlx5_devm_affinity_get_weight(struct mlx5_core_dev *dev)
 	return 0;
 }
 
+static inline void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
+{
+}
 #endif
 #endif

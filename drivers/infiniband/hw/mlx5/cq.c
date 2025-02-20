@@ -606,7 +606,7 @@ static int poll_soft_wc(struct mlx5_ib_cq *cq, int num_entries,
 		}
 		wc[npolled++] = soft_wc->wc;
 		list_del(&soft_wc->list);
-		atomic_set(&soft_wc->in_use, 0);
+		kfree(soft_wc);
 	}
 
 	return npolled;
@@ -1434,20 +1434,27 @@ int mlx5_ib_get_cqe_size(struct ib_cq *ibcq)
 }
 
 /* Called from atomic context */
-void mlx5_ib_generate_wc(struct ib_cq *ibcq, struct mlx5_ib_wc *soft_wc)
+int mlx5_ib_generate_wc(struct ib_cq *ibcq, struct ib_wc *wc)
 {
+	struct mlx5_ib_wc *soft_wc;
 	struct mlx5_ib_cq *cq = to_mcq(ibcq);
 	unsigned long flags;
 
+	soft_wc = kmalloc(sizeof(*soft_wc), GFP_ATOMIC);
+	if (!soft_wc)
+		return -ENOMEM;
+
+	soft_wc->wc = *wc;
 	spin_lock_irqsave(&cq->lock, flags);
 	list_add_tail(&soft_wc->list, &cq->wc_list);
-	atomic_set(&soft_wc->in_use, 1);
 	if (cq->notify_flags == IB_CQ_NEXT_COMP ||
-	    soft_wc->wc.status != IB_WC_SUCCESS) {
+	    wc->status != IB_WC_SUCCESS) {
 		cq->notify_flags = 0;
 		schedule_work(&cq->notify_work);
 	}
 	spin_unlock_irqrestore(&cq->lock, flags);
+
+	return 0;
 }
 
 ADD_UVERBS_ATTRIBUTES_SIMPLE(

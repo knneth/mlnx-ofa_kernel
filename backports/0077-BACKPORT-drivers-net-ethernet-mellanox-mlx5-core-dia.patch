@@ -1,81 +1,33 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
+ drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
 
-Change-Id: I188f4246c1933239619466a6fdf523b91957d887
+Change-Id: I919104024a66c46d805550fad1e83050df88294e
 ---
- .../mellanox/mlx5/core/diag/fs_tracepoint.h   | 38 ++++++++++++++-----
- 1 file changed, 28 insertions(+), 10 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
-@@ -30,6 +30,22 @@
-  * SOFTWARE.
-  */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
+@@ -4,13 +4,20 @@
+ #ifndef __MLX5_REPORTER_VNIC_H
+ #define __MLX5_REPORTER_VNIC_H
  
-+
-+/* Before kernel 3.14 there was a bug in kernel/trace/trace_export.c that
-+ * always used %d format which causes many compilation warnings.
-+ * Cast the size to int for such kernels to suppress those warnings.
-+ */
-+#ifdef MLX_SIZE_CAST_WA
-+#undef MLX_SIZE_CAST_WA
-+#endif
-+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0))
-+#define MLX_SIZE_CAST_WA (int)
++#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
+ #include "mlx5_core.h"
+ 
+ void mlx5_reporter_vnic_create(struct mlx5_core_dev *dev);
+ void mlx5_reporter_vnic_destroy(struct mlx5_core_dev *dev);
+ 
+-void mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
++#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
++void
 +#else
-+#define MLX_SIZE_CAST_WA
++int
 +#endif
-+
-+#ifndef MLX_DISABLE_TRACEPOINTS
-+
- #if !defined(_MLX5_FS_TP_) || defined(TRACE_HEADER_MULTI_READ)
- #define _MLX5_FS_TP_
++mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
+ 					  struct devlink_fmsg *fmsg,
+ 					  u16 vport_num, bool other_vport);
  
-@@ -106,9 +122,9 @@ TRACE_EVENT(mlx5_fs_add_fg,
- 		__field(u32, end_index)
- 		__field(u32, id)
- 		__field(u8, mask_enable)
--		__array(u32, mask_outer, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, mask_inner, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, mask_misc, MLX5_ST_SZ_DW(fte_match_set_misc))
-+		__array(u32, mask_outer, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, mask_inner, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, mask_misc, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_misc))
- 	    ),
- 	    TP_fast_assign(
- 			   __entry->fg = fg;
-@@ -190,12 +206,12 @@ TRACE_EVENT(mlx5_fs_set_fte,
- 		__field(u32, flow_source)
- 		__field(u8,  mask_enable)
- 		__field(int, new_fte)
--		__array(u32, mask_outer, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, mask_inner, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, mask_misc, MLX5_ST_SZ_DW(fte_match_set_misc))
--		__array(u32, value_outer, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, value_inner, MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
--		__array(u32, value_misc, MLX5_ST_SZ_DW(fte_match_set_misc))
-+		__array(u32, mask_outer, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, mask_inner, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, mask_misc, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_misc))
-+		__array(u32, value_outer, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, value_inner, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_lyr_2_4))
-+		__array(u32, value_misc, MLX_SIZE_CAST_WA MLX5_ST_SZ_DW(fte_match_set_misc))
- 	    ),
- 	    TP_fast_assign(
- 			   __entry->fte = fte;
-@@ -279,7 +295,7 @@ TRACE_EVENT(mlx5_fs_add_rule,
- 		__field(u32, sw_action)
- 		__field(u32, index)
- 		__field(u32, counter_id)
--		__array(u8, destination, sizeof(struct mlx5_flow_destination))
-+		__array(u8, destination, MLX_SIZE_CAST_WA sizeof(struct mlx5_flow_destination))
- 	    ),
- 	    TP_fast_assign(
- 			   __entry->rule = rule;
-@@ -321,3 +337,5 @@ TRACE_EVENT(mlx5_fs_del_rule,
- #undef TRACE_INCLUDE_FILE
- #define TRACE_INCLUDE_FILE fs_tracepoint
- #include <trace/define_trace.h>
-+
-+#endif /* MLX_DISABLE_TRACEPOINTS */
++#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
+ #endif /* __MLX5_REPORTER_VNIC_H */

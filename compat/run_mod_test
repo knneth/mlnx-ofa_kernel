@@ -1,0 +1,35 @@
+#!/bin/sh
+
+KVERS=${KVERS:-`uname -r`}
+KSRC=${KSRC:-/lib/modules/$KVERS/build}
+
+me=${0##*/}
+usage() {
+	cat <<EOF
+$me: Re-run a single configure test (that was done by building a module)
+
+Can only be run after ./configure was run and compat/configure generated
+test directories under compat/modtest .
+
+Usage:  $me TEST_NAME
+
+Name of test is any subdirectory of compat/modtest, any HAVE_KUKURIKU.
+It will re-run a module build for this test, which may fail with an
+error or succeed.
+
+For example:
+$me HAVE_BDEV_DISCARD_GRANULARITY
+EOF
+}
+
+case "$1" in
+'' | -h | --help | help) usage; exit 0;;
+esac
+
+test=$1
+my_dir=`dirname $0`
+full_path=`realpath $my_dir`
+ERROR_FLAGS=`awk -F'"' '/ERROR_FLAGS=/{print $2}' $my_dir/config/rdma.m4`
+
+
+make -C "$KSRC" M=$full_path/modtest MLNX_TEST_$test=m modules EXTRA_CFLAGS="$ERROR_FLAGS"

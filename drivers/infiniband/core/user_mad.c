@@ -186,10 +186,8 @@ static struct ib_mad_agent *__get_agent(struct ib_umad_file *file, int id)
 	return file->agents_dead ? NULL : file->agent[id];
 }
 
-static int queue_packet(struct ib_umad_file *file,
-			struct ib_mad_agent *agent,
-			struct ib_umad_packet *packet,
-			bool is_recv_mad)
+static int queue_packet(struct ib_umad_file *file, struct ib_mad_agent *agent,
+			struct ib_umad_packet *packet, bool is_recv_mad)
 {
 	int ret = 1;
 
@@ -197,7 +195,7 @@ static int queue_packet(struct ib_umad_file *file,
 
 	if (is_recv_mad &&
 	    atomic_read(&file->recv_list_size) > MAX_UMAD_RECV_LIST_SIZE)
-		goto out;
+		goto unlock;
 
 	for (packet->mad.hdr.id = 0;
 	     packet->mad.hdr.id < IB_UMAD_MAX_AGENTS;
@@ -209,8 +207,7 @@ static int queue_packet(struct ib_umad_file *file,
 			ret = 0;
 			break;
 		}
-
-out:
+unlock:
 	mutex_unlock(&file->mutex);
 
 	return ret;
@@ -1088,7 +1085,6 @@ static const struct file_operations umad_fops = {
 #endif
 	.open		= ib_umad_open,
 	.release	= ib_umad_close,
-	.llseek		= no_llseek,
 };
 
 static int ib_umad_sm_open(struct inode *inode, struct file *filp)
@@ -1156,7 +1152,6 @@ static const struct file_operations umad_sm_fops = {
 	.owner	 = THIS_MODULE,
 	.open	 = ib_umad_sm_open,
 	.release = ib_umad_sm_close,
-	.llseek	 = no_llseek,
 };
 
 static struct ib_umad_port *get_port(struct ib_device *ibdev,

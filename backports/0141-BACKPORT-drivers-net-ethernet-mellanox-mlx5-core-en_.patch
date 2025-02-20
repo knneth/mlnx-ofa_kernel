@@ -1,69 +1,28 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 
-Change-Id: I795c73b88f1cf3e8ccdcbd3a2a37c368e7877cc1
+Change-Id: Iffac33278c71d90c7fd643a11aa0f74ae0fcc73c
 ---
- .../mellanox/mlx5/core/en_accel/macsec.c      | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct
- 		goto out;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+@@ -123,6 +123,7 @@ enum mlx5_ipsec_cap {
  
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
-+#endif
- 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
- 			   assoc_num);
- 		err = -EINVAL;
-@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct
+ struct mlx5e_priv;
  
- 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
- 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(tx_sa);
-+#else
-+	kfree_rcu(tx_sa, rcu_head);
-+#endif
- 	macsec_device->tx_sa[assoc_num] = NULL;
- 
- out:
-@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct m
- 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
- 	metadata_dst_free(rx_sc->md_dst);
- 	kfree(rx_sc->sc_xarray_element);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(rx_sc);
-+#else
-+	kfree_rcu(rx_sc, rcu_head);
-+#endif
- }
- 
- static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
-@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct
- 		goto out;
- 	}
- 
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
-+#endif
- 		netdev_err(ctx->netdev,
- 			   "MACsec offload update RX sa %d PN isn't supported\n",
- 			   assoc_num);
-@@ -1644,6 +1660,9 @@ static const struct macsec_ops macsec_of
- 	.mdo_add_secy = mlx5e_macsec_add_secy,
- 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
- 	.mdo_del_secy = mlx5e_macsec_del_secy,
-+#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
-+	.rx_uses_md_dst = true,
-+#endif
++#ifdef CONFIG_MLX5_EN_IPSEC
+ struct mlx5e_ipsec_hw_stats {
+ 	u64 ipsec_rx_pkts;
+ 	u64 ipsec_rx_bytes;
+@@ -300,8 +301,6 @@ struct mlx5e_ipsec_pol_entry {
+ 	struct mlx5_accel_pol_xfrm_attrs attrs;
  };
  
- bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)
+-#ifdef CONFIG_MLX5_EN_IPSEC
+-
+ void mlx5e_ipsec_init(struct mlx5e_priv *priv);
+ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv);
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv);

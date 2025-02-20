@@ -55,9 +55,6 @@
 #include "en/tc/post_meter.h"
 #include "mlx5_esw_devm.h"
 
-#define mlx5_esw_for_each_rep(esw, i, rep) \
-	xa_for_each(&((esw)->offloads.vport_reps), i, rep)
-
 /* There are two match-all miss flows, one for unicast dst mac and
  * one for multicast.
  */
@@ -614,6 +611,13 @@ esw_setup_dests(struct mlx5_flow_destination *dest,
 						   1, 0, *i);
 			(*i)++;
 		}
+	}
+
+	if (attr->extra_split_ft) {
+		flow_act->flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
+		dest[*i].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
+		dest[*i].ft = attr->extra_split_ft;
+		(*i)++;
 	}
 
 out:
@@ -2484,9 +2488,10 @@ out_free:
 static void esw_mode_change(struct mlx5_eswitch *esw, u16 mode)
 {
 	mlx5_devcom_comp_lock(esw->dev->priv.hca_devcom_comp);
-
-	if (esw->dev->priv.flags & MLX5_PRIV_FLAGS_DISABLE_IB_ADEV) {
+	if (esw->dev->priv.flags & MLX5_PRIV_FLAGS_DISABLE_IB_ADEV ||
+	    mlx5_core_mp_enabled(esw->dev)) {
 		esw->mode = mode;
+		mlx5_rescan_drivers_locked(esw->dev);
 		mlx5_devcom_comp_unlock(esw->dev->priv.hca_devcom_comp);
 		return;
 	}
@@ -2587,7 +2592,8 @@ err:
 }
 
 static int esw_port_metadata_set(struct devlink *devlink, u32 id,
-				 struct devlink_param_gset_ctx *ctx)
+				 struct devlink_param_gset_ctx *ctx,
+				 struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
@@ -2652,6 +2658,10 @@ int esw_offloads_init(struct mlx5_eswitch *esw)
 	err = esw_offloads_init_reps(esw);
 	if (err)
 		return err;
+
+	if (MLX5_ESWITCH_MANAGER(esw->dev) &&
+	    mlx5_esw_vport_match_metadata_supported(esw))
+		esw->flags |= MLX5_ESWITCH_VPORT_MATCH_METADATA;
 
 	err = devl_params_register(priv_to_devlink(esw->dev),
 				   esw_devlink_params,
@@ -2979,9 +2989,9 @@ static int esw_set_master_egress_rule(struct mlx5_core_dev *master,
 	if (IS_ERR(vport))
 		return PTR_ERR(vport);
 
-	egress_ns = mlx5_get_flow_vport_acl_namespace(master,
-						      MLX5_FLOW_NAMESPACE_ESW_EGRESS,
-						      vport->index);
+	egress_ns = mlx5_get_flow_vport_namespace(master,
+						  MLX5_FLOW_NAMESPACE_ESW_EGRESS,
+						  vport->index);
 	if (!egress_ns)
 		return -EINVAL;
 
@@ -3951,6 +3961,8 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 	esw->eswitch_operation_in_progress = true;
 	up_write(&esw->mode_lock);
 
+	if (mode == DEVLINK_ESWITCH_MODE_LEGACY)
+		esw->dev->priv.flags |= MLX5_PRIV_FLAGS_SWITCH_LEGACY;
 	mlx5_eswitch_disable_locked(esw);
 	if (mode == DEVLINK_ESWITCH_MODE_SWITCHDEV) {
 		if (mlx5_devlink_trap_get_num_active(esw->dev)) {

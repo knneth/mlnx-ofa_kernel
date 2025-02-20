@@ -1,0 +1,334 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
+
+Change-Id: I5984a051234a5dc0723d34b0e0e8f22785832dc5
+---
+ include/trace/events/rpcrdma.h | 126 +++++++++++++++++++++++++++++++++
+ 1 file changed, 126 insertions(+)
+
+--- a/include/trace/events/rpcrdma.h
++++ b/include/trace/events/rpcrdma.h
+@@ -10,6 +10,8 @@
+ #if !defined(_TRACE_RPCRDMA_H) || defined(TRACE_HEADER_MULTI_READ)
+ #define _TRACE_RPCRDMA_H
+ 
++#include "../../../compat/config.h"
++
+ #include <linux/scatterlist.h>
+ #include <linux/sunrpc/rpc_rdma_cid.h>
+ #include <linux/tracepoint.h>
+@@ -304,8 +306,16 @@ DECLARE_EVENT_CLASS(xprtrdma_reply_class
+ 		__entry->xid = be32_to_cpu(rep->rr_xid);
+ 		__entry->version = be32_to_cpu(rep->rr_vers);
+ 		__entry->proc = be32_to_cpu(rep->rr_proc);
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(rep->rr_rxprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(rep->rr_rxprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s xid=0x%08x version=%u proc=%u",
+@@ -335,8 +345,16 @@ DECLARE_EVENT_CLASS(xprtrdma_rxprt,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s",
+@@ -369,8 +387,16 @@ DECLARE_EVENT_CLASS(xprtrdma_connect_cla
+ 	TP_fast_assign(
+ 		__entry->rc = rc;
+ 		__entry->connect_status = r_xprt->rx_ep->re_connect_status;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s rc=%d connection status=%d",
+@@ -608,8 +634,16 @@ DECLARE_EVENT_CLASS(xprtrdma_callback_cl
+ 
+ 	TP_fast_assign(
+ 		__entry->xid = be32_to_cpu(rqst->rq_xid);
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s xid=0x%08x",
+@@ -682,7 +716,11 @@ TRACE_EVENT(xprtrdma_device_removal,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name);
++#else
++		__assign_str(name, id->device->name);
++#endif
+ 		memcpy(__entry->addr, &id->route.addr.dst_addr,
+ 		       sizeof(struct sockaddr_in6));
+ 	),
+@@ -710,8 +748,16 @@ TRACE_EVENT(xprtrdma_op_connect,
+ 
+ 	TP_fast_assign(
+ 		__entry->delay = delay;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s delay=%lu",
+@@ -739,8 +785,16 @@ TRACE_EVENT(xprtrdma_op_set_cto,
+ 	TP_fast_assign(
+ 		__entry->connect = connect;
+ 		__entry->reconnect = reconnect;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s connect=%lu reconnect=%lu",
+@@ -769,8 +823,16 @@ TRACE_EVENT(xprtrdma_createmrs,
+ 
+ 	TP_fast_assign(
+ 		__entry->count = count;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s created %u MRs",
+@@ -798,8 +860,16 @@ TRACE_EVENT(xprtrdma_nomrs_err,
+ 
+ 		__entry->task_id = rqst->rq_task->tk_pid;
+ 		__entry->client_id = rqst->rq_task->tk_client->cl_clid;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk(SUNRPC_TRACE_TASK_SPECIFIER " peer=[%s]:%s",
+@@ -1024,8 +1094,16 @@ TRACE_EVENT(xprtrdma_post_recvs,
+ 		__entry->cq_id = ep->re_attr.recv_cq->res.id;
+ 		__entry->count = count;
+ 		__entry->posted = ep->re_receive_count;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s cq.id=%d %u new recvs, %d active",
+@@ -1054,8 +1132,16 @@ TRACE_EVENT(xprtrdma_post_recvs_err,
+ 
+ 		__entry->cq_id = ep->re_attr.recv_cq->res.id;
+ 		__entry->status = status;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s cq.id=%d rc=%d",
+@@ -1468,8 +1554,16 @@ TRACE_EVENT(xprtrdma_cb_setup,
+ 
+ 	TP_fast_assign(
+ 		__entry->reqs = reqs;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rpcrdma_addrstr(r_xprt));
++#endif
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(port);
++#else
++ 		__assign_str(port, rpcrdma_portstr(r_xprt));
++#endif
+ 	),
+ 
+ 	TP_printk("peer=[%s]:%s %u reqs",
+@@ -1499,7 +1593,11 @@ DECLARE_EVENT_CLASS(svcrdma_accept_class
+ 
+ 	TP_fast_assign(
+ 		__entry->status = status;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rdma->sc_xprt.xpt_remotebuf);
++#endif
+ 	),
+ 
+ 	TP_printk("addr=%s status=%ld",
+@@ -1676,6 +1774,7 @@ TRACE_EVENT(svcrdma_encode_wseg,
+ 	)
+ );
+ 
++#ifdef HAVE_SVC_RDMA_PCL
+ TRACE_EVENT(svcrdma_decode_rseg,
+ 	TP_PROTO(
+ 		const struct rpc_rdma_cid *cid,
+@@ -1748,6 +1847,7 @@ TRACE_EVENT(svcrdma_decode_wseg,
+ 		(unsigned long long)__entry->offset, __entry->handle
+ 	)
+ );
++#endif
+ 
+ DECLARE_EVENT_CLASS(svcrdma_error_event,
+ 	TP_PROTO(
+@@ -1985,7 +2085,11 @@ TRACE_EVENT(svcrdma_send_err,
+ 	TP_fast_assign(
+ 		__entry->status = status;
+ 		__entry->xid = __be32_to_cpu(rqst->rq_xid);
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rqst->rq_xprt->xpt_remotebuf);
++#endif
+ 	),
+ 
+ 	TP_printk("addr=%s xid=0x%08x status=%d", __get_str(addr),
+@@ -2048,7 +2152,11 @@ TRACE_EVENT(svcrdma_rq_post_err,
+ 
+ 	TP_fast_assign(
+ 		__entry->status = status;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(addr);
++#else
++ 		__assign_str(addr, rdma->sc_xprt.xpt_remotebuf);
++#endif
+ 	),
+ 
+ 	TP_printk("addr=%s status=%d",
+@@ -2161,7 +2269,11 @@ TRACE_EVENT(svcrdma_qp_error,
+ 
+ 	TP_fast_assign(
+ 		__entry->event = event->event;
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(device);
++#else
++ 		__assign_str(device, event->device->name);
++#endif
+ 		snprintf(__entry->addr, sizeof(__entry->addr) - 1,
+ 			 "%pISpc", sap);
+ 	),
+@@ -2185,7 +2297,11 @@ TRACE_EVENT(svcrdma_device_removal,
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name);
++#else
++		__assign_str(name, id->device->name);
++#endif
+ 		memcpy(__entry->addr, &id->route.addr.dst_addr,
+ 		       sizeof(struct sockaddr_in6));
+ 	),
+@@ -2278,7 +2394,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_devic
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name);
++#else
++		__assign_str(name, device->name);
++#endif
+ 	),
+ 
+ 	TP_printk("device=%s",
+@@ -2300,6 +2420,7 @@ DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_clien
+ DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_client_wait_on);
+ DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_client_remove_one_done);
+ 
++#ifdef HAVE_RPCRDMA_RN_REGISTER
+ DECLARE_EVENT_CLASS(rpcrdma_client_register_class,
+ 	TP_PROTO(
+ 		const struct ib_device *device,
+@@ -2315,7 +2436,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_regis
+ 	),
+ 
+ 	TP_fast_assign(
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		__assign_str(name);
++#else
++		__assign_str(name, device->name);
++#endif
+ 		__entry->callback = rn->rn_done;
+ 		__entry->index = rn->rn_index;
+ 	),
+@@ -2335,6 +2460,7 @@ DECLARE_EVENT_CLASS(rpcrdma_client_regis
+ 
+ DEFINE_CLIENT_REGISTER_EVENT(rpcrdma_client_register);
+ DEFINE_CLIENT_REGISTER_EVENT(rpcrdma_client_unregister);
++#endif
+ 
+ #endif /* _TRACE_RPCRDMA_H */
+ 

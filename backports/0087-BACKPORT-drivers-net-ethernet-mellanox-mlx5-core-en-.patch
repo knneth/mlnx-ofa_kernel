@@ -1,21 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
 
-Change-Id: Ie4cbdc05596423909344258721909f7b84c1b51b
+Change-Id: Ic17d6e3170042e2c5e085813030ede9e2efd6176
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-@@ -32,6 +32,9 @@
- #ifndef __MLX5_EN_PORT_BUFFER_H__
- #define __MLX5_EN_PORT_BUFFER_H__
- 
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/dcbnl.h>
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
+ int
+ mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
+ 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
++#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
+ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
+ 		       struct netlink_ext_ack *extack);
++#else
++int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
++		       u16 *new_qid, struct netlink_ext_ack *extack);
 +#endif
- #include "en.h"
- #include "port.h"
- 
+ int
+ mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
+ 			struct netlink_ext_ack *extack);

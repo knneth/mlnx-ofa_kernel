@@ -1,126 +1,98 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
-Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
+Change-Id: I4ff83e687a97e80b0a2838b8b8c7a5c2b82a9f7e
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 44 +++++++++++++++++--
- 1 file changed, 41 insertions(+), 3 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 31 ++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
-@@ -1,13 +1,22 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- /* Copyright (c) 2019 Mellanox Technologies. */
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+@@ -8,6 +8,9 @@
+ #include <linux/indirect_call_wrapper.h>
+ #include <net/ip6_checksum.h>
+ #include <net/tcp.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/udp.h>
++#endif
  
-+#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "tx.h"
- #include "pool.h"
- #include "en/xdp.h"
- #include "en/params.h"
-+#ifdef HAVE_XDP_SOCK_DRV_H
- #include <net/xdp_sock_drv.h>
--
--int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
-+#else
-+#include <net/xdp_sock.h>
+ #define MLX5E_TX_WQE_EMPTY_DS_COUNT (sizeof(struct mlx5e_tx_wqe) / MLX5_SEND_WQE_DS)
+ 
+@@ -55,6 +58,10 @@
+ #define MLX5E_MAX_KSM_PER_WQE(mdev) \
+ 	MLX5E_KSM_ENTRIES_PER_WQE(MLX5_SEND_WQE_BB * mlx5e_get_max_sq_aligned_wqebbs(mdev))
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++#define MLX5_XMIT_MORE_SKB_CB 0xa
 +#endif
 +
-+int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid
-+#ifdef HAVE_NDO_XSK_WAKEUP
-+		     , u32 flags
-+#endif
-+		     )
+ static inline
+ ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
  {
- 	struct mlx5e_priv *priv = netdev_priv(dev);
- 	struct mlx5e_params *params = &priv->channels.params;
-@@ -55,15 +64,21 @@ static void mlx5e_xsk_tx_post_err(struct
+@@ -66,7 +73,7 @@ enum mlx5e_icosq_wqe_type {
+ 	MLX5E_ICOSQ_WQE_NOP,
+ 	MLX5E_ICOSQ_WQE_UMR_RX,
+ 	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
+-#ifdef CONFIG_MLX5_EN_TLS
++#ifdef HAVE_KTLS_RX_SUPPORT
+ 	MLX5E_ICOSQ_WQE_UMR_TLS,
+ 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
+ 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
+@@ -86,12 +93,25 @@ int mlx5e_napi_poll(struct napi_struct *
+ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
  
- 	nopwqe = mlx5e_post_nop(&sq->wq, sq->sqn, &sq->pc);
- 	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, *xdpi);
-+#ifdef HAVE_XSK_TX_METADATA_OPS
- 	if (xp_tx_metadata_enabled(sq->xsk_pool))
- 		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
- 				     (union mlx5e_xdp_info) { .xsk_meta = {} });
+ /* RX */
++#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
++void mlx5e_page_dma_unmap(struct mlx5e_rq *rq,
++#ifdef HAVE_PAGE_DMA_ADDR
++			  struct page *page);
++#else
++			  struct mlx5e_alloc_unit *au);
 +#endif
- 	sq->doorbell_cseg = &nopwqe->ctrl;
- }
++void mlx5e_page_release_dynamic(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au, bool recycle);
++#endif
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq));
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq));
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_skip(struct mlx5e_rq *rq));
+ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget);
+ void mlx5e_free_rx_descs(struct mlx5e_rq *rq);
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ void mlx5e_free_rx_missing_descs(struct mlx5e_rq *rq);
++#else
++void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
++#endif
  
- bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
  {
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 	struct xsk_buff_pool *pool = sq->xsk_pool;
+@@ -283,7 +303,11 @@ mlx5e_notify_hw(struct mlx5_wq_cyc *wq,
+ {
+ 	ctrl->fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+ 	/* ensure wqe is visible to device before updating doorbell record */
++#ifdef dma_wmb
+ 	dma_wmb();
 +#else
-+	struct xdp_umem *pool = sq->umem;
-+#endif
- 	struct xsk_tx_metadata *meta = NULL;
- 	union mlx5e_xdp_info xdpi;
- 	bool work_done = true;
-@@ -84,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			work_done = false;
- 			break;
- 		}
--
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 		if (!xsk_tx_peek_desc(pool, &desc)) {
-+#else
-+		if (!xsk_umem_consume_tx(pool, &desc)) {
-+#endif
- 			/* TX will get stuck until something wakes it up by
- 			 * triggering NAPI. Currently it's expected that the
- 			 * application calls sendto() if there are consumed, but
-@@ -94,12 +112,25 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			break;
- 		}
- 
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 		xdptxd.dma_addr = xsk_buff_raw_get_dma(pool, desc.addr);
- 		xdptxd.data = xsk_buff_raw_get_data(pool, desc.addr);
-+#else
-+		xdptxd.dma_addr = xdp_umem_get_dma(pool, desc.addr);
-+		xdptxd.data = xdp_umem_get_data(pool, desc.addr);
-+#endif
- 		xdptxd.len = desc.len;
-+#ifdef HAVE_XSK_TX_METADATA_OPS
- 		meta = xsk_buff_get_metadata(pool, desc.addr);
++	wmb();
 +#endif
  
-+#ifdef HAVE_XSK_BUFF_ALLOC
- 		xsk_buff_raw_dma_sync_for_device(pool, xdptxd.dma_addr, xdptxd.len);
-+#else
-+		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
-+					   xdptxd.len, DMA_BIDIRECTIONAL);
+ 	*wq->db = cpu_to_be32(pc);
+ 
+@@ -476,6 +500,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+ 	case IPPROTO_UDP:
+ 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
+ 		fallthrough;
 +
-+#endif
+ 	case IPPROTO_TCP:
+ 		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
+ 		break;
+@@ -559,7 +584,11 @@ static inline bool mlx5e_icosq_can_post_
  
- 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
- 				      mlx5e_xmit_xdp_frame, sq, &xdptxd,
-@@ -111,6 +142,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			mlx5e_xsk_tx_post_err(sq, &xdpi);
- 		} else {
- 			mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, xdpi);
-+#ifdef HAVE_XSK_TX_METADATA_OPS
- 			if (xp_tx_metadata_enabled(sq->xsk_pool)) {
- 				struct xsk_tx_metadata_compl compl;
- 
-@@ -121,6 +153,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 						     (union mlx5e_xdp_info)
- 						     { .xsk_meta = compl });
- 			}
-+#endif
- 		}
- 
- 		flush = true;
-@@ -131,8 +164,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
- 			mlx5e_xdp_mpwqe_complete(sq);
- 		mlx5e_xmit_xdp_doorbell(sq);
- 
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- 		xsk_tx_release(pool);
+ static inline struct mlx5e_mpw_info *mlx5e_get_mpw_info(struct mlx5e_rq *rq, int i)
+ {
++#ifdef HAVE_PAGE_POOL_DEFRAG_PAGE
+ 	size_t isz = struct_size(rq->mpwqe.info, alloc_units.frag_pages, rq->mpwqe.pages_per_wqe);
 +#else
-+		xsk_umem_consume_tx_done(pool);
++	size_t isz = struct_size(rq->mpwqe.info, alloc_units, rq->mpwqe.pages_per_wqe);
 +#endif
- 	}
  
- 	return !(budget && work_done);
+ 	return (struct mlx5e_mpw_info *)((char *)rq->mpwqe.info + array_size(i, isz));
  }
-+#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

@@ -14,28 +14,45 @@ struct fwctl_uctx;
 
 /**
  * struct fwctl_ops - Driver provided operations
- * @device_type: The drivers assigned device_type number. This is uABI
- * @uctx_size: The size of the fwctl_uctx struct to allocate. The first
- *	bytes of this memory will be a fwctl_uctx. The driver can use the
- *	remaining bytes as its private memory.
- * @open_uctx: Called when a file descriptor is opened before the uctx is ever
- *	used.
- * @close_uctx: Called when the uctx is destroyed, usually when the FD is
- *	closed.
- * @info: Implement FWCTL_INFO. Return a kmalloc() memory that is copied to
- *	out_device_data. On input length indicates the size of the user buffer
- *	on output it indicates the size of the memory. The driver can ignore
- *	length on input, the core code will handle everything.
- * @fw_rpc: Implement FWCTL_RPC. Deliver rpc_in/in_len to the FW and return
- *	the response and set out_len. rpc_in can be returned as the response
- *	pointer. Otherwise the returned pointer is freed with kvfree().
+ *
+ * fwctl_unregister() will wait until all excuting ops are completed before it
+ * returns. Drivers should be mindful to not let their ops run for too long as
+ * it will block device hot unplug and module unloading.
  */
 struct fwctl_ops {
+	/**
+	 * @device_type: The drivers assigned device_type number. This is uABI.
+	 */
 	enum fwctl_device_type device_type;
+	/**
+	 * @uctx_size: The size of the fwctl_uctx struct to allocate. The first
+	 * bytes of this memory will be a fwctl_uctx. The driver can use the
+	 * remaining bytes as its private memory.
+	 */
 	size_t uctx_size;
+	/**
+	 * @open_uctx: Called when a file descriptor is opened before the uctx
+	 * is ever used.
+	 */
 	int (*open_uctx)(struct fwctl_uctx *uctx);
+	/**
+	 * @close_uctx: Called when the uctx is destroyed, usually when the FD
+	 * is closed.
+	 */
 	void (*close_uctx)(struct fwctl_uctx *uctx);
+	/**
+	 * @info: Implement FWCTL_INFO. Return a kmalloc() memory that is copied
+	 * to out_device_data. On input length indicates the size of the user
+	 * buffer on output it indicates the size of the memory. The driver can
+	 * ignore length on input, the core code will handle everything.
+	 */
 	void *(*info)(struct fwctl_uctx *uctx, size_t *length);
+	/**
+	 * @fw_rpc: Implement FWCTL_RPC. Deliver rpc_in/in_len to the FW and
+	 * return the response and set out_len. rpc_in can be returned as the
+	 * response pointer. Otherwise the returned pointer is freed with
+	 * kvfree().
+	 */
 	void *(*fw_rpc)(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
 			void *rpc_in, size_t in_len, size_t *out_len);
 };
@@ -44,18 +61,23 @@ struct fwctl_ops {
  * struct fwctl_device - Per-driver registration struct
  * @dev: The sysfs (class/fwctl/fwctlXX) device
  *
- * Each driver instance will have one of these structs with the driver
- * private data following immeidately after. This struct is refcounted,
- * it is freed by calling fwctl_put().
+ * Each driver instance will have one of these structs with the driver private
+ * data following immediately after. This struct is refcounted, it is freed by
+ * calling fwctl_put().
  */
 struct fwctl_device {
 	struct device dev;
 	/* private: */
 	struct cdev cdev;
 
-	struct rw_semaphore registration_lock;
+	/* Protect uctx_list */
 	struct mutex uctx_list_lock;
 	struct list_head uctx_list;
+	/*
+	 * Protect ops, held for write when ops becomes NULL during unregister,
+	 * held for read whenver ops is loaded or an ops function is running.
+	 */
+	struct rw_semaphore registration_lock;
 	const struct fwctl_ops *ops;
 };
 
@@ -70,16 +92,17 @@ struct fwctl_device *_fwctl_alloc_device(struct device *parent,
  * @member: Name of the struct fwctl_device in @drv_struct
  *
  * This allocates and initializes the fwctl_device embedded in the drv_struct.
- * Upon success the pointer must be freed via fwctl_put(). Returns NULL on
- * failure. Returns a 'drv_struct *' on success, NULL on error.
+ * Upon success the pointer must be freed via fwctl_put(). Returns a 'drv_struct
+ * \*' on success, NULL on error.
  */
-#define fwctl_alloc_device(parent, ops, drv_struct, member)                  \
-	container_of(_fwctl_alloc_device(                                    \
-			     parent, ops,                                    \
-			     sizeof(drv_struct) +                            \
-				     BUILD_BUG_ON_ZERO(                      \
-					     offsetof(drv_struct, member))), \
-		     drv_struct, member)
+#define fwctl_alloc_device(parent, ops, drv_struct, member)               \
+	({                                                                \
+		static_assert(__same_type(struct fwctl_device,            \
+					  ((drv_struct *)NULL)->member)); \
+		static_assert(offsetof(drv_struct, member) == 0);         \
+		(drv_struct *)_fwctl_alloc_device(parent, ops,            \
+						  sizeof(drv_struct));    \
+	})
 
 static inline struct fwctl_device *fwctl_get(struct fwctl_device *fwctl)
 {

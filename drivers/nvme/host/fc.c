@@ -2431,7 +2431,7 @@ nvme_fc_ctrl_get(struct nvme_fc_ctrl *ctrl)
  * controller. Called after last nvme_put_ctrl() call
  */
 static void
-nvme_fc_nvme_ctrl_freed(struct nvme_ctrl *nctrl)
+nvme_fc_free_ctrl(struct nvme_ctrl *nctrl)
 {
 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(nctrl);
 
@@ -3135,7 +3135,7 @@ nvme_fc_create_association(struct nvme_fc_ctrl *ctrl)
 	if (ctrl->ctrl.icdoff) {
 		dev_err(ctrl->ctrl.device, "icdoff %d is not supported!\n",
 				ctrl->ctrl.icdoff);
-		ret = NVME_SC_INVALID_FIELD | NVME_SC_DNR;
+		ret = NVME_SC_INVALID_FIELD | NVME_STATUS_DNR;
 		goto out_stop_keep_alive;
 	}
 
@@ -3143,7 +3143,7 @@ nvme_fc_create_association(struct nvme_fc_ctrl *ctrl)
 	if (!nvme_ctrl_sgl_supported(&ctrl->ctrl)) {
 		dev_err(ctrl->ctrl.device,
 			"Mandatory sgls are not supported!\n");
-		ret = NVME_SC_INVALID_FIELD | NVME_SC_DNR;
+		ret = NVME_SC_INVALID_FIELD | NVME_STATUS_DNR;
 		goto out_stop_keep_alive;
 	}
 
@@ -3313,12 +3313,10 @@ nvme_fc_reconnect_or_delete(struct nvme_fc_ctrl *ctrl, int status)
 		dev_info(ctrl->ctrl.device,
 			"NVME-FC{%d}: reset: Reconnect attempt failed (%d)\n",
 			ctrl->cnum, status);
-		if (status > 0 && (status & NVME_SC_DNR))
-			recon = false;
 	} else if (time_after_eq(jiffies, rport->dev_loss_end))
 		recon = false;
 
-	if (recon && nvmf_should_reconnect(&ctrl->ctrl)) {
+	if (recon && nvmf_should_reconnect(&ctrl->ctrl, status)) {
 		if (portptr->port_state == FC_OBJSTATE_ONLINE)
 			dev_info(ctrl->ctrl.device,
 				"NVME-FC{%d}: Reconnect attempt in %ld "
@@ -3330,7 +3328,7 @@ nvme_fc_reconnect_or_delete(struct nvme_fc_ctrl *ctrl, int status)
 		queue_delayed_work(nvme_wq, &ctrl->connect_work, recon_delay);
 	} else {
 		if (portptr->port_state == FC_OBJSTATE_ONLINE) {
-			if (status > 0 && (status & NVME_SC_DNR))
+			if (status > 0 && (status & NVME_STATUS_DNR))
 				dev_warn(ctrl->ctrl.device,
 					 "NVME-FC{%d}: reconnect failure\n",
 					 ctrl->cnum);
@@ -3387,7 +3385,8 @@ static const struct nvme_ctrl_ops nvme_fc_ctrl_ops = {
 	.reg_read32		= nvmf_reg_read32,
 	.reg_read64		= nvmf_reg_read64,
 	.reg_write32		= nvmf_reg_write32,
-	.free_ctrl		= nvme_fc_nvme_ctrl_freed,
+	.subsystem_reset	= nvmf_subsystem_reset,
+	.free_ctrl		= nvme_fc_free_ctrl,
 	.submit_async_event	= nvme_fc_submit_async_event,
 	.delete_ctrl		= nvme_fc_delete_ctrl,
 	.get_address		= nvmf_get_address,
@@ -3449,12 +3448,11 @@ nvme_fc_existing_controller(struct nvme_fc_rport *rport,
 	return found;
 }
 
-static struct nvme_ctrl *
-nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
+static struct nvme_fc_ctrl *
+nvme_fc_alloc_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
 	struct nvme_fc_lport *lport, struct nvme_fc_rport *rport)
 {
 	struct nvme_fc_ctrl *ctrl;
-	unsigned long flags;
 	int ret, idx, ctrl_loss_tmo;
 
 	if (!(rport->remoteport.port_role &
@@ -3543,7 +3541,35 @@ nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
 	if (lport->dev)
 		ctrl->ctrl.numa_node = dev_to_node(lport->dev);
 
-	/* at this point, teardown path changes to ref counting on nvme ctrl */
+	return ctrl;
+
+out_free_queues:
+	kfree(ctrl->queues);
+out_free_ida:
+	put_device(ctrl->dev);
+	ida_free(&nvme_fc_ctrl_cnt, ctrl->cnum);
+out_free_ctrl:
+	kfree(ctrl);
+out_fail:
+	/* exit via here doesn't follow ctlr ref points */
+	return ERR_PTR(ret);
+}
+
+static struct nvme_ctrl *
+nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
+	struct nvme_fc_lport *lport, struct nvme_fc_rport *rport)
+{
+	struct nvme_fc_ctrl *ctrl;
+	unsigned long flags;
+	int ret;
+
+	ctrl = nvme_fc_alloc_ctrl(dev, opts, lport, rport);
+	if (IS_ERR(ctrl))
+		return ERR_CAST(ctrl);
+
+	ret = nvme_add_ctrl(&ctrl->ctrl);
+	if (ret)
+		goto out_put_ctrl;
 
 	ret = nvme_alloc_admin_tag_set(&ctrl->ctrl, &ctrl->admin_tag_set,
 			&nvme_fc_admin_mq_ops,
@@ -3589,6 +3615,7 @@ fail_ctrl:
 	/* initiate nvme ctrl ref counting teardown */
 	nvme_uninit_ctrl(&ctrl->ctrl);
 
+out_put_ctrl:
 	/* Remove core ctrl ref. */
 	nvme_put_ctrl(&ctrl->ctrl);
 
@@ -3602,19 +3629,7 @@ fail_ctrl:
 	nvme_fc_rport_get(rport);
 
 	return ERR_PTR(-EIO);
-
-out_free_queues:
-	kfree(ctrl->queues);
-out_free_ida:
-	put_device(ctrl->dev);
-	ida_free(&nvme_fc_ctrl_cnt, ctrl->cnum);
-out_free_ctrl:
-	kfree(ctrl);
-out_fail:
-	/* exit via here doesn't follow ctlr ref points */
-	return ERR_PTR(ret);
 }
-
 
 struct nvmet_fc_traddr {
 	u64	nn;

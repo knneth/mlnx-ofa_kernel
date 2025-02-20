@@ -232,13 +232,7 @@ enum {
 
 	MLX5_INTERFACE_PROTOCOL_DPLL,
 	MLX5_INTERFACE_PROTOCOL_FWCTL,
-	MLX5_INTERFACE_PROTOCOL_CTL,
 };
-
-static bool is_ctl_supported(struct mlx5_core_dev *dev)
-{
-	return MLX5_CAP_GEN(dev, uctx_cap);
-}
 
 static bool is_fwctl_supported(struct mlx5_core_dev *dev)
 {
@@ -269,8 +263,6 @@ static const struct mlx5_adev_device {
 					   .is_supported = &is_dpll_supported },
 	[MLX5_INTERFACE_PROTOCOL_FWCTL] = { .suffix = "fwctl",
 					    .is_supported = &is_fwctl_supported },
-	[MLX5_INTERFACE_PROTOCOL_CTL] = { .suffix = "ctl",
-					  .is_supported = &is_ctl_supported },
 };
 
 int mlx5_adev_idx_alloc(void)
@@ -368,7 +360,7 @@ int mlx5_attach_device(struct mlx5_core_dev *dev)
 {
 	struct mlx5_priv *priv = &dev->priv;
 	struct auxiliary_device *adev;
-	struct auxiliary_driver *adrv;
+	const struct auxiliary_driver *adrv;
 	int ret = 0, i;
 
 	devl_assert_locked(priv_to_devlink(dev));
@@ -425,7 +417,7 @@ void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend)
 {
 	struct mlx5_priv *priv = &dev->priv;
 	struct auxiliary_device *adev;
-	struct auxiliary_driver *adrv;
+	const struct auxiliary_driver *adrv;
 	pm_message_t pm = {};
 	int i;
 
@@ -483,7 +475,6 @@ void mlx5_unregister_device(struct mlx5_core_dev *dev)
 	devl_assert_locked(priv_to_devlink(dev));
 	mlx5_devcom_comp_lock(dev->priv.hca_devcom_comp);
 	dev->priv.flags = MLX5_PRIV_FLAGS_DISABLE_ALL_ADEV;
-	dev->priv.flags &= ~MLX5_PRIV_FLAGS_DETACH;
 	mlx5_rescan_drivers_locked(dev);
 	mlx5_devcom_comp_unlock(dev->priv.hca_devcom_comp);
 }

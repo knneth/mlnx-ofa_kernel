@@ -1,0 +1,80 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
+
+Change-Id: I760687ffbcc6240af95b2947bf7fe2780188ab65
+---
+ .../mellanox/mlx5/core/en/tc_tun_geneve.c     | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
+@@ -21,6 +21,7 @@ static int mlx5e_tc_tun_calc_hlen_geneve
+ 
+ static int mlx5e_tc_tun_check_udp_dport_geneve(struct mlx5e_priv *priv,
+ 					       struct flow_cls_offload *f)
++
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+ 	struct netlink_ext_ack *extack = f->common.extack;
+@@ -55,6 +56,7 @@ static int mlx5e_tc_tun_parse_udp_ports_
+ 	int err;
+ 
+ 	err = mlx5e_tc_tun_parse_udp_ports(priv, spec, f, headers_c, headers_v);
++
+ 	if (err)
+ 		return err;
+ 
+@@ -106,13 +108,22 @@ static int mlx5e_gen_ip_tunnel_header_ge
+ 	memset(geneveh, 0, sizeof(*geneveh));
+ 	geneveh->ver = MLX5E_GENEVE_VER;
+ 	geneveh->opt_len = tun_info->options_len / 4;
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	geneveh->oam = test_bit(IP_TUNNEL_OAM_BIT, tun_info->key.tun_flags);
+ 	geneveh->critical = test_bit(IP_TUNNEL_CRIT_OPT_BIT,
+ 				     tun_info->key.tun_flags);
++#else
++	geneveh->oam = !!(tun_info->key.tun_flags & TUNNEL_OAM);
++	geneveh->critical = !!(tun_info->key.tun_flags & TUNNEL_CRIT_OPT);
++#endif
+ 	mlx5e_tunnel_id_to_vni(tun_info->key.tun_id, geneveh->vni);
+ 	geneveh->proto_type = htons(ETH_P_TEB);
+ 
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (test_bit(IP_TUNNEL_GENEVE_OPT_BIT, tun_info->key.tun_flags)) {
++#else
++	if (tun_info->key.tun_flags & TUNNEL_GENEVE_OPT) {
++#endif
+ 		if (!geneveh->opt_len)
+ 			return -EOPNOTSUPP;
+ 		ip_tunnel_info_opts_get(geneveh->options, tun_info);
+@@ -189,7 +200,11 @@ static int mlx5e_tc_tun_parse_geneve_opt
+ 
+ 	/* make sure that we're talking about GENEVE options */
+ 
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (enc_opts.key->dst_opt_type != IP_TUNNEL_GENEVE_OPT_BIT) {
++#else
++	if (enc_opts.key->dst_opt_type != TUNNEL_GENEVE_OPT) {
++#endif
+ 		NL_SET_ERR_MSG_MOD(extack,
+ 				   "Matching on GENEVE options: option type is not GENEVE");
+ 		netdev_warn(priv->netdev,
+@@ -338,8 +353,12 @@ static int mlx5e_tc_tun_parse_geneve(str
+ static bool mlx5e_tc_tun_encap_info_equal_geneve(struct mlx5e_encap_key *a,
+ 						 struct mlx5e_encap_key *b)
+ {
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	return mlx5e_tc_tun_encap_info_equal_options(a, b,
+ 						     IP_TUNNEL_GENEVE_OPT_BIT);
++#else
++	return mlx5e_tc_tun_encap_info_equal_options(a, b, TUNNEL_GENEVE_OPT);
++#endif
+ }
+ 
+ struct mlx5e_tc_tunnel geneve_tunnel = {
+@@ -353,3 +372,4 @@ struct mlx5e_tc_tunnel geneve_tunnel = {
+ 	.parse_tunnel         = mlx5e_tc_tun_parse_geneve,
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_geneve,
+ };
++

@@ -9,6 +9,25 @@
 #define compat_hlist_for_each_entry_rcu(pos, head, member) \
 	hlist_for_each_entry_rcu(pos, head, member)
 
+
+#ifndef list_for_each_entry_srcu
+#ifdef CONFIG_PROVE_RCU_LIST
+#define __list_check_srcu(cond)                                  \
+        ({                                                               \
+        RCU_LOCKDEP_WARN(!(cond),                                        \
+                "RCU-list traversed without holding the required lock!");\
+        })
+#else
+#define __list_check_srcu(cond) ({ })
+#endif
+
+#define list_for_each_entry_srcu(pos, head, member, cond)               \
+        for (__list_check_srcu(cond),                                   \
+             pos = list_entry_rcu((head)->next, typeof(*pos), member);  \
+                &pos->member != (head);                                 \
+                pos = list_entry_rcu(pos->member.next, typeof(*pos), member))
+#endif /* list_for_each_entry_srcu */
+
 #ifndef list_next_or_null_rcu
 /**
  * list_next_or_null_rcu - get the first element from a list

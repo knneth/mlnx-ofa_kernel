@@ -266,8 +266,7 @@ static void set_cache_mkc(struct mlx5_cache_ent *ent, void *mkc)
 	MLX5_SET(mkc, mkc, access_mode_1_0, ent->rb_key.access_mode & 0x3);
 	MLX5_SET(mkc, mkc, access_mode_4_2,
 		(ent->rb_key.access_mode >> 2) & 0x7);
-	if (ent->rb_key.ats)
-		MLX5_SET(mkc, mkc, ma_translation_mode, 1);
+	MLX5_SET(mkc, mkc, ma_translation_mode, !!ent->rb_key.ats);
 
 	MLX5_SET(mkc, mkc, translations_octword_size,
 		 get_mkc_octo_size(ent->rb_key.access_mode,
@@ -572,6 +571,21 @@ static void queue_adjust_cache_locked(struct mlx5_cache_ent *ent)
 	}
 }
 
+static void clean_keys(struct mlx5_ib_dev *dev, struct mlx5_cache_ent *ent)
+{
+	u32 mkey;
+
+	spin_lock_irq(&ent->mkeys_queue.lock);
+	while (ent->mkeys_queue.ci) {
+		mkey = pop_mkey_locked(ent);
+		spin_unlock_irq(&ent->mkeys_queue.lock);
+		mlx5_core_destroy_mkey(dev->mdev, mkey);
+		spin_lock_irq(&ent->mkeys_queue.lock);
+	}
+	ent->tmp_cleanup_scheduled = false;
+	spin_unlock_irq(&ent->mkeys_queue.lock);
+}
+
 static ssize_t order_attr_show(struct kobject *kobj,
 			       struct attribute *attr, char *buf)
 {
@@ -646,21 +660,6 @@ static bool someone_releasing(struct mlx5_mkey_cache *cache)
 	}
 	mutex_unlock(&cache->rb_lock);
 	return false;
-}
-
-static void clean_keys(struct mlx5_ib_dev *dev, struct mlx5_cache_ent *ent)
-{
-	u32 mkey;
-
-	spin_lock_irq(&ent->mkeys_queue.lock);
-	while (ent->mkeys_queue.ci) {
-		mkey = pop_mkey_locked(ent);
-		spin_unlock_irq(&ent->mkeys_queue.lock);
-		mlx5_core_destroy_mkey(dev->mdev, mkey);
-		spin_lock_irq(&ent->mkeys_queue.lock);
-	}
-	ent->tmp_cleanup_scheduled = false;
-	spin_unlock_irq(&ent->mkeys_queue.lock);
 }
 
 static void __cache_work_func(struct mlx5_cache_ent *ent)
@@ -834,10 +833,10 @@ mkey_cache_ent_from_rb_key(struct mlx5_ib_dev *dev,
 	 * Limit the usage of mkeys larger than twice the required size while
 	 * also allowing the usage of smallest cache entry for small MRs.
 	 */
-        ndescs_limit = max_t(u64, rb_key.ndescs * 2,
-                             MLX5_MR_CACHE_PERSISTENT_ENTRY_MIN_DESCS);
+	ndescs_limit = max_t(u64, rb_key.ndescs * 2,
+			     MLX5_MR_CACHE_PERSISTENT_ENTRY_MIN_DESCS);
 
-        return (smallest &&
+	return (smallest &&
 		smallest->rb_key.access_mode == rb_key.access_mode &&
 		smallest->rb_key.access_flags == rb_key.access_flags &&
 		smallest->rb_key.ats == rb_key.ats &&
@@ -1140,10 +1139,7 @@ struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc)
 	MLX5_SET(mkc, mkc, length64, 1);
 	set_mkc_access_pd_addr_fields(mkc, acc | IB_ACCESS_RELAXED_ORDERING, 0,
 				      pd);
-
-#ifdef CONFIG_GPU_DIRECT_STORAGE
 	MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev, ats));
-#endif
 
 	err = mlx5_ib_create_mkey(dev, &mr->mmkey, in, inlen);
 	if (err)
@@ -1219,8 +1215,7 @@ static struct mlx5_ib_mr *alloc_cacheable_mr(struct ib_pd *pd,
 	if (umem->is_dmabuf)
 		page_size = mlx5_umem_dmabuf_default_pgsz(umem, iova);
 	else
-		page_size = mlx5_umem_find_best_pgsz(umem, mkc, log_page_size,
-						     0, iova);
+		page_size = mlx5_umem_mkc_find_best_pgsz(dev, umem, iova);
 	if (WARN_ON(!page_size))
 		return ERR_PTR(-EINVAL);
 
@@ -1526,8 +1521,8 @@ static struct ib_mr *create_real_mr(struct ib_pd *pd, struct ib_umem *umem,
 		mr = alloc_cacheable_mr(pd, umem, iova, access_flags,
 					MLX5_MKC_ACCESS_MODE_MTT);
 	} else {
-		unsigned int page_size = mlx5_umem_find_best_pgsz(
-			umem, mkc, log_page_size, 0, iova);
+		unsigned int page_size =
+			mlx5_umem_mkc_find_best_pgsz(dev, umem, iova);
 
 		mutex_lock(&dev->slow_path_mutex);
 		mr = reg_create(pd, umem, iova, access_flags, page_size,
@@ -1659,7 +1654,7 @@ static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
 
 	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
 
-	if (!umem_dmabuf->sgt)
+	if (!umem_dmabuf->sgt || !mr)
 		return;
 
 	mlx5r_umr_update_mr_pas(mr, MLX5_IB_UPD_XLT_ZAP);
@@ -1853,8 +1848,7 @@ static bool can_use_umr_rereg_pas(struct mlx5_ib_mr *mr,
 	if (!mlx5r_umr_can_load_pas(dev, new_umem->length))
 		return false;
 
-	*page_size =
-		mlx5_umem_find_best_pgsz(new_umem, mkc, log_page_size, 0, iova);
+	*page_size = mlx5_umem_mkc_find_best_pgsz(dev, new_umem, iova);
 	if (WARN_ON(!*page_size))
 		return false;
 	return (mr->mmkey.cache_ent->rb_key.ndescs) >=
@@ -2142,7 +2136,16 @@ static int mlx5_revoke_mr(struct mlx5_ib_mr *mr)
 {
 	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
 	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
-	int rc;
+	bool is_odp = is_odp_mr(mr);
+	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
+		!to_ib_umem_dmabuf(mr->umem)->pinned;
+	int rc = 0;
+
+	if (is_odp)
+		mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+
+	if (is_odp_dma_buf)
+		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv, NULL);
 
 	if (mr->mmkey.cacheable && !mlx5r_umr_revoke_mr(mr) && !cache_ent_find_and_store(dev, mr)) {
 		ent = mr->mmkey.cache_ent;
@@ -2154,7 +2157,7 @@ static int mlx5_revoke_mr(struct mlx5_ib_mr *mr)
 			ent->tmp_cleanup_scheduled = true;
 		}
 		spin_unlock_irq(&ent->mkeys_queue.lock);
-		return 0;
+		goto out;
 	}
 
 	if (ent) {
@@ -2167,11 +2170,25 @@ static int mlx5_revoke_mr(struct mlx5_ib_mr *mr)
 	if (mr->umem && mr->umem->is_peer) {
 		rc = mlx5r_umr_revoke_mr(mr);
 		if (rc)
-			return rc;
+			goto out;
 		ib_umem_stop_invalidation_notifier(mr->umem);
 	}
 
-	return destroy_mkey(dev, mr);
+	rc = destroy_mkey(dev, mr);
+out:
+	if (is_odp) {
+		if (!rc)
+			to_ib_umem_odp(mr->umem)->private = NULL;
+		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+	}
+
+	if (is_odp_dma_buf) {
+		if (!rc)
+			to_ib_umem_dmabuf(mr->umem)->private = NULL;
+		dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
+	}
+
+	return rc;
 }
 
 static int __mlx5_ib_dereg_mr(struct ib_mr *ibmr)
@@ -2274,10 +2291,8 @@ int mlx5_ib_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata)
 static void mlx5_set_umr_free_mkey(struct ib_pd *pd, u32 *in, int ndescs,
 				   int access_mode, int page_shift)
 {
-	void *mkc;
-#ifdef CONFIG_GPU_DIRECT_STORAGE
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
-#endif
+	void *mkc;
 
 	mkc = MLX5_ADDR_OF(create_mkey_in, in, memory_key_mkey_entry);
 
@@ -2289,14 +2304,9 @@ static void mlx5_set_umr_free_mkey(struct ib_pd *pd, u32 *in, int ndescs,
 	MLX5_SET(mkc, mkc, access_mode_4_2, (access_mode >> 2) & 0x7);
 	MLX5_SET(mkc, mkc, umr_en, 1);
 	MLX5_SET(mkc, mkc, log_page_size, page_shift);
-#ifdef CONFIG_GPU_DIRECT_STORAGE
 	if (access_mode == MLX5_MKC_ACCESS_MODE_PA ||
 	    access_mode == MLX5_MKC_ACCESS_MODE_MTT)
-		MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev,
-								     ats));
-	else
-		pr_err_once("mlx5_ib: %s: Translation mode supported only when access_mode is MTT or PA\n", __func__);
-#endif
+		MLX5_SET(mkc, mkc, ma_translation_mode, MLX5_CAP_GEN(dev->mdev, ats));
 }
 
 static int _mlx5_alloc_mkey_descs(struct ib_pd *pd, struct mlx5_ib_mr *mr,

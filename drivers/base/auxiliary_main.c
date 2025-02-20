@@ -4,7 +4,6 @@
  *
  * Please see Documentation/driver-api/auxiliary_bus.rst for more information.
  */
-
 #ifdef pr_fmt
 #undef pr_fmt
 #endif
@@ -181,10 +180,10 @@ static const struct auxiliary_device_id *auxiliary_match_id(const struct auxilia
 	return NULL;
 }
 
-static int auxiliary_match(struct device *dev, struct device_driver *drv)
+static int auxiliary_match(struct device *dev, const struct device_driver *drv)
 {
 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
-	struct auxiliary_driver *auxdrv = to_auxiliary_drv(drv);
+	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(drv);
 
 	return !!auxiliary_match_id(auxdrv->id_table, auxdev);
 }
@@ -212,7 +211,7 @@ static void auxiliary_bus_sysfs_probe(struct auxiliary_device *auxdev)
 
 static int auxiliary_bus_probe(struct device *dev)
 {
-	struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
+	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
 	int ret;
 
@@ -232,7 +231,7 @@ static int auxiliary_bus_probe(struct device *dev)
 
 static void auxiliary_bus_remove(struct device *dev)
 {
-	struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
+	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
 
 	if (auxdrv->remove)
@@ -242,7 +241,7 @@ static void auxiliary_bus_remove(struct device *dev)
 
 static void auxiliary_bus_shutdown(struct device *dev)
 {
-	struct auxiliary_driver *auxdrv = NULL;
+	const struct auxiliary_driver *auxdrv = NULL;
 	struct auxiliary_device *auxdev;
 
 	if (dev->driver) {
@@ -297,6 +296,7 @@ int auxiliary_device_init(struct auxiliary_device *auxdev)
 
 	dev->bus = &auxiliary_bus_type;
 	device_initialize(&auxdev->dev);
+	mutex_init(&auxdev->sysfs.lock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(auxiliary_device_init);
@@ -361,7 +361,7 @@ EXPORT_SYMBOL_GPL(__auxiliary_device_add);
  */
 struct auxiliary_device *auxiliary_find_device(struct device *start,
 					       const void *data,
-					       int (*match)(struct device *dev, const void *data))
+					       device_match_t match)
 {
 	struct device *dev;
 

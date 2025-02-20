@@ -1223,7 +1223,6 @@ int memtrack_randomize_mem(void)
 EXPORT_SYMBOL(memtrack_randomize_mem);
 
 /* module entry points */
-
 int init_module(void)
 {
 	enum memtrack_memtype_t i;
@@ -1297,6 +1296,7 @@ undo_cache_create:
 	kmem_cache_destroy(meminfo_cache);
 	return -1;
 }
+
 
 void cleanup_module(void)
 {
