@@ -1530,11 +1530,14 @@ create_flow_handle(struct fs_fte *fte,
 		tree_init_node(&rule->node, NULL, del_sw_hw_rule);
 		if (flow_dest_list_lifo_ordering) {
 			if (dest &&
-			    dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+			    dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE &&
+			    dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM)
 				list_add(&rule->node.list, &fte->node.children);
 			else
 				list_add_tail(&rule->node.list, &fte->node.children);
-		} else if (!dest || dest[i].type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE) {
+		} else if (!dest ||
+			   dest[i].type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE ||
+			   dest[i].type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM) {
 			list_add_tail(&rule->node.list, &fte->node.children);
 		} else {
 			struct list_head *insert_at = &fte->node.children;
@@ -1542,8 +1545,10 @@ create_flow_handle(struct fs_fte *fte,
 
 			// Find last non-FT entry
 			list_for_each_entry (sibling, &fte->node.children, node.list) {
-				if (sibling->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+				if (sibling->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE ||
+				    sibling->dest_attr.type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM) {
 					break;
+				}
 				insert_at = &sibling->node.list;
 			}
 
