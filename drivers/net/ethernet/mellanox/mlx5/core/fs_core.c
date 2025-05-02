@@ -1594,6 +1594,12 @@ static void destroy_flow_handle(struct fs_fte *fte,
 	kfree(handle);
 }
 
+static bool is_flow_table_dest_type(enum mlx5_flow_destination_type type)
+{
+	return type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE ||
+	       type == MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE_NUM;
+}
+
 static struct mlx5_flow_handle *
 create_flow_handle_dup(struct list_head *children,
 		       struct mlx5_flow_destination *dest,
@@ -1620,8 +1626,7 @@ create_flow_handle_dup(struct list_head *children,
 		 * end of the list for forward to next prio rules.
 		 */
 		tree_init_node(&rule->node, NULL, del_sw_hw_dup_rule);
-		if (dest &&
-		    dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+		if (dest && !is_flow_table_dest_type(dest[i].type))
 			list_add(&rule->node.list, children);
 		else
 			list_add_tail(&rule->node.list, children);
@@ -1685,8 +1690,7 @@ create_flow_handle(struct fs_fte *fte,
 		 * end of the list for forward to next prio rules.
 		 */
 		tree_init_node(&rule->node, NULL, del_sw_hw_rule);
-		if (dest &&
-		    dest[i].type != MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE)
+		if (dest && !is_flow_table_dest_type(dest[i].type))
 			list_add(&rule->node.list, &fte->node.children);
 		else
 			list_add_tail(&rule->node.list, &fte->node.children);
