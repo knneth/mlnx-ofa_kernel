@@ -1,3 +1,9 @@
+mlnx-ofed-kernel (24.04-0.7.0.btech2) noble; urgency=medium
+
+  * Order DevX flow tables correctly in destination lists
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Fri, 2 May 2025 17:14:09 +0200
+
 mlnx-ofed-kernel (24.04-0.7.0.btech1) noble; urgency=medium
 
   * Rebase to OFED 24.04-0.7.0.0
