@@ -1,14 +1,14 @@
-m4trace:/usr/share/aclocal-1.15/amversion.m4:14: -1- AC_DEFUN([AM_AUTOMAKE_VERSION], [am__api_version='1.15'
+m4trace:/usr/share/aclocal-1.16/amversion.m4:14: -1- AC_DEFUN([AM_AUTOMAKE_VERSION], [am__api_version='1.16'
 dnl Some users find AM_AUTOMAKE_VERSION and mistake it for a way to
 dnl require some minimum version.  Point them to the right macro.
-m4_if([$1], [1.15], [],
+m4_if([$1], [1.16.5], [],
       [AC_FATAL([Do not call $0, use AM_INIT_AUTOMAKE([$1]).])])dnl
 ])
-m4trace:/usr/share/aclocal-1.15/amversion.m4:33: -1- AC_DEFUN([AM_SET_CURRENT_AUTOMAKE_VERSION], [AM_AUTOMAKE_VERSION([1.15])dnl
+m4trace:/usr/share/aclocal-1.16/amversion.m4:33: -1- AC_DEFUN([AM_SET_CURRENT_AUTOMAKE_VERSION], [AM_AUTOMAKE_VERSION([1.16.5])dnl
 m4_ifndef([AC_AUTOCONF_VERSION],
   [m4_copy([m4_PACKAGE_VERSION], [AC_AUTOCONF_VERSION])])dnl
 _AM_AUTOCONF_VERSION(m4_defn([AC_AUTOCONF_VERSION]))])
-m4trace:/usr/share/aclocal-1.15/as.m4:11: -1- AC_DEFUN([AM_PROG_AS], [# By default we simply use the C compiler to build assembly code.
+m4trace:/usr/share/aclocal-1.16/as.m4:11: -1- AC_DEFUN([AM_PROG_AS], [# By default we simply use the C compiler to build assembly code.
 AC_REQUIRE([AC_PROG_CC])
 test "${CCAS+set}" = set || CCAS=$CC
 test "${CCASFLAGS+set}" = set || CCASFLAGS=$CFLAGS
@@ -16,11 +16,11 @@ AC_ARG_VAR([CCAS],      [assembler compiler command (defaults to CC)])
 AC_ARG_VAR([CCASFLAGS], [assembler compiler flags (defaults to CFLAGS)])
 _AM_IF_OPTION([no-dependencies],, [_AM_DEPENDENCIES([CCAS])])dnl
 ])
-m4trace:/usr/share/aclocal-1.15/auxdir.m4:47: -1- AC_DEFUN([AM_AUX_DIR_EXPAND], [AC_REQUIRE([AC_CONFIG_AUX_DIR_DEFAULT])dnl
+m4trace:/usr/share/aclocal-1.16/auxdir.m4:47: -1- AC_DEFUN([AM_AUX_DIR_EXPAND], [AC_REQUIRE([AC_CONFIG_AUX_DIR_DEFAULT])dnl
 # Expand $ac_aux_dir to an absolute path.
 am_aux_dir=`cd "$ac_aux_dir" && pwd`
 ])
-m4trace:/usr/share/aclocal-1.15/cond.m4:12: -1- AC_DEFUN([AM_CONDITIONAL], [AC_PREREQ([2.52])dnl
+m4trace:/usr/share/aclocal-1.16/cond.m4:12: -1- AC_DEFUN([AM_CONDITIONAL], [AC_PREREQ([2.52])dnl
  m4_if([$1], [TRUE],  [AC_FATAL([$0: invalid condition: $1])],
        [$1], [FALSE], [AC_FATAL([$0: invalid condition: $1])])dnl
 AC_SUBST([$1_TRUE])dnl
@@ -40,7 +40,7 @@ AC_CONFIG_COMMANDS_PRE(
   AC_MSG_ERROR([[conditional "$1" was never defined.
 Usually this means the macro was only invoked conditionally.]])
 fi])])
-m4trace:/usr/share/aclocal-1.15/depend.m4:26: -1- AC_DEFUN([_AM_DEPENDENCIES], [AC_REQUIRE([AM_SET_DEPDIR])dnl
+m4trace:/usr/share/aclocal-1.16/depend.m4:26: -1- AC_DEFUN([_AM_DEPENDENCIES], [AC_REQUIRE([AM_SET_DEPDIR])dnl
 AC_REQUIRE([AM_OUTPUT_DEPENDENCY_COMMANDS])dnl
 AC_REQUIRE([AM_MAKE_INCLUDE])dnl
 AC_REQUIRE([AM_DEP_TRACK])dnl
@@ -170,10 +170,10 @@ AM_CONDITIONAL([am__fastdep$1], [
   test "x$enable_dependency_tracking" != xno \
   && test "$am_cv_$1_dependencies_compiler_type" = gcc3])
 ])
-m4trace:/usr/share/aclocal-1.15/depend.m4:163: -1- AC_DEFUN([AM_SET_DEPDIR], [AC_REQUIRE([AM_SET_LEADING_DOT])dnl
+m4trace:/usr/share/aclocal-1.16/depend.m4:163: -1- AC_DEFUN([AM_SET_DEPDIR], [AC_REQUIRE([AM_SET_LEADING_DOT])dnl
 AC_SUBST([DEPDIR], ["${am__leading_dot}deps"])dnl
 ])
-m4trace:/usr/share/aclocal-1.15/depend.m4:171: -1- AC_DEFUN([AM_DEP_TRACK], [AC_ARG_ENABLE([dependency-tracking], [dnl
+m4trace:/usr/share/aclocal-1.16/depend.m4:171: -1- AC_DEFUN([AM_DEP_TRACK], [AC_ARG_ENABLE([dependency-tracking], [dnl
 AS_HELP_STRING(
   [--enable-dependency-tracking],
   [do not reject slow dependency extractors])
@@ -191,60 +191,57 @@ _AM_SUBST_NOTMAKE([AMDEPBACKSLASH])dnl
 AC_SUBST([am__nodep])dnl
 _AM_SUBST_NOTMAKE([am__nodep])dnl
 ])
-m4trace:/usr/share/aclocal-1.15/depout.m4:12: -1- AC_DEFUN([_AM_OUTPUT_DEPENDENCY_COMMANDS], [{
+m4trace:/usr/share/aclocal-1.16/depout.m4:11: -1- AC_DEFUN([_AM_OUTPUT_DEPENDENCY_COMMANDS], [{
   # Older Autoconf quotes --file arguments for eval, but not when files
   # are listed without --file.  Let's play safe and only enable the eval
   # if we detect the quoting.
-  case $CONFIG_FILES in
-  *\'*) eval set x "$CONFIG_FILES" ;;
-  *)   set x $CONFIG_FILES ;;
-  esac
+  # TODO: see whether this extra hack can be removed once we start
+  # requiring Autoconf 2.70 or later.
+  AS_CASE([$CONFIG_FILES],
+          [*\'*], [eval set x "$CONFIG_FILES"],
+          [*], [set x $CONFIG_FILES])
   shift
-  for mf
+  # Used to flag and report bootstrapping failures.
+  am_rc=0
+  for am_mf
   do
     # Strip MF so we end up with the name of the file.
-    mf=`echo "$mf" | sed -e 's/:.*$//'`
-    # Check whether this is an Automake generated Makefile or not.
-    # We used to match only the files named 'Makefile.in', but
-    # some people rename them; so instead we look at the file content.
-    # Grep'ing the first line is not enough: some people post-process
-    # each Makefile.in and add a new line on top of each file to say so.
-    # Grep'ing the whole file is not good either: AIX grep has a line
+    am_mf=`AS_ECHO(["$am_mf"]) | sed -e 's/:.*$//'`
+    # Check whether this is an Automake generated Makefile which includes
+    # dependency-tracking related rules and includes.
+    # Grep'ing the whole file directly is not great: AIX grep has a line
     # limit of 2048, but all sed's we know have understand at least 4000.
-    if sed -n 's,^#.*generated by automake.*,X,p' "$mf" | grep X >/dev/null 2>&1; then
-      dirpart=`AS_DIRNAME("$mf")`
-    else
-      continue
-    fi
-    # Extract the definition of DEPDIR, am__include, and am__quote
-    # from the Makefile without running 'make'.
-    DEPDIR=`sed -n 's/^DEPDIR = //p' < "$mf"`
-    test -z "$DEPDIR" && continue
-    am__include=`sed -n 's/^am__include = //p' < "$mf"`
-    test -z "$am__include" && continue
-    am__quote=`sed -n 's/^am__quote = //p' < "$mf"`
-    # Find all dependency output files, they are included files with
-    # $(DEPDIR) in their names.  We invoke sed twice because it is the
-    # simplest approach to changing $(DEPDIR) to its actual value in the
-    # expansion.
-    for file in `sed -n "
-      s/^$am__include $am__quote\(.*(DEPDIR).*\)$am__quote"'$/\1/p' <"$mf" | \
-	 sed -e 's/\$(DEPDIR)/'"$DEPDIR"'/g'`; do
-      # Make sure the directory exists.
-      test -f "$dirpart/$file" && continue
-      fdir=`AS_DIRNAME(["$file"])`
-      AS_MKDIR_P([$dirpart/$fdir])
-      # echo "creating $dirpart/$file"
-      echo '# dummy' > "$dirpart/$file"
-    done
+    sed -n 's,^am--depfiles:.*,X,p' "$am_mf" | grep X >/dev/null 2>&1 \
+      || continue
+    am_dirpart=`AS_DIRNAME(["$am_mf"])`
+    am_filepart=`AS_BASENAME(["$am_mf"])`
+    AM_RUN_LOG([cd "$am_dirpart" \
+      && sed -e '/# am--include-marker/d' "$am_filepart" \
+        | $MAKE -f - am--depfiles]) || am_rc=$?
   done
+  if test $am_rc -ne 0; then
+    AC_MSG_FAILURE([Something went wrong bootstrapping makefile fragments
+    for automatic dependency tracking.  If GNU make was not used, consider
+    re-running the configure script with MAKE="gmake" (or whatever is
+    necessary).  You can also try re-running configure with the
+    '--disable-dependency-tracking' option to at least be able to build
+    the package (albeit without support for automatic dependency tracking).])
+  fi
+  AS_UNSET([am_dirpart])
+  AS_UNSET([am_filepart])
+  AS_UNSET([am_mf])
+  AS_UNSET([am_rc])
+  rm -f conftest-deps.mk
 }
 ])
-m4trace:/usr/share/aclocal-1.15/depout.m4:71: -1- AC_DEFUN([AM_OUTPUT_DEPENDENCY_COMMANDS], [AC_CONFIG_COMMANDS([depfiles],
+m4trace:/usr/share/aclocal-1.16/depout.m4:64: -1- AC_DEFUN([AM_OUTPUT_DEPENDENCY_COMMANDS], [AC_CONFIG_COMMANDS([depfiles],
      [test x"$AMDEP_TRUE" != x"" || _AM_OUTPUT_DEPENDENCY_COMMANDS],
-     [AMDEP_TRUE="$AMDEP_TRUE" ac_aux_dir="$ac_aux_dir"])
-])
-m4trace:/usr/share/aclocal-1.15/init.m4:29: -1- AC_DEFUN([AM_INIT_AUTOMAKE], [AC_PREREQ([2.65])dnl
+     [AMDEP_TRUE="$AMDEP_TRUE" MAKE="${MAKE-make}"])])
+m4trace:/usr/share/aclocal-1.16/init.m4:29: -1- AC_DEFUN([AM_INIT_AUTOMAKE], [AC_PREREQ([2.65])dnl
+m4_ifdef([_$0_ALREADY_INIT],
+  [m4_fatal([$0 expanded multiple times
+]m4_defn([_$0_ALREADY_INIT]))],
+  [m4_define([_$0_ALREADY_INIT], m4_expansion_stack)])dnl
 dnl Autoconf wants to disallow AM_ names.  We explicitly allow
 dnl the ones we care about.
 m4_pattern_allow([^AM_[A-Z]+FLAGS$])dnl
@@ -281,7 +278,7 @@ m4_ifval([$3], [_AM_SET_OPTION([no-define])])dnl
 [_AM_SET_OPTIONS([$1])dnl
 dnl Diagnose old-style AC_INIT with new-style AM_AUTOMAKE_INIT.
 m4_if(
-  m4_ifdef([AC_PACKAGE_NAME], [ok]):m4_ifdef([AC_PACKAGE_VERSION], [ok]),
+  m4_ifset([AC_PACKAGE_NAME], [ok]):m4_ifset([AC_PACKAGE_VERSION], [ok]),
   [ok:ok],,
   [m4_fatal([AC_INIT should be called with package and version arguments])])dnl
  AC_SUBST([PACKAGE], ['AC_PACKAGE_TARNAME'])dnl
@@ -304,8 +301,8 @@ AC_REQUIRE([AM_PROG_INSTALL_STRIP])dnl
 AC_REQUIRE([AC_PROG_MKDIR_P])dnl
 # For better backward compatibility.  To be removed once Automake 1.9.x
 # dies out for good.  For more background, see:
-# <http://lists.gnu.org/archive/html/automake/2012-07/msg00001.html>
-# <http://lists.gnu.org/archive/html/automake/2012-07/msg00014.html>
+# <https://lists.gnu.org/archive/html/automake/2012-07/msg00001.html>
+# <https://lists.gnu.org/archive/html/automake/2012-07/msg00014.html>
 AC_SUBST([mkdir_p], ['$(MKDIR_P)'])
 # We need awk for the "check" target (and possibly the TAP driver).  The
 # system "awk" is bad on some platforms.
@@ -333,6 +330,20 @@ AC_PROVIDE_IFELSE([AC_PROG_OBJCXX],
 		  [m4_define([AC_PROG_OBJCXX],
 			     m4_defn([AC_PROG_OBJCXX])[_AM_DEPENDENCIES([OBJCXX])])])dnl
 ])
+# Variables for tags utilities; see am/tags.am
+if test -z "$CTAGS"; then
+  CTAGS=ctags
+fi
+AC_SUBST([CTAGS])
+if test -z "$ETAGS"; then
+  ETAGS=etags
+fi
+AC_SUBST([ETAGS])
+if test -z "$CSCOPE"; then
+  CSCOPE=cscope
+fi
+AC_SUBST([CSCOPE])
+
 AC_REQUIRE([AM_SILENT_RULES])dnl
 dnl The testsuite driver may need to know about EXEEXT, so add the
 dnl 'am__EXEEXT' conditional if _AM_COMPILER_EXEEXT was seen.  This
@@ -372,7 +383,7 @@ END
 Aborting the configuration process, to ensure you take notice of the issue.
 
 You can download and install GNU coreutils to get an 'rm' implementation
-that behaves properly: <http://www.gnu.org/software/coreutils/>.
+that behaves properly: <https://www.gnu.org/software/coreutils/>.
 
 If you want to complete the configuration process using your problematic
 'rm' anyway, export the environment variable ACCEPT_INFERIOR_RM_PROGRAM
@@ -386,7 +397,7 @@ dnl The trailing newline in this macro's definition is deliberate, for
 dnl backward compatibility and to allow trailing 'dnl'-style comments
 dnl after the AM_INIT_AUTOMAKE invocation. See automake bug#16841.
 ])
-m4trace:/usr/share/aclocal-1.15/init.m4:186: -1- AC_DEFUN([_AC_AM_CONFIG_HEADER_HOOK], [# Compute $1's index in $config_headers.
+m4trace:/usr/share/aclocal-1.16/init.m4:204: -1- AC_DEFUN([_AC_AM_CONFIG_HEADER_HOOK], [# Compute $1's index in $config_headers.
 _am_arg=$1
 _am_stamp_count=1
 for _am_header in $config_headers :; do
@@ -398,7 +409,7 @@ for _am_header in $config_headers :; do
   esac
 done
 echo "timestamp for $_am_arg" >`AS_DIRNAME(["$_am_arg"])`/stamp-h[]$_am_stamp_count])
-m4trace:/usr/share/aclocal-1.15/install-sh.m4:11: -1- AC_DEFUN([AM_PROG_INSTALL_SH], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
+m4trace:/usr/share/aclocal-1.16/install-sh.m4:11: -1- AC_DEFUN([AM_PROG_INSTALL_SH], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
 if test x"${install_sh+set}" != xset; then
   case $am_aux_dir in
   *\ * | *\	*)
@@ -408,7 +419,7 @@ if test x"${install_sh+set}" != xset; then
   esac
 fi
 AC_SUBST([install_sh])])
-m4trace:/usr/share/aclocal-1.15/lead-dot.m4:10: -1- AC_DEFUN([AM_SET_LEADING_DOT], [rm -rf .tst 2>/dev/null
+m4trace:/usr/share/aclocal-1.16/lead-dot.m4:10: -1- AC_DEFUN([AM_SET_LEADING_DOT], [rm -rf .tst 2>/dev/null
 mkdir .tst 2>/dev/null
 if test -d .tst; then
   am__leading_dot=.
@@ -417,55 +428,42 @@ else
 fi
 rmdir .tst 2>/dev/null
 AC_SUBST([am__leading_dot])])
-m4trace:/usr/share/aclocal-1.15/make.m4:12: -1- AC_DEFUN([AM_MAKE_INCLUDE], [am_make=${MAKE-make}
-cat > confinc << 'END'
+m4trace:/usr/share/aclocal-1.16/make.m4:13: -1- AC_DEFUN([AM_MAKE_INCLUDE], [AC_MSG_CHECKING([whether ${MAKE-make} supports the include directive])
+cat > confinc.mk << 'END'
 am__doit:
-	@echo this is the am__doit target
+	@echo this is the am__doit target >confinc.out
 .PHONY: am__doit
 END
-# If we don't find an include directive, just comment out the code.
-AC_MSG_CHECKING([for style of include used by $am_make])
 am__include="#"
 am__quote=
-_am_result=none
-# First try GNU make style include.
-echo "include confinc" > confmf
-# Ignore all kinds of additional output from 'make'.
-case `$am_make -s -f confmf 2> /dev/null` in #(
-*the\ am__doit\ target*)
-  am__include=include
-  am__quote=
-  _am_result=GNU
-  ;;
-esac
-# Now try BSD make style include.
-if test "$am__include" = "#"; then
-   echo '.include "confinc"' > confmf
-   case `$am_make -s -f confmf 2> /dev/null` in #(
-   *the\ am__doit\ target*)
-     am__include=.include
-     am__quote="\""
-     _am_result=BSD
-     ;;
-   esac
-fi
-AC_SUBST([am__include])
-AC_SUBST([am__quote])
-AC_MSG_RESULT([$_am_result])
-rm -f confinc confmf
-])
-m4trace:/usr/share/aclocal-1.15/missing.m4:11: -1- AC_DEFUN([AM_MISSING_PROG], [AC_REQUIRE([AM_MISSING_HAS_RUN])
+# BSD make does it like this.
+echo '.include "confinc.mk" # ignored' > confmf.BSD
+# Other make implementations (GNU, Solaris 10, AIX) do it like this.
+echo 'include confinc.mk # ignored' > confmf.GNU
+_am_result=no
+for s in GNU BSD; do
+  AM_RUN_LOG([${MAKE-make} -f confmf.$s && cat confinc.out])
+  AS_CASE([$?:`cat confinc.out 2>/dev/null`],
+      ['0:this is the am__doit target'],
+      [AS_CASE([$s],
+          [BSD], [am__include='.include' am__quote='"'],
+          [am__include='include' am__quote=''])])
+  if test "$am__include" != "#"; then
+    _am_result="yes ($s style)"
+    break
+  fi
+done
+rm -f confinc.* confmf.*
+AC_MSG_RESULT([${_am_result}])
+AC_SUBST([am__include])])
+m4trace:/usr/share/aclocal-1.16/make.m4:42: -1- m4_pattern_allow([^am__quote$])
+m4trace:/usr/share/aclocal-1.16/missing.m4:11: -1- AC_DEFUN([AM_MISSING_PROG], [AC_REQUIRE([AM_MISSING_HAS_RUN])
 $1=${$1-"${am_missing_run}$2"}
 AC_SUBST($1)])
-m4trace:/usr/share/aclocal-1.15/missing.m4:20: -1- AC_DEFUN([AM_MISSING_HAS_RUN], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
+m4trace:/usr/share/aclocal-1.16/missing.m4:20: -1- AC_DEFUN([AM_MISSING_HAS_RUN], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
 AC_REQUIRE_AUX_FILE([missing])dnl
 if test x"${MISSING+set}" != xset; then
-  case $am_aux_dir in
-  *\ * | *\	*)
-    MISSING="\${SHELL} \"$am_aux_dir/missing\"" ;;
-  *)
-    MISSING="\${SHELL} $am_aux_dir/missing" ;;
-  esac
+  MISSING="\${SHELL} '$am_aux_dir/missing'"
 fi
 # Use eval to expand $SHELL
 if eval "$MISSING --is-lightweight"; then
@@ -475,11 +473,11 @@ else
   AC_MSG_WARN(['missing' script is too old or missing])
 fi
 ])
-m4trace:/usr/share/aclocal-1.15/options.m4:11: -1- AC_DEFUN([_AM_MANGLE_OPTION], [[_AM_OPTION_]m4_bpatsubst($1, [[^a-zA-Z0-9_]], [_])])
-m4trace:/usr/share/aclocal-1.15/options.m4:17: -1- AC_DEFUN([_AM_SET_OPTION], [m4_define(_AM_MANGLE_OPTION([$1]), [1])])
-m4trace:/usr/share/aclocal-1.15/options.m4:23: -1- AC_DEFUN([_AM_SET_OPTIONS], [m4_foreach_w([_AM_Option], [$1], [_AM_SET_OPTION(_AM_Option)])])
-m4trace:/usr/share/aclocal-1.15/options.m4:29: -1- AC_DEFUN([_AM_IF_OPTION], [m4_ifset(_AM_MANGLE_OPTION([$1]), [$2], [$3])])
-m4trace:/usr/share/aclocal-1.15/prog-cc-c-o.m4:12: -1- AC_DEFUN([_AM_PROG_CC_C_O], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
+m4trace:/usr/share/aclocal-1.16/options.m4:11: -1- AC_DEFUN([_AM_MANGLE_OPTION], [[_AM_OPTION_]m4_bpatsubst($1, [[^a-zA-Z0-9_]], [_])])
+m4trace:/usr/share/aclocal-1.16/options.m4:17: -1- AC_DEFUN([_AM_SET_OPTION], [m4_define(_AM_MANGLE_OPTION([$1]), [1])])
+m4trace:/usr/share/aclocal-1.16/options.m4:23: -1- AC_DEFUN([_AM_SET_OPTIONS], [m4_foreach_w([_AM_Option], [$1], [_AM_SET_OPTION(_AM_Option)])])
+m4trace:/usr/share/aclocal-1.16/options.m4:29: -1- AC_DEFUN([_AM_IF_OPTION], [m4_ifset(_AM_MANGLE_OPTION([$1]), [$2], [$3])])
+m4trace:/usr/share/aclocal-1.16/prog-cc-c-o.m4:12: -1- AC_DEFUN([_AM_PROG_CC_C_O], [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
 AC_REQUIRE_AUX_FILE([compile])dnl
 AC_LANG_PUSH([C])dnl
 AC_CACHE_CHECK(
@@ -511,13 +509,13 @@ if test "$am_cv_prog_cc_c_o" != yes; then
    CC="$am_aux_dir/compile $CC"
 fi
 AC_LANG_POP([C])])
-m4trace:/usr/share/aclocal-1.15/prog-cc-c-o.m4:47: -1- AC_DEFUN_ONCE([AM_PROG_CC_C_O], [AC_REQUIRE([AC_PROG_CC])])
-m4trace:/usr/share/aclocal-1.15/runlog.m4:12: -1- AC_DEFUN([AM_RUN_LOG], [{ echo "$as_me:$LINENO: $1" >&AS_MESSAGE_LOG_FD
+m4trace:/usr/share/aclocal-1.16/prog-cc-c-o.m4:47: -1- AC_DEFUN_ONCE([AM_PROG_CC_C_O], [AC_REQUIRE([AC_PROG_CC])])
+m4trace:/usr/share/aclocal-1.16/runlog.m4:12: -1- AC_DEFUN([AM_RUN_LOG], [{ echo "$as_me:$LINENO: $1" >&AS_MESSAGE_LOG_FD
    ($1) >&AS_MESSAGE_LOG_FD 2>&AS_MESSAGE_LOG_FD
    ac_status=$?
    echo "$as_me:$LINENO: \$? = $ac_status" >&AS_MESSAGE_LOG_FD
    (exit $ac_status); }])
-m4trace:/usr/share/aclocal-1.15/sanity.m4:11: -1- AC_DEFUN([AM_SANITY_CHECK], [AC_MSG_CHECKING([whether build environment is sane])
+m4trace:/usr/share/aclocal-1.16/sanity.m4:11: -1- AC_DEFUN([AM_SANITY_CHECK], [AC_MSG_CHECKING([whether build environment is sane])
 # Reject unsafe characters in $srcdir or the absolute working directory
 # name.  Accept space and tab only in the latter.
 am_lf='
@@ -588,7 +586,7 @@ AC_CONFIG_COMMANDS_PRE(
    AC_MSG_RESULT([done])])
 rm -f conftest.file
 ])
-m4trace:/usr/share/aclocal-1.15/silent.m4:12: -1- AC_DEFUN([AM_SILENT_RULES], [AC_ARG_ENABLE([silent-rules], [dnl
+m4trace:/usr/share/aclocal-1.16/silent.m4:12: -1- AC_DEFUN([AM_SILENT_RULES], [AC_ARG_ENABLE([silent-rules], [dnl
 AS_HELP_STRING(
   [--enable-silent-rules],
   [less verbose build output (undo: "make V=1")])
@@ -636,7 +634,7 @@ AM_BACKSLASH='\'
 AC_SUBST([AM_BACKSLASH])dnl
 _AM_SUBST_NOTMAKE([AM_BACKSLASH])dnl
 ])
-m4trace:/usr/share/aclocal-1.15/strip.m4:17: -1- AC_DEFUN([AM_PROG_INSTALL_STRIP], [AC_REQUIRE([AM_PROG_INSTALL_SH])dnl
+m4trace:/usr/share/aclocal-1.16/strip.m4:17: -1- AC_DEFUN([AM_PROG_INSTALL_STRIP], [AC_REQUIRE([AM_PROG_INSTALL_SH])dnl
 # Installed binaries are usually stripped using 'strip' when the user
 # run "make install-strip".  However 'strip' might not be the right
 # tool to use in cross-compilation environments, therefore Automake
@@ -647,9 +645,9 @@ if test "$cross_compiling" != no; then
 fi
 INSTALL_STRIP_PROGRAM="\$(install_sh) -c -s"
 AC_SUBST([INSTALL_STRIP_PROGRAM])])
-m4trace:/usr/share/aclocal-1.15/substnot.m4:12: -1- AC_DEFUN([_AM_SUBST_NOTMAKE])
-m4trace:/usr/share/aclocal-1.15/substnot.m4:17: -1- AC_DEFUN([AM_SUBST_NOTMAKE], [_AM_SUBST_NOTMAKE($@)])
-m4trace:/usr/share/aclocal-1.15/tar.m4:23: -1- AC_DEFUN([_AM_PROG_TAR], [# Always define AMTAR for backward compatibility.  Yes, it's still used
+m4trace:/usr/share/aclocal-1.16/substnot.m4:12: -1- AC_DEFUN([_AM_SUBST_NOTMAKE])
+m4trace:/usr/share/aclocal-1.16/substnot.m4:17: -1- AC_DEFUN([AM_SUBST_NOTMAKE], [_AM_SUBST_NOTMAKE($@)])
+m4trace:/usr/share/aclocal-1.16/tar.m4:23: -1- AC_DEFUN([_AM_PROG_TAR], [# Always define AMTAR for backward compatibility.  Yes, it's still used
 # in the wild :-(  We should find a proper way to deprecate it ...
 AC_SUBST([AMTAR], ['$${TAR-tar}'])
 
@@ -758,7 +756,7 @@ m4_if([$1], [v7],
 AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
 AC_CACHE_CHECK([for $1], lb_File,
 [if test -r "$1"; then
     AS_VAR_SET(lb_File, yes)
@@ -768,17 +766,17 @@ fi])
 AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:21: -1- AC_DEFUN([SET_XEN_INCLUDES], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:21: -1- AC_DEFUN([SET_XEN_INCLUDES], [
 XEN_INCLUDES=
 LB_LINUX_CONFIG([XEN],[XEN_INCLUDES="-I$LINUX/arch/x86/include/mach-xen"],[])
 LB_LINUX_CONFIG_VALUE([XEN_INTERFACE_VERSION],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:33: -1- AC_DEFUN([LB_LINUX_VERSION], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:33: -1- AC_DEFUN([LB_LINUX_VERSION], [
 KMODEXT=".ko"
 AC_SUBST(KMODEXT)
 
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: -1- AC_DEFUN([LB_LINUX_RELEASE], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:45: -1- AC_DEFUN([LB_LINUX_RELEASE], [
 LINUXRELEASE=$(LB_LINUX_MAKE_OUTPUT([kernelrelease]))
 if test x$LINUXRELEASE = x ; then
 	# Workaround for some kernel 6.3 RCs:
@@ -832,7 +830,7 @@ LB_LINUX_TRY_COMPILE([
 LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
 
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:102: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:102: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
 	new_configure_args=
 	eval "set x $ac_configure_args"
 	shift
@@ -851,14 +849,14 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	done
 	ac_configure_args=$new_configure_args
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:123: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:123: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
 	[$3]=$(readlink -f $with_$2)
 	LB_ARG_REPLACE_PATH([$1], $[$3])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:130: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:130: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
 	__LB_ARG_CANON_PATH([$1], m4_translit([$1], [-.], [__]), [$2])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
 for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
 	if readlink -q -e $DEFAULT_LINUX; then
 		break
@@ -973,7 +971,7 @@ LB_LINUX_TRY_COMPILE([],[],[
 
 LB_LINUX_RELEASE
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:260: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:260: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
 	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
 		SYMVERFILE=Modules.symvers
 	else
@@ -982,7 +980,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	AC_MSG_RESULT($SYMVERFILE)
 	AC_SUBST(SYMVERFILE)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:276: -1- AC_DEFUN([LB_LINUX_CROSS], [AC_MSG_CHECKING([for cross compilation])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:276: -1- AC_DEFUN([LB_LINUX_CROSS], [AC_MSG_CHECKING([for cross compilation])
 CROSS_VARS=
 case $target_vendor in
 	# The K1OM architecture is an extension of the x86 architecture.
@@ -1007,11 +1005,11 @@ case $target_vendor in
 esac
 AC_SUBST(CROSS_VARS)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:329: -1- AC_DEFUN([LB_LINUX_MAKE_OUTPUT], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:329: -1- AC_DEFUN([LB_LINUX_MAKE_OUTPUT], [
 MAKE=${MAKE:-make}
 $MAKE -s M=$PWD -C $LINUX_OBJ $1
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:340: -1- AC_DEFUN([LB_LINUX_COMPILE_IFELSE], [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:340: -1- AC_DEFUN([LB_LINUX_COMPILE_IFELSE], [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 MAKE=${MAKE:-make}
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko build/output.log
 AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
@@ -1020,7 +1018,7 @@ AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:
 m4_ifvaln([$5],[$5])dnl])
 rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.ko m4_ifval([$1], [build/conftest.c conftest.c])[]dnl
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:356: -1- AC_DEFUN([LB_LINUX_ARCH], [AC_MSG_CHECKING([Linux kernel architecture])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:356: -1- AC_DEFUN([LB_LINUX_ARCH], [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
                      MLNX_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $CROSS_VARS  \
@@ -1028,12 +1026,12 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
           rm -f build/arch])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:371: -1- AC_DEFUN([LB_LINUX_TRY_COMPILE], [LB_LINUX_COMPILE_IFELSE(
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:371: -1- AC_DEFUN([LB_LINUX_TRY_COMPILE], [LB_LINUX_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s build/conftest.o],
 	[$3], [$4])])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:383: -1- AC_DEFUN([LB_LINUX_CONFIG], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:383: -1- AC_DEFUN([LB_LINUX_CONFIG], [
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 	LB_LINUX_TRY_COMPILE([
 		#include <generated/autoconf.h>
@@ -1049,7 +1047,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:405: -1- AC_DEFUN([LB_LINUX_CONFIG_IM], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:405: -1- AC_DEFUN([LB_LINUX_CONFIG_IM], [
 	AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
 	LB_LINUX_TRY_COMPILE([
 		#include <generated/autoconf.h>
@@ -1065,12 +1063,12 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:427: -1- AC_DEFUN([LB_LINUX_TRY_MAKE], [LB_LINUX_COMPILE_IFELSE(
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:427: -1- AC_DEFUN([LB_LINUX_TRY_MAKE], [LB_LINUX_COMPILE_IFELSE(
 		[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 		[$3], [$4], [$5], [$6]
 	)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:437: -1- AC_DEFUN([LB_CONFIG_COMPAT_RDMA], [AC_MSG_CHECKING([whether to use Compat RDMA])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:437: -1- AC_DEFUN([LB_CONFIG_COMPAT_RDMA], [AC_MSG_CHECKING([whether to use Compat RDMA])
 # set default
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
@@ -1115,7 +1113,7 @@ else
 	fi
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:490: -1- AC_DEFUN([LB_CONFIG_OFED_BACKPORTS], [AC_MSG_CHECKING([whether to use any OFED backport headers])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:490: -1- AC_DEFUN([LB_CONFIG_OFED_BACKPORTS], [AC_MSG_CHECKING([whether to use any OFED backport headers])
 if test $ENABLEO2IB -eq 0; then
 	AC_MSG_RESULT([no])
 else
@@ -1145,7 +1143,7 @@ else
 	fi
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:525: -1- AC_DEFUN([LC_MODULE_LOADING], [AC_MSG_CHECKING([if kernel module loading is possible])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:525: -1- AC_DEFUN([LC_MODULE_LOADING], [AC_MSG_CHECKING([if kernel module loading is possible])
 LB_LINUX_TRY_MAKE([
 	#include <linux/kmod.h>
 ],[
@@ -1169,7 +1167,7 @@ LB_LINUX_TRY_MAKE([
 	AC_MSG_WARN([])
 ])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:556: -1- AC_DEFUN([LB_PROG_LINUX], [LB_LINUX_PATH
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:556: -1- AC_DEFUN([LB_PROG_LINUX], [LB_LINUX_PATH
 LB_LINUX_ARCH
 LB_LINUX_SYMVERFILE
 
@@ -1194,7 +1192,7 @@ LB_CONFIG_COMPAT_RDMA
 # the LN_PROG_LINUX checks are done
 LB_CONFIG_OFED_BACKPORTS
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:593: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:593: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
@@ -1219,7 +1217,7 @@ else
 	$3
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:640: -1- AC_DEFUN([LB_USES_DPKG], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:640: -1- AC_DEFUN([LB_USES_DPKG], [
 AC_MSG_CHECKING([if this distro uses dpkg])
 case `lsb_release -i -s 2>/dev/null` in
         Ubuntu | Debian)
@@ -1232,7 +1230,7 @@ case `lsb_release -i -s 2>/dev/null` in
                 ;;
 esac
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:660: -1- AC_DEFUN([LB_PROG_CC], [AC_PROG_RANLIB
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:660: -1- AC_DEFUN([LB_PROG_CC], [AC_PROG_RANLIB
 AC_CHECK_TOOL(LD, ld, [no])
 AC_CHECK_TOOL(OBJDUMP, objdump, [no])
 AC_CHECK_TOOL(STRIP, strip, [no])
@@ -1251,7 +1249,7 @@ if test $target_cpu == "powerpc64"; then
 	CC="$CC -m64"
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:683: -1- AC_DEFUN([LB_CONDITIONALS], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:683: -1- AC_DEFUN([LB_CONDITIONALS], [
 AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
 
 AC_OUTPUT
@@ -1266,7 +1264,7 @@ EXTRA_KCFLAGS: $EXTRA_KCFLAGS
 Type 'make' to build kernel modules.
 _ACEOF
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:703: -1- AC_DEFUN([SET_BUILD_ARCH], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:703: -1- AC_DEFUN([SET_BUILD_ARCH], [
 AC_MSG_CHECKING([for build ARCH])
 SRCARCH=${ARCH:-$(uname -m)}
 SRCARCH=$(echo $SRCARCH | sed -e s/i.86/x86/ \
@@ -1285,7 +1283,7 @@ fi
 
 AC_MSG_RESULT([ARCH=$ARCH, SRCARCH=$SRCARCH])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:729: -1- AC_DEFUN([LB_LINUX_CONFIG_VALUE], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:729: -1- AC_DEFUN([LB_LINUX_CONFIG_VALUE], [
 	AC_MSG_CHECKING([get value of CONFIG_$1])
 	if (grep -q "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null); then
 		res=$(grep "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null | cut -d' ' -f'3')
@@ -1296,7 +1294,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		$3
 	fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:9: -1- AC_DEFUN([MLNX_PARALLEL_INIT_ONCE], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:9: -1- AC_DEFUN([MLNX_PARALLEL_INIT_ONCE], [
 if [[ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]]; then
 	MAX_JOBS=${NJOBS:-1}
 	RAN_MLNX_PARALLEL_INIT_ONCE=1
@@ -1306,11 +1304,11 @@ if [[ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]]; then
 	declare -i RUNNING_JOBS=0
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:71: -1- AC_DEFUN([MLNX_AC_LANG_SOURCE], [_AC_LANG_DISPATCH([$0], _AC_LANG, $@)])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:78: -1- AC_DEFUN([MLNX_AC_LANG_CONFTEST], [cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:71: -1- AC_DEFUN([MLNX_AC_LANG_SOURCE], [_AC_LANG_DISPATCH([$0], _AC_LANG, $@)])
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:78: -1- AC_DEFUN([MLNX_AC_LANG_CONFTEST], [cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
 $1
 _ACEOF])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:97: -1- AC_DEFUN([MLNX_LB_LINUX_COMPILE_IFELSE], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:97: -1- AC_DEFUN([MLNX_LB_LINUX_COMPILE_IFELSE], [
 {
 MAKE=${MAKE:-make}
 tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
@@ -1323,12 +1321,12 @@ m4_ifvaln([$5],[$5])dnl])
 /bin/rm -rf $tmpbuild
 }
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:117: -1- AC_DEFUN([MLNX_LB_LINUX_TRY_COMPILE], [MLNX_LB_LINUX_COMPILE_IFELSE(
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:117: -1- AC_DEFUN([MLNX_LB_LINUX_TRY_COMPILE], [MLNX_LB_LINUX_COMPILE_IFELSE(
 	[MLNX_AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s $tmpbuild/conftest.o],
 	[$3], [$4])])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/parallel-build.m4:129: -1- AC_DEFUN([MLNX_BG_LB_LINUX_TRY_COMPILE], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/parallel-build.m4:129: -1- AC_DEFUN([MLNX_BG_LB_LINUX_TRY_COMPILE], [
 # init stuff
 MLNX_PARALLEL_INIT_ONCE
 
@@ -1352,7 +1350,7 @@ MLNX_LB_LINUX_TRY_COMPILE([$1], [$2], [$3], [$4])
 }&
 fi
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:4: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:4: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
 	AC_MSG_CHECKING([if dpll_pin_ops.lock_status_get has status_error])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/dpll.h>
@@ -13611,7 +13609,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 		AC_MSG_RESULT(no)
 	])
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12269: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12269: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
 #
 #	Wait for remaining build tests running in background
 #
@@ -13628,7 +13626,7 @@ m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_
 	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 	AC_SUBST(EXTRA_KCFLAGS)
 ])
-m4trace:/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: -1- AC_DEFUN([MLNX_PROG_LINUX], [
+m4trace:/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: -1- AC_DEFUN([MLNX_PROG_LINUX], [
 
 LB_LINUX_PATH
 LB_LINUX_SYMVERFILE
@@ -13697,8 +13695,9 @@ m4trace:configure.ac:2: -1- m4_pattern_allow([^build_alias$])
 m4trace:configure.ac:2: -1- m4_pattern_allow([^host_alias$])
 m4trace:configure.ac:2: -1- m4_pattern_allow([^target_alias$])
 m4trace:configure.ac:5: -1- AC_CONFIG_MACRO_DIR([config])
+m4trace:configure.ac:5: -1- AC_CONFIG_MACRO_DIR_TRACE([config])
 m4trace:configure.ac:7: -1- _m4_warn([obsolete], [The macro `AC_CANONICAL_SYSTEM' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:1868: AC_CANONICAL_SYSTEM is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:2081: AC_CANONICAL_SYSTEM is expanded from...
 configure.ac:7: the top level])
 m4trace:configure.ac:7: -1- m4_pattern_allow([^build$])
 m4trace:configure.ac:7: -1- m4_pattern_allow([^build_cpu$])
@@ -13715,8 +13714,8 @@ m4trace:configure.ac:7: -1- m4_pattern_allow([^target_os$])
 m4trace:configure.ac:9: -1- AM_INIT_AUTOMAKE([foreign])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^AM_[A-Z]+FLAGS$])
 m4trace:configure.ac:9: -1- AM_SET_CURRENT_AUTOMAKE_VERSION
-m4trace:configure.ac:9: -1- AM_AUTOMAKE_VERSION([1.15])
-m4trace:configure.ac:9: -1- _AM_AUTOCONF_VERSION([2.69])
+m4trace:configure.ac:9: -1- AM_AUTOMAKE_VERSION([1.16.5])
+m4trace:configure.ac:9: -1- _AM_AUTOCONF_VERSION([2.71])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^INSTALL_PROGRAM$])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^INSTALL_SCRIPT$])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^INSTALL_DATA$])
@@ -13784,6 +13783,9 @@ AC_PROVIDE_IFELSE([AC_PROG_OBJCXX],
 			     m4_defn([AC_PROG_OBJCXX])[_AM_DEPENDENCIES([OBJCXX])])])dnl
 ])
 m4trace:configure.ac:9: -2- _AM_MANGLE_OPTION([no-dependencies])
+m4trace:configure.ac:9: -1- m4_pattern_allow([^CTAGS$])
+m4trace:configure.ac:9: -1- m4_pattern_allow([^ETAGS$])
+m4trace:configure.ac:9: -1- m4_pattern_allow([^CSCOPE$])
 m4trace:configure.ac:9: -1- AM_SILENT_RULES
 m4trace:configure.ac:9: -1- m4_pattern_allow([^AM_V$])
 m4trace:configure.ac:9: -1- AM_SUBST_NOTMAKE([AM_V])
@@ -13804,6 +13806,7 @@ m4trace:configure.ac:12: -1- m4_pattern_allow([^CC$])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^CC$])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^CC$])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^ac_ct_CC$])
+m4trace:configure.ac:12: -1- m4_pattern_allow([^CC$])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^EXEEXT$])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^OBJEXT$])
 m4trace:configure.ac:12: -1- _AM_PROG_CC_C_O
@@ -13813,8 +13816,8 @@ m4trace:configure.ac:12: -1- AM_SET_DEPDIR
 m4trace:configure.ac:12: -1- m4_pattern_allow([^DEPDIR$])
 m4trace:configure.ac:12: -1- AM_OUTPUT_DEPENDENCY_COMMANDS
 m4trace:configure.ac:12: -1- AM_MAKE_INCLUDE
+m4trace:configure.ac:12: -1- AM_RUN_LOG([${MAKE-make} -f confmf.$s && cat confinc.out])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^am__include$])
-m4trace:configure.ac:12: -1- m4_pattern_allow([^am__quote$])
 m4trace:configure.ac:12: -1- AM_DEP_TRACK
 m4trace:configure.ac:12: -1- AM_CONDITIONAL([AMDEP], [test "x$enable_dependency_tracking" != xno])
 m4trace:configure.ac:12: -1- m4_pattern_allow([^AMDEP_TRUE$])
@@ -13854,19 +13857,41 @@ m4trace:configure.ac:18: -1- m4_pattern_allow([^RANLIB$])
 m4trace:configure.ac:18: -1- m4_pattern_allow([^LD$])
 m4trace:configure.ac:18: -1- m4_pattern_allow([^OBJDUMP$])
 m4trace:configure.ac:18: -1- m4_pattern_allow([^STRIP$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^CPP$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^CPPFLAGS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^CPP$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^GREP$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^EGREP$])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_stdio_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" stdio.h ]AS_TR_SH([stdio.h]) AS_TR_CPP([HAVE_stdio.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_stdlib_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" stdlib.h ]AS_TR_SH([stdlib.h]) AS_TR_CPP([HAVE_stdlib.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_string_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" string.h ]AS_TR_SH([string.h]) AS_TR_CPP([HAVE_string.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_inttypes_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" inttypes.h ]AS_TR_SH([inttypes.h]) AS_TR_CPP([HAVE_inttypes.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_stdint_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" stdint.h ]AS_TR_SH([stdint.h]) AS_TR_CPP([HAVE_stdint.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_strings_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" strings.h ]AS_TR_SH([strings.h]) AS_TR_CPP([HAVE_strings.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_sys_stat_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" sys/stat.h ]AS_TR_SH([sys/stat.h]) AS_TR_CPP([HAVE_sys/stat.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_sys_types_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" sys/types.h ]AS_TR_SH([sys/types.h]) AS_TR_CPP([HAVE_sys/types.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
+m4trace:configure.ac:18: -1- AC_DEFUN([_AC_Header_unistd_h], [m4_divert_text([INIT_PREPARE],
+  [AS_VAR_APPEND([ac_header_]]_AC_LANG_ABBREV[[_list],
+  [" unistd.h ]AS_TR_SH([unistd.h]) AS_TR_CPP([HAVE_unistd.h])["])])_AC_HEADERS_EXPANSION(_AC_LANG_ABBREV)])
 m4trace:configure.ac:18: -1- m4_pattern_allow([^STDC_HEADERS$])
 m4trace:configure.ac:18: -1- m4_pattern_allow([^SIZEOF_UNSIGNED_LONG_LONG$])
 m4trace:configure.ac:33: -1- MLNX_PROG_LINUX
 m4trace:configure.ac:33: -1- LB_LINUX_PATH
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux], [LINUX])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux], [linux], [LINUX])
@@ -13874,19 +13899,19 @@ m4trace:configure.ac:33: -1- LB_ARG_REPLACE_PATH([linux], [$LINUX])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX$])
 m4trace:configure.ac:33: -1- LB_CHECK_FILE([$LINUX], [], [AC_MSG_ERROR([Kernel source $LINUX could not be found.])])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux-obj], [LINUX_OBJ])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux-obj], [linux_obj], [LINUX_OBJ])
 m4trace:configure.ac:33: -1- LB_ARG_REPLACE_PATH([linux-obj], [$LINUX_OBJ])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX_OBJ$])
 m4trace:configure.ac:33: -1- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-../../lib/autoconf/general.m4:1492: AC_ARG_WITH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+./lib/autoconf/general.m4:1553: AC_ARG_WITH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([linux-config], [linux_config], [LINUX_CONFIG])
@@ -13896,9 +13921,9 @@ m4trace:configure.ac:33: -1- LB_CHECK_FILE([/boot/kernel.h], [KERNEL_SOURCE_HEAD
 		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])])
 m4trace:configure.ac:33: -1- LB_CHECK_FILE([/var/adm/running-kernel.h], [KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h'])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])
 m4trace:configure.ac:33: -1- __LB_ARG_CANON_PATH([kernel-source-header], [kernel_source_header], [KERNEL_SOURCE_HEADER])
@@ -13968,10 +13993,10 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^moduledir$])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^modulefsdir$])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^modulenetdir$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:45: LB_LINUX_RELEASE is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
-/scrap/jenkins_master_workspace/workspace/MLNX_OFED/Releases/jobs/Build_OFED_internal/tmp_build_dir/builder_202873_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
+You should run autoupdate.], [./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:45: LB_LINUX_RELEASE is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/build-linux.m4:140: LB_LINUX_PATH is expanded from...
+/home/kenneth/mlnx/mlnx-ofed-kernel-24.04/compat/config/rdma.m4:12287: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^RELEASE$])
 m4trace:configure.ac:33: -1- LB_LINUX_TRY_COMPILE([
@@ -93357,3 +93382,6 @@ m4trace:configure.ac:34: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_TRUE])
 m4trace:configure.ac:34: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_FALSE])
 m4trace:configure.ac:34: -1- _AC_AM_CONFIG_HEADER_HOOK(["$ac_file"])
 m4trace:configure.ac:34: -1- _AM_OUTPUT_DEPENDENCY_COMMANDS
+m4trace:configure.ac:34: -1- AM_RUN_LOG([cd "$am_dirpart" \
+      && sed -e '/# am--include-marker/d' "$am_filepart" \
+        | $MAKE -f - am--depfiles])
