@@ -36,7 +36,7 @@ Change-Id: I7409f346159cd6a6a823fb8e8e5540122e474386
  };
  
  static ssize_t hw_stat_device_show(struct device *dev,
-@@ -455,7 +441,10 @@ static struct attribute *port_default_at
+@@ -443,7 +429,10 @@ static struct attribute *port_default_at
  	&ib_port_attr_link_layer.attr,
  	NULL
  };
@@ -47,7 +47,7 @@ Change-Id: I7409f346159cd6a6a823fb8e8e5540122e474386
  
  static ssize_t print_ndev(const struct ib_gid_attr *gid_attr, char *buf)
  {
-@@ -805,7 +794,11 @@ static void ib_port_gid_attr_release(str
+@@ -793,7 +782,11 @@ static void ib_port_gid_attr_release(str
  static struct kobj_type port_type = {
  	.release       = ib_port_release,
  	.sysfs_ops     = &port_sysfs_ops,

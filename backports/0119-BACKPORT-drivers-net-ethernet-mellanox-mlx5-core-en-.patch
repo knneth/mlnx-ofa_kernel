@@ -65,7 +65,7 @@ Change-Id: I3cd5c023d79984d121d60e0af37d7d0fb567c152
 +			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
 +	flow_act.flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
 +	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-+	dest[0].counter_id = mlx5_fc_id(drop_counter);
++	dest[0].counter = drop_counter;
 +
 +	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 1);
 +#endif
@@ -86,7 +86,7 @@ Change-Id: I3cd5c023d79984d121d60e0af37d7d0fb567c152
 +	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
 +	dest[0].ft = mlx5e_tc_post_act_get_ft(post_act);
 +	dest[1].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-+	dest[1].counter_id = mlx5_fc_id(act_counter);
++	dest[1].counter = act_counter;
 +
 +	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 2);
 +#endif

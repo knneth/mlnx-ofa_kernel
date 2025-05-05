@@ -9,7 +9,7 @@ Change-Id: I7e3bab004d32f79da2c249958e84921c2a759a0d
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
-@@ -1493,25 +1493,43 @@ static struct attribute *vf_paging_attrs
+@@ -1175,25 +1175,43 @@ static struct attribute *vf_paging_attrs
  	NULL
  };
  
@@ -53,7 +53,7 @@ Change-Id: I7e3bab004d32f79da2c249958e84921c2a759a0d
  };
  
  VF_ATTR(rate);
-@@ -1527,11 +1545,17 @@ static struct attribute *vf_meters_eth_a
+@@ -1209,11 +1227,17 @@ static struct attribute *vf_meters_eth_a
  	NULL
  };
  
@@ -71,7 +71,7 @@ Change-Id: I7e3bab004d32f79da2c249958e84921c2a759a0d
  };
  #endif /* CONFIG_MLX5_ESWITCH */
  
-@@ -1542,11 +1566,17 @@ static struct attribute *vf_ib_attrs[] =
+@@ -1224,11 +1248,17 @@ static struct attribute *vf_ib_attrs[] =
  	NULL
  };
  

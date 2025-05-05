@@ -1549,6 +1549,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NL_ASSERT_CTX_FITS, [NL_ASSERT_CTX_FITS exists], [
+		#include <linux/netlink.h>
+	],[
+
+		NL_ASSERT_CTX_FITS(int);
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NL_SET_ERR_MSG_WEAK_MOD, [NL_SET_ERR_MSG_WEAK_MOD exists], [
 		#include <linux/netlink.h>
 	],[
@@ -2492,6 +2500,51 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_REQ_ATTR_CHECK, [HAVE_GENL_REQ_ATTR_CHECK defined], [
+		#include <net/genetlink.h>
+	],[
+		#ifdef GENL_REQ_ATTR_CHECK
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_BITFIELD32, [NLA_POLICY_BITFIELD32 defined], [
+		#include <net/netlink.h>
+	],[
+		#ifdef NLA_POLICY_BITFIELD32
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_NESTED, [NLA_POLICY_NESTED defined], [
+		#include <net/netlink.h>
+		#
+		static const struct nla_policy dpll_pin_get_dump_nl_policy[[1 + 1]] = {
+		    [[1]] = { .type = NLA_U32 },
+		};
+
+		static const struct nla_policy my_nested_policy[[]] = {
+		    [[0]] = NLA_POLICY_NESTED(dpll_pin_get_dump_nl_policy),
+		};
+
+	],[
+		#ifdef NLA_POLICY_NESTED
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_HAS_VALIDATION_TYPE, [nla_policy has validation_type], [
 		#include <net/netlink.h>
 	],[
@@ -2505,6 +2558,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <net/netlink.h>
 	],[
 		nla_strscpy(NULL, NULL ,0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_PUT_BITFIELD32, [nla_put_bitfield32 exist], [
+		#include <net/netlink.h>
+	],[
+		nla_put_bitfield32(NULL, 0, 0, 0);
 
 		return 0;
 	])
@@ -2549,6 +2610,30 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_NOTIFICATIONS_FILTERING, [kernel provides devlink notifications filtering], [
+		#include <net/genetlink.h>
+		void spi(void *priv)
+		{
+		}
+	],[
+		struct genl_family gf = {
+			.sock_privs = NULL,
+			.sock_priv_init = spi,
+                };
+
+		genlmsg_multicast_netns_filtered(NULL, NULL, NULL, 0, 0, 0, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_GENL_SPLIT_OPS, [struct genl_ops exists], [
+		#include <net/genetlink.h>
+	],[
+		struct genl_split_ops x;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_VALIDATE, [struct genl_ops has member validate], [
 		#include <net/genetlink.h>
 	],[
@@ -2575,6 +2660,52 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct genl_family x;
 
 		x.policy = NULL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PEERNET2ID_ALLOC_GET_3_PARAMS, [function peernet2id_alloc get 3 params], [
+		#include <net/net_namespace.h>
+	],[
+		peernet2id_alloc(NULL, NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_READ_PNET_RCU, [function read_pnet_rcu is defined], [
+		#include <net/net_namespace.h>
+	],[
+		read_pnet_rcu(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_INFO_DUMP, [function genl_info_dump is defined], [
+		#include <net/genetlink.h>
+	],[
+		const struct genl_info *gi = genl_info_dump(NULL);
+		struct genl_dumpit_info gdi;
+		struct genl_info *gi2;
+
+		gi2 = &gdi.info;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_DUMPIT_INFO, [function genl_dumpit_info is defined], [
+		#include <net/genetlink.h>
+	],[
+		genl_dumpit_info(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETLINK_CALLBACK_HAS_CTX, [struct netlink_callback has member ctx], [
+		#include <linux/netlink.h>
+	],[
+		struct netlink_callback x;
+
+		x.ctx[[0]] = 0;
 
 		return 0;
 	])
@@ -2692,6 +2823,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
                 return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_LOCKDEP_ASSERT, [lockdep.h has lockdep_assert], [
+		#include <linux/lockdep.h>
+	],[
+                lockdep_assert(0);
+
+                return 0;
+	])
 	MLNX_RDMA_TEST_CASE(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS, [register_fib_notifier has 4 params], [
 		#include <net/fib_notifier.h>
 	],[
@@ -2953,6 +3091,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/idr.h>
 	],[
 		ida_alloc_max(NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL, [idr_for_each_entry_continue_ul is defined], [
+		#include <linux/idr.h>
+	],[
+		#ifdef idr_for_each_entry_continue_ul
+			return 0;
+		#else
+			#return
+		#endif
 
 		return 0;
 	])
@@ -3498,6 +3648,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE, [from 6.14, struct scsi_host_template has member sdev_configure], [
+		#include <scsi/scsi_host.h>
+	],[
+		struct scsi_host_template sht = {
+			.sdev_configure = NULL,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SE_CMD_HAS_SENSE_INFO, [struct se_cmd has member sense_info], [
 		#include <target/target_core_base.h>
 
@@ -3978,6 +4138,19 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/bio.h>
 	],[
 		bio_init(NULL, NULL, false);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_3_UNDERSCORE_ADDRESSABLE, [__auto_type exists], [
+		#include <linux/compiler.h>
+
+	],[
+		#ifdef ___ADDRESSABLE
+			return 0;
+		#else
+			#return 1;
+		#endif	
 
 		return 0;
 	])
@@ -6221,6 +6394,45 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_EXPORT_SYMBOL_NS_GPL, [linux/export.h defines EXPORT_SYMBOL_NS_GPL], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef EXPORT_SYMBOL_NS_GPL
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___EXPORT_SYMBOL_REF, [linux/export.h defines __EXPORT_SYMBOL_REF], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef __EXPORT_SYMBOL_REF /* ddb5cdbafaaa, v6.5 and above */
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___EXPORT_SYMBOL_NS, [linux/export.h defines __EXPORT_SYMBOL_NS], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef __EXPORT_SYMBOL_NS /* v5.4 only */
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_WAIT_QUIESCE_DONE, [blk_mq_wait_quiesce_done is defined], [
 		#include <linux/blk-mq.h>
 	],[
@@ -7072,6 +7284,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_ALLOC_BULK_PAGES_API_RENAME, [linux/gfp.h has v6.14 alloc_bulk_pages API rename], [
+		#include <linux/mm_types.h>
+		#include <linux/gfp.h>
+	],[
+		unsigned int to_fill = 1;
+		struct page **page_list;
+
+		alloc_pages_bulk(GFP_KERNEL_ACCOUNT, to_fill, page_list);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H, [linux/page_frag_cache.h has page_frag_cache_drain], [
 		#include <linux/page_frag_cache.h>
 	],[
@@ -7134,6 +7358,50 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		int x = RQF_MQ_INFLIGHT;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_MAP_HW_QUEUES, [Kernel provides v6.14 blk_mq_map_hw_queues], [
+		#include <linux/blk-mq.h>
+	],[
+		blk_mq_map_hw_queues(NULL, NULL, 5);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE, [Kernel has v6.14 'force noio scope in blk_mq_freeze_queue'], [
+		#include <linux/blk-mq.h>
+	],[
+		int x;
+
+		x = blk_mq_freeze_queue(NULL);
+		blk_mq_unfreeze_queue(NULL, 1);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE, [Kernel has v6.13 'add non_owner variant of start_freeze/unfreeze queue APIs'], [
+		#include <linux/blk-mq.h>
+	],[
+		blk_freeze_queue_start_non_owner(NULL);
+		blk_mq_unfreeze_queue_non_owner(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_NO_SCHED, [linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1], [
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_NO_SCHED;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_SHOULD_MERGE, [linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1], [
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_SHOULD_MERGE;
 
 		return 0;
 	])
@@ -7222,7 +7490,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 		struct platform_driver apple_nvme_driver = {
 			.remove_new = apple_nvme_remove,
-		}
+		};
 
 		return 0;
 	])
@@ -7296,6 +7564,131 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		struct rq_list x;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_WRITE_BEGIN_FOLIO, [if address_space_operations->write_begin takes a folio param], [
+		#include <linux/fs.h>
+	],[
+		struct folio *f;
+		struct address_space_operations ops = {0};
+		ops.write_begin(NULL, NULL, 0, 0, &f, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_D_REVALIDATE_2_PARAMS, [if dentry_operations->d_revalidate takes 2 params], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry_operations ops = {0};
+
+		ops.d_revalidate(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS, [if security_dentry_init_security() takes 6 params], [
+		#include <linux/security.h>
+	],[
+		security_dentry_init_security(NULL, 0, NULL, NULL, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FILE_LOCK_CORE_C, [if struct file_lock has c field], [
+		#include <linux/filelock.h>
+	],[
+		struct file_lock a;
+		struct file_lock_core b;
+
+		b = a.c;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NO_EXPORT_SUPPORT, [if FUSE_NO_EXPORT_SUPPORT is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_NO_EXPORT_SUPPORT;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VIRTQUEUE_INFO, [if struct virtqueue_info is defined], [
+		#include <linux/virtio_config.h>
+	],[
+		struct virtqueue_info vqi;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IN_GROUP_OR_CAPABLE, [if func in_group_or_capable is defined], [
+		#include <linux/fs.h>
+	],[
+		vfsgid_t gid = {0};
+
+		in_group_or_capable(NULL, NULL, gid);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_HAS_RESEND, [if FUSE_HAS_RESEND is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_HAS_RESEND;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NOTIFY_RESEND, [if FUSE_NOTIFY_RESEND is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_NOTIFY_RESEND;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_PASSTHROUGH, [if FUSE_PASSTHROUGH is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_PASSTHROUGH;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FSPARAM_UID, [if fsparam_uid is defined], [
+		#include <linux/fs_parser.h>
+	],[
+		struct fs_parameter_spec a = fsparam_uid("foo", 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BIO_ADD_PC_PAGE, [if bio_add_pc_page is defined], [
+		#include <linux/bio.h>
+	],[
+		bio_add_pc_page(NULL, NULL, NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET, [struct platform_driver has remove with no ret], [
+		#include <linux/platform_device.h>
+
+		static void apple_nvme_remove(struct platform_device *pdev) {}
+	],[
+		struct platform_driver apple_nvme_driver = {
+			.remove = apple_nvme_remove,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ITER_ALLOW_P2PDMA, [uio.h has ITER_ALLOW_P2PDMA], [
+		#include <linux/uio.h>
+	],[
+		iov_iter_extraction_t f = ITER_ALLOW_P2PDMA;
 
 		return 0;
 	])

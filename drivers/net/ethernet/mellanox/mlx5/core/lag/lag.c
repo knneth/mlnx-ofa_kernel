@@ -98,8 +98,15 @@ static int mlx5_cmd_create_lag(struct mlx5_core_dev *dev, struct mlx5_lag *ldev,
 
 	switch (port_sel_mode) {
 	case MLX5_LAG_PORT_SELECT_MODE_QUEUE_AFFINITY:
-		MLX5_SET(lagc, lag_ctx, tx_remap_affinity_1, ports[idx0]);
-		MLX5_SET(lagc, lag_ctx, tx_remap_affinity_2, ports[idx1]);
+		if (MLX5_CAP_GEN(dev, lag_queue_affinity_active_port)) {
+			MLX5_SET(lagc, lag_ctx, active_port,
+				 lag_active_port_bits(mlx5_lag_dev(dev)));
+		} else {
+			MLX5_SET(lagc, lag_ctx,
+				 tx_remap_affinity_1, ports[idx0]);
+			MLX5_SET(lagc, lag_ctx,
+				 tx_remap_affinity_2, ports[idx1]);
+		}
 		break;
 	case MLX5_LAG_PORT_SELECT_MODE_PORT_SELECT_FT:
 		if (!MLX5_CAP_PORT_SELECTION(dev, port_select_flow_table_bypass))
@@ -129,10 +136,16 @@ static int mlx5_cmd_modify_lag(struct mlx5_core_dev *dev, struct mlx5_lag *ldev,
 		return -EINVAL;
 
 	MLX5_SET(modify_lag_in, in, opcode, MLX5_CMD_OP_MODIFY_LAG);
-	MLX5_SET(modify_lag_in, in, field_select, 0x1);
 
-	MLX5_SET(lagc, lag_ctx, tx_remap_affinity_1, ports[idx0]);
-	MLX5_SET(lagc, lag_ctx, tx_remap_affinity_2, ports[idx1]);
+	if (MLX5_CAP_GEN(dev, lag_queue_affinity_active_port)) {
+		MLX5_SET(modify_lag_in, in, field_select, 0x2);
+		MLX5_SET(lagc, lag_ctx, active_port,
+			 lag_active_port_bits(mlx5_lag_dev(dev)));
+	} else {
+		MLX5_SET(modify_lag_in, in, field_select, 0x1);
+		MLX5_SET(lagc, lag_ctx, tx_remap_affinity_1, ports[idx0]);
+		MLX5_SET(lagc, lag_ctx, tx_remap_affinity_2, ports[idx1]);
+	}
 
 	return mlx5_cmd_exec_in(dev, modify_lag, in);
 }
@@ -607,8 +620,9 @@ void mlx5_lag_set_user_mode(struct mlx5_core_dev *dev,
 	ldev->pf[i].user_mode = mode;
 }
 
-static int mlx5_lag_set_port_sel_mode_roce(struct mlx5_lag *ldev,
-					   unsigned long *flags)
+static int mlx5_lag_set_port_sel_mode(struct mlx5_lag *ldev,
+				      enum mlx5_lag_mode mode,
+				      unsigned long *flags)
 {
 	int first_idx = mlx5_lag_get_dev_index_by_seq(ldev, MLX5_LAG_P1);
 	struct mlx5_core_dev *dev0;
@@ -616,7 +630,12 @@ static int mlx5_lag_set_port_sel_mode_roce(struct mlx5_lag *ldev,
 	if (first_idx < 0)
 		return -EINVAL;
 
+	if (mode == MLX5_LAG_MODE_MPESW ||
+	    mode == MLX5_LAG_MODE_MULTIPATH)
+		return 0;
+
 	dev0 = ldev->pf[first_idx].dev;
+
 	if (!MLX5_CAP_PORT_SELECTION(dev0, port_select_flow_table)) {
 		if (ldev->ports > 2)
 			return -EINVAL;
@@ -631,31 +650,10 @@ static int mlx5_lag_set_port_sel_mode_roce(struct mlx5_lag *ldev,
 	return 0;
 }
 
-static void mlx5_lag_set_port_sel_mode_offloads(struct mlx5_lag *ldev,
-						struct lag_tracker *tracker,
-						enum mlx5_lag_mode mode,
-						unsigned long *flags)
-{
-	int first_idx = mlx5_lag_get_dev_index_by_seq(ldev, MLX5_LAG_P1);
-	struct lag_func *dev0;
-
-	if (first_idx < 0 || mode == MLX5_LAG_MODE_MPESW)
-		return;
-
-	dev0 = &ldev->pf[first_idx];
-	if (MLX5_CAP_PORT_SELECTION(dev0->dev, port_select_flow_table) &&
-	    tracker->tx_type == NETDEV_LAG_TX_TYPE_HASH) {
-		if (ldev->ports > 2)
-			ldev->buckets = MLX5_LAG_MAX_HASH_BUCKETS;
-		set_bit(MLX5_LAG_MODE_FLAG_HASH_BASED, flags);
-	}
-}
-
 static int mlx5_lag_set_flags(struct mlx5_lag *ldev, enum mlx5_lag_mode mode,
 			      struct lag_tracker *tracker, bool shared_fdb,
 			      unsigned long *flags)
 {
-	bool roce_lag = mode == MLX5_LAG_MODE_ROCE;
 	struct lag_func *dev0, *dev1;
 	int idx0, idx1;
 
@@ -693,11 +691,7 @@ static int mlx5_lag_set_flags(struct mlx5_lag *ldev, enum mlx5_lag_mode mode,
 	if (mode == MLX5_LAG_MODE_MPESW)
 		set_bit(MLX5_LAG_MODE_FLAG_FDB_SEL_MODE_NATIVE, flags);
 
-	if (roce_lag)
-		return mlx5_lag_set_port_sel_mode_roce(ldev, flags);
-
-	mlx5_lag_set_port_sel_mode_offloads(ldev, tracker, mode, flags);
-	return 0;
+	return mlx5_lag_set_port_sel_mode(ldev, mode, flags);
 }
 
 char *mlx5_get_str_port_sel_mode(enum mlx5_lag_mode mode, unsigned long flags)
@@ -1001,7 +995,7 @@ void mlx5_disable_lag(struct mlx5_lag *ldev)
 				mlx5_eswitch_reload_ib_reps(ldev->pf[i].dev->priv.eswitch);
 }
 
-static bool mlx5_shared_fdb_supported(struct mlx5_lag *ldev)
+bool mlx5_lag_shared_fdb_supported(struct mlx5_lag *ldev)
 {
 	int idx = mlx5_lag_get_dev_index_by_seq(ldev, MLX5_LAG_P1);
 	struct mlx5_core_dev *dev;
@@ -1088,7 +1082,7 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 	}
 
 	if (do_bond && !__mlx5_lag_is_active(ldev)) {
-		bool shared_fdb = mlx5_shared_fdb_supported(ldev);
+		bool shared_fdb = mlx5_lag_shared_fdb_supported(ldev);
 
 		roce_lag = mlx5_lag_is_roce_lag(ldev);
 
@@ -1102,6 +1096,10 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
 		if (err) {
 			if (shared_fdb || roce_lag)
 				mlx5_lag_add_devices(ldev);
+			if (shared_fdb) {
+				ldev_for_each(i, 0, ldev)
+					mlx5_eswitch_reload_ib_reps(ldev->pf[i].dev->priv.eswitch);
+			}
 
 			return;
 		} else if (roce_lag) {

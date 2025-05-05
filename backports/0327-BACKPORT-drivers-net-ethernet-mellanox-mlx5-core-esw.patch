@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I6238ad5325845969dcc3dd5f1347868085ff2bc9
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 133 +++++++++++++++++-
- 1 file changed, 127 insertions(+), 6 deletions(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 132 +++++++++++++++++-
+ 1 file changed, 127 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
@@ -259,7 +259,7 @@ Change-Id: I6238ad5325845969dcc3dd5f1347868085ff2bc9
  }
  
  void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_vport *vport)
-@@ -197,11 +304,25 @@ void mlx5_esw_offloads_devlink_port_unre
+@@ -197,11 +304,26 @@ void mlx5_esw_offloads_devlink_port_unre
  		return;
  	dl_port = vport->dl_port;
  
@@ -268,7 +268,7 @@ Change-Id: I6238ad5325845969dcc3dd5f1347868085ff2bc9
  		mlx5_esw_qos_vport_update_parent(vport, NULL, NULL);
 +#ifdef HAVE_DEVL_PORT_REGISTER
  	devl_rate_leaf_destroy(&dl_port->dl_port);
--
+ 
 +#else
 +	devlink_rate_leaf_destroy(&dl_port->dl_port);
 +#endif

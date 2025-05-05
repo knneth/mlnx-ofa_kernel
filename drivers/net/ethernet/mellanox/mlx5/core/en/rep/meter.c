@@ -103,7 +103,7 @@ static int mlx5_rep_create_miss_meter_rules(struct mlx5_core_dev *dev,
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_DROP |
 			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-	dest.counter_id = mlx5_fc_id(drop_counter);
+	dest.counter = drop_counter;
 
 	rule = mlx5_add_flow_rules(tbl, spec, &flow_act,
 				   &dest, 1);

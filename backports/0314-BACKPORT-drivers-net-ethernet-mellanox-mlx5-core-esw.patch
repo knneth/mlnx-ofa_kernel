@@ -28,7 +28,7 @@ Change-Id: I1c5ad699f436f6e6bcbb43c66d0f6f7e840f6ef3
 +#ifdef HAVE_ASSIGN_STR_1_PARAM
  		    TP_fast_assign(__assign_str(devname);
 +#else
-+ 		    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
++		    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
 +#endif
  			    __entry->vport_id = vport->vport;
  			    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);

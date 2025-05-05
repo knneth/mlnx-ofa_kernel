@@ -13,6 +13,7 @@ DIR="$PWD"
 GIT_URL="git://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git"
 
 FILES="ofed_scripts/checkout_files"
+MLXDEVM_CHECKOUT_FILES="ofed_scripts/mlxdevm_checkout_files"
 SRC=${SRC:-'.'}
 
 # Pretty colors
@@ -126,6 +127,39 @@ nagometer() {
 		;;
 	esac
 
+}
+
+function mlxdevm_checkout_files_recursive_rename() {
+	local MLXDEVM_DIR=$1
+	local MLXDEVM_FILE_BASE_NAME=""
+
+	if [ -d $MLXDEVM_DIR ];then
+		for file in $(find $MLXDEVM_DIR -depth);
+		do
+			MLXDEVM_FILE_BASE_NAME=$(basename $file | sed -e "s/devlink/mlxdevm/g")
+			if [[ "$(basename $file)" != "$MLXDEVM_FILE_BASE_NAME" ]];then
+				ex mv "$file" "$(dirname $file)/$MLXDEVM_FILE_BASE_NAME"
+			fi
+		done
+	fi
+}
+
+function copy_mlxdevm_checkout_files() {
+	local LINUX_TREE=$1
+	local OFA_KERNEL=$2
+	local MLXDEVM_FILE_NAME=""
+
+	while read line
+	do
+		MLXDEVM_FILE_NAME=$(echo $line | sed -e "s/devlink/mlxdevm/g")
+		ex cp -ra $LINUX_TREE/$line $OFA_KERNEL/$MLXDEVM_FILE_NAME
+		mlxdevm_checkout_files_recursive_rename $OFA_KERNEL/$MLXDEVM_FILE_NAME
+		ex git add $OFA_KERNEL/$MLXDEVM_FILE_NAME
+	done < $MLXDEVM_CHECKOUT_FILES
+
+	ex git commit --signoff --amend --no-edit
+
+	echo "------------------------------"
 }
 
 TMP=${TMP:-"/tmp"}
@@ -278,6 +312,8 @@ do
 	ex mkdir -p $SRC/$(dirname $line)
 	ex cp -a $GIT_TREE/$line $SRC/$(dirname $line)
 done < $FILES
+
+copy_mlxdevm_checkout_files $GIT_TREE $SRC
 
 if [ $SRC != '.' ]; then
 	ex cp -a [mM]akefile $SRC

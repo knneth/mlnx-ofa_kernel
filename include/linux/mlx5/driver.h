@@ -45,7 +45,6 @@
 #include <linux/workqueue.h>
 #include <linux/mempool.h>
 #include <linux/interrupt.h>
-#include <linux/idr.h>
 #include <linux/notifier.h>
 #include <linux/refcount.h>
 #include <linux/auxiliary_bus.h>
@@ -55,7 +54,6 @@
 #include <linux/mlx5/doorbell.h>
 #include <linux/mlx5/eq.h>
 #include <linux/timecounter.h>
-#include <linux/ptp_clock_kernel.h>
 #include <net/devlink.h>
 
 #define MLX5_ADEV_NAME "mlx5_core"
@@ -161,6 +159,7 @@ enum {
 	MLX5_REG_MIRC		 = 0x9162,
 	MLX5_REG_MTPTM		 = 0x9180,
 	MLX5_REG_MTCTR		 = 0x9181,
+	MLX5_REG_MRTCQ		 = 0x9182,
 	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
 	MLX5_REG_TRUST_LEVEL     = 0xC007,
@@ -321,6 +320,8 @@ struct mlx5_cmd {
 		struct semaphore sem;
 		struct semaphore pages_sem;
 		struct semaphore throttle_sem;
+		struct semaphore unprivileged_sem;
+		struct xarray	privileged_uids;
 	} vars;
 	enum mlx5_cmdif_state	state;
 	void	       *cmd_alloc_buf;
@@ -543,36 +544,6 @@ struct mlx5_core_sriov {
 	u16			max_ec_vfs;
 };
 
-struct mlx5_fc_pool {
-	struct mlx5_core_dev *dev;
-	struct mutex pool_lock; /* protects pool lists */
-	struct list_head fully_used;
-	struct list_head partially_used;
-	struct list_head unused;
-	int available_fcs;
-	int used_fcs;
-	int threshold;
-};
-
-struct mlx5_fc_stats {
-	spinlock_t counters_idr_lock; /* protects counters_idr */
-	struct idr counters_idr;
-	struct list_head counters;
-	struct llist_head addlist;
-	struct llist_head dellist;
-
-	struct workqueue_struct *wq;
-	struct delayed_work work;
-	unsigned long next_query;
-	unsigned long sampling_interval; /* jiffies */
-	u32 *bulk_query_out;
-	int bulk_query_len;
-	size_t num_counters;
-	bool bulk_query_alloc_failed;
-	unsigned long next_bulk_query_alloc;
-	struct mlx5_fc_pool fc_pool;
-};
-
 struct mlx5_events;
 struct mlx5_mpfs;
 struct mlx5_eswitch;
@@ -721,7 +692,7 @@ struct mlx5_priv {
 	struct mlx5_fw_reset	*fw_reset;
 	struct mlx5_core_roce	roce;
 	struct mlx5_core_regex	regex;
-	struct mlx5_fc_stats		fc_stats;
+	struct mlx5_fc_stats		*fc_stats;
 	struct mlx5_rl_table            rl_table;
 	struct mlx5_ft_pool		*ft_pool;
 
@@ -863,40 +834,14 @@ struct mlx5_rsvd_gids {
 	struct ida ida;
 };
 
-#define MAX_PIN_NUM	8
-struct mlx5_pps {
-	u8                         pin_caps[MAX_PIN_NUM];
-	struct work_struct         out_work;
-	u64                        start[MAX_PIN_NUM];
-	u8                         enabled;
-	u64                        min_npps_period;
-	u64                        min_out_pulse_duration_ns;
-};
-
-struct mlx5_timer {
-	struct cyclecounter        cycles;
-	struct timecounter         tc;
-	u32                        nominal_c_mult;
-	unsigned long              overflow_period;
-	struct delayed_work        overflow_work;
-};
-
-struct mlx5_clock {
-	struct mlx5_nb             pps_nb;
-	seqlock_t                  lock;
-	struct hwtstamp_config     hwtstamp_config;
-	struct ptp_clock          *ptp;
-	struct ptp_clock_info      ptp_info;
-	struct mlx5_pps            pps_info;
-	struct mlx5_timer          timer;
-};
-
 struct mlx5_mst_dump;
 
 struct mlx5_special_contexts {
 	int resd_lkey;
 };
 
+struct mlx5_clock;
+struct mlx5_clock_dev_state;
 struct mlx5_dm;
 struct mlx5_fw_tracer;
 struct mlx5_vxlan;
@@ -1004,7 +949,8 @@ struct mlx5_core_dev {
 #ifdef CONFIG_MLX5_FPGA
 	struct mlx5_fpga_device *fpga;
 #endif
-	struct mlx5_clock        clock;
+	struct mlx5_clock       *clock;
+	struct mlx5_clock_dev_state *clock_state;
 	struct mlx5_ib_clock_info  *clock_info;
 	struct mlx5_mst_dump *mst_dump;
 	struct mlx5_special_contexts special_contexts;
@@ -1214,6 +1160,8 @@ struct mlx5_async_work {
 	mlx5_async_cbk_t user_callback;
 	u16 opcode; /* cmd opcode */
 	u16 op_mod; /* cmd op_mod */
+	u8 throttle_locked:1;
+	u8 unpriv_locked:1;
 	void *out; /* pointer to the cmd output buffer */
 };
 
@@ -1244,6 +1192,8 @@ int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 int mlx5_cmd_exec_polling(struct mlx5_core_dev *dev, void *in, int in_size,
 			  void *out, int out_size);
 bool mlx5_cmd_is_down(struct mlx5_core_dev *dev);
+int mlx5_cmd_add_privileged_uid(struct mlx5_core_dev *dev, u16 uid);
+void mlx5_cmd_remove_privileged_uid(struct mlx5_core_dev *dev, u16 uid);
 
 void mlx5_core_uplink_netdev_set(struct mlx5_core_dev *mdev, struct net_device *netdev);
 void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *mdev);

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/cmd.c
 
 Change-Id: Ibd2476a0469bb2a1487e6f51c27e23e45eed65a7
 ---
- drivers/vfio/pci/mlx5/cmd.c | 54 +++++++++++++++++++++++++++++++++++++
- 1 file changed, 54 insertions(+)
+ drivers/vfio/pci/mlx5/cmd.c | 62 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 62 insertions(+)
 
 --- a/drivers/vfio/pci/mlx5/cmd.c
 +++ b/drivers/vfio/pci/mlx5/cmd.c
@@ -16,7 +16,19 @@ Change-Id: Ibd2476a0469bb2a1487e6f51c27e23e45eed65a7
  #include "cmd.h"
  
  enum { CQ_OK = 0, CQ_EMPTY = -1, CQ_POLL_ERR = -2 };
-@@ -850,6 +851,54 @@ void mlx5fv_cmd_clean_migf_resources(str
+@@ -431,7 +432,11 @@ static int mlx5vf_add_migration_pages(st
+ 		return -ENOMEM;
+ 
+ 	do {
++#ifdef HAVE_ALLOC_BULK_PAGES_API_RENAME /* Forward port */
++		filled = alloc_pages_bulk(GFP_KERNEL_ACCOUNT, to_fill,
++#else
+ 		filled = alloc_pages_bulk_array(GFP_KERNEL_ACCOUNT, to_fill,
++#endif
+ 						page_list);
+ 		if (!filled) {
+ 			ret = -ENOMEM;
+@@ -850,6 +855,54 @@ void mlx5fv_cmd_clean_migf_resources(str
  	mlx5vf_cmd_dealloc_pd(migf);
  }
  
@@ -71,7 +83,7 @@ Change-Id: Ibd2476a0469bb2a1487e6f51c27e23e45eed65a7
  static int mlx5vf_create_tracker(struct mlx5_core_dev *mdev,
  				 struct mlx5vf_pci_core_device *mvdev,
  				 struct rb_root_cached *ranges, u32 nnodes)
-@@ -872,7 +921,11 @@ static int mlx5vf_create_tracker(struct
+@@ -872,7 +925,11 @@ static int mlx5vf_create_tracker(struct
  	int i;
  
  	if (num_ranges > max_num_range) {
@@ -83,7 +95,19 @@ Change-Id: Ibd2476a0469bb2a1487e6f51c27e23e45eed65a7
  		num_ranges = max_num_range;
  	}
  
-@@ -1805,3 +1858,4 @@ end:
+@@ -1361,7 +1418,11 @@ static int alloc_recv_pages(struct mlx5_
+ 		return -ENOMEM;
+ 
+ 	for (;;) {
++#ifdef HAVE_ALLOC_BULK_PAGES_API_RENAME /* Forward port */
++		filled = alloc_pages_bulk(GFP_KERNEL_ACCOUNT,
++#else
+ 		filled = alloc_pages_bulk_array(GFP_KERNEL_ACCOUNT,
++#endif
+ 						npages - done,
+ 						recv_buf->page_list + done);
+ 		if (!filled)
+@@ -1805,3 +1866,4 @@ end:
  	mlx5vf_state_mutex_unlock(mvdev);
  	return err;
  }

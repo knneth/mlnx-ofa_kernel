@@ -1,0 +1,160 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
+
+Change-Id: I2e54cab5998eb18c95469513b5abfbe761adc49d
+---
+ net/mlxdevm/netlink_gen.c | 138 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 138 insertions(+)
+
+--- a/net/mlxdevm/netlink_gen.c
++++ b/net/mlxdevm/netlink_gen.c
+@@ -576,6 +576,7 @@ static const struct nla_policy devlink_n
+ #endif
+ 
+ /* Ops table for mlxdevm */
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ const struct genl_split_ops mlxdevm_nl_ops[15] = {
+ 	{
+ 		.cmd		= MLXDEVM_CMD_GET,
+@@ -1261,4 +1262,141 @@ const struct genl_split_ops mlxdevm_nl_o
+ 		.flags		= GENL_CMD_CAP_DO,
+ 	},
+ #endif
++#else
++#ifndef HAVE_GENL_FAMILY_POLICY
++static const struct nla_policy mlxdevm_nl_policy[MLXDEVM_ATTR_MAX + 1] = {
++        [MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_STRING },
++        [MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_STRING },
++        [MLXDEVM_ATTR_PORT_INDEX] = { .type = NLA_U32 },
++        [MLXDEVM_ATTR_PORT_FLAVOUR] = { .type = NLA_U16 },
++        [MLXDEVM_ATTR_PORT_PCI_PF_NUMBER] = { .type = NLA_U16 },
++        [MLXDEVM_ATTR_PORT_PCI_SF_NUMBER] = { .type = NLA_U32 },
++        [MLXDEVM_ATTR_PORT_CONTROLLER_NUMBER] = { .type = NLA_U32 },
++};
++#endif
++
++const struct genl_ops mlxdevm_nl_ops[11] = {
++        {
++                .cmd = MLXDEVM_CMD_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_get_doit,
++                .dumpit = mlxdevm_nl_get_dumpit,
++        },
++        {
++                .cmd = MLXDEVM_CMD_PORT_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_port_set_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++        {
++                .cmd = MLXDEVM_CMD_PORT_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_port_get_doit,
++                .dumpit = mlxdevm_nl_port_get_dumpit,
++                /* can be retrieved by unprivileged users */
++        },
++        {
++                .cmd = MLXDEVM_CMD_PORT_NEW,
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_port_new_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++        {
++                .cmd = MLXDEVM_CMD_PORT_DEL,
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_port_del_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++        {
++                .cmd = MLXDEVM_CMD_PARAM_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++                .doit = mlxdevm_nl_param_get_doit,
++                .dumpit = mlxdevm_nl_param_get_dumpit,
++                /* can be retrieved by unprivileged users */
++        },
++        {
++                .cmd = MLXDEVM_CMD_PARAM_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++                .doit = mlxdevm_nl_param_set_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++#if 0
++        {
++                .cmd = MLXDEVM_CMD_EXT_CAP_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++                .doit = mlxdevm_nl_port_fn_cap_set_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++#endif
++        {
++                .cmd = MLXDEVM_CMD_RATE_SET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_rate_set_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++        {
++                .cmd = MLXDEVM_CMD_RATE_GET,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_rate_get_doit,
++                .dumpit = mlxdevm_nl_rate_get_dumpit,
++                /* can be retrieved by unprivileged users */
++        },
++        {
++                .cmd = MLXDEVM_CMD_RATE_NEW,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_rate_new_doit,
++                .flags = GENL_ADMIN_PERM,
++        },
++        {
++                .cmd = MLXDEVM_CMD_RATE_DEL,
++#ifdef HAVE_GENL_OPS_VALIDATE
++                .validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
++#endif
++#ifndef HAVE_GENL_FAMILY_POLICY
++                .policy = mlxdevm_nl_policy,
++#endif
++                .doit = mlxdevm_nl_rate_del_doit,
++                .flags = GENL_ADMIN_PERM,
++	},
++#endif
+ };

@@ -137,7 +137,7 @@ Change-Id: I1e993a8a5d96d081dc91936c41a919a54ccc488e
  		if (err)
  			goto out;
  	}
-@@ -953,6 +983,7 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -947,6 +977,7 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  				 struct flow_cls_offload *f,
  				 void *headers_c,
  				 void *headers_v)
@@ -145,7 +145,7 @@ Change-Id: I1e993a8a5d96d081dc91936c41a919a54ccc488e
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
  	struct netlink_ext_ack *extack = f->common.extack;
-@@ -1001,3 +1032,4 @@ int mlx5e_tc_tun_parse_udp_ports(struct
+@@ -995,3 +1026,4 @@ int mlx5e_tc_tun_parse_udp_ports(struct
  
  	return 0;
  }

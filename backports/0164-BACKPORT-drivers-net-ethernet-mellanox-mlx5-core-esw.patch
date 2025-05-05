@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 
 Change-Id: I7b7c9daf6b0495c9cba273cc3528d00728e7e163
 ---
- drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c | 5 +++++
- 1 file changed, 5 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 22 ++++++++++++-------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
@@ -18,19 +18,50 @@ Change-Id: I7b7c9daf6b0495c9cba273cc3528d00728e7e163
  
  /* Minimum supported BW share value by the HW is 1 Mbit/sec */
  #define MLX5_MIN_BW_SHARE 1
-@@ -1546,6 +1549,7 @@ int mlx5_esw_qos_modify_vport_rate(struc
+@@ -373,7 +376,10 @@ static void __esw_qos_free_node(struct m
+ 	kfree(node);
+ }
  
- #define MLX5_LINKSPEED_UNIT 125000 /* 1Mbps in Bps */
- 
+-static void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
- /* Converts bytes per second value passed in a pointer into megabits per
++static
++#endif
++void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
+ {
+ 	esw_qos_node_destroy_sched_element(node, extack);
+ 	__esw_qos_free_node(node);
+@@ -744,8 +750,8 @@ out:
+ 	return speed;
+ }
+ 
+-static int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
+-					   bool hold_rtnl_lock, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
++				    bool hold_rtnl_lock, struct netlink_ext_ack *extack)
+ {
+ 	int err;
+ 
+@@ -771,9 +777,9 @@ skip_lag:
+ 	return err;
+ }
+ 
+-static int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
+-					  const char *name, u32 link_speed_max,
+-					  u64 value, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
++				  const char *name, u32 link_speed_max,
++				  u64 value, struct netlink_ext_ack *extack)
+ {
+ 	if (value > link_speed_max) {
+ 		pr_err("%s rate value %lluMbps exceed link maximum speed %u.\n",
+@@ -819,8 +825,8 @@ int mlx5_esw_qos_modify_vport_rate(struc
   * second, rewriting last. If converted rate exceed link speed or is not a
   * fraction of Mbps - returns error.
-@@ -1576,6 +1580,7 @@ static int esw_qos_devlink_rate_to_mbps(
- 	*rate = value;
- 	return 0;
- }
-+#endif
- 
- static bool esw_qos_groups_are_supported(struct mlx5_core_dev *dev)
+  */
+-static int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
+-					u64 *rate, struct netlink_ext_ack *extack)
++int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
++				 u64 *rate, struct netlink_ext_ack *extack)
  {
+ 	u32 link_speed_max, remainder;
+ 	u64 value;

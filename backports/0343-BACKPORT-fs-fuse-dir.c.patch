@@ -1,0 +1,36 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/dir.c
+
+Change-Id: Ie7fe5d70361c5933486626d5c1f1a70a9dd8e014
+---
+ fs/fuse/dir.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/fs/fuse/dir.c
++++ b/fs/fuse/dir.c
+@@ -192,7 +192,12 @@ static void fuse_lookup_init(struct fuse
+  * the lookup once more.  If the lookup results in the same inode,
+  * then refresh the attributes, timeouts and mark the dentry valid.
+  */
++#ifdef HAVE_D_REVALIDATE_2_PARAMS
+ static int fuse_dentry_revalidate(struct dentry *entry, unsigned int flags)
++#else
++static int fuse_dentry_revalidate(struct inode *dir, const struct qstr *name,
++				  struct dentry *entry, unsigned int flags)
++#endif
+ {
+ 	struct inode *inode;
+ 	struct dentry *parent;
+@@ -472,8 +477,12 @@ static int get_security_context(struct d
+ 	const char *name;
+ 	size_t namelen;
+ 
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
+ 	err = security_dentry_init_security(entry, mode, &entry->d_name,
+ 					    &name, &ctx, &ctxlen);
++#else
++	err = -EOPNOTSUPP;
++#endif
+ 	if (err) {
+ 		if (err != -EOPNOTSUPP)
+ 			goto out_err;

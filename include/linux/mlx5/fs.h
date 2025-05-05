@@ -42,6 +42,8 @@
 
 #define MLX5_RDMA_TRANSPORT_BYPASS_PRIO 0
 
+#define MLX5_FS_MAX_POOL_SIZE BIT(30)
+
 enum mlx5_flow_destination_type {
 	MLX5_FLOW_DESTINATION_TYPE_NONE,
 	MLX5_FLOW_DESTINATION_TYPE_VPORT,
@@ -169,7 +171,7 @@ struct mlx5_flow_destination {
 		u32			tir_num;
 		u32			ft_num;
 		struct mlx5_flow_table	*ft;
-		u32			counter_id;
+		struct mlx5_fc          *counter;
 		struct {
 			u16		num;
 			u16		vhca_id;
@@ -305,10 +307,9 @@ int mlx5_modify_rule_destination(struct mlx5_flow_handle *handler,
 
 struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging);
 
-/* As mlx5_fc_create() but doesn't queue stats refresh thread. */
-struct mlx5_fc *mlx5_fc_create_ex(struct mlx5_core_dev *dev, bool aging);
-
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
+struct mlx5_fc *mlx5_fc_local_create(u32 counter_id, u32 offset, u32 bulk_size);
+void mlx5_fc_local_destroy(struct mlx5_fc *counter);
 u64 mlx5_fc_query_lastuse(struct mlx5_fc *counter);
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
 			  u64 *bytes, u64 *packets, u64 *lastuse);

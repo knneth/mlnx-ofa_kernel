@@ -33,6 +33,9 @@ void mlx_backport_dependency_symbol(void);
 		mlx_backport_dependency_symbol();                           \
 		return initfn();                                        \
 	}                                                               \
-	int init_module(void)  __copy(initfn)  __attribute__((alias("__init_backport")));
+	int init_module(void)  __copy(initfn)  \
+			__attribute__((alias("__init_backport"))); \
+			 ___ADDRESSABLE(init_module, __initdata);
+
 
 #endif /* LINUX_26_COMPAT_H */

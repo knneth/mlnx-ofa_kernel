@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
  */
 
 #ifdef pr_fmt
@@ -22,6 +22,8 @@ enum {
 	FWCTL_MAX_DEVICES = 4096,
 	MAX_RPC_LEN = SZ_2M,
 };
+static_assert(FWCTL_MAX_DEVICES < (1U << MINORBITS));
+
 static dev_t fwctl_dev;
 static DEFINE_IDA(fwctl_ida);
 static unsigned long fwctl_tainted;
@@ -65,7 +67,11 @@ static int fwctl_cmd_info(struct fwctl_ucmd *ucmd)
 	if (cmd->flags)
 		return -EOPNOTSUPP;
 
-	if (cmd->device_data_len) {
+	if (!fwctl->ops->info && cmd->device_data_len) {
+		if (clear_user(u64_to_user_ptr(cmd->out_device_data),
+			       cmd->device_data_len))
+			return -EFAULT;
+	} else if (cmd->device_data_len) {
 		void *driver_info __free(kfree) =
 			fwctl->ops->info(ucmd->uctx, &driver_info_len);
 		if (IS_ERR(driver_info))
@@ -138,7 +144,7 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
 }
 
 /* On stack memory for the ioctl structs */
-union ucmd_buffer {
+union fwctl_ucmd_buffer {
 	struct fwctl_info info;
 	struct fwctl_rpc rpc;
 };
@@ -150,14 +156,14 @@ struct fwctl_ioctl_op {
 	int (*execute)(struct fwctl_ucmd *ucmd);
 };
 
-#define IOCTL_OP(_ioctl, _fn, _struct, _last)                         \
-	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                        \
-		.size = sizeof(_struct) +                             \
-			BUILD_BUG_ON_ZERO(sizeof(union ucmd_buffer) < \
-					  sizeof(_struct)),           \
-		.min_size = offsetofend(_struct, _last),              \
-		.ioctl_num = _ioctl,                                  \
-		.execute = _fn,                                       \
+#define IOCTL_OP(_ioctl, _fn, _struct, _last)                               \
+	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                              \
+		.size = sizeof(_struct) +                                   \
+			BUILD_BUG_ON_ZERO(sizeof(union fwctl_ucmd_buffer) < \
+					  sizeof(_struct)),                 \
+		.min_size = offsetofend(_struct, _last),                    \
+		.ioctl_num = _ioctl,                                        \
+		.execute = _fn,                                             \
 	}
 static const struct fwctl_ioctl_op fwctl_ioctl_ops[] = {
 	IOCTL_OP(FWCTL_INFO, fwctl_cmd_info, struct fwctl_info, out_device_data),
@@ -170,7 +176,7 @@ static long fwctl_fops_ioctl(struct file *filp, unsigned int cmd,
 	struct fwctl_uctx *uctx = filp->private_data;
 	const struct fwctl_ioctl_op *op;
 	struct fwctl_ucmd ucmd = {};
-	union ucmd_buffer buf;
+	union fwctl_ucmd_buffer buf;
 	unsigned int nr;
 	int ret;
 
@@ -246,8 +252,8 @@ static int fwctl_fops_release(struct inode *inode, struct file *filp)
 
 	scoped_guard(rwsem_read, &fwctl->registration_lock) {
 		/*
-		 * fwctl_unregister() has already removed the driver and
-		 * destroyed the uctx.
+		 * NULL ops means fwctl_unregister() has already removed the
+		 * driver and destroyed the uctx.
 		 */
 		if (fwctl->ops) {
 			guard(mutex)(&fwctl->uctx_list_lock);
@@ -300,10 +306,11 @@ _alloc_device(struct device *parent, const struct fwctl_ops *ops, size_t size)
 	devnum = ida_alloc_max(&fwctl_ida, FWCTL_MAX_DEVICES - 1, GFP_KERNEL);
 	if (devnum < 0)
 		return NULL;
-	fwctl->dev.devt = fwctl_dev + devnum;
 
+	fwctl->dev.devt = fwctl_dev + devnum;
 	fwctl->dev.class = &fwctl_class;
 	fwctl->dev.parent = parent;
+
 	init_rwsem(&fwctl->registration_lock);
 	mutex_init(&fwctl->uctx_list_lock);
 	INIT_LIST_HEAD(&fwctl->uctx_list);
@@ -393,7 +400,6 @@ static int __init fwctl_init(void)
 {
 	int ret;
 
-	BUILD_BUG_ON(FWCTL_MAX_DEVICES > (1U << MINORBITS));
 	ret = alloc_chrdev_region(&fwctl_dev, 0, FWCTL_MAX_DEVICES, "fwctl");
 	if (ret)
 		return ret;

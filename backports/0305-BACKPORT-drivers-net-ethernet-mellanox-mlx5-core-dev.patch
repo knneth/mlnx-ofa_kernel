@@ -86,10 +86,10 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
 +		return err;
 +#endif
 +
- 	err = devlink_info_version_fixed_put(req, "fw.psid", dev->board_id);
- 	if (err)
- 		return err;
-@@ -82,7 +131,9 @@ mlx5_devlink_info_get(struct devlink *de
+ 	if (!mlx5_core_is_pf(dev))
+ 		return 0;
+ 
+@@ -85,7 +134,9 @@ mlx5_devlink_info_get(struct devlink *de
  					       DEVLINK_INFO_VERSION_GENERIC_FW,
  					       version_str);
  }
@@ -99,7 +99,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  static int mlx5_devlink_reload_fw_activate(struct devlink *devlink, struct netlink_ext_ack *extack)
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
-@@ -103,6 +154,7 @@ static int mlx5_devlink_reload_fw_activa
+@@ -106,6 +157,7 @@ static int mlx5_devlink_reload_fw_activa
  		return err;
  
  	err = mlx5_fw_reset_wait_reset_done(dev);
@@ -107,7 +107,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  	if (err)
  		return err;
  
-@@ -110,7 +162,7 @@ static int mlx5_devlink_reload_fw_activa
+@@ -113,7 +165,7 @@ static int mlx5_devlink_reload_fw_activa
  	err = mlx5_health_wait_pci_up(dev);
  	if (err)
  		NL_SET_ERR_MSG_MOD(extack, "FW activate aborted, PCI reads fail after reset");
@@ -116,7 +116,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  	return err;
  }
  
-@@ -132,22 +184,46 @@ static int mlx5_devlink_trigger_fw_live_
+@@ -135,22 +187,46 @@ static int mlx5_devlink_trigger_fw_live_
  
  	return mlx5_fw_reset_set_live_patch(dev);
  }
@@ -165,7 +165,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  
  	if (mlx5_lag_is_active(dev)) {
  		NL_SET_ERR_MSG_MOD(extack, "reload is unsupported in Lag mode");
-@@ -159,11 +235,13 @@ static int mlx5_devlink_reload_down(stru
+@@ -162,11 +238,13 @@ static int mlx5_devlink_reload_down(stru
  		return -EOPNOTSUPP;
  	}
  
@@ -179,7 +179,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  
  	if (mlx5_eswitch_mode_is_blocked(dev)) {
  		NL_SET_ERR_MSG_MOD(extack, "reload is unsupported if IPSec rules are configured");
-@@ -173,9 +251,14 @@ static int mlx5_devlink_reload_down(stru
+@@ -176,9 +254,14 @@ static int mlx5_devlink_reload_down(stru
  	if (mlx5_core_is_pf(dev) && pci_num_vf(pdev))
  		NL_SET_ERR_MSG_MOD(extack, "reload while VFs are present is unfavorable");
  
@@ -194,7 +194,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  		break;
  	case DEVLINK_RELOAD_ACTION_FW_ACTIVATE:
  		if (limit == DEVLINK_RELOAD_LIMIT_NO_RESET)
-@@ -188,32 +271,55 @@ static int mlx5_devlink_reload_down(stru
+@@ -191,32 +274,55 @@ static int mlx5_devlink_reload_down(stru
  		WARN_ON(1);
  		ret = -EOPNOTSUPP;
  	}
@@ -251,7 +251,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  		if (ret)
  			return ret;
  		ret = mlx5_fw_reset_verify_fw_complete(dev, extack);
-@@ -224,9 +330,47 @@ static int mlx5_devlink_reload_up(struct
+@@ -227,9 +333,47 @@ static int mlx5_devlink_reload_up(struct
  		ret = -EOPNOTSUPP;
  	}
  
@@ -299,7 +299,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  static struct mlx5_devlink_trap *mlx5_find_trap_by_id(struct mlx5_core_dev *dev, int trap_id)
  {
  	struct mlx5_devlink_trap *dl_trap;
-@@ -279,8 +423,12 @@ static void mlx5_devlink_trap_fini(struc
+@@ -282,8 +426,12 @@ static void mlx5_devlink_trap_fini(struc
  
  static int mlx5_devlink_trap_action_set(struct devlink *devlink,
  					const struct devlink_trap *trap,
@@ -312,7 +312,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_devlink_trap_event_ctx trap_event_ctx;
-@@ -289,7 +437,9 @@ static int mlx5_devlink_trap_action_set(
+@@ -292,7 +440,9 @@ static int mlx5_devlink_trap_action_set(
  	int err;
  
  	if (is_mdev_switchdev_mode(dev)) {
@@ -322,7 +322,7 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  		return -EOPNOTSUPP;
  	}
  
-@@ -316,6 +466,7 @@ static int mlx5_devlink_trap_action_set(
+@@ -319,6 +469,7 @@ static int mlx5_devlink_trap_action_set(
  
  	return trap_event_ctx.err;
  }
@@ -330,14 +330,14 @@ Change-Id: Icff698276eafd7881a0ccf1ac7ddc94bb3843796
  
  static const struct devlink_ops mlx5_devlink_ops = {
  #ifdef CONFIG_MLX5_ESWITCH
-@@ -325,6 +476,7 @@ static const struct devlink_ops mlx5_dev
+@@ -328,6 +479,7 @@ static const struct devlink_ops mlx5_dev
  	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
  	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
  	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  	.rate_leaf_tx_share_set = mlx5_esw_devlink_rate_leaf_tx_share_set,
  	.rate_leaf_tx_max_set = mlx5_esw_devlink_rate_leaf_tx_max_set,
- 	/* To build on base kernel. */
+ 	.rate_node_tx_share_set = mlx5_esw_devlink_rate_node_tx_share_set,
 @@ -336,21 +488,59 @@ static const struct devlink_ops mlx5_dev
  	.rate_node_del = mlx5_esw_devlink_rate_node_del,
  	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,

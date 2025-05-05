@@ -3,20 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
 ---
- drivers/fwctl/mlx5/main.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/fwctl/mlx5/main.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
-@@ -26,6 +26,7 @@ struct mlx5ctl_dev {
- 	struct mlx5_core_dev *mdev;
- };
- DEFINE_FREE(mlx5ctl, struct mlx5ctl_dev *, if (_T) fwctl_put(&_T->fwctl));
-+DEFINE_FREE(kvfree_wrapper, void *, kvfree(_T));
- 
- struct mlx5_ifc_mbox_in_hdr_bits {
- 	u8 opcode[0x10];
-@@ -309,7 +310,13 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -374,7 +374,13 @@ static int mlx5ctl_probe(struct auxiliar
  	ret = fwctl_register(&mcdev->fwctl);
  	if (ret)
  		return ret;

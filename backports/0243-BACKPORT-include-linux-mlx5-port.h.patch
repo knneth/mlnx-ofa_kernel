@@ -26,7 +26,7 @@ Change-Id: Ib908e64f7db686414a70b3581745896208c8b3e0
  };
  
  enum mlx5_an_status {
-@@ -231,8 +234,10 @@ void mlx5_query_port_fcs(struct mlx5_cor
+@@ -234,8 +237,10 @@ void mlx5_query_port_fcs(struct mlx5_cor
  int mlx5_query_module_num(struct mlx5_core_dev *dev, int *module_num);
  int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
  			     u16 offset, u16 size, u8 *data);

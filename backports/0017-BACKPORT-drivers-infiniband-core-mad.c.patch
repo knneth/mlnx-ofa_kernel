@@ -320,7 +320,7 @@ Change-Id: I2fd6a98f6d097812c3ad6f409cdfc8b5db903c68
  			ret = ib_post_send(qp_info->qp, &mad_send_wr->send_wr.wr,
  					   NULL);
  			if (!ret)
-@@ -4087,11 +4153,17 @@ static struct attribute *sa_cc_default_a
+@@ -4089,11 +4155,17 @@ static struct attribute *sa_cc_default_a
  	NULL
  };
  

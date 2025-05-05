@@ -139,6 +139,7 @@ dist:
 	      README \
 	      COPYING \
 	      scripts \
+	      fs \
 	      $(rpmroot)/$(PACKAGE)/
 	@/bin/rm -f $(rpmroot)/$(PACKAGE)/configure.mk.kernel
 	@/bin/cp -f ofed_scripts/mlnx-ofa_kernel.spec $(rpmspec)

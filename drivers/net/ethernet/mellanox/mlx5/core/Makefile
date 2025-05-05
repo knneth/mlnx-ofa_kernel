@@ -3,8 +3,10 @@
 # Makefile for Mellanox 5th generation network adapters
 # (ConnectX series) core & netdev driver
 #
+GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
 
 subdir-ccflags-y += -I$(src)
+subdir-ccflags-y += -I$(CWD)/net/mlxdevm
 
 ifeq ($(CONFIG_IS_AZURELINUX), y)
 EXTRA_CFLAGS += -fno-exceptions
@@ -21,7 +23,7 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		fs_counters.o fs_ft_pool.o rl.o lag/debugfs.o lag/lag.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o lib/fs_ttc.o diag/fs_tracepoint.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o diag/reporter_vnic.o \
-		fw_reset.o qos.o lib/tout.o lib/aso.o wc.o  mst_dump.o en_diag.o sriov_sysfs.o crdump.o \
+		fw_reset.o qos.o lib/tout.o lib/aso.o wc.o fs_pool.o mst_dump.o en_diag.o sriov_sysfs.o crdump.o \
 		diag/diag_cnt.o eswitch_devlink_compat.o ecpf.o auxiliary_sysfs_compat.o compat.o
 
 #

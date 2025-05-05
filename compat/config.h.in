@@ -1,5 +1,8 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* __auto_type exists */
+#undef HAVE_3_UNDERSCORE_ADDRESSABLE
+
 /* access_ok has 3 parameters */
 #undef HAVE_ACCESS_OK_HAS_3_PARAMS
 
@@ -8,6 +11,9 @@
 
 /* adjfine is defined */
 #undef HAVE_ADJUST_BY_SCALED_PPM
+
+/* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
+#undef HAVE_ALLOC_BULK_PAGES_API_RENAME
 
 /* mm.h has assert_fault_locked */
 #undef HAVE_ASSERT_FAULT_LOCKED
@@ -65,6 +71,9 @@
 
 /* genhd.h has bd_set_size */
 #undef HAVE_BD_SET_SIZE
+
+/* if bio_add_pc_page is defined */
+#undef HAVE_BIO_ADD_PC_PAGE
 
 /* bio.h has bio_add_zone_append_page */
 #undef HAVE_BIO_ADD_ZONE_APPEND_PAGE
@@ -222,11 +231,21 @@
 /* blk_mq_destroy_queue is defined */
 #undef HAVE_BLK_MQ_DESTROY_QUEUE
 
+/* linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1 */
+#undef HAVE_BLK_MQ_F_NO_SCHED
+
+/* linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1
+   */
+#undef HAVE_BLK_MQ_F_SHOULD_MERGE
+
 /* blk-mq.h has blk_mq_hctx_set_fq_lock_class */
 #undef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
 
 /* blk-mq.h has enum hctx_type */
 #undef HAVE_BLK_MQ_HCTX_TYPE
+
+/* Kernel provides v6.14 blk_mq_map_hw_queues */
+#undef HAVE_BLK_MQ_MAP_HW_QUEUES
 
 /* struct blk_mq_ops has commit_rqs */
 #undef HAVE_BLK_MQ_OPS_COMMIT_RQS
@@ -522,6 +541,9 @@
 /* devlink_net exist */
 #undef HAVE_DEVLINK_NET
 
+/* kernel provides devlink notifications filtering */
+#undef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+
 /* devlink_params_publish is exported by the kernel */
 #undef HAVE_DEVLINK_PARAMS_PUBLISHED
 
@@ -765,6 +787,9 @@
 /* have struct dpll_pin_ops */
 #undef HAVE_DPLL_STRUCTS
 
+/* if dentry_operations->d_revalidate takes 2 params */
+#undef HAVE_D_REVALIDATE_2_PARAMS
+
 /* kernel provides encapsulation control flag helpers */
 #undef HAVE_ENCAP_CTRL_FLAG_HELPERS
 
@@ -819,6 +844,9 @@
 /* linux/eventfd.h has eventfd_signal with 1 param */
 #undef HAVE_EVENTFD_SIGNAL_GET_1_PARAM
 
+/* linux/export.h defines EXPORT_SYMBOL_NS_GPL */
+#undef HAVE_EXPORT_SYMBOL_NS_GPL
+
 /* ext_pi_ref_tag is defined */
 #undef HAVE_EXT_PI_REF_TAG
 
@@ -839,6 +867,9 @@
 
 /* sruct file has f_iocb_flags */
 #undef HAVE_FILE_F_IOCB_FLAGS
+
+/* if struct file_lock has c field */
+#undef HAVE_FILE_LOCK_CORE_C
 
 /* uring_cmd is defined in file_operations */
 #undef HAVE_FILE_OPERATIONS_URING_CMD
@@ -978,8 +1009,14 @@
 /* FOLL_LONGTERM is defined */
 #undef HAVE_FOLL_LONGTERM
 
+/* Kernel has v6.14 'force noio scope in blk_mq_freeze_queue' */
+#undef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE
+
 /* for_ifa defined */
 #undef HAVE_FOR_IFA
+
+/* if fsparam_uid is defined */
+#undef HAVE_FSPARAM_UID
 
 /* linux/fs.h has struct kiocb ki_complete 2 args */
 #undef HAVE_FS_KIOCB_KI_COMPLETE_2_ARG
@@ -992,6 +1029,18 @@
 
 /* net/macsec.h has function macsec_netdev_priv */
 #undef HAVE_FUNC_MACSEC_NETDEV_PRIV
+
+/* if FUSE_HAS_RESEND is defined */
+#undef HAVE_FUSE_HAS_RESEND
+
+/* if FUSE_NOTIFY_RESEND is defined */
+#undef HAVE_FUSE_NOTIFY_RESEND
+
+/* if FUSE_NO_EXPORT_SUPPORT is defined */
+#undef HAVE_FUSE_NO_EXPORT_SUPPORT
+
+/* if FUSE_PASSTHROUGH is defined */
+#undef HAVE_FUSE_PASSTHROUGH
 
 /* GD_SUPPRESS_PART_SCAN is defined */
 #undef HAVE_GD_SUPPRESS_PART_SCAN
@@ -1008,14 +1057,23 @@
 /* genhd.h has GENHD_FL_UP */
 #undef HAVE_GENHD_FL_UP
 
+/* function genl_dumpit_info is defined */
+#undef HAVE_GENL_DUMPIT_INFO
+
 /* struct genl_family has member policy */
 #undef HAVE_GENL_FAMILY_POLICY
 
 /* struct genl_family has member resv_start_op */
 #undef HAVE_GENL_FAMILY_RESV_START_OP
 
+/* function genl_info_dump is defined */
+#undef HAVE_GENL_INFO_DUMP
+
 /* struct genl_ops has member validate */
 #undef HAVE_GENL_OPS_VALIDATE
+
+/* HAVE_GENL_REQ_ATTR_CHECK defined */
+#undef HAVE_GENL_REQ_ATTR_CHECK
 
 /* gettimex64 is defined */
 #undef HAVE_GETTIMEX64
@@ -1108,6 +1166,9 @@
 /* idr.h has ida_free */
 #undef HAVE_IDA_FREE
 
+/* idr_for_each_entry_continue_ul is defined */
+#undef HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL
+
 /* inet_confirm_addr is exported by the kernel */
 #undef HAVE_INET_CONFIRM_ADDR_EXPORTED
 
@@ -1122,6 +1183,9 @@
 
 /* linux/compat.h has in_compat_syscall */
 #undef HAVE_IN_COMPAT_SYSCALL
+
+/* if func in_group_or_capable is defined */
+#undef HAVE_IN_GROUP_OR_CAPABLE
 
 /* iov_iter_is_bvec is defined */
 #undef HAVE_IOV_ITER_IS_BVEC_SET
@@ -1216,6 +1280,9 @@
 /* is_tcf_police is defined */
 #undef HAVE_IS_TCF_POLICE
 
+/* uio.h has ITER_ALLOW_P2PDMA */
+#undef HAVE_ITER_ALLOW_P2PDMA
+
 /* ITER_DEST is defined */
 #undef HAVE_ITER_DEST
 
@@ -1260,6 +1327,9 @@
 
 /* list_is_first is defined */
 #undef HAVE_LIST_IS_FIRST
+
+/* lockdep.h has lockdep_assert */
+#undef HAVE_LOCKDEP_ASSERT
 
 /* linux/lockdep.h has lockdep_unregister_key */
 #undef HAVE_LOCKDEP_UNREGISTER_KEY
@@ -1429,6 +1499,9 @@
 /* struct netlink_callback has member extack */
 #undef HAVE_NETLINK_CALLBACK_EXTACK
 
+/* struct netlink_callback has member ctx */
+#undef HAVE_NETLINK_CALLBACK_HAS_CTX
+
 /* netpoll_poll_dev is exported by the kernel */
 #undef HAVE_NETPOLL_POLL_DEV_EXPORTED
 
@@ -1483,8 +1556,17 @@
 /* nla_parse_deprecated exist */
 #undef HAVE_NLA_PARSE_DEPRECATED
 
+/* NLA_POLICY_BITFIELD32 defined */
+#undef HAVE_NLA_POLICY_BITFIELD32
+
 /* nla_policy has validation_type */
 #undef HAVE_NLA_POLICY_HAS_VALIDATION_TYPE
+
+/* NLA_POLICY_NESTED defined */
+#undef HAVE_NLA_POLICY_NESTED
+
+/* nla_put_bitfield32 exist */
+#undef HAVE_NLA_PUT_BITFIELD32
 
 /* nla_strscpy exist */
 #undef HAVE_NLA_STRSCPY
@@ -1495,8 +1577,15 @@
 /* nlmsg_validate_deprecated exist */
 #undef HAVE_NLMSG_VALIDATE_DEPRECATED
 
+/* NL_ASSERT_CTX_FITS exists */
+#undef HAVE_NL_ASSERT_CTX_FITS
+
 /* NL_SET_ERR_MSG_WEAK_MOD exists */
 #undef HAVE_NL_SET_ERR_MSG_WEAK_MOD
+
+/* Kernel has v6.13 'add non_owner variant of start_freeze/unfreeze queue
+   APIs' */
+#undef HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE
 
 /* nvme_auth_transform_key returns struct nvme_dhchap_key * */
 #undef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
@@ -1615,6 +1704,9 @@
 /* linux/proc_fs.h has pde_data */
 #undef HAVE_PDE_DATA
 
+/* function peernet2id_alloc get 3 params */
+#undef HAVE_PEERNET2ID_ALLOC_GET_3_PARAMS
+
 /* kernel supports v6.9 per queue netdev-genl stats */
 #undef HAVE_PER_QUEUE_NETDEV_GENL_STATS
 
@@ -1623,6 +1715,9 @@
 
 /* struct platform_driver has remove_new */
 #undef HAVE_PLATFORM_DEVICE_REMOVE_NEW
+
+/* struct platform_driver has remove with no ret */
+#undef HAVE_PLATFORM_DEVICE_REMOVE_NO_RET
 
 /* dev_pm_qos_update_user_latency_tolerance is exported by the kernel */
 #undef HAVE_PM_QOS_UPDATE_USER_LATENCY_TOLERANCE_EXPORTED
@@ -1701,6 +1796,9 @@
 
 /* linux/ratelimit_types.h exists */
 #undef HAVE_RATELIMIT_TYPES_H
+
+/* function read_pnet_rcu is defined */
+#undef HAVE_READ_PNET_RCU
 
 /* linux/security.h has register_blocking_lsm_notifier */
 #undef HAVE_REGISTER_BLOCKING_LSM_NOTIFIER
@@ -1823,6 +1921,9 @@
 /* Scsi_Host has members max_segment_size */
 #undef HAVE_SCSI_HOST_MAX_SEGMENT_SIZE
 
+/* from 6.14, struct scsi_host_template has member sdev_configure */
+#undef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE
+
 /* scsi_host_template has member init_cmd_priv */
 #undef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
 
@@ -1843,6 +1944,9 @@
 
 /* if secpath_set returns struct sec_path * */
 #undef HAVE_SECPATH_SET_RETURN_POINTER
+
+/* if security_dentry_init_security() takes 6 params */
+#undef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
 
 /* ndo_select_queue has a second net_device parameter */
 #undef HAVE_SELECT_QUEUE_NET_DEVICE
@@ -1937,6 +2041,9 @@
 
 /* strscpy_pad is defined */
 #undef HAVE_STRSCPY_PAD
+
+/* struct genl_ops exists */
+#undef HAVE_STRUCT_GENL_SPLIT_OPS
 
 /* net/ipv6.h has struct hop_jumbo_hdr */
 #undef HAVE_STRUCT_HOP_JUMBO_HDR
@@ -2226,6 +2333,9 @@
 /* sturct vfio_precopy_info exists */
 #undef HAVE_VFIO_PRECOPY_INFO
 
+/* if struct virtqueue_info is defined */
+#undef HAVE_VIRTQUEUE_INFO
+
 /* struct vlan_ethhdr has addrs member */
 #undef HAVE_VLAN_ETHHDR_HAS_ADDRS
 
@@ -2240,6 +2350,9 @@
 
 /* want_init_on_alloc is defined */
 #undef HAVE_WANT_INIT_ON_ALLOC
+
+/* if address_space_operations->write_begin takes a folio param */
+#undef HAVE_WRITE_BEGIN_FOLIO
 
 /* xa_array is defined */
 #undef HAVE_XARRAY
@@ -2442,6 +2555,12 @@
 
 /* __blkdev_issue_discard has 5 params */
 #undef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
+
+/* linux/export.h defines __EXPORT_SYMBOL_NS */
+#undef HAVE___EXPORT_SYMBOL_NS
+
+/* linux/export.h defines __EXPORT_SYMBOL_REF */
+#undef HAVE___EXPORT_SYMBOL_REF
 
 /* __flow_indr_block_cb_register is defined */
 #undef HAVE___FLOW_INDR_BLOCK_CB_REGISTER

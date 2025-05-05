@@ -6,83 +6,6 @@
 #include "eswitch.h"
 #include "mlx5_esw_devm.h"
 
-int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
-			       u32 controller, u32 sfnum, struct devlink_port *dl_port)
-{
-	struct mlx5_devm_device *devm_dev;
-	struct mlxdevm_port_attrs attrs;
-	struct mlx5_devm_port *port;
-	unsigned int dl_port_index;
-	u16 pfnum;
-	int ret;
-
-	devm_dev = mlx5_devm_device_get(dev);
-	if (!devm_dev)
-		return -ENODEV;
-	port = kzalloc(sizeof(*port), GFP_KERNEL);
-	if (!port)
-		return -ENOMEM;
-	pfnum = mlx5_get_dev_index(dev);
-	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
-	port->sfnum = sfnum;
-	port->port_index = dl_port_index;
-	port->vport_num = vport_num;
-
-	attrs.flavour = MLXDEVM_PORT_FLAVOUR_PCI_SF;
-	attrs.pci_sf.controller = controller;
-	attrs.pci_sf.sf = sfnum;
-	attrs.pci_sf.pf = pfnum;
-	mlxdevm_port_attr_set(&port->port, &attrs);
-
-	ret = mlxdevm_port_register(&devm_dev->device, &port->port, dl_port_index);
-	if (ret)
-		goto port_err;
-
-	port->port.dl_port = dl_port;
-	down_write(&devm_dev->port_list_rwsem);
-	list_add_tail(&port->list, &devm_dev->port_list);
-	up_write(&devm_dev->port_list_rwsem);
-
-	return 0;
-
-port_err:
-	kfree(port);
-	return ret;
-}
-
-void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
-{
-	struct mlx5_devm_device *devm_dev;
-	struct mlx5_devm_port *port, *tmp;
-	const struct mlxdevm_ops *ops;
-	bool found = false;
-
-	devm_dev = mlx5_devm_device_get(dev);
-	if (!devm_dev)
-		return;
-
-	down_write(&devm_dev->port_list_rwsem);
-	list_for_each_entry_safe(port, tmp, &devm_dev->port_list, list) {
-		if (port->vport_num != vport_num)
-			continue;
-		/* found the port */
-		ops = devm_dev->device.ops;
-
-		ops->rate_leaf_group_set(&port->port, "", NULL);
-		ops->rate_leaf_tx_max_set(&port->port, 0, NULL);
-		ops->rate_leaf_tx_share_set(&port->port, 0, NULL);
-
-		list_del(&port->list);
-		found = true;
-		break;
-	}
-	up_write(&devm_dev->port_list_rwsem);
-
-	WARN_ON(!found);
-	mlxdevm_port_unregister(&port->port);
-	kfree(port);
-}
-
 void mlx5_devm_sf_port_type_eth_set(struct mlx5_core_dev *dev, u16 vport_num,
 				    struct net_device *ndev)
 {
@@ -98,7 +21,31 @@ void mlx5_devm_sf_port_type_eth_set(struct mlx5_core_dev *dev, u16 vport_num,
 		if (port->vport_num != vport_num)
 			continue;
 		/* found the port */
+		rtnl_lock();
 		mlxdevm_port_type_eth_set(&port->port, ndev);
+		rtnl_unlock();
+		up_read(&devm_dev->port_list_rwsem);
+		return;
+	}
+	up_read(&devm_dev->port_list_rwsem);
+}
+
+void mlx5_devm_sf_port_type_eth_unset(struct mlx5_core_dev *dev, u16 vport_num,
+				      struct net_device *ndev)
+{
+	struct mlx5_devm_device *devm_dev;
+	struct mlx5_devm_port *port;
+
+	devm_dev = mlx5_devm_device_get(dev);
+	if (!devm_dev)
+		return;
+
+	down_read(&devm_dev->port_list_rwsem);
+	list_for_each_entry(port, &devm_dev->port_list, list) {
+		if (port->vport_num != vport_num)
+			continue;
+		/* found the port */
+		mlxdevm_port_type_clear(&port->port);
 		up_read(&devm_dev->port_list_rwsem);
 		return;
 	}

@@ -586,6 +586,7 @@ destroy_definers:
 	mlx5_lag_destroy_definers(ldev);
 tt_map:
 	clear_tt_map(port_sel);
+	memset(port_sel, 0, sizeof(*port_sel));
 	return err;
 }
 

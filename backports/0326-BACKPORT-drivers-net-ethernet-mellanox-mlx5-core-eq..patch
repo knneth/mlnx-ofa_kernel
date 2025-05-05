@@ -3,22 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eq.c
 
 Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
 ---
- drivers/net/ethernet/mellanox/mlx5/core/eq.c | 45 +++++++++++++++++++-
- 1 file changed, 43 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/eq.c | 43 +++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eq.c
-@@ -45,7 +45,9 @@ enum {
- 	MLX5_EQ_POLLING_BUDGET	= 128,
- };
- 
-+#ifdef HAVE_STATIC_ASSERT
- static_assert(MLX5_EQ_POLLING_BUDGET <= MLX5_NUM_SPARE_EQE);
-+#endif
- 
- struct mlx5_eq_table {
- 	struct xarray           comp_eqs;
-@@ -127,7 +129,11 @@ static int mlx5_eq_comp_int(struct notif
+@@ -127,7 +127,11 @@ static int mlx5_eq_comp_int(struct notif
  		/* Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -30,7 +20,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
  		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
  
-@@ -206,7 +212,7 @@ static int mlx5_eq_async_int(struct noti
+@@ -206,7 +210,7 @@ static int mlx5_eq_async_int(struct noti
  	struct mlx5_eq_table *eqt;
  	struct mlx5_core_dev *dev;
  	struct mlx5_eqe *eqe;
@@ -39,7 +29,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  	int num_eqes = 0;
  	bool recovery;
  
-@@ -225,7 +231,11 @@ static int mlx5_eq_async_int(struct noti
+@@ -225,7 +229,11 @@ static int mlx5_eq_async_int(struct noti
  		 * Make sure we read EQ entry contents after we've
  		 * checked the ownership bit.
  		 */
@@ -51,7 +41,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  		atomic_notifier_call_chain(&eqt->nh[eqe->type], eqe->type, eqe);
  		atomic_notifier_call_chain(&eqt->nh[MLX5_EVENT_TYPE_NOTIFY_ANY], eqe->type, eqe);
-@@ -330,7 +340,7 @@ create_map_eq(struct mlx5_core_dev *dev,
+@@ -330,7 +338,7 @@ create_map_eq(struct mlx5_core_dev *dev,
  
  	eq->vecidx = vecidx;
  	eq->eqn = MLX5_GET(create_eq_out, out, eq_number);
@@ -60,7 +50,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  	eq->dev = dev;
  	eq->doorbell = priv->uar->map + MLX5_EQ_DOORBEL_OFFSET;
  
-@@ -660,13 +670,18 @@ static void cleanup_async_eq(struct mlx5
+@@ -660,13 +668,18 @@ static void cleanup_async_eq(struct mlx5
  			      name, err);
  }
  
@@ -79,7 +69,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  					      DEVLINK_PARAM_GENERIC_ID_EVENT_EQ_SIZE,
  					      &val);
  	if (!err)
-@@ -674,6 +689,7 @@ static u16 async_eq_depth_devlink_param_
+@@ -674,6 +687,7 @@ static u16 async_eq_depth_devlink_param_
  	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
  	return MLX5_NUM_ASYNC_EQE;
  }
@@ -87,7 +77,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  static int create_async_eqs(struct mlx5_core_dev *dev)
  {
-@@ -706,7 +722,11 @@ static int create_async_eqs(struct mlx5_
+@@ -706,7 +720,11 @@ static int create_async_eqs(struct mlx5_
  
  	param = (struct mlx5_eq_param) {
  		.irq = table->ctrl_irq,
@@ -99,7 +89,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  	};
  
  	if (mlx5_core_is_sf(dev) && dev->async_eq_depth)
-@@ -831,7 +851,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
+@@ -831,7 +849,11 @@ struct mlx5_eqe *mlx5_eq_get_eqe(struct
  	 * checked the ownership bit.
  	 */
  	if (eqe)
@@ -111,7 +101,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  	return eqe;
  }
-@@ -1013,13 +1037,18 @@ static void destroy_comp_eq(struct mlx5_
+@@ -1013,13 +1035,18 @@ static void destroy_comp_eq(struct mlx5_
  	table->curr_comp_eqs--;
  }
  
@@ -130,7 +120,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  					      DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE,
  					      &val);
  	if (!err)
-@@ -1027,6 +1056,7 @@ static u16 comp_eq_depth_devlink_param_g
+@@ -1027,6 +1054,7 @@ static u16 comp_eq_depth_devlink_param_g
  	mlx5_core_dbg(dev, "Failed to get param. using default. err = %d\n", err);
  	return MLX5_COMP_EQ_SIZE;
  }
@@ -138,7 +128,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  /* Must be called with EQ table comp_lock held */
  static int create_comp_eq(struct mlx5_core_dev *dev, u16 vecidx)
-@@ -1045,7 +1075,11 @@ static int create_comp_eq(struct mlx5_co
+@@ -1045,7 +1073,11 @@ static int create_comp_eq(struct mlx5_co
  		return -ENOMEM;
  	}
  
@@ -150,7 +140,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  	/* if user specified completion eq depth, honor that */
  	if (mlx5_core_is_sf(dev) && dev->cmpl_eq_depth)
-@@ -1058,7 +1092,12 @@ static int create_comp_eq(struct mlx5_co
+@@ -1058,7 +1090,12 @@ static int create_comp_eq(struct mlx5_co
  	INIT_LIST_HEAD(&eq->tasklet_ctx.list);
  	INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
  	spin_lock_init(&eq->tasklet_ctx.lock);
@@ -163,7 +153,7 @@ Change-Id: I276771e0c18dc56941106b0c2064c7d6d470a82e
  
  	irq = xa_load(&table->comp_irqs, vecidx);
  	eq->irq_nb.notifier_call = mlx5_eq_comp_int;
-@@ -1216,8 +1255,10 @@ static int get_num_eqs(struct mlx5_core_
+@@ -1216,8 +1253,10 @@ static int get_num_eqs(struct mlx5_core_
  	 * have the other vectors available for other drivers using mlx5_core. For
  	 * example, mlx5_vdpa
  	 */

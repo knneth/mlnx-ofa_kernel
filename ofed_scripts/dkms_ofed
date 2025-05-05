@@ -198,6 +198,9 @@ get-modules()
 	modules="$modules \
 		drivers/vdpa/mlx5/mlx5_vdpa"
 
+	modules="$modules \
+		drivers/net/ethernet/mellanox/mlx5/core/mlx5_dpll"
+
 	echo $modules
 }
 

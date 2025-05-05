@@ -123,7 +123,7 @@ int mlx5_esw_offloads_sf_devlink_port_init(struct mlx5_eswitch *esw, struct mlx5
 					   u32 controller, u32 sfnum)
 {
 	mlx5_esw_offloads_sf_devlink_port_attrs_set(esw, &dl_port->dl_port, controller, sfnum);
-	mlx5_devm_sf_port_register(esw->dev, vport->vport, controller, sfnum, &dl_port->dl_port);
+	mlx5_devm_sf_port_register(esw->dev, vport, controller, sfnum, &dl_port->dl_port);
 
 	vport->dl_port = dl_port;
 	mlx5_devlink_port_init(dl_port, vport);

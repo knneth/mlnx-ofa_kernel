@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: include/rdma/rdma_counter.h
 
 Change-Id: Ibb0b3b97ad1e69e19f7984b258e9f698514bf8ed
 ---
- include/rdma/rdma_counter.h | 7 ++++---
- 1 file changed, 4 insertions(+), 3 deletions(-)
+ include/rdma/rdma_counter.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
 --- a/include/rdma/rdma_counter.h
 +++ b/include/rdma/rdma_counter.h
@@ -19,15 +19,4 @@ Change-Id: Ibb0b3b97ad1e69e19f7984b258e9f698514bf8ed
 -
  #include <rdma/restrack.h>
  #include <rdma/rdma_netlink.h>
- 
-@@ -46,8 +47,8 @@ struct rdma_counter {
- void rdma_counter_init(struct ib_device *dev);
- void rdma_counter_release(struct ib_device *dev);
- int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
--			       enum rdma_nl_counter_mask mask,
--			       struct netlink_ext_ack *extack);
-+			       enum rdma_nl_counter_mask mask
-+			       , struct netlink_ext_ack *extack);
- int rdma_counter_bind_qp_auto(struct ib_qp *qp, u32 port);
- int rdma_counter_unbind_qp(struct ib_qp *qp, bool force);
  

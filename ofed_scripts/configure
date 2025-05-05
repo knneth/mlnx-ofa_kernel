@@ -163,11 +163,17 @@ Usage:  `basename $0` [options]
     --with-fwctl    make CONFIG_FWCTL=m [no]
     --without-fwctl    [yes]
 
+    --with-gcov    make CONFIG_MLX5_GCOV=m [no]
+    --without-gcov    [yes]
+
     --with-bf-power-failure-event make CONFIG_BF_POWER_FAILURE_EVENT=y [no]
     --without-bf-power-failure-event [yes]
 
     --with-gds             make CONFIG_GPU_DIRECT_STORAGE=y [no]
     --without-gds             [yes]
+
+    --with-virtiofs-mod        make CONFIG_VIRTIO_FS=m [no]
+    --without-virtiofs-mod        [yes]
 
     --with-mlx5-fs-debugfs    make CONFIG_ENABLE_MLX5_FS_DEBUGFS=y [no]
 
@@ -863,6 +869,7 @@ CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
 CONFIG_MLX5_MACSEC=${CONFIG_MLX5_MACSEC:-''}
 # unset HW steering until it is ready upstream (korg >= v6.13 at least)
 CONFIG_MLX5_HW_STEERING=""
+CONFIG_MLX5_GCOV=""
 
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
 CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION:-''}
@@ -922,6 +929,7 @@ CONFIG_BF_DEVICE_EMULATION=${CONFIG_BF_DEVICE_EMULATION:-''}
 CONFIG_BF_POWER_FAILURE_EVENT=${CONFIG_BF_POWER_FAILURE_EVENT:-''}
 
 CONFIG_GPU_DIRECT_STORAGE=${CONFIG_GPU_DIRECT_STORAGE:-''}
+CONFIG_VIRTIO_FS=${CONFIG_VIRTIO_FS:-''}
 
 CONFIG_ENABLE_MLX5_FS_DEBUGFS=${CONFIG_ENABLE_MLX5_FS_DEBUGFS:-''}
 CONFIG_ENABLE_XDP="y"
@@ -938,35 +946,38 @@ REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.18.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.13"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.18.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="4.18.0"
 ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 GDS_SUPPORTED_KVERSION="4.18.0"
 
+VIRTIOFS_SUPPORTED_KVERSION="6.8.0"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.14"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
 
 #ODP
 ODP_SUPPORTED_KVERSION="4.18.0"
@@ -1014,7 +1025,7 @@ main()
                                 set -- "--all" "--with-memtrack" "--with-core-mod" "--with-user_mad-mod" "--with-user_access-mod" "--with-addr_trans-mod" \
                                         "--with-mlx5-mod" "--with-ipoib-mod" "--with-mlxfw-mod" "--with-srp-mod" "--with-iser-mod" "--with-isert-mod" \
                                         "--with-nvmf_host-mod" "--with-nvmf_target-mod" "--with-gds" "--with-nfsrdma-mod" \
-                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-sf-cfg-drv" "--with-fwctl" "$@"
+                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--without-sf-cfg-drv" "--with-fwctl" "--with-virtiofs-mod" "$@"
 				print_line
 				echo "configuring MLNX_OFED with all the flags:"
 				echo "${@:2}"
@@ -1704,6 +1715,14 @@ main()
 		--without-gds)
 			CONFIG_GPU_DIRECT_STORAGE=
 			;;
+		--with-virtiofs-mod)
+			CONFIG_VIRTIO_FS="m"
+			CONFIG_FUSE_PASSTHROUGH=
+			CONFIG_FUSE_DAX=
+			;;
+		--without-virtiofs-mod)
+			CONFIG_VIRTIO_FS=
+			;;
 		--enable-container-build)
 			ENABLE_CONTAINER_BUILD=1
 			;;
@@ -1737,6 +1756,12 @@ main()
 		--without-fwctl)
 			CONFIG_FWCTL_MLX5=
 			CONFIG_FWCTL=
+			;;
+		--with-gcov)
+			CONFIG_MLX5_GCOV="y"
+			;;
+		--without-gcov)
+			CONFIG_MLX5_GCOV=
 			;;
 		--with-sf-cfg-drv)
 			CONFIG_MLX5_SF_CFG="y"
@@ -2095,6 +2120,16 @@ fi
 if ! check_kerver ${KVERSION} ${GDS_SUPPORTED_KVERSION}; then
 	CONFIG_GPU_DIRECT_STORAGE=
 fi
+
+# Enable VIRTIOFS only for supported kernels
+if ! check_kerver ${KVERSION} ${VIRTIOFS_SUPPORTED_KVERSION}; then
+	CONFIG_VIRTIO_FS=
+fi
+
+if check_kerver ${KVERSION} ${VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
+	CONFIG_VIRTIO_FS=
+fi
+
 
 if [ $ENABLE_CONTAINER_BUILD -eq 0 ]; then
     if [ -e "/.dockerenv" ] || (grep -q docker /proc/self/cgroup &>/dev/null); then

@@ -3158,6 +3158,22 @@ unsigned nvme_find_noiob_from_bdev(struct block_device *bdev)
 }
 EXPORT_SYMBOL_GPL(nvme_find_noiob_from_bdev);
 
+bool nvme_is_bdev_support_write_zero_cmd(struct block_device *bdev)
+{
+	struct nvme_ns *ns = disk_to_nvme_ns(bdev->bd_disk);
+
+	if (!ns || ns->ctrl->ops != &nvme_pci_ctrl_ops)
+		return false;
+
+	/*
+	 * The block device can support write zeroes even if the NVMe device
+	 * doesn't support write zeroes commands. So, check the controller's
+	 * write zeroes capability here.
+	 */
+	return !!ns->ctrl->max_zeroes_sectors;
+}
+EXPORT_SYMBOL_GPL(nvme_is_bdev_support_write_zero_cmd);
+
 static int nvme_dev_map(struct nvme_dev *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev->dev);

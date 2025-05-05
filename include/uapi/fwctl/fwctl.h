@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
-/* Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES.
+/* Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
  */
 #ifndef _UAPI_FWCTL_H
 #define _UAPI_FWCTL_H
@@ -43,7 +43,8 @@ enum {
 enum fwctl_device_type {
 	FWCTL_DEVICE_TYPE_ERROR = 0,
 	FWCTL_DEVICE_TYPE_MLX5 = 1,
-	FWCTL_DEVICE_TYPE_BNXT = 3,
+	FWCTL_DEVICE_TYPE_CXL = 2,
+	FWCTL_DEVICE_TYPE_PDS = 4,
 };
 
 /**

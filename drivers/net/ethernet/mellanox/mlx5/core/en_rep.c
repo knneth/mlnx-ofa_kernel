@@ -1812,6 +1812,7 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	mlx5e_rep_metadata_remove(priv, rep, false);
 	unregister_netdev(netdev);
 	mlx5e_rep_vnic_reporter_destroy(priv);
+	mlx5_devm_sf_port_type_eth_unset(dev, rpriv->rep->vport, netdev);
 	mlx5e_detach_netdev(priv);
 	priv->profile->cleanup(priv);
 	mlx5e_destroy_netdev(priv);

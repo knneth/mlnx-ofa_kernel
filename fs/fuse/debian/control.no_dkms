@@ -1,0 +1,14 @@
+Source: virtiofs
+Section: kernel
+Priority: optional
+Maintainer: Aurelien Aptel <aaptel@nvidia.com>
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, make
+Standards-Version: 4.2.0
+Homepage: http://nvidia.com
+
+Package: virtiofs-modules
+Section: kernel
+Architecture: any
+Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
+Description: virtiofs kernel modules
+ This package provides the binary code for the virtiofs kernel modules.

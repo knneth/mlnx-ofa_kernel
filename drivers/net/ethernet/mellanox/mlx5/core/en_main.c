@@ -793,7 +793,7 @@ static int mlx5e_init_rxq_rq(struct mlx5e_channel *c, struct mlx5e_params *param
 	rq->netdev       = c->netdev;
 	rq->priv         = c->priv;
 	rq->tstamp       = c->tstamp;
-	rq->clock        = &mdev->clock;
+	rq->clock        = mdev->clock;
 	rq->icosq        = &c->icosq;
 	rq->ix           = c->ix;
 	rq->channel      = c;
@@ -1725,7 +1725,7 @@ static int mlx5e_alloc_txqsq(struct mlx5e_channel *c,
 	int err;
 
 	sq->pdev      = c->pdev;
-	sq->clock     = &mdev->clock;
+	sq->clock     = mdev->clock;
 	sq->mkey_be   = c->mkey_be;
 	sq->netdev    = c->netdev;
 	sq->mdev      = c->mdev;
@@ -5306,11 +5306,9 @@ static int mlx5e_bridge_getlink(struct sk_buff *skb, u32 pid, u32 seq,
 	struct mlx5e_priv *priv = netdev_priv(dev);
 	struct mlx5_core_dev *mdev = priv->mdev;
 	u8 mode, setting;
-	int err;
 
-	err = mlx5_eswitch_get_vepa(mdev->priv.eswitch, &setting);
-	if (err)
-		return err;
+	if (mlx5_eswitch_get_vepa(mdev->priv.eswitch, &setting))
+		return -EOPNOTSUPP;
 	mode = setting ? BRIDGE_MODE_VEPA : BRIDGE_MODE_VEB;
 	return ndo_dflt_bridge_getlink(skb, pid, seq, dev,
 				       mode,

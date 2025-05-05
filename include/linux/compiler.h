@@ -6,10 +6,21 @@
 #include_next <linux/compiler.h>
 #include <linux/types.h>
 
+#ifndef HAVE_3_UNDERSCORE_ADDRESSABLE
+#undef __ADDRESSABLE
+
+#define ___ADDRESSABLE(sym, __attrs)						\
+	static void * __used __attrs						\
+	__UNIQUE_ID(__PASTE(__addressable_,sym)) = (void *)(uintptr_t)&sym;
+
+#define __ADDRESSABLE(sym) \
+	___ADDRESSABLE(sym, __section(".discard.addressable"))
+#endif
+
 #ifndef OPTIMIZER_HIDE_VAR
 /* Make the optimizer believe the variable can be manipulated arbitrarily. */
 #define OPTIMIZER_HIDE_VAR(var)                                         \
-	        __asm__ ("" : "=r" (var) : "0" (var))
+	__asm__ ("" : "=r" (var) : "0" (var))
 #endif
 
 #ifndef HAVE_CONST_READ_ONCE_SIZE

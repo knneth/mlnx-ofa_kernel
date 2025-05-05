@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/param.c
+
+Change-Id: I5ce16b7f326b38ad1fc841193449f0a56ccbacd6
+---
+ net/mlxdevm/param.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/net/mlxdevm/param.c
++++ b/net/mlxdevm/param.c
+@@ -368,7 +368,9 @@ static void mlxdevm_param_notify(struct
+ 		return;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ }
+ #if 0
+ 
+@@ -429,7 +431,11 @@ static int
+ mlxdevm_param_type_get_from_info(struct genl_info *info,
+ 				 enum mlxdevm_param_type *param_type)
+ {
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_TYPE))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_TYPE])
++#endif
+ 		return -EINVAL;
+ 
+ 	switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE])) {
+@@ -449,7 +455,11 @@ mlxdevm_param_type_get_from_info(struct
+ 		*param_type = MLXDEVM_PARAM_TYPE_BOOL;
+ 		break;
+ 	case NLA_NESTED:
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 		if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE))
++#else
++		if(!info->attrs[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE])
++#endif
+ 			return -EINVAL;
+ 
+ 		switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE])) {
+@@ -526,7 +536,11 @@ mlxdevm_param_get_from_info(struct xarra
+ {
+ 	char *param_name;
+ 
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_NAME))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_NAME])
++#endif
+ 		return NULL;
+ 
+ 	param_name = nla_data(info->attrs[MLXDEVM_ATTR_PARAM_NAME]);
+@@ -592,7 +606,11 @@ static int __mlxdevm_nl_cmd_param_set_do
+ 			return err;
+ 	}
+ 
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_VALUE_CMODE))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_VALUE_CMODE])
++#endif
+ 		return -EINVAL;
+ 	cmode = nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_VALUE_CMODE]);
+ 	if (!mlxdevm_param_cmode_is_supported(param, cmode))

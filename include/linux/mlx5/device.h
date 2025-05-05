@@ -549,6 +549,7 @@ struct mlx5_cmd_layout {
 };
 
 enum mlx5_rfr_severity_bit_offsets {
+	MLX5_CRR_BIT_OFFSET = 0x6,
 	MLX5_RFR_BIT_OFFSET = 0x7,
 };
 
@@ -1550,8 +1551,8 @@ static inline u16 mlx5_to_sw_pkey_sz(int pkey_sz)
 	return MLX5_MIN_PKEY_TABLE_SIZE << pkey_sz;
 }
 
-#define MLX5_RDMA_RX_NUM_COUNTERS_PRIOS 2
-#define MLX5_RDMA_TX_NUM_COUNTERS_PRIOS 1
+#define MLX5_RDMA_RX_NUM_COUNTERS_PRIOS 6
+#define MLX5_RDMA_TX_NUM_COUNTERS_PRIOS 4
 #define MLX5_BY_PASS_NUM_REGULAR_PRIOS 16
 #define MLX5_BY_PASS_NUM_DONT_TRAP_PRIOS 16
 #define MLX5_BY_PASS_NUM_MULTICAST_PRIOS 1

@@ -177,7 +177,7 @@ esw_acl_create_meter(struct mlx5_vport *vport, struct vport_meter *meter,
 		 MLX5_FLOW_METER_COLOR_RED);
 	flow_act.action |= MLX5_FLOW_CONTEXT_ACTION_COUNT;
 	drop_ctr_dst.type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-	drop_ctr_dst.counter_id = mlx5_fc_id(drop_counter);
+	drop_ctr_dst.counter = drop_counter;
 
 	rule = mlx5_add_flow_rules(meter->color_tbl, spec, &flow_act,
 				   &drop_ctr_dst, 1);

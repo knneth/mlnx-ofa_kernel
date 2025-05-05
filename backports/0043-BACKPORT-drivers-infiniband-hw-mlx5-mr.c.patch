@@ -173,7 +173,7 @@ Change-Id: I9e0a635ed4688297f7e2d094c70e45f2f9e42bab
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2137,15 +2173,19 @@ static int mlx5_revoke_mr(struct mlx5_ib
+@@ -2138,15 +2174,19 @@ static int mlx5_revoke_mr(struct mlx5_ib
  	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
  	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
  	bool is_odp = is_odp_mr(mr);
@@ -193,7 +193,7 @@ Change-Id: I9e0a635ed4688297f7e2d094c70e45f2f9e42bab
  
  	if (mr->mmkey.cacheable && !mlx5r_umr_revoke_mr(mr) && !cache_ent_find_and_store(dev, mr)) {
  		ent = mr->mmkey.cache_ent;
-@@ -2182,11 +2222,13 @@ out:
+@@ -2183,11 +2223,13 @@ out:
  		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  	}
  
@@ -207,7 +207,7 @@ Change-Id: I9e0a635ed4688297f7e2d094c70e45f2f9e42bab
  
  	return rc;
  }
-@@ -3141,10 +3183,16 @@ static struct attribute *cache_default_a
+@@ -3142,10 +3184,16 @@ static struct attribute *cache_default_a
  	NULL
  };
  

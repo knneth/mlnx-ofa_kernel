@@ -264,6 +264,8 @@ static int mlx5_sync_reset_clear_reset_requested(struct mlx5_core_dev *dev, bool
 		return -EALREADY;
 	}
 
+	if (current_work() != &fw_reset->reset_timeout_work.work)
+		cancel_delayed_work(&fw_reset->reset_timeout_work);
 	mlx5_stop_sync_reset_poll(dev);
 	if (poll_health)
 		mlx5_start_health_poll(dev);
@@ -276,7 +278,6 @@ static void mlx5_sync_reset_reload_work(struct work_struct *work)
 						      reset_reload_work);
 	struct mlx5_core_dev *dev = fw_reset->dev;
 
-	cancel_delayed_work(&fw_reset->reset_timeout_work);
 	mlx5_sync_reset_clear_reset_requested(dev, false);
 	mlx5_enter_error_state(dev, true);
 	mlx5_fw_reset_complete_reload(dev, false);
@@ -335,6 +336,10 @@ static int mlx5_sync_reset_set_reset_requested(struct mlx5_core_dev *dev)
 	}
 	mlx5_stop_health_poll(dev, true);
 	mlx5_start_sync_reset_poll(dev);
+
+	if (!test_bit(MLX5_FW_RESET_FLAGS_DROP_NEW_REQUESTS, &fw_reset->reset_flags))
+		schedule_delayed_work(&fw_reset->reset_timeout_work,
+				      msecs_to_jiffies(mlx5_tout_ms(dev, PCI_SYNC_UPDATE)));
 	return 0;
 }
 
@@ -352,14 +357,11 @@ static void mlx5_fw_live_patch_event(struct work_struct *work)
 }
 
 #if IS_ENABLED(CONFIG_HOTPLUG_PCI_PCIE)
-static int mlx5_check_hotplug_interrupt(struct mlx5_core_dev *dev)
+static int mlx5_check_hotplug_interrupt(struct mlx5_core_dev *dev,
+					struct pci_dev *bridge)
 {
-	struct pci_dev *bridge = dev->pdev->bus->self;
 	u16 reg16;
 	int err;
-
-	if (!bridge)
-		return -EOPNOTSUPP;
 
 	err = pcie_capability_read_word(bridge, PCI_EXP_SLTCTL, &reg16);
 	if (err)
@@ -423,8 +425,14 @@ static int mlx5_check_dev_ids(struct mlx5_core_dev *dev, u16 dev_id)
 static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 				      u8 reset_method)
 {
+	struct pci_dev *bridge = dev->pdev->bus->self;
 	u16 dev_id;
 	int err;
+
+	if (!bridge) {
+		mlx5_core_warn(dev, "The PCI bus bridge is not accessible\n");
+		return false;
+	}
 
 	if (!MLX5_CAP_GEN(dev, fast_teardown)) {
 		mlx5_core_warn(dev, "fast teardown is not supported by firmware\n");
@@ -433,7 +441,7 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 
 #if IS_ENABLED(CONFIG_HOTPLUG_PCI_PCIE)
 	if (reset_method != MLX5_MFRL_REG_PCI_RESET_METHOD_HOT_RESET) {
-		err = mlx5_check_hotplug_interrupt(dev);
+		err = mlx5_check_hotplug_interrupt(dev, bridge);
 		if (err)
 			return false;
 	}
@@ -450,7 +458,6 @@ static void mlx5_sync_reset_request_event(struct work_struct *work)
 	struct mlx5_fw_reset *fw_reset = container_of(work, struct mlx5_fw_reset,
 						      reset_request_work);
 	struct mlx5_core_dev *dev = fw_reset->dev;
-	unsigned long sync_reset_timeout;
 	bool nack_request = false;
 	u8 sync_flow;
 	int err;
@@ -475,8 +482,6 @@ static void mlx5_sync_reset_request_event(struct work_struct *work)
 	if (mlx5_sync_reset_set_reset_requested(dev))
 		return;
 
-	sync_reset_timeout = msecs_to_jiffies(mlx5_tout_ms(dev, PCI_SYNC_UPDATE));
-	schedule_delayed_work(&fw_reset->reset_timeout_work, sync_reset_timeout);
 	err = mlx5_fw_reset_set_reset_sync_ack(dev);
 	if (err)
 		mlx5_core_warn(dev, "PCI Sync FW Update Reset Ack Failed. Error code: %d\n", err);
@@ -493,9 +498,6 @@ static int mlx5_pci_link_toggle(struct mlx5_core_dev *dev, u16 dev_id)
 	int cap, err;
 	u32 reg32;
 	u16 reg16;
-
-	if (!bridge)
-		return -EOPNOTSUPP;
 
 	cap = pci_find_capability(bridge, PCI_CAP_ID_EXP);
 	if (!cap)
@@ -608,9 +610,6 @@ static int mlx5_sync_pci_reset(struct mlx5_core_dev *dev, u8 reset_method)
 	u16 dev_id;
 	int err;
 
-	if (mlx5_core_is_ecpf(dev))
-		return -ENOTSUPP;
-
 	err = pci_read_config_word(dev->pdev, PCI_DEVICE_ID, &dev_id);
 	if (err)
 		return pcibios_err_to_errno(err);
@@ -643,7 +642,6 @@ static void mlx5_sync_reset_now_event(struct work_struct *work)
 	struct mlx5_core_dev *dev = fw_reset->dev;
 	int err;
 
-	cancel_delayed_work(&fw_reset->reset_timeout_work);
 	if (mlx5_sync_reset_clear_reset_requested(dev, false))
 		return;
 
@@ -742,7 +740,6 @@ static void mlx5_sync_reset_abort_event(struct work_struct *work)
 						      reset_abort_work);
 	struct mlx5_core_dev *dev = fw_reset->dev;
 
-	cancel_delayed_work(&fw_reset->reset_timeout_work);
 	if (mlx5_sync_reset_clear_reset_requested(dev, true))
 		return;
 	mlx5_core_warn(dev, "PCI Sync FW Update Reset Aborted.\n");

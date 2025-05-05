@@ -118,7 +118,7 @@ get_upstream_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*upstream_issue.*//')
 }
 
 get_tag_from_csv()

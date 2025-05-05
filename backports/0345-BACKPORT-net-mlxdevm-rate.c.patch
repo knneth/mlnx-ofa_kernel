@@ -1,0 +1,80 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
+
+Change-Id: Ie62288f6a526859fe1c373fe8b1b38b2b8f5c964
+---
+ net/mlxdevm/rate.c | 55 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 55 insertions(+)
+
+--- a/net/mlxdevm/rate.c
++++ b/net/mlxdevm/rate.c
+@@ -159,7 +159,9 @@ static void mlxdevm_rate_notify(struct m
+ 		return;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ }
+ #if 0
+ 
+@@ -627,6 +629,59 @@ devl_rate_node_create(struct devlink *de
+ EXPORT_SYMBOL_GPL(devl_rate_node_create);
+ #endif
+ 
++#ifndef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++/**
++ * mlxdevm_rate_node_register - Register a rate node
++ * @dev: mlxdevm instance
++ * @node: node to register
++ *
++ * mlxdevm_rate_node_register() registers a rate node. Caller must provide
++ * a valid and unique node name.
++ * Return: Returns 0 on success, error code otherwise.
++ */
++int mlxdevm_rate_node_register(struct mlxdevm *dev,
++                                struct mlxdevm_rate_node *node)
++{
++        struct mlxdevm_rate_node *cur;
++        int err = 0;
++
++        if (!node->name) {
++                WARN_ON(1);
++                return -EINVAL;
++        }
++        INIT_LIST_HEAD(&node->list);
++        down_write(&dev->rate_node_rwsem);
++        list_for_each_entry(cur, &dev->rate_node_list, list) {
++                if (strcmp(cur->name, node->name) == 0) {
++                        err = -EEXIST;
++                        goto out;
++                }
++        }
++        list_add_tail(&node->list, &dev->rate_node_list);
++        /* Given node is unique, add it. */
++out:
++        up_write(&dev->rate_node_rwsem);
++        return err;
++}
++EXPORT_SYMBOL_GPL(mlxdevm_rate_node_register);
++
++/**
++ * mlxdevm_rate_node_unregister - Unregister a previously registered rate node
++ * @dev: mlxdevm instance
++ * @node: node to unregister
++ *
++ * mlxdevm_rate_node_unregister() unregisters a rate node.
++ */
++void mlxdevm_rate_node_unregister(struct mlxdevm *dev,
++                                   struct mlxdevm_rate_node *node)
++{
++        down_write(&dev->rate_node_rwsem);
++        list_del(&node->list);
++        up_write(&dev->rate_node_rwsem);
++}
++EXPORT_SYMBOL_GPL(mlxdevm_rate_node_unregister);
++#endif
++
+ /**
+  * devm_rate_leaf_create - create mlxdevm rate leaf
+  * @mlxdevm_port: mlxdevm port object to create rate object on

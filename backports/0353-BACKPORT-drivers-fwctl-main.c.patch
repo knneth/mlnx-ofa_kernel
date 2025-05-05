@@ -34,7 +34,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  #include <uapi/fwctl/fwctl.h>
  
 +#ifndef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER
-+DEFINE_FREE(kvfree_wrapper, void *, kvfree(_T));
++DEFINE_FREE(kvfree_wrapper, void *, if (!IS_ERR_OR_NULL(_T)) kvfree(_T))
 +#endif
 +
 +#ifndef HAVE_CLEANUP_H
@@ -51,7 +51,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  enum {
  	FWCTL_MAX_DEVICES = 4096,
  	MAX_RPC_LEN = SZ_2M,
-@@ -87,6 +115,13 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -93,6 +121,13 @@ static int fwctl_cmd_rpc(struct fwctl_uc
  	struct fwctl_device *fwctl = ucmd->uctx->fwctl;
  	struct fwctl_rpc *cmd = ucmd->cmd;
  	size_t out_len;
@@ -65,7 +65,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  
  	if (cmd->in_len > MAX_RPC_LEN || cmd->out_len > MAX_RPC_LEN)
  		return -EMSGSIZE;
-@@ -113,15 +148,14 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -119,15 +154,14 @@ static int fwctl_cmd_rpc(struct fwctl_uc
  		return -EOPNOTSUPP;
  	}
  
@@ -83,7 +83,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  	if (IS_ERR(outbuf))
  		return PTR_ERR(outbuf);
  	if (outbuf == inbuf) {
-@@ -130,7 +164,7 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -136,7 +170,7 @@ static int fwctl_cmd_rpc(struct fwctl_uc
  	}
  
  	if (copy_to_user(u64_to_user_ptr(cmd->out), outbuf,
@@ -92,7 +92,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  		return -EFAULT;
  
  	cmd->out_len = out_len;
-@@ -150,6 +184,79 @@ struct fwctl_ioctl_op {
+@@ -156,6 +190,79 @@ struct fwctl_ioctl_op {
  	int (*execute)(struct fwctl_ucmd *ucmd);
  };
  
@@ -169,10 +169,10 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
 +}
 +#endif
 +
- #define IOCTL_OP(_ioctl, _fn, _struct, _last)                         \
- 	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                        \
- 		.size = sizeof(_struct) +                             \
-@@ -208,13 +315,13 @@ static int fwctl_fops_open(struct inode
+ #define IOCTL_OP(_ioctl, _fn, _struct, _last)                               \
+ 	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                              \
+ 		.size = sizeof(_struct) +                                   \
+@@ -214,13 +321,13 @@ static int fwctl_fops_open(struct inode
  	struct fwctl_device *fwctl =
  		container_of(inode->i_cdev, struct fwctl_device, cdev);
  	int ret;
@@ -188,7 +188,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  	if (!uctx)
  		return -ENOMEM;
  
-@@ -228,7 +335,13 @@ static int fwctl_fops_open(struct inode
+@@ -234,7 +341,13 @@ static int fwctl_fops_open(struct inode
  	}
  
  	get_device(&fwctl->dev);
@@ -202,7 +202,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  	return 0;
  }
  
-@@ -272,12 +385,20 @@ static void fwctl_device_release(struct
+@@ -278,12 +391,20 @@ static void fwctl_device_release(struct
  	struct fwctl_device *fwctl =
  		container_of(device, struct fwctl_device, dev);
  
@@ -223,7 +223,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  {
  	return kasprintf(GFP_KERNEL, "fwctl/%s", dev_name(dev));
  }
-@@ -297,7 +418,11 @@ _alloc_device(struct device *parent, con
+@@ -303,7 +424,11 @@ _alloc_device(struct device *parent, con
  	if (!fwctl)
  		return NULL;
  
@@ -234,8 +234,8 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
 +#endif
  	if (devnum < 0)
  		return NULL;
- 	fwctl->dev.devt = fwctl_dev + devnum;
-@@ -309,7 +434,11 @@ _alloc_device(struct device *parent, con
+ 
+@@ -316,7 +441,11 @@ _alloc_device(struct device *parent, con
  	INIT_LIST_HEAD(&fwctl->uctx_list);
  
  	device_initialize(&fwctl->dev);
@@ -247,7 +247,7 @@ Change-Id: I1544a11dffe4216f440cd50068cc7403c7191277
  }
  
  /* Drivers use the fwctl_alloc_device() wrapper */
-@@ -334,7 +463,11 @@ struct fwctl_device *_fwctl_alloc_device
+@@ -341,7 +470,11 @@ struct fwctl_device *_fwctl_alloc_device
  		return NULL;
  
  	fwctl->ops = ops;

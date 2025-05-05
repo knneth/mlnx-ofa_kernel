@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/apple.c
 
 Change-Id: I68b191f84e99e3e44ee0f25be8ec559454053482
 ---
- drivers/nvme/host/apple.c | 25 +++++++++++++++++++++++++
- 1 file changed, 25 insertions(+)
+ drivers/nvme/host/apple.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
 
 --- a/drivers/nvme/host/apple.c
 +++ b/drivers/nvme/host/apple.c
@@ -33,7 +33,27 @@ Change-Id: I68b191f84e99e3e44ee0f25be8ec559454053482
  {
  	struct apple_nvme_iod *iod = blk_mq_rq_to_pdu(req);
  	struct apple_nvme_queue *q = iod->q;
-@@ -1535,7 +1544,11 @@ static int apple_nvme_probe(struct platf
+@@ -1251,7 +1260,9 @@ static int apple_nvme_alloc_tagsets(stru
+ 	anv->admin_tagset.timeout = NVME_ADMIN_TIMEOUT;
+ 	anv->admin_tagset.numa_node = NUMA_NO_NODE;
+ 	anv->admin_tagset.cmd_size = sizeof(struct apple_nvme_iod);
++#ifdef HAVE_BLK_MQ_F_NO_SCHED
+ 	anv->admin_tagset.flags = BLK_MQ_F_NO_SCHED;
++#endif
+ 	anv->admin_tagset.driver_data = &anv->adminq;
+ 
+ 	ret = blk_mq_alloc_tag_set(&anv->admin_tagset);
+@@ -1275,7 +1286,9 @@ static int apple_nvme_alloc_tagsets(stru
+ 	anv->tagset.timeout = NVME_IO_TIMEOUT;
+ 	anv->tagset.numa_node = NUMA_NO_NODE;
+ 	anv->tagset.cmd_size = sizeof(struct apple_nvme_iod);
++#ifdef HAVE_BLK_MQ_F_SHOULD_MERGE
+ 	anv->tagset.flags = BLK_MQ_F_SHOULD_MERGE;
++#endif
+ 	anv->tagset.driver_data = &anv->ioq;
+ 
+ 	ret = blk_mq_alloc_tag_set(&anv->tagset);
+@@ -1535,7 +1548,11 @@ static int apple_nvme_probe(struct platf
  	if (ret)
  		goto out_put_ctrl;
  
@@ -45,11 +65,12 @@ Change-Id: I68b191f84e99e3e44ee0f25be8ec559454053482
  	if (IS_ERR(anv->ctrl.admin_q)) {
  		ret = -ENOMEM;
  		anv->ctrl.admin_q = NULL;
-@@ -1554,7 +1567,11 @@ out_put_ctrl:
+@@ -1554,7 +1571,12 @@ out_put_ctrl:
  	return ret;
  }
  
-+#ifdef HAVE_PLATFORM_DEVICE_REMOVE_NEW
++#if defined(HAVE_PLATFORM_DEVICE_REMOVE_NEW) || \
++	defined(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET)
  static void apple_nvme_remove(struct platform_device *pdev)
 +#else
 +static int apple_nvme_remove(struct platform_device *pdev)
@@ -57,18 +78,19 @@ Change-Id: I68b191f84e99e3e44ee0f25be8ec559454053482
  {
  	struct apple_nvme *anv = platform_get_drvdata(pdev);
  
-@@ -1569,6 +1586,10 @@ static void apple_nvme_remove(struct pla
+@@ -1569,6 +1591,11 @@ static void apple_nvme_remove(struct pla
  		apple_rtkit_shutdown(anv->rtk);
  
  	apple_nvme_detach_genpd(anv);
 +
-+#ifndef HAVE_PLATFORM_DEVICE_REMOVE_NEW
++#if !defined(HAVE_PLATFORM_DEVICE_REMOVE_NEW) && \
++	!defined(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET)
 +	return 0;
 +#endif
  }
  
  static void apple_nvme_shutdown(struct platform_device *pdev)
-@@ -1618,7 +1639,11 @@ static struct platform_driver apple_nvme
+@@ -1618,7 +1645,11 @@ static struct platform_driver apple_nvme
  		.pm = pm_sleep_ptr(&apple_nvme_pm_ops),
  	},
  	.probe = apple_nvme_probe,

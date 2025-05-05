@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/core.c
 
 Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
 ---
- drivers/nvme/host/core.c | 1169 +++++++++++++++++++++++++++++++++++++-
- 1 file changed, 1150 insertions(+), 19 deletions(-)
+ drivers/nvme/host/core.c | 1224 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 1205 insertions(+), 19 deletions(-)
 
 --- a/drivers/nvme/host/core.c
 +++ b/drivers/nvme/host/core.c
@@ -946,7 +946,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  }
  
  static void nvme_set_chunk_sectors(struct nvme_ns *ns, struct nvme_id_ns *id,
-@@ -2104,43 +2528,251 @@ static void nvme_set_chunk_sectors(struc
+@@ -2104,43 +2528,266 @@ static void nvme_set_chunk_sectors(struc
  		return;
  	}
  
@@ -1156,12 +1156,20 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  static int nvme_update_ns_info_generic(struct nvme_ns *ns,
  		struct nvme_ns_info *info)
  {
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	unsigned int memflags;
++#endif
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
  	struct queue_limits lim;
  	int ret;
 +#endif
  
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	memflags = blk_mq_freeze_queue(ns->disk->queue);
++#else
  	blk_mq_freeze_queue(ns->disk->queue);
++#endif
++
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
  	lim = queue_limits_start_update(ns->disk->queue);
  	nvme_set_ctrl_limits(ns->ctrl, &lim);
@@ -1170,7 +1178,11 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
 +	nvme_set_ctrl_limits(ns->ctrl, ns->disk->queue);
 +#endif
  	set_disk_ro(ns->disk, nvme_ns_is_readonly(ns, info));
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	blk_mq_unfreeze_queue(ns->disk->queue, memflags);
++#else
  	blk_mq_unfreeze_queue(ns->disk->queue);
++#endif
  
  	/* Hide the block-interface for these devices */
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
@@ -1192,13 +1204,24 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	struct nvme_id_ns_nvm *nvm = NULL;
  	struct nvme_zone_info zi = {};
  	struct nvme_id_ns *id;
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	unsigned int memflags;
++#endif
 +#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
  	sector_t capacity;
 +#endif
  	unsigned lbaf;
  	int ret;
  
-@@ -2173,6 +2805,7 @@ static int nvme_update_ns_info_block(str
+@@ -2169,10 +2816,15 @@ static int nvme_update_ns_info_block(str
+ 			goto out;
+ 	}
+ 
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	memflags = blk_mq_freeze_queue(ns->disk->queue);
++#else
+ 	blk_mq_freeze_queue(ns->disk->queue);
++#endif
  	ns->head->lba_shift = id->lbaf[lbaf].ds;
  	ns->noiob = le16_to_cpu(id->noiob);
  	ns->head->nuse = le64_to_cpu(id->nuse);
@@ -1206,7 +1229,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	capacity = nvme_lba_to_sect(ns->head, le64_to_cpu(id->nsze));
  
  	lim = queue_limits_start_update(ns->disk->queue);
-@@ -2186,18 +2819,23 @@ static int nvme_update_ns_info_block(str
+@@ -2186,27 +2838,50 @@ static int nvme_update_ns_info_block(str
  	    ns->head->ids.csi == NVME_CSI_ZNS)
  		nvme_update_zone_info(ns, &lim, &zi);
  
@@ -1231,7 +1254,12 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  		capacity = 0;
  
  	ret = queue_limits_commit_update(ns->disk->queue, &lim);
-@@ -2206,7 +2844,21 @@ static int nvme_update_ns_info_block(str
+ 	if (ret) {
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++		blk_mq_unfreeze_queue(ns->disk->queue, memflags);
++#else
+ 		blk_mq_unfreeze_queue(ns->disk->queue);
++#endif
  		goto out;
  	}
  
@@ -1253,7 +1281,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  	/*
  	 * Only set the DEAC bit if the device guarantees that reads from
-@@ -2217,14 +2869,23 @@ static int nvme_update_ns_info_block(str
+@@ -2217,14 +2892,27 @@ static int nvme_update_ns_info_block(str
  	if ((id->dlfeat & 0x7) == 0x1 && (id->dlfeat & (1 << 3)))
  		ns->head->features |= NVME_NS_DEAC;
  	set_disk_ro(ns->disk, nvme_ns_is_readonly(ns, info));
@@ -1261,7 +1289,11 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
 +	blk_queue_write_cache(ns->disk->queue, vwc, vwc);
 +#endif
  	set_bit(NVME_NS_READY, &ns->flags);
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++	blk_mq_unfreeze_queue(ns->disk->queue, memflags);
++#else
  	blk_mq_unfreeze_queue(ns->disk->queue);
++#endif
  
 +#ifdef CONFIG_BLK_DEV_ZONED
  	if (blk_queue_is_zoned(ns->queue)) {
@@ -1277,7 +1309,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  	ret = 0;
  out:
-@@ -2272,8 +2933,10 @@ static int nvme_update_ns_info(struct nv
+@@ -2272,10 +2960,19 @@ static int nvme_update_ns_info(struct nv
  	}
  
  	if (!ret && nvme_ns_head_multipath(ns->head)) {
@@ -1285,10 +1317,19 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  		struct queue_limits *ns_lim = &ns->disk->queue->limits;
  		struct queue_limits lim;
 +#endif
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++		unsigned int memflags;
++#endif
  
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++		memflags = blk_mq_freeze_queue(ns->head->disk->queue);
++#else
  		blk_mq_freeze_queue(ns->head->disk->queue);
++#endif
  		/*
-@@ -2291,6 +2954,7 @@ static int nvme_update_ns_info(struct nv
+ 		 * queue_limits mixes values that are the hardware limitations
+ 		 * for bio splitting with what is the device configuration.
+@@ -2291,6 +2988,7 @@ static int nvme_update_ns_info(struct nv
  		 * the splitting limits in to make sure we still obey possibly
  		 * lower limitations of other controllers.
  		 */
@@ -1296,7 +1337,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  		lim = queue_limits_start_update(ns->head->disk->queue);
  		lim.logical_block_size = ns_lim->logical_block_size;
  		lim.physical_block_size = ns_lim->physical_block_size;
-@@ -2298,22 +2962,39 @@ static int nvme_update_ns_info(struct nv
+@@ -2298,22 +2996,43 @@ static int nvme_update_ns_info(struct nv
  		lim.io_opt = ns_lim->io_opt;
  		queue_limits_stack_bdev(&lim, ns->disk->part0, 0,
  					ns->head->disk->disk_name);
@@ -1326,7 +1367,11 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
 +		blk_queue_update_readahead(ns->head->disk->queue);
 +#endif
 +#endif
++#ifdef HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE /* Forward port */
++		blk_mq_unfreeze_queue(ns->head->disk->queue, memflags);
++#else
  		blk_mq_unfreeze_queue(ns->head->disk->queue);
++#endif
  	}
  
  	return ret;
@@ -1337,7 +1382,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  int nvme_ns_get_unique_id(struct nvme_ns *ns, u8 id[16],
  		enum blk_unique_id type)
  {
-@@ -2339,8 +3020,9 @@ static int nvme_get_unique_id(struct gen
+@@ -2339,8 +3058,9 @@ static int nvme_get_unique_id(struct gen
  {
  	return nvme_ns_get_unique_id(disk->private_data, id, type);
  }
@@ -1348,7 +1393,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  static int nvme_sec_submit(void *data, u16 spsp, u8 secp, void *buffer, size_t len,
  		bool send)
  {
-@@ -2375,7 +3057,7 @@ static void nvme_configure_opal(struct n
+@@ -2375,7 +3095,7 @@ static void nvme_configure_opal(struct n
  static void nvme_configure_opal(struct nvme_ctrl *ctrl, bool was_suspended)
  {
  }
@@ -1357,7 +1402,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  #ifdef CONFIG_BLK_DEV_ZONED
  static int nvme_report_zones(struct gendisk *disk, sector_t sector,
-@@ -2391,12 +3073,21 @@ static int nvme_report_zones(struct gend
+@@ -2391,12 +3111,21 @@ static int nvme_report_zones(struct gend
  const struct block_device_operations nvme_bdev_ops = {
  	.owner		= THIS_MODULE,
  	.ioctl		= nvme_ioctl,
@@ -1379,7 +1424,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	.pr_ops		= &nvme_pr_ops,
  };
  
-@@ -2853,11 +3544,12 @@ static void nvme_init_subnqn(struct nvme
+@@ -2853,11 +3582,12 @@ static void nvme_init_subnqn(struct nvme
  {
  	size_t nqnlen;
  	int off;
@@ -1393,7 +1438,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  			return;
  		}
  
-@@ -2886,7 +3578,11 @@ static void nvme_release_subsystem(struc
+@@ -2886,7 +3616,11 @@ static void nvme_release_subsystem(struc
  		container_of(dev, struct nvme_subsystem, dev);
  
  	if (subsys->instance >= 0)
@@ -1405,7 +1450,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	kfree(subsys);
  }
  
-@@ -3010,7 +3706,11 @@ static int nvme_init_subsystem(struct nv
+@@ -3010,7 +3744,11 @@ static int nvme_init_subsystem(struct nv
  	subsys->awupf = le16_to_cpu(id->awupf);
  	nvme_mpath_default_iopolicy(subsys);
  
@@ -1417,7 +1462,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	subsys->dev.release = nvme_release_subsystem;
  	subsys->dev.groups = nvme_subsys_attrs_groups;
  	dev_set_name(&subsys->dev, "nvme-subsys%d", ctrl->instance);
-@@ -3260,7 +3960,9 @@ static int nvme_check_ctrl_fabric_info(s
+@@ -3260,7 +3998,9 @@ static int nvme_check_ctrl_fabric_info(s
  
  static int nvme_init_identify(struct nvme_ctrl *ctrl)
  {
@@ -1427,7 +1472,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	struct nvme_id_ctrl *id;
  	u32 max_hw_sectors;
  	bool prev_apst_enabled;
-@@ -3327,11 +4029,15 @@ static int nvme_init_identify(struct nvm
+@@ -3327,11 +4067,15 @@ static int nvme_init_identify(struct nvm
  	ctrl->max_hw_sectors =
  		min_not_zero(ctrl->max_hw_sectors, max_hw_sectors);
  
@@ -1443,7 +1488,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  	ctrl->sgls = le32_to_cpu(id->sgls);
  	ctrl->kas = le16_to_cpu(id->kas);
-@@ -3495,7 +4201,9 @@ static const struct file_operations nvme
+@@ -3495,7 +4239,9 @@ static const struct file_operations nvme
  	.release	= nvme_dev_release,
  	.unlocked_ioctl	= nvme_dev_ioctl,
  	.compat_ioctl	= compat_ptr_ioctl,
@@ -1453,7 +1498,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  };
  
  static struct nvme_ns_head *nvme_find_ns_head(struct nvme_subsystem *subsys,
-@@ -3541,7 +4249,11 @@ static int nvme_subsys_check_duplicate_i
+@@ -3541,7 +4287,11 @@ static int nvme_subsys_check_duplicate_i
  
  static void nvme_cdev_rel(struct device *dev)
  {
@@ -1465,7 +1510,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  }
  
  void nvme_cdev_del(struct cdev *cdev, struct device *cdev_device)
-@@ -3555,11 +4267,19 @@ int nvme_cdev_add(struct cdev *cdev, str
+@@ -3555,11 +4305,19 @@ int nvme_cdev_add(struct cdev *cdev, str
  {
  	int minor, ret;
  
@@ -1485,7 +1530,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	cdev_device->release = nvme_cdev_rel;
  	device_initialize(cdev_device);
  	cdev_init(cdev, fops);
-@@ -3588,8 +4308,12 @@ static const struct file_operations nvme
+@@ -3588,8 +4346,12 @@ static const struct file_operations nvme
  	.release	= nvme_ns_chr_release,
  	.unlocked_ioctl	= nvme_ns_chr_ioctl,
  	.compat_ioctl	= compat_ptr_ioctl,
@@ -1498,7 +1543,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  };
  
  static int nvme_add_ns_cdev(struct nvme_ns *ns)
-@@ -3620,7 +4344,11 @@ static struct nvme_ns_head *nvme_alloc_n
+@@ -3620,7 +4382,11 @@ static struct nvme_ns_head *nvme_alloc_n
  	head = kzalloc(size, GFP_KERNEL);
  	if (!head)
  		goto out;
@@ -1510,7 +1555,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (ret < 0)
  		goto out_free_head;
  	head->instance = ret;
-@@ -3655,7 +4383,11 @@ static struct nvme_ns_head *nvme_alloc_n
+@@ -3655,7 +4421,11 @@ static struct nvme_ns_head *nvme_alloc_n
  out_cleanup_srcu:
  	cleanup_srcu_struct(&head->srcu);
  out_ida_remove:
@@ -1522,7 +1567,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  out_free_head:
  	kfree(head);
  out:
-@@ -3825,15 +4557,23 @@ static void nvme_ns_add_to_ctrl_list(str
+@@ -3825,15 +4595,23 @@ static void nvme_ns_add_to_ctrl_list(str
  
  static void nvme_alloc_ns(struct nvme_ctrl *ctrl, struct nvme_ns_info *info)
  {
@@ -1546,7 +1591,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (ctrl->opts && ctrl->opts->data_digest)
  		lim.features |= BLK_FEAT_STABLE_WRITES;
  	if (ctrl->ops->supports_pci_p2pdma &&
-@@ -3841,6 +4581,13 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3841,6 +4619,13 @@ static void nvme_alloc_ns(struct nvme_ct
  		lim.features |= BLK_FEAT_PCI_P2PDMA;
  
  	disk = blk_mq_alloc_disk(ctrl->tagset, &lim, ns);
@@ -1560,7 +1605,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (IS_ERR(disk))
  		goto out_free_ns;
  	disk->fops = &nvme_bdev_ops;
-@@ -3848,12 +4595,70 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3848,12 +4633,70 @@ static void nvme_alloc_ns(struct nvme_ct
  
  	ns->disk = disk;
  	ns->queue = disk->queue;
@@ -1631,7 +1676,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	/*
  	 * If multipathing is enabled, the device name for all disks and not
  	 * just those that represent shared namespaces needs to be based on the
-@@ -3865,6 +4670,7 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3865,6 +4708,7 @@ static void nvme_alloc_ns(struct nvme_ct
  	 * instance as shared namespaces will show up as multiple block
  	 * devices.
  	 */
@@ -1639,7 +1684,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (nvme_ns_head_multipath(ns->head)) {
  		sprintf(disk->disk_name, "nvme%dc%dn%d", ctrl->subsys->instance,
  			ctrl->instance, ns->head->instance);
-@@ -3876,9 +4682,31 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3876,9 +4720,31 @@ static void nvme_alloc_ns(struct nvme_ct
  		sprintf(disk->disk_name, "nvme%dn%d", ctrl->instance,
  			ns->head->instance);
  	}
@@ -1673,7 +1718,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  	mutex_lock(&ctrl->namespaces_lock);
  	/*
-@@ -3894,8 +4722,24 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3894,8 +4760,24 @@ static void nvme_alloc_ns(struct nvme_ct
  	synchronize_srcu(&ctrl->srcu);
  	nvme_get_ctrl(ctrl);
  
@@ -1698,7 +1743,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  
  	if (!nvme_ns_head_multipath(ns->head))
  		nvme_add_ns_cdev(ns);
-@@ -3912,12 +4756,20 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3912,12 +4794,20 @@ static void nvme_alloc_ns(struct nvme_ct
  
  	return;
  
@@ -1719,7 +1764,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
   out_unlink_ns:
  	mutex_lock(&ctrl->subsys->lock);
  	list_del_rcu(&ns->siblings);
-@@ -3925,8 +4777,17 @@ static void nvme_alloc_ns(struct nvme_ct
+@@ -3925,8 +4815,17 @@ static void nvme_alloc_ns(struct nvme_ct
  		list_del_init(&ns->head->entry);
  	mutex_unlock(&ctrl->subsys->lock);
  	nvme_put_ns_head(ns->head);
@@ -1737,7 +1782,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
   out_free_ns:
  	kfree(ns);
  }
-@@ -3967,6 +4828,9 @@ static void nvme_ns_remove(struct nvme_n
+@@ -3967,6 +4866,9 @@ static void nvme_ns_remove(struct nvme_n
  		nvme_cdev_del(&ns->cdev, &ns->cdev_device);
  	del_gendisk(ns->disk);
  
@@ -1747,7 +1792,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	mutex_lock(&ns->ctrl->namespaces_lock);
  	list_del_rcu(&ns->list);
  	mutex_unlock(&ns->ctrl->namespaces_lock);
-@@ -3997,7 +4861,18 @@ static void nvme_validate_ns(struct nvme
+@@ -3997,7 +4899,18 @@ static void nvme_validate_ns(struct nvme
  		goto out;
  	}
  
@@ -1766,7 +1811,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  out:
  	/*
  	 * Only remove the namespace if we got a fatal error back from the
-@@ -4283,14 +5158,32 @@ void nvme_remove_namespaces(struct nvme_
+@@ -4283,14 +5196,32 @@ void nvme_remove_namespaces(struct nvme_
  	mutex_unlock(&ctrl->namespaces_lock);
  	synchronize_srcu(&ctrl->srcu);
  
@@ -1799,7 +1844,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  		container_of(dev, struct nvme_ctrl, ctrl_device);
  	struct nvmf_ctrl_options *opts = ctrl->opts;
  	int ret;
-@@ -4536,7 +5429,9 @@ EXPORT_SYMBOL_GPL(nvme_complete_async_ev
+@@ -4536,7 +5467,9 @@ EXPORT_SYMBOL_GPL(nvme_complete_async_ev
  int nvme_alloc_admin_tag_set(struct nvme_ctrl *ctrl, struct blk_mq_tag_set *set,
  		const struct blk_mq_ops *ops, unsigned int cmd_size)
  {
@@ -1809,7 +1854,17 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	int ret;
  
  	memset(set, 0, sizeof(*set));
-@@ -4557,14 +5452,32 @@ int nvme_alloc_admin_tag_set(struct nvme
+@@ -4546,7 +5479,9 @@ int nvme_alloc_admin_tag_set(struct nvme
+ 		/* Reserved for fabric connect and keep alive */
+ 		set->reserved_tags = 2;
+ 	set->numa_node = ctrl->numa_node;
++#ifdef HAVE_BLK_MQ_F_NO_SCHED
+ 	set->flags = BLK_MQ_F_NO_SCHED;
++#endif
+ 	if (ctrl->ops->flags & NVME_F_BLOCKING)
+ 		set->flags |= BLK_MQ_F_BLOCKING;
+ 	set->cmd_size = cmd_size;
+@@ -4557,14 +5492,32 @@ int nvme_alloc_admin_tag_set(struct nvme
  	if (ret)
  		return ret;
  
@@ -1842,7 +1897,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  		if (IS_ERR(ctrl->fabrics_q)) {
  			ret = PTR_ERR(ctrl->fabrics_q);
  			goto out_cleanup_admin_q;
-@@ -4575,8 +5488,14 @@ int nvme_alloc_admin_tag_set(struct nvme
+@@ -4575,8 +5528,14 @@ int nvme_alloc_admin_tag_set(struct nvme
  	return 0;
  
  out_cleanup_admin_q:
@@ -1857,7 +1912,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  out_free_tagset:
  	blk_mq_free_tag_set(set);
  	ctrl->admin_q = NULL;
-@@ -4587,11 +5506,23 @@ EXPORT_SYMBOL_GPL(nvme_alloc_admin_tag_s
+@@ -4587,11 +5546,23 @@ EXPORT_SYMBOL_GPL(nvme_alloc_admin_tag_s
  
  void nvme_remove_admin_tag_set(struct nvme_ctrl *ctrl)
  {
@@ -1881,7 +1936,16 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	}
  	blk_mq_free_tag_set(ctrl->admin_tagset);
  }
-@@ -4623,21 +5554,35 @@ int nvme_alloc_io_tag_set(struct nvme_ct
+@@ -4616,28 +5587,44 @@ int nvme_alloc_io_tag_set(struct nvme_ct
+ 		/* Reserved for fabric connect */
+ 		set->reserved_tags = 1;
+ 	set->numa_node = ctrl->numa_node;
++#ifdef HAVE_BLK_MQ_F_SHOULD_MERGE
+ 	set->flags = BLK_MQ_F_SHOULD_MERGE;
++#endif
+ 	if (ctrl->ops->flags & NVME_F_BLOCKING)
+ 		set->flags |= BLK_MQ_F_BLOCKING;
+ 	set->cmd_size = cmd_size;
  	set->driver_data = ctrl;
  	set->nr_hw_queues = ctrl->queue_count - 1 - ctrl->num_p2p_queues;
  	set->timeout = NVME_IO_TIMEOUT;
@@ -1917,7 +1981,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	}
  
  	ctrl->tagset = set;
-@@ -4653,8 +5598,14 @@ EXPORT_SYMBOL_GPL(nvme_alloc_io_tag_set)
+@@ -4653,8 +5640,14 @@ EXPORT_SYMBOL_GPL(nvme_alloc_io_tag_set)
  void nvme_remove_io_tag_set(struct nvme_ctrl *ctrl)
  {
  	if (ctrl->ops->flags & NVME_F_FABRICS) {
@@ -1932,7 +1996,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	}
  	blk_mq_free_tag_set(ctrl->tagset);
  }
-@@ -4728,15 +5679,20 @@ static void nvme_free_ctrl(struct device
+@@ -4728,15 +5721,20 @@ static void nvme_free_ctrl(struct device
  	struct nvme_subsystem *subsys = ctrl->subsys;
  
  	if (!subsys || ctrl->instance != subsys->instance)
@@ -1954,7 +2018,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (subsys) {
  		mutex_lock(&nvme_subsystems_lock);
  		list_del(&ctrl->subsys_entry);
-@@ -4799,8 +5755,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4799,8 +5797,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  		ret = -ENOMEM;
  		goto out;
  	}
@@ -1967,7 +2031,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	if (ret < 0)
  		goto out;
  	ctrl->instance = ret;
-@@ -4815,7 +5774,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4815,7 +5816,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  	ctrl->device = &ctrl->ctrl_device;
  	ctrl->device->devt = MKDEV(MAJOR(nvme_ctrl_base_chr_devt),
  			ctrl->instance);
@@ -1979,7 +2043,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	ctrl->device->parent = ctrl->dev;
  	if (ops->dev_attr_groups)
  		ctrl->device->groups = ops->dev_attr_groups;
-@@ -4827,7 +5790,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
+@@ -4827,7 +5832,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctr
  	return ret;
  
  out_release_instance:
@@ -1991,7 +2055,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  out:
  	if (ctrl->discard_page)
  		__free_page(ctrl->discard_page);
-@@ -4836,6 +5803,34 @@ out:
+@@ -4836,6 +5845,34 @@ out:
  }
  EXPORT_SYMBOL_GPL(nvme_init_ctrl);
  
@@ -2026,7 +2090,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  /*
   * On success, returns with an elevated controller reference and caller must
   * use nvme_uninit_ctrl() to properly free resources associated with the ctrl.
-@@ -4878,7 +5873,11 @@ void nvme_mark_namespaces_dead(struct nv
+@@ -4878,7 +5915,11 @@ void nvme_mark_namespaces_dead(struct nv
  	srcu_idx = srcu_read_lock(&ctrl->srcu);
  	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
  				 srcu_read_lock_held(&ctrl->srcu))
@@ -2038,7 +2102,35 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	srcu_read_unlock(&ctrl->srcu, srcu_idx);
  }
  EXPORT_SYMBOL_GPL(nvme_mark_namespaces_dead);
-@@ -4943,21 +5942,81 @@ EXPORT_SYMBOL_GPL(nvme_start_freeze);
+@@ -4891,7 +5932,11 @@ void nvme_unfreeze(struct nvme_ctrl *ctr
+ 	srcu_idx = srcu_read_lock(&ctrl->srcu);
+ 	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
+ 				 srcu_read_lock_held(&ctrl->srcu))
++#ifdef HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE /* Forward port */
++		blk_mq_unfreeze_queue_non_owner(ns->queue);
++#else
+ 		blk_mq_unfreeze_queue(ns->queue);
++#endif
+ 	srcu_read_unlock(&ctrl->srcu, srcu_idx);
+ 	clear_bit(NVME_CTRL_FROZEN, &ctrl->flags);
+ }
+@@ -4936,28 +5981,97 @@ void nvme_start_freeze(struct nvme_ctrl
+ 	srcu_idx = srcu_read_lock(&ctrl->srcu);
+ 	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
+ 				 srcu_read_lock_held(&ctrl->srcu))
++#ifdef HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE /* Forward port */
++		/*
++		 * Typical non_owner use case is from pci driver, in which
++		 * start_freeze is called from timeout work function, but
++		 * unfreeze is done in reset work context
++		 */
++		blk_freeze_queue_start_non_owner(ns->queue);
++#else
+ 		blk_freeze_queue_start(ns->queue);
++#endif
+ 	srcu_read_unlock(&ctrl->srcu, srcu_idx);
+ }
+ EXPORT_SYMBOL_GPL(nvme_start_freeze);
  
  void nvme_quiesce_io_queues(struct nvme_ctrl *ctrl)
  {
@@ -2120,7 +2212,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  }
  EXPORT_SYMBOL_GPL(nvme_unquiesce_io_queues);
  
-@@ -4965,8 +6024,14 @@ void nvme_quiesce_admin_queue(struct nvm
+@@ -4965,8 +6079,14 @@ void nvme_quiesce_admin_queue(struct nvm
  {
  	if (!test_and_set_bit(NVME_CTRL_ADMIN_Q_STOPPED, &ctrl->flags))
  		blk_mq_quiesce_queue(ctrl->admin_q);
@@ -2135,7 +2227,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  }
  EXPORT_SYMBOL_GPL(nvme_quiesce_admin_queue);
  
-@@ -4994,8 +6059,11 @@ static inline bool disk_is_nvme(struct g
+@@ -4994,8 +6114,11 @@ static inline bool disk_is_nvme(struct g
  {
  	if (!disk_to_dev(disk)->parent)
  		return false;
@@ -2148,7 +2240,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  }
  
  struct nvme_ns *disk_to_nvme_ns(struct gendisk *disk)
-@@ -5090,36 +6158,88 @@ static int __init nvme_core_init(void)
+@@ -5090,36 +6213,88 @@ static int __init nvme_core_init(void)
  	if (result < 0)
  		goto destroy_delete_wq;
  
@@ -2238,7 +2330,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  unregister_chrdev:
  	unregister_chrdev_region(nvme_ctrl_base_chr_devt, NVME_MINORS);
  destroy_delete_wq:
-@@ -5134,10 +6254,18 @@ out:
+@@ -5134,10 +6309,18 @@ out:
  
  static void __exit nvme_core_exit(void)
  {
@@ -2257,7 +2349,7 @@ Change-Id: Ie9c191b23fa6bd10100a69cba190ef9ebbdfbcc6
  	unregister_chrdev_region(nvme_ns_chr_devt, NVME_MINORS);
  	unregister_chrdev_region(nvme_ctrl_base_chr_devt, NVME_MINORS);
  	destroy_workqueue(nvme_delete_wq);
-@@ -5148,6 +6276,9 @@ static void __exit nvme_core_exit(void)
+@@ -5148,6 +6331,9 @@ static void __exit nvme_core_exit(void)
  }
  
  MODULE_LICENSE("GPL");

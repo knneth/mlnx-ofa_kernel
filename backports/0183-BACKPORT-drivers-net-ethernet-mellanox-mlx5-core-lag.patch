@@ -54,7 +54,7 @@ Change-Id: I0617b442c22467d20633a0ee6d15de4de3e2667e
  
  	if (first_idx < 0)
  		return;
-@@ -598,6 +609,9 @@ static int __mlx5_lag_modify_definers_de
+@@ -599,6 +610,9 @@ static int __mlx5_lag_modify_definers_de
  	int err;
  	int i;
  	int j;

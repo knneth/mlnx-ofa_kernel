@@ -7,6 +7,8 @@
 #if IS_ENABLED(CONFIG_MLXDEVM)
 #include <net/mlxdevm.h>
 #include <linux/rwsem.h>
+#include <devl_internal.h>
+#include "mlx5_devm_driver_params.h"
 
 struct mlx5_devm_device {
 	struct mlxdevm device;
@@ -15,10 +17,6 @@ struct mlx5_devm_device {
 	struct list_head list;
 	struct rw_semaphore port_list_rwsem;
 	struct xarray devm_sfs;
-};
-
-enum mlx5_devm_param_id {
-	MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
 };
 
 struct mlx5_devm_device *mlx5_devm_device_get(struct mlx5_core_dev *dev);

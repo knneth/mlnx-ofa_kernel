@@ -912,7 +912,7 @@ mlx5e_hairpin_create_oob_rx_flow(struct mlx5e_hp_oob_cnt *oob,
 	memcpy(&dest[0], &oob->rx_dest, sizeof(struct mlx5_flow_destination));
 
 	dest[1].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-	dest[1].counter_id = mlx5_fc_id(cnt);
+	dest[1].counter = cnt;
 
 	flow_rule = mlx5_add_flow_rules(oob->ft, NULL, &flow_act, dest, 2);
 	if (IS_ERR(flow_rule))
@@ -1055,7 +1055,7 @@ mlx5e_hairpin_add_oob_tx_flow(struct mlx5e_priv *priv, struct mlx5_fc *cnt,
 	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_COUNT | MLX5_FLOW_CONTEXT_ACTION_ALLOW;
 
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-	dest.counter_id = mlx5_fc_id(cnt);
+	dest.counter = cnt;
 	flow_rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 
 	if (IS_ERR(flow_rule))
@@ -2175,7 +2175,7 @@ mlx5e_add_offloaded_nic_rule(struct mlx5e_priv *priv,
 
 	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_COUNT) {
 		dest[dest_ix].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-		dest[dest_ix].counter_id = mlx5_fc_id(attr->counter);
+		dest[dest_ix].counter = attr->counter;
 		dest_ix++;
 	}
 

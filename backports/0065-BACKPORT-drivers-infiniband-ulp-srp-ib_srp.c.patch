@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/srp/ib_srp.c
 
 Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
 ---
- drivers/infiniband/ulp/srp/ib_srp.c | 283 +++++++++++++++++++++++++++-
- 1 file changed, 282 insertions(+), 1 deletion(-)
+ drivers/infiniband/ulp/srp/ib_srp.c | 292 +++++++++++++++++++++++++++-
+ 1 file changed, 291 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/ulp/srp/ib_srp.c
 +++ b/drivers/infiniband/ulp/srp/ib_srp.c
@@ -386,7 +386,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  	ch_idx = blk_mq_unique_tag_to_hwq(tag);
  	if (WARN_ON_ONCE(ch_idx >= target->ch_count))
  		return SUCCESS;
-@@ -2844,6 +3054,20 @@ static int srp_target_alloc(struct scsi_
+@@ -2844,7 +3054,26 @@ static int srp_target_alloc(struct scsi_
  	return 0;
  }
  
@@ -404,10 +404,16 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
 +}
 +#endif
 +
++#ifdef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE /* Forward port */
++static int srp_sdev_configure(struct scsi_device *sdev,
++			      struct queue_limits *lim)
++#else
  static int srp_slave_configure(struct scsi_device *sdev)
++#endif
  {
  	struct Scsi_Host *shost = sdev->host;
-@@ -3040,6 +3264,7 @@ static ssize_t allow_ext_sg_show(struct
+ 	struct srp_target_port *target = host_to_target(shost);
+@@ -3040,6 +3269,7 @@ static ssize_t allow_ext_sg_show(struct
  
  static DEVICE_ATTR_RO(allow_ext_sg);
  
@@ -415,7 +421,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  static struct attribute *srp_host_attrs[] = {
  	&dev_attr_id_ext.attr,
  	&dev_attr_ioc_guid.attr,
-@@ -3061,16 +3286,46 @@ static struct attribute *srp_host_attrs[
+@@ -3061,16 +3291,50 @@ static struct attribute *srp_host_attrs[
  };
  
  ATTRIBUTE_GROUPS(srp_host);
@@ -453,7 +459,11 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
 +#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
 +	.slave_alloc			= srp_slave_alloc,
 +#endif
++#ifdef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE /* Forward port */
++	.sdev_configure			= srp_sdev_configure,
++#else
  	.slave_configure		= srp_slave_configure,
++#endif
  	.info				= srp_target_info,
 +#ifdef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
  	.init_cmd_priv			= srp_init_cmd_priv,
@@ -462,7 +472,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  	.queuecommand			= srp_queuecommand,
  	.change_queue_depth             = srp_change_queue_depth,
  	.eh_timed_out			= srp_timed_out,
-@@ -3082,9 +3337,18 @@ static const struct scsi_host_template s
+@@ -3082,9 +3346,18 @@ static const struct scsi_host_template s
  	.can_queue			= SRP_DEFAULT_CMD_SQ_SIZE,
  	.this_id			= -1,
  	.cmd_per_lun			= SRP_DEFAULT_CMD_SQ_SIZE,
@@ -481,7 +491,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  };
  
  static int srp_sdev_count(struct Scsi_Host *host)
-@@ -3704,9 +3968,12 @@ static ssize_t add_target_store(struct d
+@@ -3704,9 +3977,12 @@ static ssize_t add_target_store(struct d
  	target_host->max_id      = 1;
  	target_host->max_lun     = -1LL;
  	target_host->max_cmd_len = sizeof ((struct srp_cmd *) (void *) 0L)->cdb;
@@ -495,7 +505,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  
  	target = host_to_target(target_host);
  
-@@ -3736,6 +4003,9 @@ static ssize_t add_target_store(struct d
+@@ -3736,6 +4012,9 @@ static ssize_t add_target_store(struct d
  	if (ret)
  		goto out;
  
@@ -505,7 +515,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  	if (!srp_conn_unique(target->srp_host, target)) {
  		if (target->using_rdma_cm) {
  			shost_printk(KERN_INFO, target->scsi_host,
-@@ -3830,6 +4100,11 @@ static ssize_t add_target_store(struct d
+@@ -3830,6 +4109,11 @@ static ssize_t add_target_store(struct d
  		if (ret)
  			goto err_disconnect;
  
@@ -517,7 +527,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  		ret = srp_connect_ch(ch, max_iu_len, multich);
  		if (ret) {
  			char dst[64];
-@@ -3848,6 +4123,9 @@ static ssize_t add_target_store(struct d
+@@ -3848,6 +4132,9 @@ static ssize_t add_target_store(struct d
  				goto free_ch;
  			} else {
  				srp_free_ch_ib(target, ch);
@@ -527,7 +537,7 @@ Change-Id: I53bc7ef96123b5e0a5a0328eae39e4dd82a87613
  				target->ch_count = ch - target->ch;
  				goto connected;
  			}
-@@ -3908,6 +4186,9 @@ free_ch:
+@@ -3908,6 +4195,9 @@ free_ch:
  	for (i = 0; i < target->ch_count; i++) {
  		ch = &target->ch[i];
  		srp_free_ch_ib(target, ch);

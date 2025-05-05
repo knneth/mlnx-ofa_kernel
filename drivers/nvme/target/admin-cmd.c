@@ -356,7 +356,7 @@ static bool nvmet_is_write_zeroes(struct nvmet_ctrl *ctrl)
 	unsigned long idx;
 
 	xa_for_each(&ctrl->subsys->namespaces, idx, ns)
-		if (!bdev_write_zeroes_sectors(ns->bdev))
+		if (!nvme_is_bdev_support_write_zero_cmd(ns->bdev))
 			return false;
 	return true;
 }

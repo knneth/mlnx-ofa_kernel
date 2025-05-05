@@ -334,7 +334,7 @@ void ib_umem_stop_invalidation_notifier(struct ib_umem *umem)
 	if (umem_p->invalidation_func) {
 		mutex_lock(&umem_p->mapping_lock);
 		umem_p->invalidation_func = NULL;
-	} else if (umem_p->xa_id != PEER_NO_INVALIDATION_ID) {
+	} else if (umem_p->xa_id == PEER_NO_INVALIDATION_ID) {
 		mutex_lock(&umem_p->mapping_lock);
 	} else {
 		/*

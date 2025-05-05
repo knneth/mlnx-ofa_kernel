@@ -249,19 +249,10 @@ struct mlx5_vport {
 
 	struct mlx5_vport_info  info;
 
-	/* Protected with the E-Switch qos domain lock. The Vport QoS can
-	 * either be disabled (sched_node is NULL) or in one of three states:
-	 * 1. Regular QoS (sched_node is a vport node).
-	 * 2. TC QoS enabled on the vport (sched_node is a TC arbiter).
-	 * 3. TC QoS enabled on the vport's parent node
-	 *    (sched_node is a rate limit node).
-	 * When TC is enabled in either mode, the vport owns vport TC scheduling nodes.
-	 */
+	/* Protected with the E-Switch qos domain lock. */
 	struct {
 		/* Vport scheduling element node. */
 		struct mlx5_esw_sched_node *sched_node;
-		/* Array of vport traffic class scheduling nodes. */
-		struct mlx5_esw_sched_node **sched_nodes;
 	} qos;
 
 	u16 vport;

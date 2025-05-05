@@ -57,6 +57,15 @@
 %global _gcc_lto_cflags %{nil}
 %endif
 
+
+%if (0%{?fedora} >= 39)
+%global _hardening_gcc_cflags %{nil}
+%global _gcc_lto_cflags %{nil}
+# A way to override -fexceptions:
+%global _legacy_options -fcommon -fno-exceptions
+%endif
+
+
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
 %global krelver %(echo -n %{KVERSION} | sed -e 's/-/_/g')
@@ -77,8 +86,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 25.01}
-%{!?_release: %global _release OFED.25.01.0.6.0.1}
+%{!?_version: %global _version 25.04}
+%{!?_release: %global _release OFED.25.04.0.6.0.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -106,6 +115,7 @@ Obsoletes: mlnx-en-kmp-trace
 Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
+Obsoletes: kmod-mellanox
 Requires: mlnx-tools >= 5.2.0
 Requires: coreutils
 Requires: pciutils
@@ -122,10 +132,10 @@ BuildRequires: /usr/bin/perl
 Requires: systemd-sysvcompat
 %endif
 %endif
-%description 
+%description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.01-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
 
 
 # build KMP rpms?
@@ -139,7 +149,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif
 EOF)
-%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp" >> %{_builddir}/preamble)
+%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp, kmod-mellanox, kmod-mellanox-ethernet, kmod-mellanox-nvme" >> %{_builddir}/preamble)
 %if %KMOD_PREAMBLE
 %kernel_module_package -f %{_builddir}/kmp.files -r %{_kmp_rel} -p %{_builddir}/preamble
 %else
@@ -169,7 +179,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.01-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -200,7 +210,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.01-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -302,7 +312,7 @@ export NAME=%{name}
 export VERSION=%{version}
 export PREFIX=%{_prefix}
 mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}
-for flavor in %flavors_to_build; do 
+for flavor in %flavors_to_build; do
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
 	cd $PWD/obj/$flavor
@@ -572,6 +582,8 @@ update-alternatives --remove \
 /lib/udev/auxdev-sf-netdev-rename
 /usr/sbin/setup_mr_cache.sh
 %_datadir/mlnx_ofed/mlnx_bf_assign_ct_cores.sh
+%_datadir/mlnx_ofed/mlnx_drv_ctl
+%_datadir/mlnx_ofed/mod_load_funcs
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf
 %{_sbindir}/*
@@ -601,10 +613,14 @@ update-alternatives --remove \
 
 %files -n %{devel_pname}
 %defattr(-,root,root,-)
+%dir %{_prefix}/src/ofa_kernel
+%dir %{_prefix}/src/ofa_kernel/%{_arch}
+%ghost %{_prefix}/src/ofa_kernel/default
 %{_prefix}/src/ofa_kernel/%{_arch}/[0-9]*
 
 %files source
 %defattr(-,root,root,-)
+%dir %{_prefix}/src/ofa_kernel-%{version}
 %{_prefix}/src/ofa_kernel-%version/source
 %{_prefix}/src/mlnx-ofa_kernel-%version
 

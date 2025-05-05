@@ -9,7 +9,7 @@ Change-Id: I93af65adb3a12951f82ef065ac5a09c2b85f162e
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-@@ -1860,9 +1860,14 @@ int mlx5_esw_bridge_port_mdb_add(struct
+@@ -1862,9 +1862,14 @@ int mlx5_esw_bridge_port_mdb_add(struct
  		esw_warn(br_offloads->esw->dev,
  			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
  			 addr, vport_num);
@@ -25,7 +25,7 @@ Change-Id: I93af65adb3a12951f82ef065ac5a09c2b85f162e
  		return -EINVAL;
  	}
  
-@@ -1873,17 +1878,28 @@ int mlx5_esw_bridge_port_mdb_add(struct
+@@ -1875,17 +1880,28 @@ int mlx5_esw_bridge_port_mdb_add(struct
  			esw_warn(br_offloads->esw->dev,
  				 "Failed to lookup bridge port vlan metadata to create MDB (MAC=%pM,vid=%u,vport=%u)\n",
  				 addr, vid, vport_num);

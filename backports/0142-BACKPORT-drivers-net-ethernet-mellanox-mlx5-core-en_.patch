@@ -9,7 +9,7 @@ Change-Id: I41da0726ebac57278184a8841ad25df58918facd
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
-@@ -2290,6 +2290,7 @@ int mlx5e_accel_ipsec_fs_init(struct mlx
+@@ -2288,6 +2288,7 @@ int mlx5e_accel_ipsec_fs_init(struct mlx
  	struct mlx5_flow_namespace *ns, *ns_esw;
  	int err = -ENOMEM;
  

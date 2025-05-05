@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
 ---
- .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 392 +++++++++++++++++-
- 1 file changed, 373 insertions(+), 19 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 391 +++++++++++++++++-
+ 1 file changed, 373 insertions(+), 18 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -37,16 +37,15 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  struct ptys2ethtool_config {
  	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
  	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertised);
-@@ -239,7 +245,7 @@ void mlx5e_build_ptys2ethtool_map(void)
- 				       ETHTOOL_LINK_MODE_800000baseSR8_Full_BIT,
- 				       ETHTOOL_LINK_MODE_800000baseVR8_Full_BIT);
+@@ -260,6 +266,7 @@ void mlx5e_build_ptys2ethtool_map(void)
+ 				       ETHTOOL_LINK_MODE_800000baseSR4_Full_BIT,
+ 				       ETHTOOL_LINK_MODE_800000baseVR4_Full_BIT);
  }
--
 +#endif
+ 
  static void mlx5e_ethtool_get_speed_arr(struct mlx5_core_dev *mdev,
  					struct ptys2ethtool_config **arr,
- 					u32 *size)
-@@ -330,8 +336,12 @@ static void mlx5e_get_ethtool_stats(stru
+@@ -351,8 +358,12 @@ static void mlx5e_get_ethtool_stats(stru
  }
  
  void mlx5e_ethtool_get_ringparam(struct mlx5e_priv *priv,
@@ -59,7 +58,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  {
  	/* Limitation for regular RQ. XSK RQ may clamp the queue length in
  	 * mlx5e_mpwqe_get_log_rq_size.
-@@ -351,20 +361,31 @@ void mlx5e_ethtool_get_ringparam(struct
+@@ -372,20 +383,31 @@ void mlx5e_ethtool_get_ringparam(struct
  	param->tx_max_pending = 1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE;
  	param->tx_pending     = 1 << priv->channels.params.log_sq_size;
  
@@ -91,7 +90,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  }
  
  int mlx5e_ethtool_set_ringparam(struct mlx5e_priv *priv,
-@@ -378,19 +399,60 @@ int mlx5e_ethtool_set_ringparam(struct m
+@@ -399,18 +421,59 @@ int mlx5e_ethtool_set_ringparam(struct m
  
  	if (!priv->shared_rq &&
  	    param->rx_pending < (1 << MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE)) {
@@ -131,9 +130,9 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
 +				__func__, param->tx_pending,
 +				1 << MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE);
 +#endif
- 		return -EINVAL;
- 	}
- 
++		return -EINVAL;
++	}
++
 +#ifdef HAVE_BASECODE_EXTRAS
 +	if (param->tx_pending > (1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE)) {
 +#ifdef NL_SET_ERR_MSG_FMT_MOD
@@ -145,14 +144,13 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
 +				__func__, param->tx_pending,
 +				1 << MLX5E_PARAMS_MAXIMUM_LOG_SQ_SIZE);
 +#endif
-+		return -EINVAL;
-+	}
+ 		return -EINVAL;
+ 	}
 +#endif
-+
+ 
  	log_rq_size = order_base_2(param->rx_pending);
  	log_sq_size = order_base_2(param->tx_pending);
- 
-@@ -417,13 +479,22 @@ unlock:
+@@ -438,13 +501,22 @@ unlock:
  }
  
  static int mlx5e_set_ringparam(struct net_device *dev,
@@ -178,7 +176,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  }
  
  void mlx5e_ethtool_get_channels(struct mlx5e_priv *priv,
-@@ -451,6 +522,9 @@ int mlx5e_ethtool_set_channels(struct ml
+@@ -472,6 +544,9 @@ int mlx5e_ethtool_set_channels(struct ml
  	unsigned int count = ch->combined_count;
  	struct mlx5e_params new_params;
  	bool arfs_enabled;
@@ -188,7 +186,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	bool opened;
  	int err = 0;
  
-@@ -517,6 +591,21 @@ int mlx5e_ethtool_set_channels(struct ml
+@@ -538,6 +613,21 @@ int mlx5e_ethtool_set_channels(struct ml
  		goto out;
  	}
  
@@ -210,7 +208,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	/* Don't allow changing the number of channels if MQPRIO mode channel offload is active,
  	 * because it defines a partition over the channels queues.
  	 */
-@@ -526,7 +615,6 @@ int mlx5e_ethtool_set_channels(struct ml
+@@ -547,7 +637,6 @@ int mlx5e_ethtool_set_channels(struct ml
  			   __func__);
  		goto out;
  	}
@@ -218,7 +216,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	new_params = *cur_params;
  	new_params.num_channels = count;
  
-@@ -563,11 +651,18 @@ static int mlx5e_set_channels(struct net
+@@ -584,11 +673,18 @@ static int mlx5e_set_channels(struct net
  }
  
  int mlx5e_ethtool_get_coalesce(struct mlx5e_priv *priv,
@@ -237,7 +235,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  	if (!MLX5_CAP_GEN(priv->mdev, cq_moderation)) {
  		NL_SET_ERR_MSG_MOD(extack, "CQ moderation not supported");
-@@ -583,26 +678,39 @@ int mlx5e_ethtool_get_coalesce(struct ml
+@@ -604,26 +700,39 @@ int mlx5e_ethtool_get_coalesce(struct ml
  		coal->rx_coalesce_usecs		= rx_moder->usec;
  		coal->rx_max_coalesced_frames	= rx_moder->pkts;
  		coal->use_adaptive_rx_coalesce	= priv->channels.params.rx_dim_enabled;
@@ -278,7 +276,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  }
  
  static int mlx5e_ethtool_get_per_queue_coalesce(struct mlx5e_priv *priv, u32 queue,
-@@ -714,16 +822,25 @@ mlx5e_set_priv_channels_rx_coalesce(stru
+@@ -735,16 +844,25 @@ mlx5e_set_priv_channels_rx_coalesce(stru
  }
  
  int mlx5e_ethtool_set_coalesce(struct mlx5e_priv *priv,
@@ -304,7 +302,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	int err = 0;
  
  	if (!MLX5_CAP_GEN(mdev, cq_moderation) ||
-@@ -734,29 +851,43 @@ int mlx5e_ethtool_set_coalesce(struct ml
+@@ -755,29 +873,43 @@ int mlx5e_ethtool_set_coalesce(struct ml
  
  	if (coal->tx_coalesce_usecs > MLX5E_MAX_COAL_TIME ||
  	    coal->rx_coalesce_usecs > MLX5E_MAX_COAL_TIME) {
@@ -348,7 +346,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  	rx_dim_enabled = !!coal->use_adaptive_rx_coalesce;
  	tx_dim_enabled = !!coal->use_adaptive_tx_coalesce;
-@@ -773,6 +904,7 @@ int mlx5e_ethtool_set_coalesce(struct ml
+@@ -794,6 +926,7 @@ int mlx5e_ethtool_set_coalesce(struct ml
  		}
  	}
  
@@ -356,7 +354,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	cq_period_mode = mlx5e_dim_cq_period_mode(kernel_coal->use_cqe_mode_rx);
  	reset_rx = mlx5e_reset_rx_channels_moderation(&priv->channels, cq_period_mode,
  						      rx_dim_enabled, false);
-@@ -785,15 +917,24 @@ int mlx5e_ethtool_set_coalesce(struct ml
+@@ -806,15 +939,24 @@ int mlx5e_ethtool_set_coalesce(struct ml
  
  	reset_rx |= rx_dim_enabled != new_params.rx_dim_enabled;
  	reset_tx |= tx_dim_enabled != new_params.tx_dim_enabled;
@@ -381,7 +379,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  	if (reset_rx) {
  		mlx5e_channels_rx_change_dim(&priv->channels, false);
-@@ -836,13 +977,22 @@ state_unlock:
+@@ -857,13 +999,22 @@ state_unlock:
  }
  
  static int mlx5e_set_coalesce(struct net_device *netdev,
@@ -408,7 +406,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  }
  
  static int mlx5e_ethtool_set_per_queue_coalesce(struct mlx5e_priv *priv, u32 queue,
-@@ -960,7 +1110,6 @@ static void ptys2ethtool_adver_link(unsi
+@@ -981,7 +1132,6 @@ static void ptys2ethtool_adver_link(unsi
  			  table[proto].advertised,
  			  __ETHTOOL_LINK_MODE_MASK_NBITS);
  }
@@ -416,7 +414,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static const u32 pplm_fec_2_ethtool[] = {
  	[MLX5E_FEC_NOFEC] = ETHTOOL_FEC_OFF,
  	[MLX5E_FEC_FIRECODE] = ETHTOOL_FEC_BASER,
-@@ -1297,7 +1446,6 @@ static int mlx5e_ethtool_get_link_ksetti
+@@ -1319,7 +1469,6 @@ static int mlx5e_ethtool_get_link_ksetti
  			   __func__, err);
  		err = 0; /* don't fail caps query because of FEC error */
  	}
@@ -424,7 +422,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	if (!an_disable_admin)
  		ethtool_link_ksettings_add_link_mode(link_ksettings,
  						     advertising, Autoneg);
-@@ -1349,6 +1497,7 @@ static u32 mlx5e_ethtool2ptys_adver_link
+@@ -1371,6 +1520,7 @@ static u32 mlx5e_ethtool2ptys_adver_link
  
  static u32 mlx5e_ethtool2ptys_ext_adver_link(const unsigned long *link_modes)
  {
@@ -432,7 +430,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	u32 i, ptys_modes = 0;
  	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes);
  
-@@ -1365,6 +1514,9 @@ static u32 mlx5e_ethtool2ptys_ext_adver_
+@@ -1387,6 +1537,9 @@ static u32 mlx5e_ethtool2ptys_ext_adver_
  			ptys_modes |= MLX5E_PROT_MASK(i);
  	}
  	return ptys_modes;
@@ -442,7 +440,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  }
  
  static bool ext_link_mode_requested(const unsigned long *adver)
-@@ -1409,7 +1561,13 @@ static int mlx5e_ethtool_set_link_ksetti
+@@ -1431,7 +1584,13 @@ static int mlx5e_ethtool_set_link_ksetti
  	speed = link_ksettings->base.speed;
  
  	ext_supported = mlx5_ptys_ext_supported(mdev);
@@ -456,7 +454,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	if (!ext_supported && ext)
  		return -EOPNOTSUPP;
  
-@@ -1421,9 +1579,15 @@ static int mlx5e_ethtool_set_link_ksetti
+@@ -1443,9 +1602,15 @@ static int mlx5e_ethtool_set_link_ksetti
  			   __func__, err);
  		goto out;
  	}
@@ -472,7 +470,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	err = mlx5e_speed_validate(priv->netdev, ext, link_modes, autoneg);
  	if (err)
  		goto out;
-@@ -1490,8 +1654,64 @@ static u32 mlx5e_get_rxfh_indir_size(str
+@@ -1512,8 +1677,64 @@ static u32 mlx5e_get_rxfh_indir_size(str
  	return mlx5e_ethtool_get_rxfh_indir_size(priv);
  }
  
@@ -480,7 +478,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
 +#ifdef HAVE_GET_RXFH_CONTEXT
 +static int mlx5e_get_rxfh_context(struct net_device *dev, u32 *indir,
 +				  u8 *key, u8 *hfunc, u32 rss_context)
-+{
+ {
 +	struct mlx5e_priv *priv = netdev_priv(dev);
 +	int err;
 +
@@ -493,7 +491,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
 +static int mlx5e_set_rxfh_context(struct net_device *dev, const u32 *indir,
 +				  const u8 *key, const u8 hfunc,
 +				  u32 *rss_context, bool delete)
- {
++{
 +	struct mlx5e_priv *priv = netdev_priv(dev);
 +	int err;
 +
@@ -538,7 +536,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	u32 rss_context = rxfh->rss_context;
  	int err;
-@@ -1501,14 +1721,26 @@ static int mlx5e_get_rxfh(struct net_dev
+@@ -1523,14 +1744,26 @@ static int mlx5e_get_rxfh(struct net_dev
  					rxfh->indir, rxfh->key, &rxfh->hfunc);
  	mutex_unlock(&priv->state_lock);
  	return err;
@@ -567,7 +565,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	unsigned int count;
  	int err;
  
-@@ -1527,7 +1759,17 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1549,7 +1782,17 @@ static int mlx5e_set_rxfh(struct net_dev
  		}
  	}
  
@@ -585,7 +583,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  		err = mlx5e_rx_res_rss_destroy(priv->rx_res, *rss_context);
  		goto unlock;
  	}
-@@ -1541,6 +1783,7 @@ static int mlx5e_set_rxfh(struct net_dev
+@@ -1563,6 +1806,7 @@ static int mlx5e_set_rxfh(struct net_dev
  	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, *rss_context,
  					rxfh->indir, rxfh->key,
  					hfunc == ETH_RSS_HASH_NO_CHANGE ? NULL : &hfunc);
@@ -593,7 +591,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  unlock:
  	mutex_unlock(&priv->state_lock);
-@@ -1637,7 +1880,7 @@ static int mlx5e_set_tunable(struct net_
+@@ -1659,7 +1903,7 @@ static int mlx5e_set_tunable(struct net_
  	mutex_unlock(&priv->state_lock);
  	return err;
  }
@@ -602,7 +600,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static void mlx5e_get_pause_stats(struct net_device *netdev,
  				  struct ethtool_pause_stats *pause_stats)
  {
-@@ -1645,6 +1888,7 @@ static void mlx5e_get_pause_stats(struct
+@@ -1667,6 +1911,7 @@ static void mlx5e_get_pause_stats(struct
  
  	mlx5e_stats_pause_get(priv, pause_stats);
  }
@@ -610,7 +608,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  static void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  					 struct ethtool_pauseparam *pauseparam)
-@@ -1700,7 +1944,11 @@ static int mlx5e_set_pauseparam(struct n
+@@ -1722,7 +1967,11 @@ static int mlx5e_set_pauseparam(struct n
  }
  
  int mlx5e_ethtool_get_ts_info(struct mlx5e_priv *priv,
@@ -622,7 +620,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  {
  	struct mlx5_core_dev *mdev = priv->mdev;
  
-@@ -1724,7 +1972,11 @@ int mlx5e_ethtool_get_ts_info(struct mlx
+@@ -1746,7 +1995,11 @@ int mlx5e_ethtool_get_ts_info(struct mlx
  }
  
  static int mlx5e_get_ts_info(struct net_device *dev,
@@ -634,7 +632,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  
-@@ -1853,7 +2105,7 @@ static int mlx5e_set_wol(struct net_devi
+@@ -1875,7 +2128,7 @@ static int mlx5e_set_wol(struct net_devi
  
  	return mlx5_set_port_wol(mdev, mlx5_wol_mode);
  }
@@ -643,7 +641,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static void mlx5e_get_fec_stats(struct net_device *netdev,
  				struct ethtool_fec_stats *fec_stats)
  {
-@@ -1861,7 +2113,7 @@ static void mlx5e_get_fec_stats(struct n
+@@ -1883,7 +2136,7 @@ static void mlx5e_get_fec_stats(struct n
  
  	mlx5e_stats_fec_get(priv, fec_stats);
  }
@@ -652,7 +650,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static int mlx5e_get_fecparam(struct net_device *netdev,
  			      struct ethtool_fecparam *fecparam)
  {
-@@ -2021,6 +2273,7 @@ static int mlx5e_get_module_eeprom(struc
+@@ -2043,6 +2296,7 @@ static int mlx5e_get_module_eeprom(struc
  	return 0;
  }
  
@@ -660,7 +658,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static int mlx5e_get_module_eeprom_by_page(struct net_device *netdev,
  					   const struct ethtool_module_eeprom *page_data,
  					   struct netlink_ext_ack *extack)
-@@ -2052,10 +2305,15 @@ static int mlx5e_get_module_eeprom_by_pa
+@@ -2074,10 +2328,15 @@ static int mlx5e_get_module_eeprom_by_pa
  		if (size_read == -EINVAL)
  			return -EINVAL;
  		if (size_read < 0) {
@@ -676,7 +674,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  			return i;
  		}
  
-@@ -2065,6 +2323,7 @@ static int mlx5e_get_module_eeprom_by_pa
+@@ -2087,6 +2346,7 @@ static int mlx5e_get_module_eeprom_by_pa
  
  	return i;
  }
@@ -684,7 +682,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
  			       struct ethtool_flash *flash)
-@@ -2191,6 +2450,39 @@ int mlx5e_modify_rx_cqe_compression_lock
+@@ -2213,6 +2473,39 @@ int mlx5e_modify_rx_cqe_compression_lock
  	return 0;
  }
  
@@ -724,7 +722,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static int set_pflag_rx_cqe_compress(struct net_device *netdev,
  				     bool enable)
  {
-@@ -2212,6 +2504,21 @@ static int set_pflag_rx_cqe_compress(str
+@@ -2234,6 +2527,21 @@ static int set_pflag_rx_cqe_compress(str
  	return 0;
  }
  
@@ -746,7 +744,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -2242,8 +2549,10 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2264,8 +2572,10 @@ static int set_pflag_rx_striding_rq(stru
  	if (err)
  		return err;
  
@@ -757,7 +755,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  	return 0;
  }
-@@ -2256,7 +2565,11 @@ static int set_pflag_rx_no_csum_complete
+@@ -2278,7 +2588,11 @@ static int set_pflag_rx_no_csum_complete
  	int i;
  
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state) ||
@@ -769,7 +767,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  		return 0;
  
  	for (i = 0; i < channels->num; i++) {
-@@ -2293,10 +2606,12 @@ static int set_pflag_per_channel_stats(s
+@@ -2315,10 +2629,12 @@ static int set_pflag_per_channel_stats(s
  	return 0;
  }
  
@@ -782,7 +780,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  
  static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
  {
-@@ -2325,6 +2640,7 @@ static int set_pflag_tx_port_ts(struct n
+@@ -2347,6 +2663,7 @@ static int set_pflag_tx_port_ts(struct n
  	}
  
  	new_params = priv->channels.params;
@@ -790,7 +788,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	/* Don't allow enabling TX-port-TS if MQPRIO mode channel  offload is
  	 * active, since it defines explicitly which TC accepts the packet.
  	 * This conflicts with TX-port-TS hijacking the PTP traffic to a specific
-@@ -2415,9 +2731,14 @@ static const struct pflag_desc mlx5e_pri
+@@ -2437,9 +2754,14 @@ static const struct pflag_desc mlx5e_pri
  	{ "rx_cqe_moder",        set_pflag_rx_cqe_based_moder },
  	{ "tx_cqe_moder",        set_pflag_tx_cqe_based_moder },
  	{ "rx_cqe_compress",     set_pflag_rx_cqe_compress },
@@ -805,7 +803,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	{ "skb_tx_mpwqe",        set_pflag_skb_tx_mpwqe },
  	{ "tx_port_ts",          set_pflag_tx_port_ts },
  	{ "dropless_rq",	 set_pflag_dropless_rq},
-@@ -2502,6 +2823,7 @@ static int mlx5e_set_rxnfc(struct net_de
+@@ -2524,6 +2846,7 @@ static int mlx5e_set_rxnfc(struct net_de
  	return mlx5e_ethtool_set_rxnfc(priv, cmd);
  }
  
@@ -813,7 +811,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
  {
  	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
-@@ -2671,7 +2993,8 @@ mlx5e_get_link_ext_state(struct net_devi
+@@ -2693,7 +3016,8 @@ mlx5e_get_link_ext_state(struct net_devi
  
  	return -ENODATA;
  }
@@ -823,7 +821,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static void mlx5e_get_eth_phy_stats(struct net_device *netdev,
  				    struct ethtool_eth_phy_stats *phy_stats)
  {
-@@ -2704,7 +3027,9 @@ static void mlx5e_get_rmon_stats(struct
+@@ -2726,7 +3050,9 @@ static void mlx5e_get_rmon_stats(struct
  
  	mlx5e_stats_rmon_get(priv, rmon_stats, ranges);
  }
@@ -833,7 +831,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  static void mlx5e_get_ts_stats(struct net_device *netdev,
  			       struct ethtool_ts_stats *ts_stats)
  {
-@@ -2712,17 +3037,30 @@ static void mlx5e_get_ts_stats(struct ne
+@@ -2734,17 +3060,30 @@ static void mlx5e_get_ts_stats(struct ne
  
  	mlx5e_stats_ts_get(priv, ts_stats);
  }
@@ -864,7 +862,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	.get_strings       = mlx5e_get_strings,
  	.get_sset_count    = mlx5e_get_sset_count,
  	.get_ethtool_stats = mlx5e_get_ethtool_stats,
-@@ -2738,13 +3076,19 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2760,13 +3099,19 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_link_ksettings  = mlx5e_set_link_ksettings,
  	.get_rxfh_key_size   = mlx5e_get_rxfh_key_size,
  	.get_rxfh_indir_size = mlx5e_get_rxfh_indir_size,
@@ -884,7 +882,7 @@ Change-Id: Ie121399ddca0458a52db0473e090a9724dd4e745
  	.get_pauseparam    = mlx5e_get_pauseparam,
  	.set_pauseparam    = mlx5e_set_pauseparam,
  	.get_ts_info       = mlx5e_get_ts_info,
-@@ -2753,22 +3097,32 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2775,22 +3120,32 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_wol	   = mlx5e_set_wol,
  	.get_module_info   = mlx5e_get_module_info,
  	.get_module_eeprom = mlx5e_get_module_eeprom,

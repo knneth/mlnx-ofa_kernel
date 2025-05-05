@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
  */
 #ifndef __LINUX_FWCTL_H
 #define __LINUX_FWCTL_H
@@ -75,7 +75,7 @@ struct fwctl_device {
 	struct list_head uctx_list;
 	/*
 	 * Protect ops, held for write when ops becomes NULL during unregister,
-	 * held for read whenver ops is loaded or an ops function is running.
+	 * held for read whenever ops is loaded or an ops function is running.
 	 */
 	struct rw_semaphore registration_lock;
 	const struct fwctl_ops *ops;

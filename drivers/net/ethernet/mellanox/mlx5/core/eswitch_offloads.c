@@ -724,7 +724,7 @@ mlx5_eswitch_add_offloaded_rule(struct mlx5_eswitch *esw,
 
 	if (flow_act.action & MLX5_FLOW_CONTEXT_ACTION_COUNT) {
 		dest[i].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
-		dest[i].counter_id = mlx5_fc_id(attr->counter);
+		dest[i].counter = attr->counter;
 		i++;
 	}
 
@@ -2002,7 +2002,8 @@ static int esw_create_offloads_fdb_tables(struct mlx5_eswitch *esw)
 	 * total vports of the peer (currently is also uses esw->total_vports).
 	 */
 
-	table_size = MLX5_MAX_PORTS * (esw->total_vports * MAX_SQ_NVPORTS + MAX_PF_SQ) +
+	table_size = MLX5_MAX_PORTS *
+		     (esw->total_vports * MAX_SQ_NVPORTS + MAX_PF_SQ * MLX5_MAX_NUM_TC) +
 		     esw->total_vports + MLX5_MAX_PEER_MISS_RULES * (MLX5_MAX_PORTS - 1) +
 		     MLX5_ESW_MISS_FLOWS;
 

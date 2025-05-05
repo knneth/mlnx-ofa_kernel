@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
  *
  * These are definitions for the command interface for mlx5 HW. mlx5 FW has a
  * User Context mechanism which allows the FW to understand a security scope.

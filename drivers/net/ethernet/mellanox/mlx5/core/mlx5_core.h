@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"25.01-0.6.0"
+#define DRIVER_VERSION	"25.04-0.6.0"
 
 extern uint mlx5_core_debug_mask;
 
@@ -295,9 +295,9 @@ int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
-int mlx5_create_vf_group_sysfs(struct mlx5_core_dev *dev,
-			       u32 group_id, struct kobject *group_kobj);
-void mlx5_destroy_vf_group_sysfs(struct mlx5_esw_sched_node *group);
+int mlx5_create_vf_node_sysfs(struct mlx5_core_dev *dev,
+			      u32 node_id, struct kobject *node_kobj);
+void mlx5_destroy_vf_node_sysfs(struct mlx5_esw_sched_node *node);
 int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id);
 int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id);
 bool mlx5_qos_element_type_supported(struct mlx5_core_dev *dev, int type, u8 hierarchy);

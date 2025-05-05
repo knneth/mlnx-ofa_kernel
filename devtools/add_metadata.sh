@@ -41,6 +41,7 @@ ref_db=
 changeid_map=
 def_feature=
 def_ustatus=
+def_uissue=
 
 usage()
 {
@@ -55,7 +56,8 @@ Options:
     -f, --feature <NAME>            Feature name to assign to new commits.
                                     Must exist in: 'metadata/features_metadata_db.csv'
     -s, --upstream-status <STATUS>  Upstream status to assign to new commits.
-                                    Valid values: [NA, ignore, in_progress, accepted, rejected, planning]
+                                    Valid values: [NA, ignore, in_progress, accepted]
+    -i, --upstream-issue  <ISSUE>  Upstream issue to assign to new commits.
     -g, --general <TAG>	     add current upsream delta tag to general(f.e v5.6-rc2).
 
     --dry-run                Just print, don't really change anything.
@@ -65,8 +67,6 @@ Description for upstream status:
     "ignore" -------> Patch that should be automatically dropped at next rebase (scripts changes).
     "in_progress" --> Being prepared for Upstream submission.
     "accepted" -----> Accepted upstream, should be automatically dropped at next rebase.
-    "rejected" -----> Sent upstream and got rejected, will be taken again to OFED at next rebase.
-    "planning"------> Applicable upstream, work is pending commitment"
 EOF
 }
 
@@ -108,6 +108,10 @@ do
 		;;
 		-s | --upstream-status)
 		def_ustatus="$2"
+		shift
+		;;
+		-i | --upstream-issue)
+		def_uissue="$2"
 		shift
 		;;
 		-h | *help | *usage)
@@ -207,7 +211,14 @@ get_upstream_from_csv()
 {
 	local line=$1; shift
 
-	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*general.*//')
+	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_status=\s*//' -e 's/;\s*upstream_issue.*//')
+}
+
+get_issue_from_csv()
+{
+	local line=$1; shift
+
+	echo $(echo "$line" | sed -r -e 's/.*;\s*upstream_issue=\s*//' -e 's/;\s*general.*//')
 }
 
 get_general_from_csv()
@@ -290,6 +301,25 @@ get_upstream_status_from_ref()
 	echo $status
 }
 
+get_upstream_issue_from_ref()
+{
+	local uniqID=$1; shift
+	local ref_db=$1; shift
+	local subject=$1; shift
+
+	local line=$(get_line_from_ref "$uniqID" "$ref_db" "$subject")
+	if [ "X$line" == "X" ]; then
+		echo ""
+		return
+	fi
+	local issue=$(get_issue_from_csv "$line")
+	if [ "X$issue" == "X-1" ]; then
+		echo ""
+		return
+	fi
+	echo $issue
+}
+
 get_general_from_ref()
 {
 	local uniqID=$1; shift
@@ -340,13 +370,14 @@ if [ -z "$commitIDs" ]; then
 fi
 if [ ! -z "$def_ustatus" ]; then
 	case $def_ustatus in
-		NA|rejected|accepted|in_progress|ignore|planning)
+		NA|accepted|in_progress|ignore)
 			;; # Valid status
-		*)	echo "-E- Valid status is one of the follow options: 'NA'|'rejected'|'accepted'|'in_progress'|'ignore'|'planning'"
+		*)	echo "-E- Valid status is one of the follow options: 'NA'|'rejected'|'accepted'|'in_progress'|'ignore'"
 			exit 1
 			;;
 	esac
 fi
+
 if [ "X$def_ustatus" = "Xaccepted" ];then
 	if [ "X$general" = "X" ]; then
 		echo "-E- -g|--general must be used in case of status accepted"
@@ -372,6 +403,7 @@ do
 	subject=
 	feature=
 	upstream=
+	upstream_iss=
 
 	uniqID=
 	changeID=$(get_by_tag $cid "change-id")
@@ -394,6 +426,7 @@ do
 	subject=$(get_subject $cid)
 	feature=$(get_by_tag $cid "feature")
 	upstream=$(get_by_tag $cid "upstream(.*status)")
+	upstream_iss=$(get_by_tag $cid "upstream(.*issue)")
 	if [ -z "$general" ]
 	then
 		general=$(get_by_tag $cid "general")
@@ -402,11 +435,22 @@ do
 	if is_backports_change_only $cid ;then
 		feature="backports"
 		upstream="ignore"
+		upstream_iss=""
 	fi
 	if is_scripts_change_only $cid ;then
 		feature="ofed_scripts"
 		upstream="ignore"
+		upstream_iss=""
 	fi
+
+	if [ "X$upstream" = "Xin_progress" ];then
+		if [ -z "$upstream_iss" ]; then
+			echo "-i|--upsrteam_issue must be used in case of status in_progress (can be filled later)"
+		fi
+	else
+		upstream_iss=$def_uissue
+	fi
+
 	if [ "X$ref_db" != "X" ]; then
 		if [ "X$feature" == "X" ]; then
 			feature=$(get_feature_from_ref "$uniqID" "$ref_db" "$subject")
@@ -423,7 +467,8 @@ do
 	if [ "X$upstream" == "X" ]; then
 		upstream=$def_ustatus
 	fi
-	entry="$uniqID; subject=${subject}; feature=${feature}; upstream_status=${upstream}; general=${general};"
+
+	entry="$uniqID; subject=${subject}; feature=${feature}; upstream_status=${upstream}; upstream_issue=${upstream_iss}; general=${general};"
 	if [ "X$ref_db" != "X" ]; then
 		general="" #remove for each iteration
 	fi

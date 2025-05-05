@@ -60,5 +60,6 @@ int nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart);
 struct pci_dev *nvme_find_pdev_from_bdev(struct block_device *bdev);
 unsigned nvme_find_ns_id_from_bdev(struct block_device *bdev);
 unsigned nvme_find_noiob_from_bdev(struct block_device *bdev);
+bool nvme_is_bdev_support_write_zero_cmd(struct block_device *bdev);
 
 #endif /* _LINUX_NVME_PEER_H */

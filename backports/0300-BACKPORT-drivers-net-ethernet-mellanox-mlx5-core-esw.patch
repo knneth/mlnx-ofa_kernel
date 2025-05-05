@@ -175,7 +175,7 @@ Change-Id: I9f7b6b35456e93f286b4b6b7f6fca5c3b76c1813
 +#ifdef HAVE_DEVL_PORT_REGISTER
  		devl_rate_nodes_destroy(devlink);
 +#else
-+ 		devlink_rate_nodes_destroy(devlink);
++		devlink_rate_nodes_destroy(devlink);
 +#endif
 +#endif
  }

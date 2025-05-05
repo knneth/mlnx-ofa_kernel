@@ -158,6 +158,14 @@ endif
 	cp source/ofed_scripts/mlx5.conf   debian/$(putils)/etc/infiniband
 ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/ofed_scripts/install_helper $(CURDIR)/debian/$(putils)
+	# For macsec:
+	var=; \
+	if apt-cache show "linux-modules-extra-$(kernelver)" >/dev/null 2>&1 \
+	  && LC_ALL=C apt-cache show linux-modules-extra-$(kernelver) 2>/dev/null| grep -q -v ^N:; \
+	then \
+	  var="linux-modules-extra-$(kernelver)"; \
+	fi; \
+	echo "extra:Depends=$$var" >> debian/$(pdkms).substvars
 endif
 
 	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/lib/udev/rules.d
@@ -179,7 +187,6 @@ endif
 	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
-	install -m 0644 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.upstart	debian/$(putils)/etc/init/openibd.conf
 	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/mlnx-bf.conf	debian/$(putils)/etc/modprobe.d
@@ -188,6 +195,8 @@ endif
 	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
 	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh		debian/$(putils)/usr/share/mlnx_ofed
+	install -m 0755 ofed_scripts/mlnx_drv_ctl			debian/$(putils)/usr/share/mlnx_ofed
+	install -m 0755 ofed_scripts/mod_load_funcs			debian/$(putils)/usr/share/mlnx_ofed
 
 override_dh_installinit:
 

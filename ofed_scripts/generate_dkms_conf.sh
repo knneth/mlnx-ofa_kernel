@@ -32,7 +32,7 @@ cd ${0%*/*}
 kernelver=${kernelver:-`uname -r`}
 kernel_source_dir=${kernel_source_dir:-"/lib/modules/$kernelver/build"}
 PACKAGE_NAME=${PACKAGE_NAME:-"mlnx-ofed-kernel"}
-PACKAGE_VERSION=${PACKAGE_VERSION:-"25.01"}
+PACKAGE_VERSION=${PACKAGE_VERSION:-"25.04"}
 
 echo 'is_conf_set() {'
 echo '	grep -q "^$1=[ym]" "$kernel_source_dir/.config" 2>/dev/null'
@@ -64,6 +64,9 @@ do
 	if [ "$name" = 'mlx5_vdpa' ]; then
 		echo "if is_conf_set CONFIG_MLX5_VDPA_NET; then"
 	fi
+	if [ "$name" = 'mlx5_dpll' ]; then
+		echo "if is_conf_set CONFIG_MLX5_DPLL; then"
+	fi
 	echo 'BUILT_MODULE_NAME[$i]='$name
 	echo 'BUILT_MODULE_LOCATION[$i]='${module%*/*}
 	echo 'DEST_MODULE_NAME[$i]='$name
@@ -71,7 +74,7 @@ do
 	echo 'STRIP[$i]="$STRIP_MODS"'
 	echo 'let i++'
 	case "$name" in auxiliary | mlxdevm | irdma | mlx5-vfio-pci \
-			| mlx5_vdpa)
+			| mlx5_vdpa | mlx5_dpll)
 		echo "fi";;
 	esac
 done

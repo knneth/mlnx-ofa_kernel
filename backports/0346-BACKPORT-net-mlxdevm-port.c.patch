@@ -1,0 +1,153 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
+
+Change-Id: I1a25316e19f27bb0e2b6542699df46f379ccb903
+---
+ net/mlxdevm/port.c | 53 ++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 46 insertions(+), 7 deletions(-)
+
+--- a/net/mlxdevm/port.c
++++ b/net/mlxdevm/port.c
+@@ -509,7 +509,11 @@ mlxdevm_nl_port_function_attrs_put(struc
+ 	bool msg_updated = false;
+ 	int err;
+ 
++#ifdef HAVE_NLA_NEST_START_NOFLAG
+ 	function_attr = nla_nest_start_noflag(msg, MLXDEVM_ATTR_PORT_FUNCTION);
++#else
++	function_attr = nla_nest_start(msg, MLXDEVM_ATTR_PORT_FUNCTION);
++#endif
+ 	if (!function_attr)
+ 		return -EMSGSIZE;
+ 
+@@ -630,7 +634,9 @@ static void mlxdevm_port_notify(struct m
+ 
+ 	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
+ 	mlxdevm_nl_obj_desc_port_set(&desc, mlxdevm_port);
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
++#endif
+ }
+ #if 0
+ 
+@@ -657,9 +663,18 @@ void devlink_ports_notify_unregister(str
+ 
+ int mlxdevm_nl_port_get_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
++	struct mlxdevm_port *mlxdevm_port;
+ 	struct sk_buff *msg;
+ 	int err;
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = info->user_ptr[1];
++#else
++	struct mlxdevm *mlxdevm = info->user_ptr[0];
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
+ 
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+@@ -690,7 +705,11 @@ mlxdevm_nl_port_get_dump_one(struct sk_b
+ 					   MLXDEVM_CMD_PORT_NEW,
+ 					   NETLINK_CB(cb->skb).portid,
+ 					   cb->nlh->nlmsg_seq, flags,
++#ifdef HAVE_NETLINK_CALLBACK_EXTACK
+ 					   cb->extack);
++#else
++					   NULL);
++#endif
+ 		if (err) {
+ 			state->idx = port_index;
+ 			break;
+@@ -940,8 +959,17 @@ static int mlxdevm_port_function_set(str
+ 
+ int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
++	struct mlxdevm_port *mlxdevm_port;
+ 	int err;
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = info->user_ptr[1];
++#else
++	struct mlxdevm *mlxdevm = info->user_ptr[0];
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
+ 
+ 	if (info->attrs[MLXDEVM_ATTR_PORT_TYPE]) {
+ 		enum mlxdevm_port_type port_type;
+@@ -1012,7 +1040,7 @@ int mlxdevm_nl_port_new_doit(struct sk_b
+ 	struct netlink_ext_ack *extack = info->extack;
+ 	struct mlxdevm_port_new_attrs new_attrs = {};
+ 	struct mlxdevm *mlxdevm = info->user_ptr[0];
+-	struct mlxdevm_port *mlxdevm_port;
++	struct mlxdevm_port *mlxdevm_port = NULL;
+ 	unsigned int new_index;
+ 	struct sk_buff *msg;
+ 	int err;
+@@ -1051,21 +1079,22 @@ int mlxdevm_nl_port_new_doit(struct sk_b
+ 	if (err)
+ 		return err;
+ 
++	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
++
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg) {
+ 		err = -ENOMEM;
+ 		goto err_out_port_del;
+ 	}
+ 
+-	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
+-
+ 	err = mlxdevm_nl_port_fill(msg, mlxdevm_port, MLXDEVM_CMD_PORT_NEW,
+ 				   info->snd_portid, info->snd_seq, 0, NULL);
+ 	if (WARN_ON_ONCE(err))
+ 		goto err_out_msg_free;
++
+ 	err = genlmsg_reply(msg, info);
+ 	if (err)
+-		goto err_out_port_del;
++		goto err_out_msg_free;
+ 	return 0;
+ 
+ err_out_msg_free:
+@@ -1077,9 +1106,17 @@ err_out_port_del:
+ 
+ int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
++	struct mlxdevm_port *mlxdevm_port;
+ 	struct netlink_ext_ack *extack = info->extack;
+ 	struct mlxdevm *mlxdevm = info->user_ptr[0];
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = info->user_ptr[1];
++#else
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
+ 
+ 	if (!mlxdevm_port->ops->port_del)
+ 		return -EOPNOTSUPP;
+@@ -1304,6 +1341,7 @@ static void mlxdevm_port_type_netdev_che
+ 		err = ops->ndo_get_phys_port_name(netdev, name, sizeof(name));
+ 		WARN_ON(err != -EOPNOTSUPP);
+ 	}
++#ifdef HAVE_NDO_GET_PORT_PARENT_ID
+ 	if (ops->ndo_get_port_parent_id) {
+ 		/* Some drivers use the same set of ndos for netdevs
+ 		 * that have mlxdevm_port registered and also for
+@@ -1317,6 +1355,7 @@ static void mlxdevm_port_type_netdev_che
+ 		err = ops->ndo_get_port_parent_id(netdev, &ppid);
+ 		WARN_ON(err != -EOPNOTSUPP);
+ 	}
++#endif
+ }
+ 
+ static void __mlxdevm_port_type_set(struct mlxdevm_port *mlxdevm_port,

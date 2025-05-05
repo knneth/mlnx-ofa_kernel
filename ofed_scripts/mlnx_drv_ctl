@@ -1,0 +1,67 @@
+#!/bin/bash
+
+me=${0##*/}
+
+usage() {
+	cat <<EOF
+$me: Manually load / unload mlnx-ofa kernel infiniband stack
+
+Usage: $0 <load | unload | status>
+EOF
+}
+
+MLNX_OFED_FUNCS_FILE="/usr/share/mlnx_ofed/mod_load_funcs"
+if [ ! -r "$MLNX_OFED_FUNCS_FILE" ]; then
+	echo "$0: Error: missing functions file $MLNX_OFED_FUNCS_FILE. Aborting"
+	exit 1
+fi
+. "$MLNX_OFED_FUNCS_FILE"
+
+set -e
+
+# Update systemd state to those services as down
+mark_service_down() {
+	local conf service
+
+	for conf in /etc/rdma/modules/*.conf; do
+		conf=${conf##*/}
+		conf=${conf%.conf}
+		service="rdma-load-modules@$conf.service"
+		if ! systemctl --quiet is-active "$service"; then
+			continue
+		fi
+		systemctl --quiet stop "$service"
+	done
+}
+
+check_if_openibd_running() {
+	if [ ! -e /run/mlx_os_booting ]; then
+		return
+	fi
+	echo "$me: /etc/init.d/openibd seems to be running. Aborting"
+	exit 1
+}
+
+drv_ctl_unload() {
+	set_modprobe_ip
+	set_modules_to_load
+	check_if_ok_to_stop
+	check_if_openibd_running
+	unload_all_modules # Despite the name, does not unload all modules
+        unload mlx_compat
+	mark_service_down
+}
+
+drv_ctl_load() {
+	modprobe mlx5_core
+}
+
+drv_ctl_status() {
+	set_modprobe_ip
+	status
+}
+
+case "$1" in
+load | unload | status) drv_ctl_$1;;
+*) echo "Unknown command '$1'"; usage; exit 1;;
+esac

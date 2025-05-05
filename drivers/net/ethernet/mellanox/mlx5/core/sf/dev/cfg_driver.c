@@ -4,21 +4,15 @@
 #include "dev.h"
 #include "devlink.h"
 #include <net/mlxdevm.h>
+#include <devl_internal.h>
+#include "../../mlx5_devm_driver_params.h"
 
 #include "cfg_driver.h"
+
 
 struct mlx5_sf_cfg_devm {
 	struct mlxdevm device;
 	struct mlx5_sf_dev *sf_dev;
-};
-
-enum mlx5_devm_param_id {
-	MLX5_DEVM_PARAM_ID_CMPL_EQ_DEPTH,
-	MLX5_DEVM_PARAM_ID_ASYNC_EQ_DEPTH,
-	MLX5_DEVM_PARAM_ID_DISABLE_ROCE,
-	MLX5_DEVM_PARAM_ID_DISABLE_FC,
-	MLX5_DEVM_PARAM_ID_DISABLE_NETDEV,
-	MLX5_DEVM_PARAM_ID_MAX_CMPL_EQS,
 };
 
 static struct mlx5_sf_dev *mlxdevm_to_sf_dev(struct mlxdevm *devm)
@@ -39,7 +33,8 @@ static int mlx5_devm_cmpl_eq_depth_get(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_cmpl_eq_depth_set(struct mlxdevm *devm, u32 id,
-				       struct mlxdevm_param_gset_ctx *ctx)
+				       struct mlxdevm_param_gset_ctx *ctx,
+				       struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -57,7 +52,8 @@ static int mlx5_devm_async_eq_depth_get(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_async_eq_depth_set(struct mlxdevm *devm, u32 id,
-					struct mlxdevm_param_gset_ctx *ctx)
+					struct mlxdevm_param_gset_ctx *ctx,
+					struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -82,7 +78,8 @@ static int mlx5_devm_disable_fc_get(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_disable_fc_set(struct mlxdevm *devm, u32 id,
-				    struct mlxdevm_param_gset_ctx *ctx)
+				    struct mlxdevm_param_gset_ctx *ctx,
+				    struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -100,7 +97,8 @@ static int mlx5_devm_disable_netdev_get(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_disable_netdev_set(struct mlxdevm *devm, u32 id,
-					struct mlxdevm_param_gset_ctx *ctx)
+					struct mlxdevm_param_gset_ctx *ctx,
+					struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -118,7 +116,8 @@ static int mlx5_devm_max_cmpl_eqs_get(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_max_cmpl_eqs_set(struct mlxdevm *devm, u32 id,
-				      struct mlxdevm_param_gset_ctx *ctx)
+				      struct mlxdevm_param_gset_ctx *ctx,
+				      struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -161,33 +160,6 @@ static const struct mlxdevm_param mlx5_sf_cfg_devm_params[] = {
 			     mlx5_devm_max_cmpl_eqs_validate),
 };
 
-static void mlx5_sf_cfg_devm_set_params_init_values(struct mlxdevm *devm)
-{
-	struct mlx5_sf_cfg_devm *sf_cfg_dev;
-	union mlxdevm_param_value value;
-
-	sf_cfg_dev = container_of(devm, struct mlx5_sf_cfg_devm, device);
-
-	value.vbool = false;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_DISABLE_ROCE, value);
-
-	value.vbool = false;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_DISABLE_FC, value);
-
-	value.vbool = false;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_DISABLE_NETDEV, value);
-
-	value.vu32 = 0;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_CMPL_EQ_DEPTH, value);
-
-	value.vu32 = 0;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_ASYNC_EQ_DEPTH, value);
-
-	value.vu16 = 0;
-	mlxdevm_param_driverinit_value_set(devm, MLX5_DEVM_PARAM_ID_MAX_CMPL_EQS, value);
-
-}
-
 static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 				 const struct auxiliary_device_id *id)
 {
@@ -201,7 +173,7 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 		return -ENOMEM;
 
 	devm = &sf_cfg_dev->device;
-	devm->device = &sf_dev->adev.dev;
+	devm->dev = &sf_dev->adev.dev;
 	sf_cfg_dev->sf_dev = sf_dev;
 
 	err = mlxdevm_register(devm);
@@ -212,9 +184,6 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 				      ARRAY_SIZE(mlx5_sf_cfg_devm_params));
 	if (err)
 		goto params_reg_err;
-
-	mlx5_sf_cfg_devm_set_params_init_values(devm);
-	mlxdevm_params_publish(devm);
 
 	dev_set_drvdata(&sf_dev->adev.dev, sf_cfg_dev);
 	return 0;

@@ -15,7 +15,7 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 Package: mlnx-ofed-kernel-modules
 Section: kernel
 Architecture: any
-Depends: ${misc:Depends}, mlnx-ofed-kernel-utils
+Depends: ${misc:Depends}, ${extra:Depends}, mlnx-ofed-kernel-utils
 Provides: mlnx-rdma-rxe-modules
 Conflicts: mlnx-rdma-rxe-modules
 Replaces: mlnx-rdma-rxe-modules

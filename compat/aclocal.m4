@@ -754,90 +754,6 @@ AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])# LB_CHECK_FILE
 
-
-#
-# Support XEN
-#
-AC_DEFUN([SET_XEN_INCLUDES],
-[
-XEN_INCLUDES=
-LB_LINUX_CONFIG([XEN],[XEN_INCLUDES="-I$LINUX/arch/x86/include/mach-xen"],[])
-LB_LINUX_CONFIG_VALUE([XEN_INTERFACE_VERSION],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"],[XEN_INCLUDES="$XEN_INCLUDES -D__XEN_INTERFACE_VERSION__=$res"])
-])
-
-#
-# LB_LINUX_VERSION
-#
-# Set things accordingly for a linux kernel
-#
-AC_DEFUN([LB_LINUX_VERSION],[
-KMODEXT=".ko"
-AC_SUBST(KMODEXT)
-]
-)
-
-
-#
-# LB_LINUX_RELEASE
-#
-# get the release version of linux
-#
-AC_DEFUN([LB_LINUX_RELEASE],
-[
-LINUXRELEASE=$(LB_LINUX_MAKE_OUTPUT([kernelrelease]))
-if test x$LINUXRELEASE = x ; then
-	# Workaround for some kernel 6.3 RCs:
-	LINUXRELEASE=`cat $LINUX_OBJ/include/config/kernel.release 2>/dev/null`
-	if test "$LINUXRELEASE" = ''; then
-		AC_MSG_RESULT([unknown])
-		AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
-	fi
-fi
-AC_MSG_RESULT([$LINUXRELEASE])
-AC_SUBST(LINUXRELEASE)
-
-moduledir='/lib/modules/'$LINUXRELEASE/updates/kernel
-AC_SUBST(moduledir)
-
-modulefsdir='$(moduledir)/fs/$(PACKAGE)'
-AC_SUBST(modulefsdir)
-
-modulenetdir='$(moduledir)/net/$(PACKAGE)'
-AC_SUBST(modulenetdir)
-
-# ------------ RELEASE --------------------------------
-AC_MSG_CHECKING([for MLNX release])
-AC_ARG_WITH([release],
-	AS_HELP_STRING([--with-release=string],
-		       [set the release string (default=$kvers_YYYYMMDDhhmm)]),
-	[RELEASE=$withval],
-	RELEASE=""
-	if test -n "$DOWNSTREAM_RELEASE"; then
-		RELEASE="${DOWNSTREAM_RELEASE}_"
-	fi
-	RELEASE="$RELEASE`echo ${LINUXRELEASE} | tr '-' '_'`_$BUILDID")
-AC_MSG_RESULT($RELEASE)
-AC_SUBST(RELEASE)
-
-# check is redhat/suse kernels
-AC_MSG_CHECKING([that RedHat kernel])
-LB_LINUX_TRY_COMPILE([
-		#include <linux/version.h>
-	],[
-		#ifndef RHEL_RELEASE_CODE
-		#error "not redhat kernel"
-		#endif
-	],[
-		RHEL_KERNEL="yes"
-		AC_MSG_RESULT([yes])
-	],[
-	        AC_MSG_RESULT([no])
-])
-
-LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
-
-])
-
 # LB_ARG_REPLACE_PATH(PACKAGE, PATH)
 AC_DEFUN([LB_ARG_REPLACE_PATH],[
 	new_configure_args=
@@ -957,320 +873,6 @@ AC_DEFUN([LB_LINUX_SYMVERFILE],
 ])
 
 #
-# LB_LINUX_CROSS
-#
-# check for cross compilation
-#
-AC_DEFUN([LB_LINUX_CROSS],
-	[AC_MSG_CHECKING([for cross compilation])
-CROSS_VARS=
-case $target_vendor in
-	# The K1OM architecture is an extension of the x86 architecture.
-	# So, the $target_arch is x86_64.
-	k1om)
-		AC_MSG_RESULT([Intel(R) Xeon Phi(TM)])
-		CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
-		if test $CC_TARGET_ARCH != x86_64-$target_vendor-linux ; then
-			AC_MSG_ERROR([Cross compiler not found in PATH.])
-		fi
-		CROSS_VARS="ARCH=$target_vendor CROSS_COMPILE=x86_64-$target_vendor-linux-"
-		CCAS=$CC
-		if test x$enable_server = xyes ; then
-			AC_MSG_WARN([Disabling server (not supported for x86_64-$target_vendor-linux).])
-			enable_server='no'
-		fi
-		;;
-	*)
-		CROSS_VARS="CROSS_COMPILE=$CROSS_COMPILE"
-		AC_MSG_RESULT([no])
-		;;
-esac
-AC_SUBST(CROSS_VARS)
-])
-
-# these are like AC_TRY_COMPILE, but try to build modules against the
-# kernel, inside the build directory
-
-# LB_LANG_PROGRAM(C)([PROLOGUE], [BODY])
-# --------------------------------------
-m4_define([LB_LANG_PROGRAM],
-[
-#include <linux/module.h>
-#include <linux/kernel.h>
-MODULE_LICENSE("GPL");
-$1
-int
-main (void)
-{
-dnl Do *not* indent the following line: there may be CPP directives.
-dnl Don't move the `;' right after for the same reason.
-$2
-  ;
-  return 0;
-}])
-
-
-#
-# LB_LINUX_MAKE_OUTPUT
-#
-# Runs a make target ($1, potentially with extra flags)
-# output goes to standard output.
-#
-AC_DEFUN([LB_LINUX_MAKE_OUTPUT],
-[
-MAKE=${MAKE:-make}
-$MAKE -s M=$PWD -C $LINUX_OBJ $1
-])
-
-#
-# LB_LINUX_COMPILE_IFELSE
-#
-# like AC_COMPILE_IFELSE
-#
-AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
-[m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
-MAKE=${MAKE:-make}
-rm -f build/conftest.o build/conftest.mod.c build/conftest.ko build/output.log
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && env $CROSS_VARS $MAKE -d [$2] ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $PWD/build/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$PWD/build >/dev/null 2>build/output.log; [[[ $? -ne 0 ]]] && cat build/output.log 1>&2 && false || config/warning_filter.sh build/output.log) >/dev/null && AC_TRY_COMMAND([$3])],
-	[$4],
-	[_AC_MSG_LOG_CONFTEST
-m4_ifvaln([$5],[$5])dnl])
-rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.ko m4_ifval([$1], [build/conftest.c conftest.c])[]dnl
-])
-
-#
-# LB_LINUX_ARCH
-#
-# Determine the kernel's idea of the current architecture
-#
-AC_DEFUN([LB_LINUX_ARCH],
-         [AC_MSG_CHECKING([Linux kernel architecture])
-          AS_IF([rm -f $PWD/build/arch
-                 make -s --no-print-directory echoarch -f $PWD/build/Makefile \
-                     MLNX_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $CROSS_VARS  \
-                     ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
-                [AC_MSG_RESULT([$LINUX_ARCH])],
-                [AC_MSG_ERROR([Could not determine the kernel architecture.])])
-          rm -f build/arch])
-
-#
-# LB_LINUX_TRY_COMPILE
-#
-# like AC_TRY_COMPILE
-#
-AC_DEFUN([LB_LINUX_TRY_COMPILE],
-[LB_LINUX_COMPILE_IFELSE(
-	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
-	[modules],
-	[test -s build/conftest.o],
-	[$3], [$4])])
-
-#
-# LB_LINUX_CONFIG
-#
-# check if a given config option is defined
-#
-AC_DEFUN([LB_LINUX_CONFIG],[
-	AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
-	LB_LINUX_TRY_COMPILE([
-		#include <generated/autoconf.h>
-	],[
-		#ifndef CONFIG_$1
-		#error CONFIG_$1 not #defined
-		#endif
-	],[
-		AC_MSG_RESULT([yes])
-		$2
-	],[
-		AC_MSG_RESULT([no])
-		$3
-	])
-])
-
-#
-# LB_LINUX_CONFIG_IM
-#
-# check if a given config option is builtin or as module
-#
-AC_DEFUN([LB_LINUX_CONFIG_IM],[
-	AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
-	LB_LINUX_TRY_COMPILE([
-		#include <generated/autoconf.h>
-	],[
-		#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
-		#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
-		#endif
-	],[
-		AC_MSG_RESULT([yes])
-		$2
-	],[
-		AC_MSG_RESULT([no])
-		$3
-	])
-])
-
-#
-# LB_LINUX_TRY_MAKE
-#
-# like LB_LINUX_TRY_COMPILE, but with different arguments
-#
-AC_DEFUN([LB_LINUX_TRY_MAKE],
-	[LB_LINUX_COMPILE_IFELSE(
-		[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
-		[$3], [$4], [$5], [$6]
-	)]
-)
-
-#
-# LB_CONFIG_COMPAT_RDMA
-#
-AC_DEFUN([LB_CONFIG_COMPAT_RDMA],
-[AC_MSG_CHECKING([whether to use Compat RDMA])
-# set default
-AC_ARG_WITH([o2ib],
-	AS_HELP_STRING([--with-o2ib=path],
-		       [build o2iblnd against path]),
-	[
-		case $with_o2ib in
-		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
-			ENABLEO2IB=2
-			;;
-		no)     ENABLEO2IB=0
-			;;
-		*)      O2IBPATHS=$with_o2ib
-			ENABLEO2IB=3
-			;;
-		esac
-	],[
-		O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
-		ENABLEO2IB=1
-	])
-if test $ENABLEO2IB -eq 0; then
-	AC_MSG_RESULT([no])
-else
-	o2ib_found=false
-	for O2IBPATH in $O2IBPATHS; do
-		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
-			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
-			o2ib_found=true
-			break
-		fi
-	done
-	compatrdma_found=false
-	if $o2ib_found; then
-		if test \( -f ${O2IBPATH}/include/linux/compat-2.6.h \); then
-			compatrdma_found=true
-			AC_MSG_RESULT([yes])
-			AC_DEFINE(HAVE_COMPAT_RDMA, 1, [compat rdma found])
-		else
-			AC_MSG_RESULT([no])
-		fi
-	fi
-fi
-])
-
-#
-# LB_CONFIG_OFED_BACKPORTS
-#
-# include any OFED backport headers in all compile commands
-# NOTE: this does only include the backport paths, not the OFED headers
-#       adding the OFED headers is done in the lnet portion
-AC_DEFUN([LB_CONFIG_OFED_BACKPORTS],
-[AC_MSG_CHECKING([whether to use any OFED backport headers])
-if test $ENABLEO2IB -eq 0; then
-	AC_MSG_RESULT([no])
-else
-	if ! $o2ib_found; then
-		AC_MSG_RESULT([no])
-		case $ENABLEO2IB in
-			1) ;;
-			2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
-			3) AC_MSG_ERROR([bad --with-o2ib path]);;
-			*) AC_MSG_ERROR([internal error]);;
-		esac
-	else
-		if ! $compatrdma_found; then
-                	if test -f $O2IBPATH/config.mk; then
-				. $O2IBPATH/config.mk
-			elif test -f $O2IBPATH/ofed_patch.mk; then
-				. $O2IBPATH/ofed_patch.mk
-			fi
-		fi
-		if test -n "$BACKPORT_INCLUDES"; then
-			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
-			EXTRA_LNET_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_LNET_INCLUDE"
-			AC_MSG_RESULT([yes])
-		else
-			AC_MSG_RESULT([no])
-		fi
-	fi
-fi
-])
-
-# LC_MODULE_LOADING
-# after 2.6.28 CONFIG_KMOD is removed, and only CONFIG_MODULES remains
-# so we test if request_module is implemented or not
-AC_DEFUN([LC_MODULE_LOADING],
-[AC_MSG_CHECKING([if kernel module loading is possible])
-LB_LINUX_TRY_MAKE([
-	#include <linux/kmod.h>
-],[
-	int myretval=ENOSYS ;
-	return myretval;
-],[
-	MLNX_KERNEL_TEST=conftest.i
-],[dnl
-	grep request_module build/conftest.i |dnl
-		grep -v `grep "int myretval=" build/conftest.i |dnl
-			cut -d= -f2 | cut -d" "  -f1`dnl
-		>/dev/null dnl
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
-		  [kernel module loading is possible])
-],[
-	AC_MSG_RESULT(no)
-	AC_MSG_WARN([])
-	AC_MSG_WARN([Kernel module loading support is highly recommended.])
-	AC_MSG_WARN([])
-])
-])
-
-#
-# LB_PROG_LINUX
-#
-# linux tests
-#
-AC_DEFUN([LB_PROG_LINUX],
-[LB_LINUX_PATH
-LB_LINUX_ARCH
-LB_LINUX_SYMVERFILE
-
-
-LB_LINUX_CONFIG([MODULES],[],[
-	AC_MSG_ERROR([module support is required to build MLNX kernel modules.])
-])
-
-LB_LINUX_CONFIG([MODVERSIONS])
-
-LB_LINUX_CONFIG([KALLSYMS],[],[
-	AC_MSG_ERROR([compat_mlnx requires that CONFIG_KALLSYMS is enabled in your kernel.])
-])
-
-# 2.6.28
-LC_MODULE_LOADING
-
-LB_CONFIG_COMPAT_RDMA
-
-# it's ugly to be doing anything with OFED outside of the lnet module, but
-# this has to be done here so that the backports path is set before all of
-# the LN_PROG_LINUX checks are done
-LB_CONFIG_OFED_BACKPORTS
-])
-
-#
 # LB_CHECK_SYMBOL_EXPORT
 # check symbol exported or not
 # $1 - symbol
@@ -1305,127 +907,6 @@ else
 	AC_MSG_RESULT([yes])
 	$3
 fi
-])
-
-#
-# Like AC_CHECK_HEADER but checks for a kernel-space header
-#
-m4_define([LB_CHECK_LINUX_HEADER],
-[AS_VAR_PUSHDEF([ac_Header], [ac_cv_header_$1])dnl
-AC_CACHE_CHECK([for $1], ac_Header,
-	       [LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
-				  [modules],
-				  [test -s build/conftest.o],
-				  [AS_VAR_SET(ac_Header, [yes])],
-				  [AS_VAR_SET(ac_Header, [no])])])
-AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
-AS_VAR_POPDEF([ac_Header])dnl
-])
-
-#
-# LB_USES_DPKG
-#
-# Determine if the target is a dpkg system or rpm
-#
-AC_DEFUN([LB_USES_DPKG],
-[
-AC_MSG_CHECKING([if this distro uses dpkg])
-case `lsb_release -i -s 2>/dev/null` in
-        Ubuntu | Debian)
-                AC_MSG_RESULT([yes])
-                uses_dpkg=yes
-                ;;
-        *)
-                AC_MSG_RESULT([no])
-                uses_dpkg=no
-                ;;
-esac
-])
-
-#
-# LB_PROG_CC
-#
-# checks on the C compiler
-#
-AC_DEFUN([LB_PROG_CC],
-[AC_PROG_RANLIB
-AC_CHECK_TOOL(LD, ld, [no])
-AC_CHECK_TOOL(OBJDUMP, objdump, [no])
-AC_CHECK_TOOL(STRIP, strip, [no])
-
-# ---------  unsigned long long sane? -------
-AC_CHECK_SIZEOF(unsigned long long, 0)
-echo "---> size SIZEOF $SIZEOF_unsigned_long_long"
-echo "---> size SIZEOF $ac_cv_sizeof_unsigned_long_long"
-if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
-	AC_MSG_ERROR([** we assume that sizeof(long long) == 8.])
-fi
-
-if test $target_cpu == "powerpc64"; then
-	AC_MSG_WARN([set compiler with -m64])
-	CFLAGS="$CFLAGS -m64"
-	CC="$CC -m64"
-fi
-])
-
-# LB_CONTITIONALS
-#
-AC_DEFUN([LB_CONDITIONALS],
-[
-AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
-
-AC_OUTPUT
-
-cat <<_ACEOF
-
-CC:            $CC
-LD:            $LD
-CFLAGS:        $CFLAGS
-EXTRA_KCFLAGS: $EXTRA_KCFLAGS
-
-Type 'make' to build kernel modules.
-_ACEOF
-])
-
-#
-# SET_BUILD_ARCH
-#
-AC_DEFUN([SET_BUILD_ARCH],
-[
-AC_MSG_CHECKING([for build ARCH])
-SRCARCH=${ARCH:-$(uname -m)}
-SRCARCH=$(echo $SRCARCH | sed -e s/i.86/x86/ \
-			-e s/x86_64/x86/ \
-			-e s/ppc.*/powerpc/ \
-			-e 's/powerpc64/powerpc/' \
-			-e s/aarch64.*/arm64/ \
-			-e s/sparc32.*/sparc/ \
-			-e s/sparc64.*/sparc/ \
-			-e s/s390x/s390/)
-
-# very old kernels had different strucure under arch dir
-if [[ "X$SRCARCH" == "Xx86" ]] && ! [[ -d "$LINUX/arch/x86" ]]; then
-	SRCARCH=x86_64
-fi
-
-AC_MSG_RESULT([ARCH=$ARCH, SRCARCH=$SRCARCH])
-])
-
-#
-# LB_LINUX_CONFIG_VALUE
-#
-#  get a given config's option value
-#
-AC_DEFUN([LB_LINUX_CONFIG_VALUE],[
-	AC_MSG_CHECKING([get value of CONFIG_$1])
-	if (grep -q "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null); then
-		res=$(grep "^#define CONFIG_$1 " $LINUX_OBJ/include/generated/autoconf.h 2>/dev/null | cut -d' ' -f'3')
-		AC_MSG_RESULT([$1 value is '$res'])
-		$2
-	else
-		AC_MSG_RESULT([$1 in not defined in autoconf.h])
-		$3
-	fi
 ])
 
 /nl Examine kernel functionality
@@ -2979,6 +2460,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NL_ASSERT_CTX_FITS, [NL_ASSERT_CTX_FITS exists], [
+		#include <linux/netlink.h>
+	],[
+
+		NL_ASSERT_CTX_FITS(int);
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NL_SET_ERR_MSG_WEAK_MOD, [NL_SET_ERR_MSG_WEAK_MOD exists], [
 		#include <linux/netlink.h>
 	],[
@@ -3922,6 +3411,51 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_REQ_ATTR_CHECK, [HAVE_GENL_REQ_ATTR_CHECK defined], [
+		#include <net/genetlink.h>
+	],[
+		#ifdef GENL_REQ_ATTR_CHECK
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_BITFIELD32, [NLA_POLICY_BITFIELD32 defined], [
+		#include <net/netlink.h>
+	],[
+		#ifdef NLA_POLICY_BITFIELD32
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_NESTED, [NLA_POLICY_NESTED defined], [
+		#include <net/netlink.h>
+		#
+		static const struct nla_policy dpll_pin_get_dump_nl_policy[[1 + 1]] = {
+		    [[1]] = { .type = NLA_U32 },
+		};
+
+		static const struct nla_policy my_nested_policy[[]] = {
+		    [[0]] = NLA_POLICY_NESTED(dpll_pin_get_dump_nl_policy),
+		};
+
+	],[
+		#ifdef NLA_POLICY_NESTED
+			return 0;
+		#else
+			#return 1;
+		#endif
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_HAS_VALIDATION_TYPE, [nla_policy has validation_type], [
 		#include <net/netlink.h>
 	],[
@@ -3935,6 +3469,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <net/netlink.h>
 	],[
 		nla_strscpy(NULL, NULL ,0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_PUT_BITFIELD32, [nla_put_bitfield32 exist], [
+		#include <net/netlink.h>
+	],[
+		nla_put_bitfield32(NULL, 0, 0, 0);
 
 		return 0;
 	])
@@ -3979,6 +3521,30 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_NOTIFICATIONS_FILTERING, [kernel provides devlink notifications filtering], [
+		#include <net/genetlink.h>
+		void spi(void *priv)
+		{
+		}
+	],[
+		struct genl_family gf = {
+			.sock_privs = NULL,
+			.sock_priv_init = spi,
+                };
+
+		genlmsg_multicast_netns_filtered(NULL, NULL, NULL, 0, 0, 0, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_GENL_SPLIT_OPS, [struct genl_ops exists], [
+		#include <net/genetlink.h>
+	],[
+		struct genl_split_ops x;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_VALIDATE, [struct genl_ops has member validate], [
 		#include <net/genetlink.h>
 	],[
@@ -4005,6 +3571,52 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct genl_family x;
 
 		x.policy = NULL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PEERNET2ID_ALLOC_GET_3_PARAMS, [function peernet2id_alloc get 3 params], [
+		#include <net/net_namespace.h>
+	],[
+		peernet2id_alloc(NULL, NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_READ_PNET_RCU, [function read_pnet_rcu is defined], [
+		#include <net/net_namespace.h>
+	],[
+		read_pnet_rcu(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_INFO_DUMP, [function genl_info_dump is defined], [
+		#include <net/genetlink.h>
+	],[
+		const struct genl_info *gi = genl_info_dump(NULL);
+		struct genl_dumpit_info gdi;
+		struct genl_info *gi2;
+
+		gi2 = &gdi.info;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_DUMPIT_INFO, [function genl_dumpit_info is defined], [
+		#include <net/genetlink.h>
+	],[
+		genl_dumpit_info(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETLINK_CALLBACK_HAS_CTX, [struct netlink_callback has member ctx], [
+		#include <linux/netlink.h>
+	],[
+		struct netlink_callback x;
+
+		x.ctx[[0]] = 0;
 
 		return 0;
 	])
@@ -4122,6 +3734,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
                 return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_LOCKDEP_ASSERT, [lockdep.h has lockdep_assert], [
+		#include <linux/lockdep.h>
+	],[
+                lockdep_assert(0);
+
+                return 0;
+	])
 	MLNX_RDMA_TEST_CASE(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS, [register_fib_notifier has 4 params], [
 		#include <net/fib_notifier.h>
 	],[
@@ -4383,6 +4002,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/idr.h>
 	],[
 		ida_alloc_max(NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL, [idr_for_each_entry_continue_ul is defined], [
+		#include <linux/idr.h>
+	],[
+		#ifdef idr_for_each_entry_continue_ul
+			return 0;
+		#else
+			#return
+		#endif
 
 		return 0;
 	])
@@ -4928,6 +4559,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE, [from 6.14, struct scsi_host_template has member sdev_configure], [
+		#include <scsi/scsi_host.h>
+	],[
+		struct scsi_host_template sht = {
+			.sdev_configure = NULL,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SE_CMD_HAS_SENSE_INFO, [struct se_cmd has member sense_info], [
 		#include <target/target_core_base.h>
 
@@ -5408,6 +5049,19 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/bio.h>
 	],[
 		bio_init(NULL, NULL, false);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_3_UNDERSCORE_ADDRESSABLE, [__auto_type exists], [
+		#include <linux/compiler.h>
+
+	],[
+		#ifdef ___ADDRESSABLE
+			return 0;
+		#else
+			#return 1;
+		#endif	
 
 		return 0;
 	])
@@ -7651,6 +7305,45 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_EXPORT_SYMBOL_NS_GPL, [linux/export.h defines EXPORT_SYMBOL_NS_GPL], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef EXPORT_SYMBOL_NS_GPL
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___EXPORT_SYMBOL_REF, [linux/export.h defines __EXPORT_SYMBOL_REF], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef __EXPORT_SYMBOL_REF /* ddb5cdbafaaa, v6.5 and above */
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___EXPORT_SYMBOL_NS, [linux/export.h defines __EXPORT_SYMBOL_NS], [
+		#include <linux/export.h>
+	],[
+
+		#ifdef __EXPORT_SYMBOL_NS /* v5.4 only */
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_WAIT_QUIESCE_DONE, [blk_mq_wait_quiesce_done is defined], [
 		#include <linux/blk-mq.h>
 	],[
@@ -8502,6 +8195,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_ALLOC_BULK_PAGES_API_RENAME, [linux/gfp.h has v6.14 alloc_bulk_pages API rename], [
+		#include <linux/mm_types.h>
+		#include <linux/gfp.h>
+	],[
+		unsigned int to_fill = 1;
+		struct page **page_list;
+
+		alloc_pages_bulk(GFP_KERNEL_ACCOUNT, to_fill, page_list);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H, [linux/page_frag_cache.h has page_frag_cache_drain], [
 		#include <linux/page_frag_cache.h>
 	],[
@@ -8564,6 +8269,50 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		int x = RQF_MQ_INFLIGHT;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_MAP_HW_QUEUES, [Kernel provides v6.14 blk_mq_map_hw_queues], [
+		#include <linux/blk-mq.h>
+	],[
+		blk_mq_map_hw_queues(NULL, NULL, 5);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FORCE_NOIO_SCOPE_IN_BLK_MQ_FREEZE_QUEUE, [Kernel has v6.14 'force noio scope in blk_mq_freeze_queue'], [
+		#include <linux/blk-mq.h>
+	],[
+		int x;
+
+		x = blk_mq_freeze_queue(NULL);
+		blk_mq_unfreeze_queue(NULL, 1);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE, [Kernel has v6.13 'add non_owner variant of start_freeze/unfreeze queue APIs'], [
+		#include <linux/blk-mq.h>
+	],[
+		blk_freeze_queue_start_non_owner(NULL);
+		blk_mq_unfreeze_queue_non_owner(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_NO_SCHED, [linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1], [
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_NO_SCHED;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_SHOULD_MERGE, [linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1], [
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_SHOULD_MERGE;
 
 		return 0;
 	])
@@ -8652,7 +8401,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 		struct platform_driver apple_nvme_driver = {
 			.remove_new = apple_nvme_remove,
-		}
+		};
 
 		return 0;
 	])
@@ -8726,6 +8475,131 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		struct rq_list x;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_WRITE_BEGIN_FOLIO, [if address_space_operations->write_begin takes a folio param], [
+		#include <linux/fs.h>
+	],[
+		struct folio *f;
+		struct address_space_operations ops = {0};
+		ops.write_begin(NULL, NULL, 0, 0, &f, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_D_REVALIDATE_2_PARAMS, [if dentry_operations->d_revalidate takes 2 params], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry_operations ops = {0};
+
+		ops.d_revalidate(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS, [if security_dentry_init_security() takes 6 params], [
+		#include <linux/security.h>
+	],[
+		security_dentry_init_security(NULL, 0, NULL, NULL, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FILE_LOCK_CORE_C, [if struct file_lock has c field], [
+		#include <linux/filelock.h>
+	],[
+		struct file_lock a;
+		struct file_lock_core b;
+
+		b = a.c;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NO_EXPORT_SUPPORT, [if FUSE_NO_EXPORT_SUPPORT is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_NO_EXPORT_SUPPORT;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VIRTQUEUE_INFO, [if struct virtqueue_info is defined], [
+		#include <linux/virtio_config.h>
+	],[
+		struct virtqueue_info vqi;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IN_GROUP_OR_CAPABLE, [if func in_group_or_capable is defined], [
+		#include <linux/fs.h>
+	],[
+		vfsgid_t gid = {0};
+
+		in_group_or_capable(NULL, NULL, gid);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_HAS_RESEND, [if FUSE_HAS_RESEND is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_HAS_RESEND;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NOTIFY_RESEND, [if FUSE_NOTIFY_RESEND is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_NOTIFY_RESEND;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FUSE_PASSTHROUGH, [if FUSE_PASSTHROUGH is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		int a = FUSE_PASSTHROUGH;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FSPARAM_UID, [if fsparam_uid is defined], [
+		#include <linux/fs_parser.h>
+	],[
+		struct fs_parameter_spec a = fsparam_uid("foo", 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BIO_ADD_PC_PAGE, [if bio_add_pc_page is defined], [
+		#include <linux/bio.h>
+	],[
+		bio_add_pc_page(NULL, NULL, NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET, [struct platform_driver has remove with no ret], [
+		#include <linux/platform_device.h>
+
+		static void apple_nvme_remove(struct platform_device *pdev) {}
+	],[
+		struct platform_driver apple_nvme_driver = {
+			.remove = apple_nvme_remove,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ITER_ALLOW_P2PDMA, [uio.h has ITER_ALLOW_P2PDMA], [
+		#include <linux/uio.h>
+	],[
+		iov_iter_extraction_t f = ITER_ALLOW_P2PDMA;
 
 		return 0;
 	])
