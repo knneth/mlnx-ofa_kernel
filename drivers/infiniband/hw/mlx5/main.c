@@ -3264,7 +3264,6 @@ static int lag_event(struct notifier_block *nb, unsigned long event, void *data)
 				roce_del_all_netdev_gids(ibdev, portnum + 1,
 							 old_ndev);
 			rdma_roce_rescan_port(ibdev, portnum + 1);
-			ret = NOTIFY_OK;
 		}
 		break;
 	default:
@@ -3273,7 +3272,7 @@ static int lag_event(struct notifier_block *nb, unsigned long event, void *data)
 
 out:
 	dev_put(old_ndev);
-	return ret;
+	return notifier_from_errno(ret);
 }
 
 static void mlx5e_lag_event_register(struct mlx5_ib_dev *dev)

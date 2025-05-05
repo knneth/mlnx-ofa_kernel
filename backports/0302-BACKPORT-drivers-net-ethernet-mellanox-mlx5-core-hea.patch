@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
 
 Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
 ---
- .../net/ethernet/mellanox/mlx5/core/health.c  | 382 +++++++++++++++---
- 1 file changed, 334 insertions(+), 48 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/health.c  | 399 +++++++++++++++---
+ 1 file changed, 351 insertions(+), 48 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
@@ -370,7 +370,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  	int err;
  
  	if (!mlx5_core_is_pf(dev))
-@@ -624,30 +777,105 @@ mlx5_fw_fatal_reporter_dump(struct devli
+@@ -624,30 +777,122 @@ mlx5_fw_fatal_reporter_dump(struct devli
  
  	if (priv_ctx) {
  		struct mlx5_fw_reporter_ctx *fw_reporter_ctx = priv_ctx;
@@ -428,12 +428,29 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
 +{
 +	struct mlx5_fw_reporter_ctx fw_reporter_ctx;
 +	struct mlx5_core_health *health;
++#ifndef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
++	struct mlx5_core_dev *dev;
++	struct mlx5_priv *priv;
++#endif
 +
 +	health = container_of(work, struct mlx5_core_health, report_work);
++#ifndef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
++	priv = container_of(health, struct mlx5_priv, health);
++	dev = container_of(priv, struct mlx5_core_dev, priv);
++#endif
 +
 +	if (IS_ERR_OR_NULL(health->fw_reporter))
 +		return;
 +
++#ifndef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
++	mutex_lock(&dev->intf_state_mutex);
++	if (test_bit(MLX5_DROP_HEALTH_WORK, &health->flags)) {
++		mlx5_core_err(dev, "health reports are not permitted at this stage\n");
++		mutex_unlock(&dev->intf_state_mutex);
++		return;
++	}
++	mutex_unlock(&dev->intf_state_mutex);
++#endif
 +	fw_reporter_ctx.err_synd = health->synd;
 +	fw_reporter_ctx.miss_counter = health->miss_counter;
 +	if (fw_reporter_ctx.err_synd) {
@@ -477,7 +494,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  
  	mutex_lock(&dev->intf_state_mutex);
  	if (test_bit(MLX5_DROP_HEALTH_WORK, &health->flags)) {
-@@ -658,18 +886,24 @@ static void mlx5_fw_fatal_reporter_err_w
+@@ -658,18 +903,24 @@ static void mlx5_fw_fatal_reporter_err_w
  	mutex_unlock(&dev->intf_state_mutex);
  	enter_error_state(dev, false);
  	if (IS_ERR_OR_NULL(health->fw_fatal_reporter)) {
@@ -502,7 +519,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  	if (devlink_health_report(health->fw_fatal_reporter,
  				  "FW fatal error reported", &fw_reporter_ctx) == -ECANCELED) {
  		/* If recovery wasn't performed, due to grace period,
-@@ -720,16 +954,33 @@ void mlx5_fw_reporters_create(struct mlx
+@@ -720,16 +971,33 @@ void mlx5_fw_reporters_create(struct mlx
  	}
  
  	health->fw_reporter =
@@ -539,7 +556,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  	if (IS_ERR(health->fw_fatal_reporter))
  		mlx5_core_warn(dev, "Failed to create fw fatal reporter, err = %ld\n",
  			       PTR_ERR(health->fw_fatal_reporter));
-@@ -745,6 +996,7 @@ static void mlx5_fw_reporters_destroy(st
+@@ -745,6 +1013,7 @@ static void mlx5_fw_reporters_destroy(st
  	if (!IS_ERR_OR_NULL(health->fw_fatal_reporter))
  		devlink_health_reporter_destroy(health->fw_fatal_reporter);
  }
@@ -547,7 +564,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  
  static unsigned long get_next_poll_jiffies(struct mlx5_core_dev *dev)
  {
-@@ -761,7 +1013,9 @@ void mlx5_trigger_health_work(struct mlx
+@@ -761,7 +1030,9 @@ void mlx5_trigger_health_work(struct mlx
  {
  	struct mlx5_core_health *health = &dev->priv.health;
  
@@ -557,7 +574,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  		queue_work(health->wq, &health->fatal_report_work);
  }
  
-@@ -794,9 +1048,13 @@ static void poll_health(struct timer_lis
+@@ -794,9 +1065,13 @@ static void poll_health(struct timer_lis
  {
  	struct mlx5_core_dev *dev = from_timer(dev, t, priv.health.timer);
  	struct mlx5_core_health *health = &dev->priv.health;
@@ -571,7 +588,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  	u32 count;
  
  	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
-@@ -823,13 +1081,17 @@ static void poll_health(struct timer_lis
+@@ -823,13 +1098,17 @@ static void poll_health(struct timer_lis
  	if (health->miss_counter == MAX_MISSES) {
  		mlx5_core_err(dev, "device's health compromised - reached miss count\n");
  		print_health_info(dev);
@@ -589,7 +606,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  
  out:
  	mod_timer(&health->timer, get_next_poll_jiffies(dev));
-@@ -874,7 +1136,9 @@ void mlx5_drain_health_wq(struct mlx5_co
+@@ -874,7 +1153,9 @@ void mlx5_drain_health_wq(struct mlx5_co
  
  	set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
@@ -599,7 +616,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  	cancel_work_sync(&health->fatal_report_work);
  }
  
-@@ -884,22 +1148,38 @@ void mlx5_health_cleanup(struct mlx5_cor
+@@ -884,22 +1165,38 @@ void mlx5_health_cleanup(struct mlx5_cor
  
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
  	destroy_workqueue(health->wq);
@@ -638,7 +655,7 @@ Change-Id: Ia995b4a702f05444920c2868faa0b028a13c44ee
  
  	health = &dev->priv.health;
  	name = kmalloc(64, GFP_KERNEL);
-@@ -912,14 +1192,20 @@ int mlx5_health_init(struct mlx5_core_de
+@@ -912,14 +1209,20 @@ int mlx5_health_init(struct mlx5_core_de
  	kfree(name);
  	if (!health->wq)
  		goto out_err;

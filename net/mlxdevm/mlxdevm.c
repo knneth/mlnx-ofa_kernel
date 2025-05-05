@@ -141,17 +141,16 @@ void mlxdevm_rate_nodes_destroy(struct mlxdevm *dev)
 	u32 tc_bw[MLX5_MAX_NUM_TC] = {};
 	struct mlxdevm_port *port;
 
-	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list)
-		ops->rate_node_tc_bw_set(dev, cur->name, tc_bw, NULL);
-
 	list_for_each_entry(port, &dev->port_list, list) {
 		ops->rate_leaf_group_set(port, "", NULL);
 		ops->rate_leaf_tx_max_set(port, 0, NULL);
 		ops->rate_leaf_tx_share_set(port, 0, NULL);
 	}
 
-	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list)
+	list_for_each_entry_safe(cur, tmp, &dev->rate_group_list, list) {
+		ops->rate_node_tc_bw_set(dev, cur->name, tc_bw, NULL);
 		ops->rate_node_del(dev, cur->name, NULL);
+	}
 }
 EXPORT_SYMBOL_GPL(mlxdevm_rate_nodes_destroy);
 

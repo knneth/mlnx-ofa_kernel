@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
 
 Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
 ---
- drivers/infiniband/hw/mlx5/mr.c | 65 +++++++++++++++++++++++++++------
- 1 file changed, 54 insertions(+), 11 deletions(-)
+ drivers/infiniband/hw/mlx5/mr.c | 71 ++++++++++++++++++++++++++++-----
+ 1 file changed, 60 insertions(+), 11 deletions(-)
 
 --- a/drivers/infiniband/hw/mlx5/mr.c
 +++ b/drivers/infiniband/hw/mlx5/mr.c
@@ -173,7 +173,41 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -3131,10 +3167,17 @@ static struct attribute *cache_default_a
+@@ -2143,15 +2179,19 @@ static int mlx5_revoke_mr(struct mlx5_ib
+ 	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
+ 	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
+ 	bool is_odp = is_odp_mr(mr);
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
+ 		!to_ib_umem_dmabuf(mr->umem)->pinned;
++#endif
+ 	int rc = 0;
+ 
+ 	if (is_odp)
+ 		mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	if (is_odp_dma_buf)
+ 		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv, NULL);
++#endif
+ 
+ 	if (mr->mmkey.cacheable && !mlx5r_umr_revoke_mr(mr) && !cache_ent_find_and_store(dev, mr)) {
+ 		ent = mr->mmkey.cache_ent;
+@@ -2188,11 +2228,13 @@ out:
+ 		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+ 	}
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	if (is_odp_dma_buf) {
+ 		if (!rc)
+ 			to_ib_umem_dmabuf(mr->umem)->private = NULL;
+ 		dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
+ 	}
++#endif
+ 
+ 	return rc;
+ }
+@@ -3154,10 +3196,17 @@ static struct attribute *cache_default_a
  	NULL
  };
  

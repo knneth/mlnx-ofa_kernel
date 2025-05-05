@@ -99,7 +99,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  	trace_mlx5_sf_add(dev, sf->port_index, sf->controller, sf->hw_fn_id, new_attr->sfnum);
  	return 0;
  
-@@ -301,7 +338,11 @@ static bool mlx5_sf_table_supported(cons
+@@ -302,7 +339,11 @@ static bool mlx5_sf_table_supported(cons
  int mlx5_devlink_sf_port_new(struct devlink *devlink,
  			     const struct devlink_port_new_attrs *new_attr,
  			     struct netlink_ext_ack *extack,
@@ -111,7 +111,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_sf_table *table = dev->priv.sf_table;
-@@ -322,7 +363,11 @@ int mlx5_devlink_sf_port_new(struct devl
+@@ -323,7 +364,11 @@ int mlx5_devlink_sf_port_new(struct devl
  		return -EOPNOTSUPP;
  	}
  
@@ -123,7 +123,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  }
  
  static void mlx5_sf_dealloc(struct mlx5_sf_table *table, struct mlx5_sf *sf)
-@@ -362,13 +407,24 @@ static void mlx5_sf_del(struct mlx5_sf_t
+@@ -363,13 +408,24 @@ static void mlx5_sf_del(struct mlx5_sf_t
  	mlx5_sf_dealloc(table, sf);
  }
  
@@ -149,7 +149,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  
  	mlx5_sf_del(table, sf);
  	return 0;
-@@ -448,6 +504,7 @@ static int mlx5_sf_esw_event(struct noti
+@@ -449,6 +505,7 @@ static int mlx5_sf_esw_event(struct noti
  	return 0;
  }
  
@@ -157,7 +157,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  static int mlx5_sf_mdev_event(struct notifier_block *nb, unsigned long event, void *data)
  {
  	struct mlx5_sf_table *table = container_of(nb, struct mlx5_sf_table, mdev_nb);
-@@ -472,6 +529,7 @@ out:
+@@ -473,6 +530,7 @@ out:
  	mutex_unlock(&table->sf_state_lock);
  	return ret;
  }
@@ -165,7 +165,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  
  int mlx5_sf_table_init(struct mlx5_core_dev *dev)
  {
-@@ -499,9 +557,10 @@ int mlx5_sf_table_init(struct mlx5_core_
+@@ -500,9 +558,10 @@ int mlx5_sf_table_init(struct mlx5_core_
  	if (err)
  		goto vhca_err;
  
@@ -177,7 +177,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  	return 0;
  
  vhca_err:
-@@ -520,7 +579,9 @@ void mlx5_sf_table_cleanup(struct mlx5_c
+@@ -521,7 +580,9 @@ void mlx5_sf_table_cleanup(struct mlx5_c
  	if (!table)
  		return;
  

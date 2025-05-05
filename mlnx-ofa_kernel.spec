@@ -78,7 +78,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 24.10}
-%{!?_release: %global _release OFED.24.10.1.1.4.0.105.1}
+%{!?_release: %global _release OFED.24.10.2.1.8.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -117,10 +117,15 @@ Requires: lsof
 BuildRequires: %kernel_module_package_buildreqs
 BuildRequires: /usr/bin/perl
 %endif
+%if "%{_vendor}" == "suse"
+%if 0%{?sle_version} >= 150600
+Requires: systemd-sysvcompat
+%endif
+%endif
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-1.1.4.0.105.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-2.1.8.tgz
 
 
 # build KMP rpms?
@@ -164,7 +169,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-1.1.4.0.105.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-2.1.8.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -195,7 +200,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-1.1.4.0.105.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-2.1.8.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -391,50 +396,6 @@ install -m 0755 %{_builddir}/$NAME-$VERSION/source/ofed_scripts/net-interfaces %
 # TBD: move these utilities into standalone package
 install -d %{buildroot}%{_sbindir}
 
-# update /etc/init.d/openibd header
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || "$is_euler" != '' ]]; then
-perl -i -ne 'if (m@^#!/bin/bash@) {
-        print q@#!/bin/bash
-#
-# Bring up/down openib
-#
-# chkconfig: 2345 05 95
-# description: Activates/Deactivates InfiniBand Driver to \
-#              start at boot time.
-#
-### BEGIN INIT INFO
-# Provides:       openibd
-### END INIT INFO
-@;
-                 } else {
-                     print;
-                 }' %{buildroot}/etc/init.d/openibd
-fi
-
-if grep -qwE 'suse|SLES' /etc/os-release 2>/dev/null; then
-    local_fs='$local_fs'
-    openiscsi=''
-    %if %{build_oiscsi}
-        openiscsi='open-iscsi'
-    %endif
-        perl -i -ne "if (m@^#!/bin/bash@) {
-        print q@#!/bin/bash
-### BEGIN INIT INFO
-# Provides:       openibd
-# Required-Start: $local_fs
-# Required-Stop: opensmd $openiscsi
-# Default-Start:  2 3 5
-# Default-Stop: 0 1 2 6
-# Description:    Activates/Deactivates InfiniBand Driver to \
-#                 start at boot time.
-### END INIT INFO
-@;
-                 } else {
-                     print;
-                 }" %{buildroot}/etc/init.d/openibd
-fi
-
 %if %{build_ipoib}
 case $(uname -m) in
 	i[3-6]86)
@@ -470,46 +431,10 @@ fi
 
 %post -n %{utils_pname}
 if [ $1 -eq 1 ]; then # 1 : This package is being installed
-#############################################################################################################
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
-if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || -f /etc/ctyunos-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
-        /sbin/chkconfig openibd off >/dev/null 2>&1 || true
-        /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-        /sbin/chkconfig --del openibd >/dev/null 2>&1 || true
-
-%if "%{WITH_SYSTEMD}" != "1"
-        /sbin/chkconfig --add openibd >/dev/null 2>&1 || true
-        /sbin/chkconfig openibd on >/dev/null 2>&1 || true
-%else
-        /usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
-%endif
-fi
-
-if grep -qwE 'suse|SLES' /etc/os-release 2>/dev/null; then
-        /sbin/chkconfig openibd off >/dev/null  2>&1 || true
-        /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-        /sbin/insserv -r openibd >/dev/null 2>&1 || true
-
-%if "%{WITH_SYSTEMD}" != "1"
-        /sbin/insserv openibd >/dev/null 2>&1 || true
-        /sbin/chkconfig openibd on >/dev/null 2>&1 || true
-%else
-        /usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
-%endif
-fi
-
-%if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"
-/usr/sbin/update-rc.d openibd defaults || true
-%endif
-
-%if "%{POWERKVM}" == "1"
-/usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-/usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
-%endif
-
 %if "%{WITH_SYSTEMD}" == "1"
+export SYSTEMCTL_SKIP_SYSV=1
 /usr/bin/systemctl daemon-reload >/dev/null 2>&1 || :
+/usr/bin/systemctl enable openibd >/dev/null  2>&1 || true
 cat /proc/sys/kernel/random/boot_id 2>/dev/null | sed -e 's/-//g' > /var/run/openibd.bootid || true
 test -s /var/run/openibd.bootid || echo manual > /var/run/openibd.bootid || true
 %endif
@@ -561,32 +486,12 @@ fi # 1 : closed
 # END of post
 
 %preun -n %{utils_pname}
-is_euler=`grep 'NAME=".*Euler' /etc/os-release 2>/dev/null || :`
-is_kylin=`grep 'NAME=".*Kylin' /etc/os-release 2>/dev/null || :`
+%if "%{WITH_SYSTEMD}" == "1"
+export SYSTEMCTL_SKIP_SYSV=1
 if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
-          if [[ -f /etc/redhat-release || -f /etc/rocks-release || -f /etc/UnionTech-release || "$is_euler" != '' || "$is_kylin" != '' ]]; then
-                /sbin/chkconfig openibd off >/dev/null 2>&1 || true
-                /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-                /sbin/chkconfig --del openibd  >/dev/null 2>&1 || true
-          fi
-	  if grep -qwE 'suse|SLES' /etc/os-release 2>/dev/null; then
-                /sbin/chkconfig openibd off >/dev/null 2>&1 || true
-                /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-                /sbin/insserv -r openibd >/dev/null 2>&1 || true
-          fi
-          if [ -f /etc/debian_version ]; then
-                if ! ( /usr/sbin/update-rc.d openibd remove > /dev/null 2>&1 ); then
-                        true
-                fi
-          fi
-%if "%{WINDRIVER}" == "1" || "%{BLUENIX}" == "1"
-/usr/sbin/update-rc.d -f openibd remove || true
-%endif
-
-%if "%{POWERKVM}" == "1"
-/usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
-%endif
+          /usr/bin/systemctl disable openibd >/dev/null  2>&1 || true
 fi
+%endif
 
 %postun -n %{utils_pname}
 %if "%{WITH_SYSTEMD}" == "1"

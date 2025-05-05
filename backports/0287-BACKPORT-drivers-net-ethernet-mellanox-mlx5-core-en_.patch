@@ -645,7 +645,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static void
  mlx5e_add_skb_shared_info_frag(struct mlx5e_rq *rq, struct skb_shared_info *sinfo,
  			       struct xdp_buff *xdp, struct mlx5e_frag_page *frag_page,
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  			       u32 frag_offset, u32 len)
 +#else
 +			       u32 frag_offset, u32 len, bool *has_frags)
@@ -656,7 +656,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	dma_addr_t addr = page_pool_get_dma_addr(frag_page->page);
  
  	dma_sync_single_for_cpu(rq->pdev, addr + frag_offset, len, rq->buff.map_dir);
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  	if (!xdp_buff_has_frags(xdp)) {
 +#else
 +	if (!*has_frags) {
@@ -666,7 +666,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		 */
  		sinfo->nr_frags = 0;
  		sinfo->xdp_frags_size = 0;
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  		xdp_buff_set_frags_flag(xdp);
 +#else
 +		*has_frags = true;
@@ -1407,7 +1407,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	dma_addr_t addr;
 +	u32 truesize;
 +	void *va;
-+#ifndef HAVE_XDP_HAS_FRAGS
++#ifndef HAVE_XDP_BUFF_HAS_FLAGS
 +	bool has_frags = false;
 +#endif
 +
@@ -1437,7 +1437,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +		frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
 +
 +		mlx5e_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, frag_page,
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +					       wi->offset, frag_consumed_bytes);
 +#else
 +					       wi->offset, frag_consumed_bytes, &has_frags);
@@ -1485,7 +1485,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	skb_mark_for_recycle(skb);
 +	head_wi->frag_page->frags++;
 +
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +	if (xdp_buff_has_frags(&mxbuf.xdp)) {
 +#else
 +	if (has_frags) {
@@ -1608,7 +1608,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	u32 metasize;
  	u32 truesize;
  	void *va;
-+#ifndef HAVE_XDP_HAS_FRAGS
++#ifndef HAVE_XDP_BUFF_HAS_FLAGS
 +	bool frag_pfmemalloc = false;
 +	bool has_frags = false;
 +	u32 frag_size;
@@ -1665,7 +1665,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +					frag_consumed_bytes, rq->buff.map_dir);
 +#endif
 +
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +		if (!xdp_buff_has_frags(&mxbuf.xdp)) {
 +#else
 +		if (!has_frags) {
@@ -1674,7 +1674,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +			 * when possible.
 +			 */
 +			sinfo->nr_frags = 0;
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +			sinfo->xdp_frags_size = 0;
 +			xdp_buff_set_frags_flag(&mxbuf.xdp);
 +#else
@@ -1693,12 +1693,12 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +#endif
 +
 +		if (page_is_pfmemalloc(au->page))
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +			xdp_buff_set_frag_pfmemalloc(&mxbuf.xdp);
 +#else
 +			frag_pfmemalloc = true;
 +#endif
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
 +		sinfo->xdp_frags_size += frag_consumed_bytes;
 +#else
 +		frag_size += frag_consumed_bytes;
@@ -1744,7 +1744,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 -	head_wi->frag_page->frags++;
 -
 +	page_ref_inc(head_wi->au->page);
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  	if (xdp_buff_has_frags(&mxbuf.xdp)) {
 +#else
 +	if (unlikely(has_frags)) {
@@ -1753,7 +1753,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +
  		/* sinfo->nr_frags is reset by build_skb, calculate again. */
  		xdp_update_skb_shared_info(skb, wi - head_wi - 1,
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  					   sinfo->xdp_frags_size, truesize,
  					   xdp_buff_is_frag_pfmemalloc(&mxbuf.xdp));
 +#else
@@ -1959,7 +1959,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	u16 linear_data_len;
  	u16 linear_hr;
  	void *va;
-+#ifndef HAVE_XDP_HAS_FRAGS
++#ifndef HAVE_XDP_BUFF_HAS_FLAGS
 +	bool has_frags = false;
 +#endif
  
@@ -1982,7 +1982,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  			truesize += ALIGN(pg_consumed_bytes, BIT(rq->mpwqe.log_stride_sz));
  
  		mlx5e_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, frag_page, frag_offset,
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  					       pg_consumed_bytes);
 +#else
 +					       pg_consumed_bytes, &has_frags);
@@ -2006,7 +2006,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	{
  		dma_addr_t addr;
  
-+#ifdef HAVE_XDP_HAS_FRAGS
++#ifdef HAVE_XDP_BUFF_HAS_FLAGS
  		if (xdp_buff_has_frags(&mxbuf.xdp)) {
 +#else
 +		if (has_frags) {

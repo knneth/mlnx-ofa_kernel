@@ -283,7 +283,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  	if (!test_bit(MLX5_BREAK_FW_WAIT, &vport->dev->intf_state))
- 		mlx5_esw_qos_vport_update_node(vport, NULL, NULL);
+ 		mlx5_esw_qos_vport_update_parent(vport, NULL, NULL);
 +#ifdef HAVE_DEVL_PORT_REGISTER
  	devl_rate_leaf_destroy(&dl_port->dl_port);
  

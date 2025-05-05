@@ -249,26 +249,19 @@ struct mlx5_vport {
 
 	struct mlx5_vport_info  info;
 
-
 	/* Protected with the E-Switch qos domain lock. The Vport QoS can
-	 * either be disabled (!sched_node) or in one of two states:
-	 * regular QoS (when sched_node is active) or TC QoS
-	 * (when tc_arbiter_node is active). Both regular and TC QoS use the
-	 * min_rate and max_rate from the sched_node, to save configuration to
-	 * save the configurations set on the vport.
+	 * either be disabled (sched_node is NULL) or in one of three states:
+	 * 1. Regular QoS (sched_node is a vport node).
+	 * 2. TC QoS enabled on the vport (sched_node is a TC arbiter).
+	 * 3. TC QoS enabled on the vport's parent node
+	 *    (sched_node is a rate limit node).
+	 * When TC is enabled in either mode, the vport owns vport TC scheduling nodes.
 	 */
 	struct {
 		/* Vport scheduling element node. */
 		struct mlx5_esw_sched_node *sched_node;
-		/* Traffic class QoS. */
-		struct {
-			/* Vport traffic class scheduling element nodes. */
-			struct mlx5_esw_sched_node **sched_nodes;
-			/* Rate limit scheduling element index for the traffic class nodes. */
-			u32 esw_rate_limit_elem_ix;
-			/* The traffic class arbiter node the vport belongs to. */
-			struct mlx5_esw_sched_node *arbiter_node;
-		} tc;
+		/* Array of vport traffic class scheduling nodes. */
+		struct mlx5_esw_sched_node **sched_nodes;
 	} qos;
 
 	u16 vport;
@@ -533,9 +526,8 @@ int mlx5_eswitch_set_vport_trust(struct mlx5_eswitch *esw,
 				 u16 vport_num, bool setting);
 int mlx5_eswitch_set_vport_rate(struct mlx5_eswitch *esw, u16 vport,
 				u32 max_rate, u32 min_rate);
-int mlx5_esw_qos_vport_update_node(struct mlx5_vport *vport,
-				   struct mlx5_esw_sched_node *node,
-				   struct netlink_ext_ack *extack);
+int mlx5_esw_qos_vport_update_parent(struct mlx5_vport *vport, struct mlx5_esw_sched_node *node,
+				     struct netlink_ext_ack *extack);
 int mlx5_eswitch_set_vepa(struct mlx5_eswitch *esw, u8 setting);
 int mlx5_eswitch_get_vepa(struct mlx5_eswitch *esw, u8 *setting);
 int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,

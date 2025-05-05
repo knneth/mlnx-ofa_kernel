@@ -10,7 +10,7 @@ Change-Id: I6f3406defefae7023d53acefdeb84d89fd4f0bac
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 @@ -45,6 +45,10 @@
  
- #define DRIVER_VERSION	"24.10-1.1.4.0.105"
+ #define DRIVER_VERSION	"24.10-2.1.8"
  
 +#ifndef BITS_TO_BYTES
 +#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)

@@ -1180,8 +1180,7 @@ static void mlx5_eswitch_clear_vf_vports_info(struct mlx5_eswitch *esw)
 	unsigned long i;
 
 	mlx5_esw_for_each_vf_vport(esw, i, vport, esw->esw_funcs.num_vfs) {
-		kfree(vport->qos.sched_node);
-		memset(&vport->qos, 0, sizeof(vport->qos));
+		mlx5_esw_qos_vport_qos_free(vport);
 		memset(&vport->info, 0, sizeof(vport->info));
 		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
 		vport->info.vlan_proto = htons(ETH_P_8021Q);
@@ -1194,8 +1193,7 @@ static void mlx5_eswitch_clear_ec_vf_vports_info(struct mlx5_eswitch *esw)
 	unsigned long i;
 
 	mlx5_esw_for_each_ec_vf_vport(esw, i, vport, esw->esw_funcs.num_ec_vfs) {
-		kfree(vport->qos.sched_node);
-		memset(&vport->qos, 0, sizeof(vport->qos));
+		mlx5_esw_qos_vport_qos_free(vport);
 		memset(&vport->info, 0, sizeof(vport->info));
 		vport->info.link_state = MLX5_VPORT_ADMIN_STATE_AUTO;
 		vport->info.vlan_proto = htons(ETH_P_8021Q);
@@ -1321,6 +1319,8 @@ static void mlx5_eswitch_unload_ec_vf_vports(struct mlx5_eswitch *esw,
 {
 	struct mlx5_vport *vport;
 	unsigned long i;
+
+	mlx5_esw_qos_pre_cleanup(esw->dev, num_ec_vfs);
 
 	mlx5_esw_for_each_ec_vf_vport(esw, i, vport, num_ec_vfs) {
 		if (!vport->enabled)
