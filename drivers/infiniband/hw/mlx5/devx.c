@@ -1023,6 +1023,9 @@ static bool devx_is_general_cmd(void *in, struct mlx5_ib_dev *dev)
 	case MLX5_CMD_OP_QUERY_ESW_FUNCTIONS:
 		return true;
 	default:
+		// User has full access to device anyway, so let it use a proper API
+		if (capable(CAP_SYS_RAWIO))
+			return true;
 		return false;
 	}
 }
