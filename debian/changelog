@@ -1,3 +1,9 @@
+mlnx-ofed-kernel (24.10-2.1.8.btech2) noble; urgency=medium
+
+  * Additional access to device commands
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Sun, 22 Jun 2025 16:56:47 +0200
+
 mlnx-ofed-kernel (24.10-2.1.8.btech1) noble; urgency=medium
 
   * Rebase to OFED 24.10-OFED.24.10.2.1.8.1
