@@ -24,14 +24,8 @@ enum sched_node_type {
 	SCHED_NODE_TYPE_VPORT,
 };
 
-static const char * const sched_node_type_str[] = {
-	[SCHED_NODE_TYPE_VPORTS_TSAR] = "vports TSAR",
-	[SCHED_NODE_TYPE_VPORT] = "vport",
-};
-
 struct mlx5_esw_sched_node {
 	u32 ix;
-	struct mlx5_core_dev *dev;
 	struct mlxdevm_rate_node devm;
 	/* Bandwidth parameters. */
 	u32 max_rate;
@@ -50,6 +44,8 @@ struct mlx5_esw_sched_node {
 	struct list_head children;
 	/* Valid only if this node is associated with a vport. */
 	struct mlx5_vport *vport;
+	/* Level in the hierarchy. The root node level is 1. */
+	u8 level;
 
 	/* sysfs group related fields */
 	struct kobject kobj;
@@ -58,29 +54,42 @@ struct mlx5_esw_sched_node {
 	struct completion free_node_comp;
 };
 
-static inline void esw_qos_lock(struct mlx5_eswitch *esw)
-{
-	mutex_lock(&esw->qos.domain->lock);
-}
+int mlx5_esw_qos_init(struct mlx5_eswitch *esw);
+void mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs);
+void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw);
 
-static inline void esw_qos_unlock(struct mlx5_eswitch *esw)
-{
-	mutex_unlock(&esw->qos.domain->lock);
-}
+int
+mlx5_esw_get_esw_and_vport(struct devlink *devlink, struct devlink_port *port,
+			   struct mlx5_eswitch **esw, struct mlx5_vport **vport,
+			   struct netlink_ext_ack *extack);
+
+void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
+int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
+				    struct netlink_ext_ack *extack);
+int mlx5_esw_qos_set_vport_max_rate(struct mlx5_vport *vport, u32 max_rate,
+				    struct netlink_ext_ack *extack);
+int esw_qos_set_node_min_rate(struct mlx5_esw_sched_node *node,
+			      u32 min_rate, struct netlink_ext_ack *extack);
+int esw_qos_sched_elem_config(struct mlx5_esw_sched_node *node, u32 max_rate, u32 bw_share,
+			      struct netlink_ext_ack *extack);
+void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
+				struct netlink_ext_ack *extack);
+
+void esw_qos_lock(struct mlx5_eswitch *esw);
+void esw_qos_unlock(struct mlx5_eswitch *esw);
 
 static inline void esw_assert_qos_lock_held(struct mlx5_eswitch *esw)
 {
 	lockdep_assert_held(&esw->qos.domain->lock);
 }
 
-void mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs);
-int mlx5_esw_qos_init(struct mlx5_eswitch *esw);
-void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw);
+struct mlx5_esw_sched_node *
+esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 node_id,
+				 struct netlink_ext_ack *extack);
 
-int mlx5_esw_qos_set_vport_rate(struct mlx5_vport *evport,
-				u32 max_rate, u32 min_rate);
+int mlx5_esw_qos_set_vport_rate(struct mlx5_vport *evport, u32 max_rate, u32 min_rate);
 bool mlx5_esw_qos_get_vport_rate(struct mlx5_vport *vport, u32 *max_rate, u32 *min_rate);
-void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
+void mlx5_esw_qos_vport_disable_locked(struct mlx5_vport *vport);
 
 void mlx5_esw_qos_vport_qos_free(struct mlx5_vport *vport);
 u32 mlx5_esw_qos_vport_get_sched_elem_ix(const struct mlx5_vport *vport);
@@ -92,34 +101,10 @@ int mlx5_esw_qos_set_sysfs_node_max_rate(struct mlx5_eswitch *esw,
 					  struct mlx5_esw_sched_node *node,
 					  u32 max_rate);
 int mlx5_esw_qos_set_sysfs_node_min_rate(struct mlx5_eswitch *esw,
-					  struct mlx5_esw_sched_node *node,
-					  u32 min_rate);
+					 struct mlx5_esw_sched_node *node,
+					 u32 min_rate);
 void sysfs_esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
-			        struct netlink_ext_ack *extack);
-struct mlx5_esw_sched_node *
-esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 node_id,
 				struct netlink_ext_ack *extack);
-void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
-			       struct netlink_ext_ack *extack);
-int esw_qos_sched_elem_config(struct mlx5_esw_sched_node *node, u32 max_rate,
-			      u32 min_rate, struct netlink_ext_ack *extack);
-int esw_qos_set_node_min_rate(struct mlx5_esw_sched_node *node,
-			      u32 min_rate, struct netlink_ext_ack *extack);
-int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
-				    struct netlink_ext_ack *extack);
-int mlx5_esw_qos_set_vport_max_rate(struct mlx5_vport *vport, u32 max_rate,
-				    struct netlink_ext_ack *extack);
-int
-mlx5_esw_get_esw_and_vport(struct devlink *devlink, struct devlink_port *port,
-			   struct mlx5_eswitch **esw, struct mlx5_vport **vport,
-			   struct netlink_ext_ack *extack);
-int esw_qos_vport_enable(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
-			 struct netlink_ext_ack *extack);
-int esw_qos_set_vport_min_rate(struct mlx5_vport *evport,
-			       u32 min_rate, struct netlink_ext_ack *extack);
-int esw_qos_set_vport_max_rate(struct mlx5_vport *evport,
-			       u32 max_rate, struct netlink_ext_ack *extack);
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 
 int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack);
@@ -133,13 +118,14 @@ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
 				   struct netlink_ext_ack *extack);
 int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
 				   struct netlink_ext_ack *extack);
-int mlx5_esw_devlink_rate_parent_set(struct devlink_rate *devlink_rate,
-				     struct devlink_rate *parent,
-				     void *priv, void *parent_priv,
-				     struct netlink_ext_ack *extack);
-
-#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
-
+int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
+					  struct devlink_rate *parent,
+					  void *priv, void *parent_priv,
+					  struct netlink_ext_ack *extack);
+int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
+					  struct devlink_rate *parent,
+					  void *priv, void *parent_priv,
+					  struct netlink_ext_ack *extack);
 #endif
 
 #endif

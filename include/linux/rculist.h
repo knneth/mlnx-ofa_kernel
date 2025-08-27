@@ -6,10 +6,6 @@
 
 #include_next <linux/rculist.h>
 
-#define compat_hlist_for_each_entry_rcu(pos, head, member) \
-	hlist_for_each_entry_rcu(pos, head, member)
-
-
 #ifndef list_for_each_entry_srcu
 #ifdef CONFIG_PROVE_RCU_LIST
 #define __list_check_srcu(cond)                                  \

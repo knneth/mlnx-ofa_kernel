@@ -289,7 +289,7 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
-	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc);
+	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc, NULL);
 	mutex_unlock(&priv->state_lock);
 	if (err)
 		goto out;
@@ -336,7 +336,7 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 			goto unlock;
 	}
 	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
-					&ethtool_hfunc);
+					&ethtool_hfunc, NULL);
 	mutex_unlock(&priv->state_lock);
 	rtnl_unlock();
 
@@ -355,6 +355,68 @@ bad_input:
 
 static DEVICE_ATTR(hfunc, S_IRUGO | S_IWUSR,
 		  mlx5e_show_hfunc, mlx5e_store_hfunc);
+
+static ssize_t mlx5e_show_xfrm(struct device *device,
+			       struct device_attribute *attr,
+			       char *buf)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	int err, len = 0;
+	bool symmetric;
+
+	rtnl_lock();
+	mutex_lock(&priv->state_lock);
+	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
+	if (err)
+		return err;
+
+	len += sprintf(buf + len, "Operational xfrm: %s\n",
+		       symmetric == true ?  "symmetric-or-xor" : "none");
+	len += sprintf(buf + len, "Supported xfrm: symmetric-or-xor none\n");
+
+	return len;
+}
+
+static ssize_t mlx5e_store_xfrm(struct device *device,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	struct net_device *netdev = priv->netdev;
+	char xfrm[ETH_GSTRING_LEN];
+	bool symmetric;
+	int err;
+
+	err = sscanf(buf, "%31s", xfrm);
+
+	if (err != 1)
+		goto bad_input;
+
+	if (!strcmp(xfrm, "symmetric-or-xor"))
+		symmetric = true;
+	else if (!strcmp(xfrm, "none"))
+		symmetric = false;
+	else
+		goto bad_input;
+
+	rtnl_lock();
+	mutex_lock(&priv->state_lock);
+	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
+	mutex_unlock(&priv->state_lock);
+	rtnl_unlock();
+	return err ? err : count;
+
+bad_input:
+	netdev_err(netdev, "Bad Input\n");
+	return -EINVAL;
+}
+
+static DEVICE_ATTR(xfrm, S_IRUGO | S_IWUSR,
+		  mlx5e_show_xfrm, mlx5e_store_xfrm);
+
+
 
 #define MLX5E_PFC_PREVEN_CRITICAL_AUTO_MSEC	100
 #define MLX5E_PFC_PREVEN_MINOR_AUTO_MSEC	85
@@ -964,6 +1026,7 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
 
 static struct attribute *mlx5e_settings_attrs[] = {
 	&dev_attr_hfunc.attr,
+	&dev_attr_xfrm.attr,
 	&dev_attr_pfc_stall_prevention.attr,
 	NULL,
 };

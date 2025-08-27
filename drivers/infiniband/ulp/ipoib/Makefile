@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
 obj-$(CONFIG_INFINIBAND_IPOIB)			+= ib_ipoib.o
 
 ib_ipoib-y					:= ipoib_main.o \

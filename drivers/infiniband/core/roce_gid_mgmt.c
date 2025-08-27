@@ -525,8 +525,8 @@ EXPORT_SYMBOL(rdma_roce_rescan_device);
  * rdma_roce_rescan_port - Rescan all of the network devices in the system
  * and add their gids if relevant to the port of the RoCE device.
  *
- * @ib_dev:         the rdma device
- * @port:	    port number
+ * @ib_dev: IB device
+ * @port: Port number
  */
 void rdma_roce_rescan_port(struct ib_device *ib_dev, u32 port)
 {

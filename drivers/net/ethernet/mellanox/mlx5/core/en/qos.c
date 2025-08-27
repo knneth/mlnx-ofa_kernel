@@ -77,6 +77,7 @@ int mlx5e_open_qos_sq(struct mlx5e_priv *priv, struct mlx5e_channels *chs,
 	struct mlx5e_params *params;
 	struct mlx5e_channel *c;
 	struct mlx5e_txqsq *sq;
+	unsigned int db_ix;
 	u32 tisn;
 
 	params = &chs->params;
@@ -112,6 +113,7 @@ int mlx5e_open_qos_sq(struct mlx5e_priv *priv, struct mlx5e_channels *chs,
 	ix = node_qid % params->num_channels;
 	qid = node_qid / params->num_channels;
 	c = chs->c[ix];
+	db_ix = mlx5e_get_doorbell_index(c->mdev, ix);
 
 	qos_sqs = mlx5e_state_dereference(priv, c->qos_sqs);
 	sq = kzalloc(sizeof(*sq), GFP_KERNEL);
@@ -123,7 +125,7 @@ int mlx5e_open_qos_sq(struct mlx5e_priv *priv, struct mlx5e_channels *chs,
 
 	memset(&param_sq, 0, sizeof(param_sq));
 	memset(&param_cq, 0, sizeof(param_cq));
-	mlx5e_build_sq_param(c->mdev, params, &param_sq);
+	mlx5e_build_sq_param(c->mdev, params, db_ix, &param_sq);
 	mlx5e_build_tx_cq_param(c->mdev, params, &param_cq);
 	err = mlx5e_open_cq(c->mdev, params->tx_cq_moderation, &param_cq, &ccp, &sq->cq);
 	if (err)

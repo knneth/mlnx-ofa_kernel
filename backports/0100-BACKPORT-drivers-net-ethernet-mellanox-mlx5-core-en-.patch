@@ -1,32 +1,63 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
 
-Change-Id: I1b09d4c0628c056d2b4428918ad16e3ffd79f92b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c   | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
- void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
- 				  struct mlx5e_encap_entry *e);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5
+ 			     int act_index,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	struct netlink_ext_ack *extack = parse_state->extack;
+ 	struct mlx5e_priv *priv = parse_state->flow->priv;
  
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
- 		       void *type_data);
+@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5
+ 	}
+ 
+ 	return true;
++#else
++	return false;
++#endif
+ }
+ 
+ static void
+ copy_mpls_info(struct mlx5e_mpls_info *mpls_info,
+ 	       const struct flow_action_entry *act)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	mpls_info->label = act->mpls_push.label;
+ 	mpls_info->tc = act->mpls_push.tc;
+ 	mpls_info->bos = act->mpls_push.bos;
+ 	mpls_info->ttl = act->mpls_push.ttl;
++#endif
+ }
+ 
+ static int
+@@ -67,10 +73,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e
+ 		return false;
+ 	}
+ 
++#ifdef HAVE_NETIF_IS_BAREDUDP
+ 	if (!netif_is_bareudp(filter_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls pop supported only on bareudp devices");
+ 		return false;
+ 	}
 +#endif
  
- void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
- 			  struct sk_buff *skb);
- 
-+#ifdef HAVE_BASECODE_EXTRAS
-+void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
-+
-+int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
-+				void *cb_priv);
+ 	return true;
+ }
+@@ -81,7 +89,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_ac
+ 		      struct mlx5e_priv *priv,
+ 		      struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_MPLS
+ 	attr->esw_attr->eth.h_proto = act->mpls_pop.proto;
 +#endif
-+
- #else /* CONFIG_MLX5_CLS_ACT */
+ 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
+ 	flow_flag_set(parse_state->flow, L3_TO_L2_DECAP);
  
- struct mlx5e_rep_priv;

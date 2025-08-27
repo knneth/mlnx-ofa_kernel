@@ -17,7 +17,7 @@ const struct nla_policy mlxdevm_dl_port_function_nl_policy[MLXDEVM_PORT_FN_ATTR_
 	[MLXDEVM_PORT_FN_ATTR_OPSTATE] = NLA_POLICY_MAX(NLA_U8, 1),
 	[MLXDEVM_PORT_FN_ATTR_CAPS] = NLA_POLICY_BITFIELD32(15),
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 const struct nla_policy devlink_dl_selftest_id_nl_policy[DEVLINK_ATTR_SELFTEST_ID_FLASH + 1] = {
 	[DEVLINK_ATTR_SELFTEST_ID_FLASH] = { .type = NLA_FLAG, },
@@ -69,7 +69,7 @@ static const struct nla_policy mlxdevm_port_del_nl_policy[MLXDEVM_ATTR_PORT_INDE
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_PORT_INDEX] = { .type = NLA_U32, },
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_PORT_SPLIT - do */
 static const struct nla_policy devlink_port_split_nl_policy[DEVLINK_ATTR_PORT_SPLIT_COUNT + 1] = {
@@ -189,28 +189,30 @@ static const struct nla_policy devlink_sb_occ_max_clear_nl_policy[DEVLINK_ATTR_S
 	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[DEVLINK_ATTR_SB_INDEX] = { .type = NLA_U32, },
 };
+#endif
 
-/* DEVLINK_CMD_ESWITCH_GET - do */
-static const struct nla_policy devlink_eswitch_get_nl_policy[DEVLINK_ATTR_DEV_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_ESWITCH_GET - do */
+static const struct nla_policy mlxdevm_eswitch_get_nl_policy[MLXDEVM_ATTR_DEV_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* DEVLINK_CMD_ESWITCH_SET - do */
-static const struct nla_policy devlink_eswitch_set_nl_policy[DEVLINK_ATTR_ESWITCH_ENCAP_MODE + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_ESWITCH_MODE] = NLA_POLICY_MAX(NLA_U16, 1),
-	[DEVLINK_ATTR_ESWITCH_INLINE_MODE] = NLA_POLICY_MAX(NLA_U8, 3),
-	[DEVLINK_ATTR_ESWITCH_ENCAP_MODE] = NLA_POLICY_MAX(NLA_U8, 1),
+/* MLXDEVM_CMD_ESWITCH_SET - do */
+static const struct nla_policy mlxdevm_eswitch_set_nl_policy[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_ESWITCH_MODE] = NLA_POLICY_MAX(NLA_U16, 1),
+	[MLXDEVM_ATTR_ESWITCH_INLINE_MODE] = NLA_POLICY_MAX(NLA_U8, 3),
+	[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE] = NLA_POLICY_MAX(NLA_U8, 1),
 };
 
-/* DEVLINK_CMD_DPIPE_TABLE_GET - do */
-static const struct nla_policy devlink_dpipe_table_get_nl_policy[DEVLINK_ATTR_DPIPE_TABLE_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DPIPE_TABLE_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_DPIPE_TABLE_GET - do */
+static const struct nla_policy mlxdevm_dpipe_table_get_nl_policy[MLXDEVM_ATTR_DPIPE_TABLE_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DPIPE_TABLE_NAME] = { .type = NLA_NUL_STRING, },
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_DPIPE_ENTRIES_GET - do */
 static const struct nla_policy devlink_dpipe_entries_get_nl_policy[DEVLINK_ATTR_DPIPE_TABLE_NAME + 1] = {
@@ -240,24 +242,24 @@ static const struct nla_policy devlink_resource_set_nl_policy[DEVLINK_ATTR_RESOU
 	[DEVLINK_ATTR_RESOURCE_ID] = { .type = NLA_U64, },
 	[DEVLINK_ATTR_RESOURCE_SIZE] = { .type = NLA_U64, },
 };
-
-/* DEVLINK_CMD_RESOURCE_DUMP - do */
-static const struct nla_policy devlink_resource_dump_nl_policy[DEVLINK_ATTR_DEV_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-};
-
-/* DEVLINK_CMD_RELOAD - do */
-static const struct nla_policy devlink_reload_nl_policy[DEVLINK_ATTR_RELOAD_LIMITS + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_RELOAD_ACTION] = NLA_POLICY_RANGE(NLA_U8, 1, 2),
-	[DEVLINK_ATTR_RELOAD_LIMITS] = NLA_POLICY_BITFIELD32(6),
-	[DEVLINK_ATTR_NETNS_PID] = { .type = NLA_U32, },
-	[DEVLINK_ATTR_NETNS_FD] = { .type = NLA_U32, },
-	[DEVLINK_ATTR_NETNS_ID] = { .type = NLA_U32, },
-};
 #endif
+
+/* MLXDEVM_CMD_RESOURCE_DUMP - do */
+static const struct nla_policy mlxdevm_resource_dump_nl_policy[MLXDEVM_ATTR_DEV_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+};
+
+/* MLXDEVM_CMD_RELOAD - do */
+static const struct nla_policy mlxdevm_reload_nl_policy[MLXDEVM_ATTR_RELOAD_LIMITS + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_RELOAD_ACTION] = NLA_POLICY_RANGE(NLA_U8, 1, 2),
+	[MLXDEVM_ATTR_RELOAD_LIMITS] = NLA_POLICY_BITFIELD32(6),
+	[MLXDEVM_ATTR_NETNS_PID] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_NETNS_FD] = { .type = NLA_U32, },
+	[MLXDEVM_ATTR_NETNS_ID] = { .type = NLA_U32, },
+};
 
 /* MLXDEVM_CMD_PARAM_GET - do */
 static const struct nla_policy mlxdevm_param_get_do_nl_policy[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE + 1] = {
@@ -280,7 +282,7 @@ static const struct nla_policy mlxdevm_param_set_nl_policy[MLXDEVM_ATTR_EXT_PARA
 	[MLXDEVM_ATTR_PARAM_TYPE] = { .type = NLA_U8, },
 	[MLXDEVM_ATTR_PARAM_VALUE_CMODE] = NLA_POLICY_MAX(NLA_U8, 2),
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_REGION_GET - do */
 static const struct nla_policy devlink_region_get_do_nl_policy[DEVLINK_ATTR_REGION_NAME + 1] = {
@@ -339,12 +341,14 @@ static const struct nla_policy devlink_port_param_set_nl_policy[DEVLINK_ATTR_POR
 	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[DEVLINK_ATTR_PORT_INDEX] = { .type = NLA_U32, },
 };
+#endif
 
-/* DEVLINK_CMD_INFO_GET - do */
-static const struct nla_policy devlink_info_get_nl_policy[DEVLINK_ATTR_DEV_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_INFO_GET - do */
+static const struct nla_policy mlxdevm_info_get_nl_policy[MLXDEVM_ATTR_DEV_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_HEALTH_REPORTER_GET - do */
 static const struct nla_policy devlink_health_reporter_get_do_nl_policy[DEVLINK_ATTR_HEALTH_REPORTER_NAME + 1] = {
@@ -403,58 +407,60 @@ static const struct nla_policy devlink_health_reporter_dump_clear_nl_policy[DEVL
 	[DEVLINK_ATTR_PORT_INDEX] = { .type = NLA_U32, },
 	[DEVLINK_ATTR_HEALTH_REPORTER_NAME] = { .type = NLA_NUL_STRING, },
 };
+#endif
 
-/* DEVLINK_CMD_FLASH_UPDATE - do */
-static const struct nla_policy devlink_flash_update_nl_policy[DEVLINK_ATTR_FLASH_UPDATE_OVERWRITE_MASK + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_FLASH_UPDATE_FILE_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_FLASH_UPDATE_OVERWRITE_MASK] = NLA_POLICY_BITFIELD32(3),
+/* MLXDEVM_CMD_FLASH_UPDATE - do */
+static const struct nla_policy mlxdevm_flash_update_nl_policy[MLXDEVM_ATTR_FLASH_UPDATE_OVERWRITE_MASK + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_FLASH_UPDATE_COMPONENT] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_FLASH_UPDATE_OVERWRITE_MASK] = NLA_POLICY_BITFIELD32(3),
 };
 
-/* DEVLINK_CMD_TRAP_GET - do */
-static const struct nla_policy devlink_trap_get_do_nl_policy[DEVLINK_ATTR_TRAP_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_TRAP_GET - do */
+static const struct nla_policy mlxdevm_trap_get_do_nl_policy[MLXDEVM_ATTR_TRAP_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* DEVLINK_CMD_TRAP_GET - dump */
-static const struct nla_policy devlink_trap_get_dump_nl_policy[DEVLINK_ATTR_DEV_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_TRAP_GET - dump */
+static const struct nla_policy mlxdevm_trap_get_dump_nl_policy[MLXDEVM_ATTR_DEV_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* DEVLINK_CMD_TRAP_SET - do */
-static const struct nla_policy devlink_trap_set_nl_policy[DEVLINK_ATTR_TRAP_ACTION + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_ACTION] = NLA_POLICY_MAX(NLA_U8, 2),
+/* MLXDEVM_CMD_TRAP_SET - do */
+static const struct nla_policy mlxdevm_trap_set_nl_policy[MLXDEVM_ATTR_TRAP_ACTION + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_ACTION] = NLA_POLICY_MAX(NLA_U8, 2),
 };
 
-/* DEVLINK_CMD_TRAP_GROUP_GET - do */
-static const struct nla_policy devlink_trap_group_get_do_nl_policy[DEVLINK_ATTR_TRAP_GROUP_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_GROUP_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_TRAP_GROUP_GET - do */
+static const struct nla_policy mlxdevm_trap_group_get_do_nl_policy[MLXDEVM_ATTR_TRAP_GROUP_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_GROUP_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* DEVLINK_CMD_TRAP_GROUP_GET - dump */
-static const struct nla_policy devlink_trap_group_get_dump_nl_policy[DEVLINK_ATTR_DEV_NAME + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+/* MLXDEVM_CMD_TRAP_GROUP_GET - dump */
+static const struct nla_policy mlxdevm_trap_group_get_dump_nl_policy[MLXDEVM_ATTR_DEV_NAME + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* DEVLINK_CMD_TRAP_GROUP_SET - do */
-static const struct nla_policy devlink_trap_group_set_nl_policy[DEVLINK_ATTR_TRAP_POLICER_ID + 1] = {
-	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_GROUP_NAME] = { .type = NLA_NUL_STRING, },
-	[DEVLINK_ATTR_TRAP_ACTION] = NLA_POLICY_MAX(NLA_U8, 2),
-	[DEVLINK_ATTR_TRAP_POLICER_ID] = { .type = NLA_U32, },
+/* MLXDEVM_CMD_TRAP_GROUP_SET - do */
+static const struct nla_policy mlxdevm_trap_group_set_nl_policy[MLXDEVM_ATTR_TRAP_POLICER_ID + 1] = {
+	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_GROUP_NAME] = { .type = NLA_NUL_STRING, },
+	[MLXDEVM_ATTR_TRAP_ACTION] = NLA_POLICY_MAX(NLA_U8, 2),
+	[MLXDEVM_ATTR_TRAP_POLICER_ID] = { .type = NLA_U32, },
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_TRAP_POLICER_GET - do */
 static const struct nla_policy devlink_trap_policer_get_do_nl_policy[DEVLINK_ATTR_TRAP_POLICER_ID + 1] = {
@@ -531,7 +537,7 @@ static const struct nla_policy mlxdevm_rate_del_nl_policy[MLXDEVM_ATTR_RATE_NODE
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_RATE_NODE_NAME] = { .type = NLA_NUL_STRING, },
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* DEVLINK_CMD_LINECARD_GET - do */
 static const struct nla_policy devlink_linecard_get_do_nl_policy[DEVLINK_ATTR_LINECARD_INDEX + 1] = {
@@ -576,7 +582,7 @@ static const struct nla_policy devlink_notify_filter_set_nl_policy[DEVLINK_ATTR_
 #endif
 
 /* Ops table for mlxdevm */
-const struct genl_split_ops mlxdevm_nl_ops[15] = {
+const struct genl_split_ops mlxdevm_nl_ops[29] = {
 	{
 		.cmd		= MLXDEVM_CMD_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -640,7 +646,7 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= MLXDEVM_ATTR_PORT_INDEX,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_PORT_SPLIT,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -779,36 +785,38 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= DEVLINK_ATTR_SB_INDEX,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
+#endif
 	{
-		.cmd		= DEVLINK_CMD_ESWITCH_GET,
+		.cmd		= MLXDEVM_CMD_ESWITCH_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_eswitch_get_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_eswitch_get_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DEV_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_eswitch_get_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_eswitch_get_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DEV_NAME,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_ESWITCH_SET,
+		.cmd		= MLXDEVM_CMD_ESWITCH_SET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_eswitch_set_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_eswitch_set_nl_policy,
-		.maxattr	= DEVLINK_ATTR_ESWITCH_ENCAP_MODE,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_eswitch_set_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_eswitch_set_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_ESWITCH_ENCAP_MODE,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_DPIPE_TABLE_GET,
+		.cmd		= MLXDEVM_CMD_DPIPE_TABLE_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_dpipe_table_get_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_dpipe_table_get_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DPIPE_TABLE_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_dpipe_table_get_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_dpipe_table_get_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DPIPE_TABLE_NAME,
 		.flags		= GENL_CMD_CAP_DO,
 	},
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_DPIPE_ENTRIES_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -849,27 +857,27 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= DEVLINK_ATTR_RESOURCE_SIZE,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
+#endif
 	{
-		.cmd		= DEVLINK_CMD_RESOURCE_DUMP,
+		.cmd		= MLXDEVM_CMD_RESOURCE_DUMP,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_resource_dump_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_resource_dump_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DEV_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_resource_dump_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_resource_dump_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DEV_NAME,
 		.flags		= GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_RELOAD,
+		.cmd		= MLXDEVM_CMD_RELOAD,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit_dev_lock,
-		.doit		= devlink_nl_reload_doit,
-		.post_doit	= devlink_nl_post_doit_dev_lock,
-		.policy		= devlink_reload_nl_policy,
-		.maxattr	= DEVLINK_ATTR_RELOAD_LIMITS,
+		.pre_doit	= mlxdevm_nl_pre_doit_dev_lock,
+		.doit		= mlxdevm_nl_reload_doit,
+		.post_doit	= mlxdevm_nl_post_doit_dev_lock,
+		.policy		= mlxdevm_reload_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_RELOAD_LIMITS,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
-#endif
 	{
 		.cmd		= MLXDEVM_CMD_PARAM_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -897,7 +905,7 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_REGION_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -969,22 +977,24 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= DEVLINK_ATTR_PORT_INDEX,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
+#endif
 	{
-		.cmd		= DEVLINK_CMD_INFO_GET,
+		.cmd		= MLXDEVM_CMD_INFO_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_info_get_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_info_get_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DEV_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_info_get_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_info_get_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DEV_NAME,
 		.flags		= GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_INFO_GET,
+		.cmd		= MLXDEVM_CMD_INFO_GET,
 		.validate	= GENL_DONT_VALIDATE_DUMP,
-		.dumpit		= devlink_nl_info_get_dumpit,
+		.dumpit		= mlxdevm_nl_info_get_dumpit,
 		.flags		= GENL_CMD_CAP_DUMP,
 	},
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_HEALTH_REPORTER_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -1050,70 +1060,72 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= DEVLINK_ATTR_HEALTH_REPORTER_NAME,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
+#endif
 	{
-		.cmd		= DEVLINK_CMD_FLASH_UPDATE,
+		.cmd		= MLXDEVM_CMD_FLASH_UPDATE,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_flash_update_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_flash_update_nl_policy,
-		.maxattr	= DEVLINK_ATTR_FLASH_UPDATE_OVERWRITE_MASK,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_flash_update_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_flash_update_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_FLASH_UPDATE_OVERWRITE_MASK,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_GET,
+		.cmd		= MLXDEVM_CMD_TRAP_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_trap_get_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_trap_get_do_nl_policy,
-		.maxattr	= DEVLINK_ATTR_TRAP_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_trap_get_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_trap_get_do_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_TRAP_NAME,
 		.flags		= GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_GET,
-		.dumpit		= devlink_nl_trap_get_dumpit,
-		.policy		= devlink_trap_get_dump_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DEV_NAME,
+		.cmd		= MLXDEVM_CMD_TRAP_GET,
+		.dumpit		= mlxdevm_nl_trap_get_dumpit,
+		.policy		= mlxdevm_trap_get_dump_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DEV_NAME,
 		.flags		= GENL_CMD_CAP_DUMP,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_SET,
+		.cmd		= MLXDEVM_CMD_TRAP_SET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_trap_set_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_trap_set_nl_policy,
-		.maxattr	= DEVLINK_ATTR_TRAP_ACTION,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_trap_set_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_trap_set_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_TRAP_ACTION,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_GROUP_GET,
+		.cmd		= MLXDEVM_CMD_TRAP_GROUP_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_trap_group_get_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_trap_group_get_do_nl_policy,
-		.maxattr	= DEVLINK_ATTR_TRAP_GROUP_NAME,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_trap_group_get_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_trap_group_get_do_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_TRAP_GROUP_NAME,
 		.flags		= GENL_CMD_CAP_DO,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_GROUP_GET,
-		.dumpit		= devlink_nl_trap_group_get_dumpit,
-		.policy		= devlink_trap_group_get_dump_nl_policy,
-		.maxattr	= DEVLINK_ATTR_DEV_NAME,
+		.cmd		= MLXDEVM_CMD_TRAP_GROUP_GET,
+		.dumpit		= mlxdevm_nl_trap_group_get_dumpit,
+		.policy		= mlxdevm_trap_group_get_dump_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_DEV_NAME,
 		.flags		= GENL_CMD_CAP_DUMP,
 	},
 	{
-		.cmd		= DEVLINK_CMD_TRAP_GROUP_SET,
+		.cmd		= MLXDEVM_CMD_TRAP_GROUP_SET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
-		.pre_doit	= devlink_nl_pre_doit,
-		.doit		= devlink_nl_trap_group_set_doit,
-		.post_doit	= devlink_nl_post_doit,
-		.policy		= devlink_trap_group_set_nl_policy,
-		.maxattr	= DEVLINK_ATTR_TRAP_POLICER_ID,
+		.pre_doit	= mlxdevm_nl_pre_doit,
+		.doit		= mlxdevm_nl_trap_group_set_doit,
+		.post_doit	= mlxdevm_nl_post_doit,
+		.policy		= mlxdevm_trap_group_set_nl_policy,
+		.maxattr	= MLXDEVM_ATTR_TRAP_POLICER_ID,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_TRAP_POLICER_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,
@@ -1199,7 +1211,7 @@ const struct genl_split_ops mlxdevm_nl_ops[15] = {
 		.maxattr	= MLXDEVM_ATTR_RATE_NODE_NAME,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 	{
 		.cmd		= DEVLINK_CMD_LINECARD_GET,
 		.validate	= GENL_DONT_VALIDATE_STRICT,

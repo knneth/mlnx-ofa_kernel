@@ -24,7 +24,7 @@ unsigned int mlxdevm_linecard_index(struct mlxdevm_linecard *linecard)
 {
 	return linecard->index;
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static struct devlink_linecard *
 devlink_linecard_get_by_index(struct devlink *devlink,
@@ -71,7 +71,7 @@ struct mlxdevm_linecard_type {
 	const char *type;
 	const void *priv;
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static int devlink_nl_linecard_fill(struct sk_buff *msg,
 				    struct devlink *devlink,

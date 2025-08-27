@@ -6,6 +6,10 @@
 
 #include_next <linux/rcupdate.h>
 
+#ifndef HAVE___IS_KVFREE_RCU_OFFSET
+#define __is_kvfree_rcu_offset(offset) ((offset) < 4096)
+#endif
+
 #ifndef rcu_replace_pointer
 #define rcu_replace_pointer(rcu_ptr, ptr, c)				\
 ({									\
@@ -26,7 +30,6 @@
 #define kfree_rcu(ptr, rhf) kvfree_rcu_arg_2(ptr, rhf)
 #define kvfree_rcu(ptr, rhf) kvfree_rcu_arg_2(ptr, rhf)
 
-#define __is_kvfree_rcu_offset(offset) ((offset) < 4096)
 
 #define kvfree_rcu_arg_2(ptr, rhf)					\
 do {									\

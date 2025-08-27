@@ -350,34 +350,8 @@ typedef int flow_setup_cb_t(enum tc_setup_type type, void *type_data,
 					    void *cb_priv);
 #endif
 
-#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
-struct flow_cls_common_offload {
-	u32 chain_index;
-	__be16 protocol;
-	u32 prio;
-	struct netlink_ext_ack *extack;
-};
-
-#define flow_cls_command tc_fl_command
-struct flow_cls_offload1 {
-	struct flow_cls_common_offload common;
-	enum flow_cls_command command;
-	unsigned long cookie;
-	struct flow_rule *rule;
-	struct flow_stats stats;
-	u32 classid;
-};
-
-
-static inline struct flow_rule *
-flow_cls_offload_flow_rule1(struct flow_cls_offload1 *flow_cmd)
-{
-	return flow_cmd->rule;
-}
-#else
 #define flow_cls_offload1 flow_cls_offload
 #define flow_cls_offload_flow_rule1 flow_cls_offload_flow_rule
-#endif /* CONFIG_COMPAT_CLS_FLOWER_4_18_MOD */
 
 #ifndef HAVE_FLOW_INDR_BLOCK_CB_ALLOC
 #define flow_indr_block_cb_remove flow_block_cb_remove
@@ -412,7 +386,7 @@ static inline bool flow_rule_is_supp_enc_control_flags(const u32 supp_enc_flags,
 	if (likely((enc_ctrl_flags & ~supp_enc_flags) == 0))
 		return true;
 
-#ifdef NL_SET_ERR_MSG_FMT_MOD
+#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
 	NL_SET_ERR_MSG_FMT_MOD(extack,
 			       "Unsupported match on enc_control.flags %#x",
 			       enc_ctrl_flags);
@@ -453,7 +427,7 @@ static inline bool flow_rule_is_supp_control_flags(const u32 supp_flags,
 	if (likely((ctrl_flags & ~supp_flags) == 0))
 		return true;
 
-#ifdef NL_SET_ERR_MSG_FMT_MOD
+#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
 	NL_SET_ERR_MSG_FMT_MOD(extack,
 			       "Unsupported match on control.flags %#x",
 			       ctrl_flags);

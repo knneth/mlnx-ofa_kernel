@@ -225,6 +225,14 @@ int __auxiliary_device_add(struct auxiliary_device *auxdev, const char *modname)
 int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
 void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
 				       int irq);
+/*
+* Add mlx5_compat_sf_auxiliary_device_sysfs_irq_(add|remove)
+* declarations in base code until 4097699 fix is accepted upstream.
+* Needed to build base code w/o backports.
+*/
+int mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
+void mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
+                                                     int irq);
 #else /* CONFIG_SYSFS */
 static inline int
 auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
@@ -268,9 +276,5 @@ void auxiliary_driver_unregister(struct auxiliary_driver *auxdrv);
  */
 #define module_auxiliary_driver(__auxiliary_driver) \
 	module_driver(__auxiliary_driver, auxiliary_driver_register, auxiliary_driver_unregister)
-
-struct auxiliary_device *auxiliary_find_device(struct device *start,
-					       const void *data,
-					       device_match_t match);
 
 #endif /* _AUXILIARY_BUS_H_ */

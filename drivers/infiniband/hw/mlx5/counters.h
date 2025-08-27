@@ -8,11 +8,6 @@
 
 #include "mlx5_ib.h"
 
-
-struct mlx5_per_qp_opfc {
-	struct mlx5_ib_op_fc opfcs[MLX5_IB_OPCOUNTER_MAX];
-};
-
 struct mlx5_rdma_counter {
 	struct rdma_counter rdma_counter;
 

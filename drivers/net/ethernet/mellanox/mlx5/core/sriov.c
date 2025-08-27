@@ -36,6 +36,7 @@
 #include "mlx5_core.h"
 #include "mlx5_irq.h"
 #include "eswitch.h"
+#include "mlx5_devm.h"
 
 static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf, u16 func_id)
 {
@@ -192,20 +193,13 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
 {
 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
 	struct devlink *devlink = priv_to_devlink(dev);
+	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(dev)->device;
 	int err;
 
-	if (num_vfs && pci_num_vf(dev->pdev)) {
-		if (num_vfs == pci_num_vf(dev->pdev))
-			return 0;
-
-		mlx5_core_warn(dev,
-			       "VFs already enabled. Disable before enabling %d VFs\n",
-			       num_vfs);
-		return -EBUSY;
-	}
-
 	devl_lock(devlink);
+	devm_lock(mlxdevm);
 	err = mlx5_device_enable_sriov(dev, num_vfs);
+	devm_unlock(mlxdevm);
 	devl_unlock(devlink);
 	if (err) {
 		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
@@ -215,7 +209,11 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
 	err = pci_enable_sriov(pdev, num_vfs);
 	if (err) {
 		mlx5_core_warn(dev, "pci_enable_sriov failed : %d\n", err);
+		devl_lock(devlink);
+		devm_lock(mlxdevm);
 		mlx5_device_disable_sriov(dev, num_vfs, true, true);
+		devm_unlock(mlxdevm);
+		devl_unlock(devlink);
 	}
 	return err;
 }
@@ -224,11 +222,14 @@ void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change)
 {
 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
 	struct devlink *devlink = priv_to_devlink(dev);
+	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(dev)->device;
 	int num_vfs = pci_num_vf(dev->pdev);
 
 	pci_disable_sriov(pdev);
 	devl_lock(devlink);
+	devm_lock(mlxdevm);
 	mlx5_device_disable_sriov(dev, num_vfs, true, num_vf_change);
+	devm_unlock(mlxdevm);
 	devl_unlock(devlink);
 }
 

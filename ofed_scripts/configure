@@ -663,6 +663,15 @@ check_complex_defines()
                 unset_complex_define_to_config_h HAVE_LIGHT_SFS
         fi
 
+# Define HAVE_KFREE_RCU_MIGHTSLEEP from other flags
+        if check_compat_config_h_var HAVE_KFREE_RCU_MIGHTSLEEP_MACRO &&
+           check_compat_config_h_var HAVE_KVFREE_CALL_RCU_VOID_PTR
+        then
+                set_complex_define_to_config_h HAVE_KFREE_RCU_MIGHTSLEEP
+        else
+                unset_complex_define_to_config_h HAVE_KFREE_RCU_MIGHTSLEEP
+        fi
+
 # Define HAVE_DPLL_SUPPORT from other flags
         if (check_compat_config_h_var HAVE_DPLL_NETDEV_PIN_SET || 
 	    check_compat_config_h_var HAVE_NETDEV_DPLL_PIN_SET) &&
@@ -713,6 +722,23 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR
 	fi
+
+# Block devlink upstream code
+	unset_complex_define_to_config_h HAVE_BLOCKED_DEVLINK_CODE
+
+# Block IRQs directory fo auxiliary device kernel implemntation (available since 6.11)
+# until 4097699 is  fixed
+	unset_complex_define_to_config_h HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX
+
+# Define HAVE_DEVLINK_HAIRPIN_PARAMS from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_PARAM_REGISTER ||
+	   check_compat_config_h_var HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_HAIRPIN_PARAMS
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_HAIRPIN_PARAMS
+	fi
+
 }
 
 check_kerver_rh_cls()
@@ -775,22 +801,17 @@ check_inbox_auxiliary() {
 
 # Check if the kernel we build with has an auxiliary bus module
 check_inbox_fwctl() {
-	check_autofconf CONFIG_FWCTL_MLX5
 	check_autofconf CONFIG_FWCTL
-	[ "$CONFIG_FWCTL_MLX5$CONFIG_FWCTL" != '' ]
+	[ "$CONFIG_FWCTL" != '' ]
 }
 
 function check_autofconf {
 	VAR=$1
 	VALUE=$(tac ${KSRC_OBJ}/include/*/autoconf.h | grep -m1 ${VAR} | sed -ne 's/.*\([01]\)$/\1/gp')
-
 	if [ "${!VAR}" = '' ]; then
-		# WA since CONFIG_FWCTL not upstream yet - Check if VAR contains "FWCTL" in its base name
-		if [[ ! "$VAR" =~ FWCTL ]]; then
-			# VAR will only be set here. Ignore it later
-			# when generating configuration
-			ignored_autofconf_vars="$ignored_autofconf_vars $VAR"
-		fi
+		# VAR will only be set here. Ignore it later
+		# when generating configuration
+		ignored_autofconf_vars="$ignored_autofconf_vars $VAR"
 	fi
 	eval "export $VAR=$VALUE"
 }
@@ -861,14 +882,13 @@ CONFIG_MLX5_INFINIBAND=${CONFIG_MLX5_INFINIBAND:-''}
 CONFIG_MLX5_DEBUG=${CONFIG_MLX5_DEBUG:-''}
 CONFIG_BACKPORT_LRO=${CONFIG_BACKPORT_LRO:-''}
 CONFIG_AUXILIARY_BUS=${CONFIG_AUXILIARY_BUS:-'m'}
-CONFIG_FWCTL=${CONFIG_FWCTL:-''}
-CONFIG_FWCTL_MLX5=${CONFIG_FWCTL_MLX5:-''}
+CONFIG_FWCTL=${CONFIG_FWCTL:-'m'}
+CONFIG_FWCTL_MLX5=${CONFIG_FWCTL_MLX5:-'m'}
 CONFIG_MLXDEVM=${CONFIG_MLXDEVM:-'m'}
 CONFIG_MLX5_SF_CFG=${CONFIG_MLX5_SF_CFG:-''}
 CONFIG_MLX5_SF_SFC=${CONFIG_MLX5_SF_SFC:-''}
 CONFIG_MLX5_MACSEC=${CONFIG_MLX5_MACSEC:-''}
-# unset HW steering until it is ready upstream (korg >= v6.13 at least)
-CONFIG_MLX5_HW_STEERING=""
+CONFIG_MLX5_HW_STEERING=${CONFIG_MLX5_HW_STEERING:-'m'}
 CONFIG_MLX5_GCOV=""
 
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
@@ -938,46 +958,46 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.12"
+OFED_BASE_KVERSION="6.15"
 MIN_KVERSION="4.18"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
 REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
-NFSRDMA_SUPPORTED_KVERSION="4.18.0"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+NFSRDMA_SUPPORTED_KVERSION="4.18"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # nvmf
-NVMF_SUPPORTED_KVERSION="4.18.0"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+NVMF_SUPPORTED_KVERSION="4.18"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="4.18.0"
 ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 GDS_SUPPORTED_KVERSION="4.18.0"
 
 VIRTIOFS_SUPPORTED_KVERSION="6.8.0"
-VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.15"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
 
 #ODP
 ODP_SUPPORTED_KVERSION="4.18.0"
@@ -1025,7 +1045,7 @@ main()
                                 set -- "--all" "--with-memtrack" "--with-core-mod" "--with-user_mad-mod" "--with-user_access-mod" "--with-addr_trans-mod" \
                                         "--with-mlx5-mod" "--with-ipoib-mod" "--with-mlxfw-mod" "--with-srp-mod" "--with-iser-mod" "--with-isert-mod" \
                                         "--with-nvmf_host-mod" "--with-nvmf_target-mod" "--with-gds" "--with-nfsrdma-mod" \
-                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--without-sf-cfg-drv" "--with-fwctl" "--with-virtiofs-mod" "$@"
+                                        "--with-mlxdevm-mod" "--with-mlx5-ipsec" "--with-sf-cfg-drv" "--with-fwctl" "--with-virtiofs-mod" "$@"
 				print_line
 				echo "configuring MLNX_OFED with all the flags:"
 				echo "${@:2}"
@@ -1745,17 +1765,13 @@ main()
 			CONFIG_MLXDEVM=
 			;;
 		--with-fwctl)
-			if check_inbox_fwctl; then
-				CONFIG_FWCTL_MLX5=
-				CONFIG_FWCTL=
-			else
-				CONFIG_FWCTL_MLX5="m"
-				CONFIG_FWCTL="m"
-			fi
+			CONFIG_FWCTL_MLX5="m"
+			CONFIG_FWCTL="m"
 			;;
 		--without-fwctl)
 			CONFIG_FWCTL_MLX5=
 			CONFIG_FWCTL=
+			SKIP_FWCTL_INBOX_CHECK=1
 			;;
 		--with-gcov)
 			CONFIG_MLX5_GCOV="y"
@@ -1843,6 +1859,14 @@ if check_inbox_auxiliary; then
 	CONFIG_AUXILIARY_BUS=
 else
 	CONFIG_AUXILIARY_BUS="m"
+fi
+
+if [ "${SKIP_FWCTL_INBOX_CHECK}" != "1" ]; then
+	if check_inbox_fwctl; then
+		CONFIG_FWCTL=
+	else
+		CONFIG_FWCTL="m"
+	fi
 fi
 
 if  check_kerver ${KVERSION} ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
@@ -2302,13 +2326,6 @@ fi
 if [ ! -e backports_applied ]; then
 	echo "backports_applied does not exist. running ofed_patch.sh"
 	ex ${CWD}/ofed_scripts/ofed_patch.sh ${ofed_patch_params}
-
-	XEN_KERNEL_GCC="Red Hat 4.8.5"
-	# Perform the check directly if XEN kernel
-	if [[ "${GCC_VERSION}" == *"${XEN_KERNEL_GCC}"* ]]; then
-		rm -f "${CWD}/compat/configure"
-		ex "${CWD}/ofed_scripts/ofed_patch.sh" --with-patchdir="${CWD}/compat/xenserver_4_19"
-	fi
 fi
 
 # Create configure.mk

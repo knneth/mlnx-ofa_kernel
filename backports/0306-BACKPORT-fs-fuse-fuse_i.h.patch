@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
+
+Change-Id: I735972eb235aa0500be345e78084349ce96520d6
+---
+ fs/fuse/fuse_i.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/fs/fuse/fuse_i.h
++++ b/fs/fuse/fuse_i.h
+@@ -42,6 +42,10 @@
+ #undef CONFIG_FUSE_PASSTHROUGH
+ #define CONFIG_VIRTIO_FS 1
+ 
++#ifndef HAVE_FUSE_PASSTHROUGH
++struct fuse_backing_map;
++#endif
++
+ /** Default max number of pages that can be used in a single read request */
+ #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
+ 

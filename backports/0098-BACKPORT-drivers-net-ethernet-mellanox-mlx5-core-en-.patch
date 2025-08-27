@@ -1,49 +1,66 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
 
-Change-Id: Ie6f3dd30b20424e16e74fd40f43660c1027d7807
 ---
- .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
- 1 file changed, 13 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en/tc/act/ct.c         | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-@@ -279,11 +279,17 @@ static const struct sysfs_ops rep_sysfs_
- 	.store  = rep_attr_store
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+@@ -5,6 +5,18 @@
+ #include "en/tc_priv.h"
+ #include "en/tc_ct.h"
  
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(rep);
++#ifndef TCA_CT_ACT_COMMIT
++#define TCA_CT_ACT_COMMIT    (1 << 0)
++#endif
++#ifndef HAVE_FLOW_OFFLOAD_ACTION_LAST_ENTRY
++static inline bool flow_action_is_last_entry(const struct flow_action *action,
++					     const struct flow_action_entry *entry)
++{
++	return entry == &action->entries[action->num_entries - 1];
++}
++#endif /* HAVE_FLOW_OFFLOAD_ACTION_LAST_ENTRY */
++
++#ifdef HAVE_FLOW_ACTION_CT
+ static bool
+ tc_act_can_offload_ct(struct mlx5e_tc_act_parse_state *parse_state,
+ 		      const struct flow_action_entry *act,
+@@ -14,6 +26,7 @@ tc_act_can_offload_ct(struct mlx5e_tc_ac
+ 	return !((act->ct.action & TCA_CT_ACT_COMMIT) &&
+ 		 flow_action_is_last_entry(parse_state->flow_action, act));
+ }
 +#endif
  
- static struct kobj_type rep_type = {
- 	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_groups
+ static int
+ tc_act_parse_ct(struct mlx5e_tc_act_parse_state *parse_state,
+@@ -53,8 +66,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ 			     const struct flow_action_entry *act,
+ 			     struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	if (act->ct.action & TCA_CT_ACT_CLEAR)
+ 		return false;
++#endif
+ 
+ 	return true;
+ }
+@@ -62,11 +77,17 @@ tc_act_is_multi_table_act_ct(struct mlx5
+ static bool
+ tc_act_is_missable_ct(const struct flow_action_entry *act)
+ {
++#ifdef HAVE_FLOW_ACTION_ENTRY_MISS_COOKIE
+ 	return !(act->ct.action & TCA_CT_ACT_CLEAR);
 +#else
-+	.default_attrs = rep_attrs
++	return false;
 +#endif
- };
+ }
  
- static struct attribute *rep_paging_attrs[] = {
-@@ -291,12 +297,18 @@ static struct attribute *rep_paging_attr
- 	&attr_num_pages.attr,
- 	NULL,
- };
--ATTRIBUTE_GROUPS(rep_paging);
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
-+ATTRIBUTE_GROUPS(rep_paging);
+ struct mlx5e_tc_act mlx5e_tc_act_ct = {
++#ifdef HAVE_FLOW_ACTION_CT
+ 	.can_offload = tc_act_can_offload_ct,
 +#endif
- 
- static struct kobj_type rep_paging = {
- 	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_paging_groups
-+#else
-+	.default_attrs = rep_paging_attrs
-+#endif
- };
- 
- void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)
+ 	.parse_action = tc_act_parse_ct,
+ 	.post_parse = tc_act_post_parse_ct,
+ 	.is_multi_table_act = tc_act_is_multi_table_act_ct,

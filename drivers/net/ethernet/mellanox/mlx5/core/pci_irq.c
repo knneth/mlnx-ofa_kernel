@@ -378,6 +378,11 @@ int mlx5_irq_get_index(struct mlx5_irq *irq)
 	return irq->map.index;
 }
 
+struct mlx5_irq_pool *mlx5_irq_get_pool(struct mlx5_irq *irq)
+{
+	return irq->pool;
+}
+
 /* irq_pool API */
 
 /* requesting an irq from a given pool according to given index */
@@ -405,18 +410,20 @@ static struct mlx5_irq_pool *sf_ctrl_irq_pool_get(struct mlx5_irq_table *irq_tab
 	return irq_table->sf_ctrl_pool;
 }
 
-static struct mlx5_irq_pool *sf_irq_pool_get(struct mlx5_irq_table *irq_table)
+static struct mlx5_irq_pool *
+sf_comp_irq_pool_get(struct mlx5_irq_table *irq_table)
 {
 	return irq_table->sf_comp_pool;
 }
 
-struct mlx5_irq_pool *mlx5_irq_pool_get(struct mlx5_core_dev *dev)
+struct mlx5_irq_pool *
+mlx5_irq_table_get_comp_irq_pool(struct mlx5_core_dev *dev)
 {
 	struct mlx5_irq_table *irq_table = mlx5_irq_table_get(dev);
 	struct mlx5_irq_pool *pool = NULL;
 
 	if (mlx5_core_is_sf(dev))
-		pool = sf_irq_pool_get(irq_table);
+		pool = sf_comp_irq_pool_get(irq_table);
 
 	/* In some configs, there won't be a pool of SFs IRQs. Hence, returning
 	 * the PF IRQs pool in case the SF pool doesn't exist.
@@ -451,7 +458,7 @@ static void _mlx5_irq_release(struct mlx5_irq *irq)
  */
 void mlx5_ctrl_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *ctrl_irq)
 {
-	mlx5_irq_affinity_irq_release(dev, ctrl_irq, ctrl_irq_pool_get(dev));
+	mlx5_irq_affinity_irq_release(dev, ctrl_irq);
 }
 
 /**
@@ -601,7 +608,7 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pcif_vec,
 			  bool dynamic_vec)
 {
 	struct mlx5_irq_table *table = dev->priv.irq_table;
-	int sf_vec_account = sf_vec;
+	int sf_vec_available = sf_vec;
 	int num_sf_ctrl;
 	int err;
 
@@ -622,8 +629,10 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pcif_vec,
 	num_sf_ctrl = DIV_ROUND_UP(mlx5_sf_max_functions(dev),
 				   MLX5_SFS_PER_CTRL_IRQ);
 	num_sf_ctrl = min_t(int, MLX5_IRQ_CTRL_SF_MAX, num_sf_ctrl);
-	if (!dynamic_vec && num_sf_ctrl >= sf_vec_account) {
-		mlx5_core_dbg(dev, "Not enough IRQs for SFs. SF may run at lower performance\n");
+	if (!dynamic_vec && (num_sf_ctrl + 1) > sf_vec_available) {
+		mlx5_core_dbg(dev,
+			      "Not enough IRQs for SFs control and completion pool, required=%d avail=%d\n",
+			      num_sf_ctrl + 1, sf_vec_available);
 		return 0;
 	}
 
@@ -635,11 +644,11 @@ static int irq_pools_init(struct mlx5_core_dev *dev, int sf_vec, int pcif_vec,
 		err = PTR_ERR(table->sf_ctrl_pool);
 		goto err_pf;
 	}
-	sf_vec_account -= num_sf_ctrl;
+	sf_vec_available -= num_sf_ctrl;
 
 	/* init sf_comp_pool, remaining vectors are for the SF completions */
 	table->sf_comp_pool = irq_pool_alloc(dev, pcif_vec + num_sf_ctrl,
-					     sf_vec_account, "mlx5_sf_comp",
+					     sf_vec_available, "mlx5_sf_comp",
 					     MLX5_EQ_SHARE_IRQ_MIN_COMP,
 					     MLX5_EQ_SHARE_IRQ_MAX_COMP);
 	if (IS_ERR(table->sf_comp_pool)) {
@@ -727,10 +736,9 @@ int mlx5_irq_table_get_num_comp(struct mlx5_irq_table *table)
 
 int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 {
-	int max_num_eq = mlx5_max_eq_cap_get(dev);
-	int num_eqs;
-	int total_vec;
+	int num_eqs = mlx5_max_eq_cap_get(dev);
 	bool dynamic_vec;
+	int total_vec;
 	int pcif_vec;
 	int req_vec;
 	int err;
@@ -738,15 +746,6 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 
 	if (mlx5_core_is_sf(dev))
 		return 0;
-
-	if (max_num_eq) {
-		num_eqs = max_num_eq;
-	} else {
-		num_eqs = 1 << MLX5_CAP_GEN(dev, log_max_eq);
-		num_eqs -= MLX5_FW_RESERVED_EQS;
-		if (num_eqs <= 0)
-			return -ENOMEM;
-	}
 
 	/* PCI PF vectors usage is limited by online cpus, device EQs and
 	 * PCI MSI-X capability.

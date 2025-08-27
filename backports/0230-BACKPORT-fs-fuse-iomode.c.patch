@@ -1,0 +1,79 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
+
+---
+ fs/fuse/iomode.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/fs/fuse/iomode.c
++++ b/fs/fuse/iomode.c
+@@ -112,6 +112,7 @@ unlock:
+ 	return err;
+ }
+ 
++#ifdef HAVE_FUSE_PASSTHROUGH
+ /* Takes uncached_io inode mode reference to be dropped on file release */
+ static int fuse_file_uncached_io_open(struct inode *inode,
+ 				      struct fuse_file *ff,
+@@ -128,6 +129,7 @@ static int fuse_file_uncached_io_open(st
+ 	ff->iomode = IOM_UNCACHED;
+ 	return 0;
+ }
++#endif
+ 
+ void fuse_inode_uncached_io_end(struct fuse_inode *fi)
+ {
+@@ -165,6 +167,7 @@ static void fuse_file_uncached_io_releas
+ 	(FOPEN_PASSTHROUGH | FOPEN_DIRECT_IO | FOPEN_PARALLEL_DIRECT_WRITES | \
+ 	 FOPEN_NOFLUSH)
+ 
++#ifdef HAVE_FUSE_PASSTHROUGH
+ static int fuse_file_passthrough_open(struct inode *inode, struct file *file)
+ {
+ 	struct fuse_file *ff = file->private_data;
+@@ -192,12 +195,15 @@ static int fuse_file_passthrough_open(st
+ 
+ 	return err;
+ }
++#endif
+ 
+ /* Request access to submit new io to inode via open file */
+ int fuse_file_io_open(struct file *file, struct inode *inode)
+ {
+ 	struct fuse_file *ff = file->private_data;
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 	struct fuse_inode *fi = get_fuse_inode(inode);
++#endif
+ 	int err;
+ 
+ 	/*
+@@ -212,8 +218,10 @@ int fuse_file_io_open(struct file *file,
+ 	 * which is already open for passthrough.
+ 	 */
+ 	err = -EINVAL;
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 	if (fuse_inode_backing(fi) && !(ff->open_flags & FOPEN_PASSTHROUGH))
+ 		goto fail;
++#endif
+ 
+ 	/*
+ 	 * FOPEN_PARALLEL_DIRECT_WRITES requires FOPEN_DIRECT_IO.
+@@ -230,12 +238,18 @@ int fuse_file_io_open(struct file *file,
+ 	 * so we put the inode in caching mode to prevent parallel dio.
+ 	 */
+ 	if ((ff->open_flags & FOPEN_DIRECT_IO) &&
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 	    !(ff->open_flags & FOPEN_PASSTHROUGH))
++#else
++	    1)
++#endif
+ 		return 0;
+ 
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 	if (ff->open_flags & FOPEN_PASSTHROUGH)
+ 		err = fuse_file_passthrough_open(inode, file);
+ 	else
++#endif
+ 		err = fuse_file_cached_io_open(inode, ff);
+ 	if (err)
+ 		goto fail;

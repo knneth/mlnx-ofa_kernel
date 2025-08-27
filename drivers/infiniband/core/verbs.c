@@ -827,7 +827,6 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u32 port_num,
 	if (rdma_protocol_roce(device, port_num)) {
 		u16 vlan_id = wc->wc_flags & IB_WC_WITH_VLAN ?
 				wc->vlan_id : 0xffff;
-		bool ll_dest_addr = rdma_link_local_addr((struct in6_addr *)sgid.raw);
 
 		if (!(wc->wc_flags & IB_WC_GRH))
 			return -EPROTOTYPE;
@@ -839,27 +838,18 @@ int ib_init_ah_attr_from_wc(struct ib_device *device, u32 port_num,
 			return PTR_ERR(sgid_attr);
 
 		flow_class = be32_to_cpu(grh->version_tclass_flow);
-		if (ll_dest_addr && wc->wc_flags & IB_WC_WITH_VLAN &&
-				wc->wc_flags & IB_WC_WITH_SMAC) {
-			memcpy(ah_attr->roce.dmac, wc->smac, ETH_ALEN);
-			hoplimit = 1;
-			rdma_move_grh_sgid_attr(ah_attr,
-						&sgid,
-						flow_class & 0xFFFFF,
-						hoplimit,
-						(flow_class >> 20) & 0xFF,
-						sgid_attr);
-			return 0;
-		} else {
+		rdma_move_grh_sgid_attr(ah_attr,
+					&sgid,
+					flow_class & 0xFFFFF,
+					hoplimit,
+					(flow_class >> 20) & 0xFF,
+					sgid_attr);
 
-			rdma_move_grh_sgid_attr(ah_attr,
-						&sgid,
-						flow_class & 0xFFFFF,
-						hoplimit,
-						(flow_class >> 20) & 0xFF,
-						sgid_attr);
-			return ib_resolve_unicast_gid_dmac(device, ah_attr);
-		}
+		ret = ib_resolve_unicast_gid_dmac(device, ah_attr);
+		if (ret)
+			rdma_destroy_ah_attr(ah_attr);
+
+		return ret;
 	} else {
 		rdma_ah_set_dlid(ah_attr, wc->slid);
 		rdma_ah_set_path_bits(ah_attr, wc->dlid_path_bits);
@@ -3130,22 +3120,23 @@ EXPORT_SYMBOL(__rdma_block_iter_start);
 bool __rdma_block_iter_next(struct ib_block_iter *biter)
 {
 	unsigned int block_offset;
-	unsigned int sg_delta;
+	unsigned int delta;
 
 	if (!biter->__sg_nents || !biter->__sg)
 		return false;
 
 	biter->__dma_addr = sg_dma_address(biter->__sg) + biter->__sg_advance;
 	block_offset = biter->__dma_addr & (BIT_ULL(biter->__pg_bit) - 1);
-	sg_delta = BIT_ULL(biter->__pg_bit) - block_offset;
+	delta = BIT_ULL(biter->__pg_bit) - block_offset;
 
-	if (sg_dma_len(biter->__sg) - biter->__sg_advance > sg_delta) {
-		biter->__sg_advance += sg_delta;
-	} else {
+	while (biter->__sg_nents && biter->__sg &&
+	       sg_dma_len(biter->__sg) - biter->__sg_advance <= delta) {
+		delta -= sg_dma_len(biter->__sg) - biter->__sg_advance;
 		biter->__sg_advance = 0;
 		biter->__sg = sg_next(biter->__sg);
 		biter->__sg_nents--;
 	}
+	biter->__sg_advance += delta;
 
 	return true;
 }

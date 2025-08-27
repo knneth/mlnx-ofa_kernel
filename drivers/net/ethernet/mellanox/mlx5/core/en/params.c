@@ -10,6 +10,9 @@
 #include <net/page_pool/types.h>
 #include <net/xdp_sock_drv.h>
 
+#define MLX5_MPWRQ_MAX_LOG_WQE_SZ 18
+#define MLX5_REP_MPWRQ_MAX_LOG_WQE_SZ 17
+
 static u8 mlx5e_mpwrq_min_page_shift(struct mlx5_core_dev *mdev)
 {
 	u8 min_page_shift = MLX5_CAP_GEN_2(mdev, log_min_mkey_entity_size);
@@ -103,18 +106,22 @@ u8 mlx5e_mpwrq_log_wqe_sz(struct mlx5_core_dev *mdev, u8 page_shift,
 			  enum mlx5e_mpwrq_umr_mode umr_mode)
 {
 	u8 umr_entry_size = mlx5e_mpwrq_umr_entry_size(umr_mode);
-	u8 max_pages_per_wqe, max_log_mpwqe_size;
+	u8 max_pages_per_wqe, max_log_wqe_size_calc;
+	u8 max_log_wqe_size_cap;
 	u16 max_wqe_size;
 
 	/* Keep in sync with MLX5_MPWRQ_MAX_PAGES_PER_WQE. */
 	max_wqe_size = mlx5e_get_max_sq_aligned_wqebbs(mdev) * MLX5_SEND_WQE_BB;
 	max_pages_per_wqe = ALIGN_DOWN(max_wqe_size - sizeof(struct mlx5e_umr_wqe),
 				       MLX5_UMR_FLEX_ALIGNMENT) / umr_entry_size;
-	max_log_mpwqe_size = ilog2(max_pages_per_wqe) + page_shift;
+	max_log_wqe_size_calc = ilog2(max_pages_per_wqe) + page_shift;
 
-	WARN_ON_ONCE(max_log_mpwqe_size < MLX5E_ORDER2_MAX_PACKET_MTU);
+	WARN_ON_ONCE(max_log_wqe_size_calc < MLX5E_ORDER2_MAX_PACKET_MTU);
 
-	return min_t(u8, max_log_mpwqe_size, MLX5_MPWRQ_MAX_LOG_WQE_SZ);
+	max_log_wqe_size_cap = mlx5_core_is_ecpf(mdev) ?
+			   MLX5_REP_MPWRQ_MAX_LOG_WQE_SZ : MLX5_MPWRQ_MAX_LOG_WQE_SZ;
+
+	return min_t(u8, max_log_wqe_size_calc, max_log_wqe_size_cap);
 }
 
 u8 mlx5e_mpwrq_pages_per_wqe(struct mlx5_core_dev *mdev, u8 page_shift,
@@ -618,6 +625,7 @@ void mlx5e_build_create_cq_param(struct mlx5e_create_cq_param *ccp, struct mlx5e
 		.ch_stats = c->stats,
 		.node = cpu_to_node(c->cpu),
 		.ix = c->vec_ix,
+		.db_ix = mlx5e_get_doorbell_index(c->mdev, c->ix),
 	};
 }
 
@@ -988,6 +996,7 @@ void mlx5e_build_tx_cq_param(struct mlx5_core_dev *mdev,
 }
 
 void mlx5e_build_sq_param_common(struct mlx5_core_dev *mdev,
+				 unsigned int db_ix,
 				 struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
@@ -997,10 +1006,11 @@ void mlx5e_build_sq_param_common(struct mlx5_core_dev *mdev,
 	MLX5_SET(wq, wq, pd,            mdev->mlx5e_res.hw_objs.pdn);
 
 	param->wq.buf_numa_node = dev_to_node(mlx5_core_dma_dev(mdev));
+	param->db_ix = db_ix;
 }
 
 void mlx5e_build_sq_param(struct mlx5_core_dev *mdev,
-			  struct mlx5e_params *params,
+			  struct mlx5e_params *params, unsigned int db_ix,
 			  struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
@@ -1009,7 +1019,7 @@ void mlx5e_build_sq_param(struct mlx5_core_dev *mdev,
 
 	allow_swp = mlx5_geneve_tx_allowed(mdev) ||
 		    (mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_CRYPTO);
-	mlx5e_build_sq_param_common(mdev, param);
+	mlx5e_build_sq_param_common(mdev, db_ix, param);
 	MLX5_SET(wq, wq, log_wq_sz, params->log_sq_size);
 	MLX5_SET(sqc, sqc, allow_swp, allow_swp);
 	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_SKB_TX_MPWQE);
@@ -1202,12 +1212,13 @@ static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
 
 static void mlx5e_build_icosq_param(struct mlx5_core_dev *mdev,
 				    u8 log_wq_size,
+				    unsigned int db_ix,
 				    struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, param);
+	mlx5e_build_sq_param_common(mdev, db_ix, param);
 
 	MLX5_SET(wq, wq, log_wq_sz, log_wq_size);
 	MLX5_SET(sqc, sqc, reg_umr, MLX5_CAP_ETH(mdev, reg_umr_sq));
@@ -1216,12 +1227,13 @@ static void mlx5e_build_icosq_param(struct mlx5_core_dev *mdev,
 
 static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
 					  u8 log_wq_size,
+					  unsigned int db_ix,
 					  struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, param);
+	mlx5e_build_sq_param_common(mdev, db_ix, param);
 	param->stop_room = mlx5e_stop_room_for_wqe(mdev, 1); /* for XSK NOP */
 	param->is_tls = mlx5e_is_ktls_rx(mdev);
 	if (param->is_tls)
@@ -1233,23 +1245,39 @@ static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
 
 void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
 			     struct mlx5e_params *params,
-			     struct mlx5e_xsk_param *xsk,
+			     unsigned int db_ix,
 			     struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, param);
+	mlx5e_build_sq_param_common(mdev, db_ix, param);
 	MLX5_SET(wq, wq, log_wq_sz, params->log_sq_size);
 	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
-	param->is_xdp_mb = !mlx5e_rx_is_linear_skb(mdev, params, xsk);
 	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
+}
+
+unsigned int mlx5e_get_doorbell_index(struct mlx5_core_dev *mdev,
+				      unsigned int ch_ix)
+{
+	unsigned int num_doorbells = mdev->mlx5e_res.hw_objs.num_bfregs;
+
+	if (num_doorbells == 1)
+		return MLX5_DEFAULT_DOORBELL_IX;
+
+	/* With more than one doorbell, round-robin between doorbells
+	 * [1..num_doorbells-1], leaving doorbell 0 for all SQs not associated
+	 * with channels.
+	 */
+	return 1 + ch_ix % (num_doorbells - 1);
 }
 
 int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
 			      struct mlx5e_params *params,
+			      unsigned int ch_ix,
 			      struct mlx5e_channel_param *cparam)
 {
+	unsigned int db_ix = mlx5e_get_doorbell_index(mdev, ch_ix);
 	u8 icosq_log_wq_sz, async_icosq_log_wq_sz;
 	int err;
 
@@ -1260,10 +1288,12 @@ int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
 	icosq_log_wq_sz = mlx5e_build_icosq_log_wq_sz(mdev, params, &cparam->rq);
 	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
 
-	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);
-	mlx5e_build_xdpsq_param(mdev, params, NULL, &cparam->xdp_sq);
-	mlx5e_build_icosq_param(mdev, icosq_log_wq_sz, &cparam->icosq);
-	mlx5e_build_async_icosq_param(mdev, async_icosq_log_wq_sz, &cparam->async_icosq);
+	mlx5e_build_sq_param(mdev, params, db_ix, &cparam->txq_sq);
+	mlx5e_build_xdpsq_param(mdev, params, db_ix, &cparam->xdp_sq);
+	mlx5e_build_icosq_param(mdev, icosq_log_wq_sz, db_ix,
+				&cparam->icosq);
+	mlx5e_build_async_icosq_param(mdev, async_icosq_log_wq_sz, db_ix,
+				      &cparam->async_icosq);
 
 	return 0;
 }

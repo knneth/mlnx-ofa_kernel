@@ -480,31 +480,6 @@ static ssize_t config_show(struct kobject *kobj,
 	return (ssize_t)(p - buf);
 }
 
-static ssize_t smart_nic_attr_show(struct kobject *kobj,
-				   struct attribute *attr, char *buf)
-{
-	struct kobj_attribute *kattr;
-	ssize_t ret = -EIO;
-
-	kattr = container_of(attr, struct kobj_attribute, attr);
-	if (kattr->show)
-		ret = kattr->show(kobj, kattr, buf);
-	return ret;
-}
-
-static ssize_t smart_nic_attr_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buf, size_t count)
-{
-	struct kobj_attribute *kattr;
-	ssize_t ret = -EIO;
-
-	kattr = container_of(attr, struct kobj_attribute, attr);
-	if (kattr->store)
-		ret = kattr->store(kobj, kattr, buf, count);
-	return ret;
-}
-
 static struct kobj_attribute attr_max_tx_rate = {
 	.attr = {.name = "max_tx_rate",
 		 .mode = 0644 },
@@ -558,13 +533,8 @@ static struct attribute *smart_nic_attrs[] = {
 
 ATTRIBUTE_GROUPS(smart_nic);
 
-static const struct sysfs_ops smart_nic_sysfs_ops = {
-	.show   = smart_nic_attr_show,
-	.store  = smart_nic_attr_store
-};
-
 static struct kobj_type smart_nic_type = {
-	.sysfs_ops     = &smart_nic_sysfs_ops,
+	.sysfs_ops     = &kobj_sysfs_ops,
 	.default_groups = smart_nic_groups
 };
 
@@ -700,28 +670,10 @@ static struct attribute *regex_attrs[] = {
 	NULL,
 };
 
-static ssize_t regex_attr_show(struct kobject *kobj,
-			       struct attribute *attr, char *buf)
-{
-	return smart_nic_attr_show(kobj, attr, buf);
-}
-
-static ssize_t regex_attr_store(struct kobject *kobj,
-				struct attribute *attr,
-				const char *buf, size_t count)
-{
-	return smart_nic_attr_store(kobj, attr, buf, count);
-}
-
-static const struct sysfs_ops regex_sysfs_ops = {
-	.show   = regex_attr_show,
-	.store  = regex_attr_store
-};
-
 ATTRIBUTE_GROUPS(regex);
 
 static struct kobj_type regex_type = {
-	.sysfs_ops     = &regex_sysfs_ops,
+	.sysfs_ops     = &kobj_sysfs_ops,
 	.default_groups = regex_groups
 };
 

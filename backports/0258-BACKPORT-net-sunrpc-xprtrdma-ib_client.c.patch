@@ -1,0 +1,98 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
+
+---
+ net/sunrpc/xprtrdma/ib_client.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+--- a/net/sunrpc/xprtrdma/ib_client.c
++++ b/net/sunrpc/xprtrdma/ib_client.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2024 Oracle.  All rights reserved.
+  */
+ 
++#ifdef HAVE_RPCRDMA_RN_REGISTER
+ /* #include <linux/module.h>
+ #include <linux/slab.h> */
+ #include <linux/xarray.h>
+@@ -14,7 +15,9 @@
+ #include <linux/sunrpc/rdma_rn.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ /* Per-ib_device private data for rpcrdma */
+ struct rpcrdma_device {
+@@ -66,7 +69,9 @@ int rpcrdma_rn_register(struct ib_device
+ 		return -ENOMEM;
+ 	kref_get(&rd->rd_kref);
+ 	rn->rn_done = done;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_register(device, rn);
++#endif
+ 	return 0;
+ }
+ 
+@@ -75,7 +80,9 @@ static void rpcrdma_rn_release(struct kr
+ 	struct rpcrdma_device *rd = container_of(kref, struct rpcrdma_device,
+ 						 rd_kref);
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_completion(rd->rd_device);
++#endif
+ 	complete(&rd->rd_done);
+ }
+ 
+@@ -92,7 +99,9 @@ void rpcrdma_rn_unregister(struct ib_dev
+ 	if (!rd)
+ 		return;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_unregister(device, rn);
++#endif
+ 	xa_erase(&rd->rd_xa, rn->rn_index);
+ 	kref_put(&rd->rd_kref, rpcrdma_rn_release);
+ }
+@@ -118,7 +127,9 @@ static int rpcrdma_add_one(struct ib_dev
+ 	init_completion(&rd->rd_done);
+ 	ib_set_client_data(device, &rpcrdma_ib_client, rd);
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_add_one(device);
++#endif
+ 	return 0;
+ }
+ 
+@@ -137,7 +148,9 @@ static void rpcrdma_remove_one(struct ib
+ 	struct rpcrdma_notification *rn;
+ 	unsigned long index;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_remove_one(device);
++#endif
+ 
+ 	set_bit(RPCRDMA_RD_F_REMOVING, &rd->rd_flags);
+ 	xa_for_each(&rd->rd_xa, index, rn)
+@@ -148,11 +161,15 @@ static void rpcrdma_remove_one(struct ib
+ 	 * registrants for this device.
+ 	 */
+ 	if (!refcount_dec_and_test(&rd->rd_kref.refcount)) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_rpcrdma_client_wait_on(device);
++#endif
+ 		wait_for_completion(&rd->rd_done);
+ 	}
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_rpcrdma_client_remove_one_done(device);
++#endif
+ 	xa_destroy(&rd->rd_xa);
+ 	kfree(rd);
+ }
+@@ -182,3 +199,4 @@ int rpcrdma_ib_client_register(void)
+ {
+ 	return ib_register_client(&rpcrdma_ib_client);
+ }
++#endif

@@ -1,0 +1,105 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
+
+Change-Id: I5392bcc35cf6aa895422d8ebe86d46dd43ae259a
+---
+ .../net/ethernet/mellanox/mlx5/core/port.c    | 59 +++++++++++++++++++
+ 1 file changed, 59 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/port.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/port.c
+@@ -445,6 +445,7 @@ int mlx5_query_module_eeprom(struct mlx5
+ 	return mlx5_query_mcia(dev, &query, data);
+ }
+ 
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
+ int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
+ 				     struct mlx5_module_eeprom_query_params *params,
+ 				     u8 *data)
+@@ -463,6 +464,7 @@ int mlx5_query_module_eeprom_by_page(str
+ 
+ 	return mlx5_query_mcia(dev, params, data);
+ }
++#endif
+ 
+ static int mlx5_query_port_pvlc(struct mlx5_core_dev *dev, u32 *pvlc,
+ 				int pvlc_size,  u8 local_port)
+@@ -1137,6 +1139,7 @@ out:
+ 	return err;
+ }
+ 
++#ifdef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
+ /* speed in units of 1Mb */
+ static const struct mlx5_link_info mlx5e_link_info[MLX5E_LINK_MODES_NUMBER] = {
+ 	[MLX5E_1000BASE_CX_SGMII]	= {.speed = 1000, .lanes = 1},
+@@ -1190,6 +1193,60 @@ mlx5e_ext_link_info[MLX5E_EXT_LINK_MODES
+ 	[MLX5E_400GAUI_2_400GBASE_CR2_KR2]	= {.speed = 400000, .lanes = 2},
+ 	[MLX5E_800GAUI_4_800GBASE_CR4_KR4]	= {.speed = 800000, .lanes = 4},
+ };
++#else
++static const struct mlx5_link_info mlx5e_link_info[MLX5E_LINK_MODES_NUMBER] = {
++   [MLX5E_1000BASE_CX_SGMII] = {.speed = 1000},
++   [MLX5E_1000BASE_KX]       = {.speed = 1000},
++   [MLX5E_10GBASE_CX4]       = {.speed = 10000},
++   [MLX5E_10GBASE_KX4]       = {.speed = 10000},
++   [MLX5E_10GBASE_KR]        = {.speed = 10000},
++   [MLX5E_20GBASE_KR2]       = {.speed = 20000},
++   [MLX5E_40GBASE_CR4]       = {.speed = 40000},
++   [MLX5E_40GBASE_KR4]       = {.speed = 40000},
++   [MLX5E_56GBASE_R4]        = {.speed = 56000},
++   [MLX5E_10GBASE_CR]        = {.speed = 10000},
++   [MLX5E_10GBASE_SR]        = {.speed = 10000},
++   [MLX5E_10GBASE_ER]        = {.speed = 10000},
++   [MLX5E_40GBASE_SR4]       = {.speed = 40000},
++   [MLX5E_40GBASE_LR4]       = {.speed = 40000},
++   [MLX5E_50GBASE_SR2]       = {.speed = 50000},
++   [MLX5E_100GBASE_CR4]      = {.speed = 100000},
++   [MLX5E_100GBASE_SR4]      = {.speed = 100000},
++   [MLX5E_100GBASE_KR4]      = {.speed = 100000},
++   [MLX5E_100GBASE_LR4]      = {.speed = 100000},
++   [MLX5E_100BASE_TX]        = {.speed = 100},
++   [MLX5E_1000BASE_T]        = {.speed = 1000},
++   [MLX5E_10GBASE_T]         = {.speed = 10000},
++   [MLX5E_25GBASE_CR]        = {.speed = 25000},
++   [MLX5E_25GBASE_KR]        = {.speed = 25000},
++   [MLX5E_25GBASE_SR]        = {.speed = 25000},
++   [MLX5E_50GBASE_CR2]       = {.speed = 50000},
++   [MLX5E_50GBASE_KR2]       = {.speed = 50000},
++};
++
++static const struct mlx5_link_info
++mlx5e_ext_link_info[MLX5E_EXT_LINK_MODES_NUMBER] = {
++  [MLX5E_SGMII_100M]                      = {.speed = 100},
++  [MLX5E_1000BASE_X_SGMII]                = {.speed = 1000},
++  [MLX5E_5GBASE_R]                        = {.speed = 5000},
++  [MLX5E_10GBASE_XFI_XAUI_1]              = {.speed = 10000},
++  [MLX5E_40GBASE_XLAUI_4_XLPPI_4]         = {.speed = 40000},
++  [MLX5E_25GAUI_1_25GBASE_CR_KR]          = {.speed = 25000},
++  [MLX5E_50GAUI_2_LAUI_2_50GBASE_CR2_KR2] = {.speed = 50000},
++  [MLX5E_50GAUI_1_LAUI_1_50GBASE_CR_KR]   = {.speed = 50000},
++  [MLX5E_CAUI_4_100GBASE_CR4_KR4]         = {.speed = 100000},
++  [MLX5E_100GAUI_2_100GBASE_CR2_KR2]      = {.speed = 100000},
++  [MLX5E_200GAUI_4_200GBASE_CR4_KR4]      = {.speed = 200000},
++  [MLX5E_400GAUI_8_400GBASE_CR8]          = {.speed = 400000},
++  [MLX5E_100GAUI_1_100GBASE_CR_KR]        = {.speed = 100000},
++  [MLX5E_200GAUI_2_200GBASE_CR2_KR2]      = {.speed = 200000},
++  [MLX5E_400GAUI_4_400GBASE_CR4_KR4]      = {.speed = 400000},
++  [MLX5E_800GAUI_8_800GBASE_CR8_KR8]      = {.speed = 800000},
++  [MLX5E_200GAUI_1_200GBASE_CR1_KR1]      = {.speed = 200000},
++  [MLX5E_400GAUI_2_400GBASE_CR2_KR2]      = {.speed = 400000},
++  [MLX5E_800GAUI_4_800GBASE_CR4_KR4]      = {.speed = 800000},
++};
++#endif
+ 
+ int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
+ 			      struct mlx5_port_eth_proto *eproto)
+@@ -1269,7 +1326,9 @@ u32 mlx5_port_info2linkmodes(struct mlx5
+ 					  force_legacy);
+ 	for (i = 0; i < max_size; ++i) {
+ 		if (table[i].speed == info->speed) {
++#ifdef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
+ 			if (!info->lanes || table[i].lanes == info->lanes)
++#endif
+ 				link_modes |= MLX5E_PROT_MASK(i);
+ 		}
+ 	}

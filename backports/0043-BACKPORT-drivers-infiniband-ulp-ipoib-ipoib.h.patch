@@ -1,0 +1,26 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib.h
+
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib.h
++++ b/drivers/infiniband/ulp/ipoib/ipoib.h
+@@ -42,6 +42,9 @@
+ #include <linux/kref.h>
+ #include <linux/if_infiniband.h>
+ #include <linux/mutex.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/ratelimit.h>
++#endif
+ 
+ #include <net/neighbour.h>
+ #include <net/sch_generic.h>
+@@ -859,5 +862,6 @@ extern int ipoib_debug_level;
+ #endif /* CONFIG_INFINIBAND_IPOIB_DEBUG_DATA */
+ 
+ #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
++extern int ipoib_enhanced_enabled;
+ 
+ #endif /* _IPOIB_H */

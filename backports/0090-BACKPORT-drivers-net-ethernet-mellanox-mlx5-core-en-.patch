@@ -1,21 +1,31 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 
-Change-Id: Iac3503c26aa0f4d6fff2526a0ea3d1a538912e7e
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
-@@ -32,6 +32,9 @@
- #ifndef __MLX5_EN_PORT_BUFFER_H__
- #define __MLX5_EN_PORT_BUFFER_H__
- 
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+@@ -10,6 +10,10 @@
+ #include <linux/notifier.h>
+ #include <net/netevent.h>
+ #include <net/arp.h>
 +#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/dcbnl.h>
++#include <net/addrconf.h>
++#include <net/ipv6_stubs.h>
 +#endif
- #include "en.h"
- #include "port.h"
+ #include "neigh.h"
+ #include "tc.h"
+ #include "en_rep.h"
+@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
  
+ 	neigh_connected = (nud_state & NUD_VALID) && !dead;
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
++#endif
+ 
+ 	if (!same_dev)
+ 		goto out;

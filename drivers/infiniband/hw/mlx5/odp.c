@@ -228,6 +228,13 @@ static void destroy_unused_implicit_child_mr(struct mlx5_ib_mr *mr)
 	unsigned long idx = ib_umem_start(odp) >> MLX5_IMR_MTT_SHIFT;
 	struct mlx5_ib_mr *imr = mr->parent;
 
+	/*
+	 * If userspace is racing freeing the parent implicit ODP MR then we can
+	 * loose the race with parent destruction. In this case
+	 * mlx5_ib_free_odp_mr() will free everything in the implicit_children
+	 * xarray so NOP is fine. This child MR cannot be destroyed here because
+	 * we are under its umem_mutex.
+	 */
 	if (!refcount_inc_not_zero(&imr->mmkey.usecount))
 		return;
 
@@ -240,8 +247,8 @@ static void destroy_unused_implicit_child_mr(struct mlx5_ib_mr *mr)
 	}
 
 	if (MLX5_CAP_ODP(mr_to_mdev(mr)->mdev, mem_page_fault))
-		__xa_erase(&mr_to_mdev(mr)->odp_mkeys,
-			   mlx5_base_mkey(mr->mmkey.key));
+		xa_erase(&mr_to_mdev(mr)->odp_mkeys,
+			 mlx5_base_mkey(mr->mmkey.key));
 	xa_unlock(&imr->implicit_children);
 
 	/* Freeing a MR is a sleeping operation, so bounce to a work queue */
@@ -302,9 +309,6 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
 				blk_start_idx = idx;
 				in_block = 1;
 			}
-
-			/* Count page invalidations */
-			invalidations += idx - blk_start_idx + 1;
 		} else {
 			u64 umr_offset = idx & umr_block_mask;
 
@@ -314,16 +318,21 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
 						     MLX5_IB_UPD_XLT_ZAP |
 						     MLX5_IB_UPD_XLT_ATOMIC);
 				in_block = 0;
+				/* Count page invalidations */
+				invalidations += idx - blk_start_idx + 1;
 			}
 		}
 	}
-	if (in_block)
+	if (in_block) {
 		mlx5r_umr_update_xlt(mr, blk_start_idx,
 				     idx - blk_start_idx + 1, 0,
 				     MLX5_IB_UPD_XLT_ZAP |
 				     MLX5_IB_UPD_XLT_ATOMIC);
+		/* Count page invalidations */
+		invalidations += idx - blk_start_idx + 1;
+	}
 
-	mlx5_update_odp_stats(mr, invalidations, invalidations);
+	mlx5_update_odp_stats_with_handled(mr, invalidations, invalidations);
 
 	/*
 	 * We are now sure that the device will not access the
@@ -512,8 +521,8 @@ static struct mlx5_ib_mr *implicit_get_child_mr(struct mlx5_ib_mr *imr,
 	}
 
 	if (MLX5_CAP_ODP(dev->mdev, mem_page_fault)) {
-		ret = __xa_store(&dev->odp_mkeys, mlx5_base_mkey(mr->mmkey.key),
-				 &mr->mmkey, GFP_KERNEL);
+		ret = xa_store(&dev->odp_mkeys, mlx5_base_mkey(mr->mmkey.key),
+			       &mr->mmkey, GFP_KERNEL);
 		if (xa_is_err(ret)) {
 			ret = ERR_PTR(xa_err(ret));
 			__xa_erase(&imr->implicit_children, idx);
@@ -814,9 +823,11 @@ static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
 			       u32 *bytes_mapped, u32 flags)
 {
 	struct ib_umem_dmabuf *umem_dmabuf = to_ib_umem_dmabuf(mr->umem);
+	unsigned int old_page_shift = mr->page_shift;
+	unsigned int page_shift;
+	unsigned long page_size;
 	u32 xlt_flags = 0;
 	int err;
-	unsigned long page_size;
 
 	if (flags & MLX5_PF_FLAGS_ENABLE)
 		xlt_flags |= MLX5_IB_UPD_XLT_ENABLE;
@@ -833,15 +844,28 @@ static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
 		ib_umem_dmabuf_unmap_pages(umem_dmabuf);
 		err = -EINVAL;
 	} else {
-		if (mr->data_direct)
-			err = mlx5r_umr_update_data_direct_ksm_pas(mr, xlt_flags);
-		else
-			err = mlx5r_umr_update_mr_pas(mr, xlt_flags);
+		page_shift = order_base_2(page_size);
+		if (page_shift != mr->page_shift && mr->dmabuf_faulted) {
+			err = mlx5r_umr_dmabuf_update_pgsz(mr, xlt_flags,
+							   page_shift);
+		} else {
+			mr->page_shift = page_shift;
+			if (mr->data_direct)
+				err = mlx5r_umr_update_data_direct_ksm_pas(
+					mr, xlt_flags);
+			else
+				err = mlx5r_umr_update_mr_pas(mr,
+							      xlt_flags);
+		}
 	}
 	dma_resv_unlock(umem_dmabuf->attach->dmabuf->resv);
 
-	if (err)
+	if (err) {
+		mr->page_shift = old_page_shift;
 		return err;
+	}
+
+	mr->dmabuf_faulted = 1;
 
 	if (bytes_mapped)
 		*bytes_mapped += bcnt;
@@ -1009,7 +1033,7 @@ next_mr:
 		if (ret < 0)
 			goto end;
 
-		mlx5_update_odp_stats(mr, faults, ret);
+		mlx5_update_odp_stats_with_handled(mr, faults, ret);
 
 		if (ret < pages_in_range) {
 			ret = -EFAULT;
@@ -1537,7 +1561,7 @@ static void mlx5_ib_mr_memory_pfault_handler(struct mlx5_ib_dev *dev,
 			goto err;
 	}
 
-	mlx5_update_odp_stats(mr, faults, ret);
+	mlx5_update_odp_stats_with_handled(mr, faults, ret);
 	mlx5r_deref_odp_mkey(mmkey);
 
 	if (pfault->memory.flags & MLX5_MEMORY_PAGE_FAULT_FLAGS_LAST)

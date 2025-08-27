@@ -1,43 +1,35 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 
-Change-Id: Idec2f080ffc2c4326e0e6585a10e6582c45e0fb0
 ---
- .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
-@@ -19,9 +19,21 @@ enum {
- 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
- };
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+@@ -364,6 +364,7 @@ static int mlx5e_fs_add_any_vid_rules(st
+ 	return mlx5e_add_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID, 0);
+ }
  
-+#ifdef HAVE_KTLS_STRUCTS
- int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
- 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
- void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
-+#else
-+static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
-+				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
-+{
-+	return -EOPNOTSUPP;
-+}
-+
-+static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
-+{
-+}
-+#endif
- int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
- 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
- void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
-@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
- union mlx5e_crypto_info {
- 	struct tls_crypto_info crypto_info;
- 	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;
-+#ifdef TLS_CIPHER_AES_GCM_256
- 	struct tls12_crypto_info_aes_gcm_256 crypto_info_256;
-+#endif
- };
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ static struct mlx5_flow_handle *
+ mlx5e_add_trap_rule(struct mlx5_flow_table *ft, int trap_id, int tir_num)
+ {
+@@ -434,6 +435,7 @@ void mlx5e_remove_mac_trap(struct mlx5e_
+ 		fs->l2.trap_rule = NULL;
+ 	}
+ }
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
  
- struct mlx5e_set_tls_static_params_wqe {
+ void mlx5e_enable_cvlan_filter(struct mlx5e_flow_steering *fs, bool promisc)
+ {
+@@ -559,7 +561,9 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ 	WARN_ON_ONCE(fs->state_destroy);
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ 	mlx5e_remove_vlan_trap(fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ 	/* must be called after DESTROY bit is set and
+ 	 * set_rx_mode is called and flushed

@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
+
+---
+ drivers/infiniband/hw/mlx5/umr.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/umr.c
++++ b/drivers/infiniband/hw/mlx5/umr.c
+@@ -694,8 +694,8 @@ _mlx5r_umr_update_mr_pas(struct mlx5_ib_
+ 	size_t processed_blocks = 0;
+ 	struct ib_block_iter biter;
+ 	size_t cur_block_idx = 0;
+-	struct mlx5_ksm *cur_ksm;
+-	struct mlx5_mtt *cur_mtt;
++	struct mlx5_ksm *cur_ksm = NULL;
++	struct mlx5_mtt *cur_mtt = NULL;
+ 	size_t orig_sg_length;
+ 	size_t total_blocks;
+ 	size_t final_size;

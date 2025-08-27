@@ -109,7 +109,7 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		modules
 else
 # compile with inbox driver
-		make EXTRA_CFLAGS="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
+		make ccflags-y="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		modules
 endif
 
@@ -140,7 +140,6 @@ binrpm: rpmcheck $(rpmspec)
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),Kconfig,makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
-	cp common.postinst $(rpmroot)/$(PACKAGE)/
 	cp *.c $(rpmroot)/$(PACKAGE)/
 	cp *.h $(rpmroot)/$(PACKAGE)/
 	cp -r debian $(rpmroot)/$(PACKAGE)/

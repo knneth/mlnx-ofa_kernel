@@ -163,7 +163,8 @@ static int mlx5_aso_alloc_sq(struct mlx5_core_dev *mdev, int numa_node,
 	struct mlx5_wq_param param;
 	int err;
 
-	sq->uar_map = mdev->mlx5e_res.hw_objs.bfreg.map;
+	sq->uar_map =
+		mdev->mlx5e_res.hw_objs.bfregs[MLX5_DEFAULT_DOORBELL_IX].map;
 
 	param.db_numa_node = numa_node;
 	param.buf_numa_node = numa_node;
@@ -178,6 +179,7 @@ static int mlx5_aso_alloc_sq(struct mlx5_core_dev *mdev, int numa_node,
 static int create_aso_sq(struct mlx5_core_dev *mdev, int pdn,
 			 void *sqc_data, struct mlx5_aso *sq)
 {
+	unsigned int db_ix = MLX5_DEFAULT_DOORBELL_IX;
 	void *in, *sqc, *wq;
 	int inlen, err;
 	u8 ts_format;
@@ -203,7 +205,8 @@ static int create_aso_sq(struct mlx5_core_dev *mdev, int pdn,
 	MLX5_SET(sqc, sqc, ts_format, ts_format);
 
 	MLX5_SET(wq,   wq, wq_type,       MLX5_WQ_TYPE_CYCLIC);
-	MLX5_SET(wq,   wq, uar_page,      mdev->mlx5e_res.hw_objs.bfreg.index);
+	MLX5_SET(wq,   wq, uar_page,
+		 mdev->mlx5e_res.hw_objs.bfregs[db_ix].index);
 	MLX5_SET(wq,   wq, log_wq_pg_sz,  sq->wq_ctrl.buf.page_shift -
 					  MLX5_ADAPTER_PAGE_SHIFT);
 	MLX5_SET64(wq, wq, dbr_addr,      sq->wq_ctrl.db.dma);

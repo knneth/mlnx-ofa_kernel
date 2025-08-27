@@ -314,9 +314,6 @@ static ssize_t rate_show(struct ib_device *ibdev, u32 port_num,
 	if (ret)
 		return ret;
 
-	if (!attr.active_speed && !attr.active_width)
-		return sprintf(buf, "0 GB/sec\n");
-
 	switch (attr.active_speed) {
 	case IB_SPEED_DDR:
 		speed = " DDR";

@@ -272,8 +272,7 @@ static void free_fwp(struct mlx5_core_dev *dev, struct fw_page *fwp,
 	kfree(fwp);
 }
 
-static int free_4k(struct mlx5_core_dev *dev, u64 addr, u32 function,
-		   bool ec_function)
+static void free_4k(struct mlx5_core_dev *dev, u64 addr, u32 function)
 {
 	struct fw_page *fwp;
 	int n;
@@ -281,28 +280,21 @@ static int free_4k(struct mlx5_core_dev *dev, u64 addr, u32 function,
 	fwp = find_fw_page(dev, addr & MLX5_U64_4K_PAGE_MASK, function);
 	if (!fwp) {
 		mlx5_core_warn_rl(dev, "page not found\n");
-		return -ENOMEM;
+		return;
 	}
 	n = (addr & ~MLX5_U64_4K_PAGE_MASK) >> MLX5_ADAPTER_PAGE_SHIFT;
-	if (test_bit(n, &fwp->bitmask)) {
-		mlx5_core_warn(dev, "addr 0x%llx is already freed, n %d\n", addr, n);
-		return -EINVAL;
-	}
-
 	fwp->free_count++;
 	set_bit(n, &fwp->bitmask);
 	if (fwp->free_count == MLX5_NUM_4K_IN_PAGE)
 		free_fwp(dev, fwp, fwp->free_count != 1);
 	else if (fwp->free_count == 1)
 		list_add(&fwp->list, &dev->priv.free_list);
-
-	return 0;
 }
 
 static int alloc_system_page(struct mlx5_core_dev *dev, u32 function)
 {
 	struct device *device = mlx5_core_dma_dev(dev);
-	int nid = dev_to_node(device);
+	int nid = dev->priv.numa_node;
 	struct page *page;
 	u64 zero_addr = 1;
 	u64 addr;
@@ -532,7 +524,7 @@ out_dropped:
 	dev->priv.give_pages_dropped += npages;
 out_4k:
 	for (i--; i >= 0; i--)
-		free_4k(dev, MLX5_GET64(manage_pages_in, in, pas[i]), function, ec_function);
+		free_4k(dev, MLX5_GET64(manage_pages_in, in, pas[i]), function);
 out_free:
 	kvfree(in);
 	if (notify_fail)
@@ -640,7 +632,6 @@ static int reclaim_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 	u32 *out;
 	int err;
 	int i;
-	int claimed = 0;
 
 	if (nclaimed)
 		*nclaimed = 0;
@@ -684,18 +675,17 @@ static int reclaim_pages(struct mlx5_core_dev *dev, u16 func_id, int npages,
 	}
 
 	for (i = 0; i < num_claimed; i++)
-		if (!free_4k(dev, MLX5_GET64(manage_pages_out, out, pas[i]), function, ec_function))
-			claimed++;
+		free_4k(dev, MLX5_GET64(manage_pages_out, out, pas[i]), function);
 
 	if (nclaimed)
-		*nclaimed = claimed;
+		*nclaimed = num_claimed;
 
 	func_type = func_id_to_type(dev, func_id, ec_function);
-	dev->priv.page_counters[func_type] -= claimed;
-	dev->priv.fw_pages -= claimed;
+	dev->priv.page_counters[func_type] -= num_claimed;
+	dev->priv.fw_pages -= num_claimed;
 	if (func_id) {
 #ifdef CONFIG_MLX5_ESWITCH
-		update_pg_counters(dev, func_id, claimed, false);
+		update_pg_counters(dev, func_id, num_claimed, false);
 #endif
 	}
 

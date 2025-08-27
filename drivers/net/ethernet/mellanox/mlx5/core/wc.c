@@ -255,7 +255,30 @@ static void mlx5_wc_destroy_sq(struct mlx5_wc_sq *sq)
 	mlx5_wq_destroy(&sq->wq_ctrl);
 }
 
-static void mlx5_wc_post_nop(struct mlx5_wc_sq *sq, bool signaled)
+#ifdef __aarch64__
+static inline void custom_iowrite64_copy(void *out_ptr, void* in_ptr)
+{
+	asm volatile(
+		"ldp     x1, x2, [ %[in_ptr] ]\n"
+		"isb\n"
+		"str     x1, [ %[out_ptr] ]\n"
+		"str     x2, [ %[out_ptr], #8 ]\n"
+		"str     xzr, [ %[out_ptr], #16 ]\n"
+		"str     xzr, [ %[out_ptr], #24 ]\n"
+		"str     xzr, [ %[out_ptr], #32 ]\n"
+		"str     xzr, [ %[out_ptr], #40 ]\n"
+		"str     xzr, [ %[out_ptr], #48 ]\n"
+		"str     xzr, [ %[out_ptr], #56 ]\n"
+		:
+		: [in_ptr] "r"(in_ptr), [out_ptr] "r"(out_ptr)
+		: "x1", "x2", "memory"
+	);
+	dgh();
+}
+#endif
+
+static void mlx5_wc_post_nop(struct mlx5_wc_sq *sq, unsigned int *offset,
+			     bool signaled)
 {
 	int buf_size = (1 << MLX5_CAP_GEN(sq->cq.mdev, log_bf_reg_size)) / 2;
 	struct mlx5_wqe_ctrl_seg *ctrl;
@@ -288,10 +311,14 @@ static void mlx5_wc_post_nop(struct mlx5_wc_sq *sq, bool signaled)
 	 */
 	wmb();
 
-	__iowrite64_copy(sq->bfreg.map + sq->bfreg.offset, mmio_wqe,
+#ifdef __aarch64__
+	custom_iowrite64_copy(sq->bfreg.map + *offset, mmio_wqe);
+#else
+	__iowrite64_copy(sq->bfreg.map + *offset, mmio_wqe,
 			 sizeof(mmio_wqe) / 8);
+#endif
 
-	sq->bfreg.offset ^= buf_size;
+	*offset ^= buf_size;
 }
 
 static int mlx5_wc_poll_cq(struct mlx5_wc_sq *sq)
@@ -332,6 +359,7 @@ static int mlx5_wc_poll_cq(struct mlx5_wc_sq *sq)
 
 static void mlx5_core_test_wc(struct mlx5_core_dev *mdev)
 {
+	unsigned int offset = 0;
 	unsigned long expires;
 	struct mlx5_wc_sq *sq;
 	int i, err;
@@ -358,9 +386,9 @@ static void mlx5_core_test_wc(struct mlx5_core_dev *mdev)
 		goto err_create_sq;
 
 	for (i = 0; i < TEST_WC_NUM_WQES - 1; i++)
-		mlx5_wc_post_nop(sq, false);
+		mlx5_wc_post_nop(sq, &offset, false);
 
-	mlx5_wc_post_nop(sq, true);
+	mlx5_wc_post_nop(sq, &offset, true);
 
 	expires = jiffies + TEST_WC_POLLING_MAX_TIME_JIFFIES;
 	do {
@@ -378,6 +406,9 @@ err_create_cq:
 	mlx5_free_bfreg(mdev, &sq->bfreg);
 err_alloc_bfreg:
 	kfree(sq);
+
+	if (mdev->wc_state == MLX5_WC_STATE_UNSUPPORTED)
+		mlx5_core_warn(mdev, "Write combining is not supported\n");
 }
 
 bool mlx5_wc_support_get(struct mlx5_core_dev *mdev)

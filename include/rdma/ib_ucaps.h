@@ -9,9 +9,9 @@
 #define UCAP_ENABLED(ucaps, type) (!!((ucaps) & (1U << (type))))
 
 enum rdma_user_cap {
-	RDMA_UCAP_MLX5_CTRL_LOCAL = 0,
-	RDMA_UCAP_MLX5_CTRL_OTHER_VHCA = 1,
-	RDMA_UCAP_MAX = 2,
+	RDMA_UCAP_MLX5_CTRL_LOCAL,
+	RDMA_UCAP_MLX5_CTRL_OTHER_VHCA,
+	RDMA_UCAP_MAX
 };
 
 void ib_cleanup_ucaps(void);
@@ -24,8 +24,7 @@ static inline int ib_create_ucap(enum rdma_user_cap type)
 {
 	return -EOPNOTSUPP;
 }
-
 static inline void ib_remove_ucap(enum rdma_user_cap type) {}
-#endif
+#endif /* CONFIG_INFINIBAND_USER_ACCESS */
 
 #endif /* _IB_UCAPS_H_ */

@@ -4,8 +4,8 @@
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
 
-#if 0
 #include "devl_internal.h"
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static struct devlink_dpipe_field devlink_dpipe_fields_ethernet[] = {
 	{
@@ -84,14 +84,15 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 EXPORT_SYMBOL_GPL(devlink_dpipe_match_put);
+#endif
 
-static int devlink_dpipe_matches_put(struct devlink_dpipe_table *table,
+static int mlxdevm_dpipe_matches_put(struct mlxdevm_dpipe_table *table,
 				     struct sk_buff *skb)
 {
 	struct nlattr *matches_attr;
 
 	matches_attr = nla_nest_start_noflag(skb,
-					     DEVLINK_ATTR_DPIPE_TABLE_MATCHES);
+					     MLXDEVM_ATTR_DPIPE_TABLE_MATCHES);
 	if (!matches_attr)
 		return -EMSGSIZE;
 
@@ -105,6 +106,7 @@ nla_put_failure:
 	nla_nest_cancel(skb, matches_attr);
 	return -EMSGSIZE;
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_dpipe_action_put(struct sk_buff *skb,
 			     struct devlink_dpipe_action *action)
@@ -132,14 +134,15 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 EXPORT_SYMBOL_GPL(devlink_dpipe_action_put);
+#endif
 
-static int devlink_dpipe_actions_put(struct devlink_dpipe_table *table,
+static int mlxdevm_dpipe_actions_put(struct mlxdevm_dpipe_table *table,
 				     struct sk_buff *skb)
 {
 	struct nlattr *actions_attr;
 
 	actions_attr = nla_nest_start_noflag(skb,
-					     DEVLINK_ATTR_DPIPE_TABLE_ACTIONS);
+					     MLXDEVM_ATTR_DPIPE_TABLE_ACTIONS);
 	if (!actions_attr)
 		return -EMSGSIZE;
 
@@ -154,36 +157,35 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static int devlink_dpipe_table_put(struct sk_buff *skb,
-				   struct devlink_dpipe_table *table)
+static int mlxdevm_dpipe_table_put(struct sk_buff *skb,
+				   struct mlxdevm_dpipe_table *table)
 {
 	struct nlattr *table_attr;
 	u64 table_size;
 
 	table_size = table->table_ops->size_get(table->priv);
-	table_attr = nla_nest_start_noflag(skb, DEVLINK_ATTR_DPIPE_TABLE);
+	table_attr = nla_nest_start_noflag(skb, MLXDEVM_ATTR_DPIPE_TABLE);
 	if (!table_attr)
 		return -EMSGSIZE;
 
-	if (nla_put_string(skb, DEVLINK_ATTR_DPIPE_TABLE_NAME, table->name) ||
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_DPIPE_TABLE_SIZE, table_size,
-			      DEVLINK_ATTR_PAD))
+	if (nla_put_string(skb, MLXDEVM_ATTR_DPIPE_TABLE_NAME, table->name) ||
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_DPIPE_TABLE_SIZE, table_size))
 		goto nla_put_failure;
-	if (nla_put_u8(skb, DEVLINK_ATTR_DPIPE_TABLE_COUNTERS_ENABLED,
+	if (nla_put_u8(skb, MLXDEVM_ATTR_DPIPE_TABLE_COUNTERS_ENABLED,
 		       table->counters_enabled))
 		goto nla_put_failure;
 
 	if (table->resource_valid) {
-		if (nla_put_u64_64bit(skb, DEVLINK_ATTR_DPIPE_TABLE_RESOURCE_ID,
-				      table->resource_id, DEVLINK_ATTR_PAD) ||
-		    nla_put_u64_64bit(skb, DEVLINK_ATTR_DPIPE_TABLE_RESOURCE_UNITS,
-				      table->resource_units, DEVLINK_ATTR_PAD))
+		if (mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_DPIPE_TABLE_RESOURCE_ID,
+				       table->resource_id) ||
+		    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_DPIPE_TABLE_RESOURCE_UNITS,
+				       table->resource_units))
 			goto nla_put_failure;
 	}
-	if (devlink_dpipe_matches_put(table, skb))
+	if (mlxdevm_dpipe_matches_put(table, skb))
 		goto nla_put_failure;
 
-	if (devlink_dpipe_actions_put(table, skb))
+	if (mlxdevm_dpipe_actions_put(table, skb))
 		goto nla_put_failure;
 
 	nla_nest_end(skb, table_attr);
@@ -194,7 +196,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static int devlink_dpipe_send_and_alloc_skb(struct sk_buff **pskb,
+static int mlxdevm_dpipe_send_and_alloc_skb(struct sk_buff **pskb,
 					    struct genl_info *info)
 {
 	int err;
@@ -210,13 +212,13 @@ static int devlink_dpipe_send_and_alloc_skb(struct sk_buff **pskb,
 	return 0;
 }
 
-static int devlink_dpipe_tables_fill(struct genl_info *info,
-				     enum devlink_command cmd, int flags,
+static int mlxdevm_dpipe_tables_fill(struct genl_info *info,
+				     enum mlxdevm_command cmd, int flags,
 				     struct list_head *dpipe_tables,
 				     const char *table_name)
 {
-	struct devlink *devlink = info->user_ptr[0];
-	struct devlink_dpipe_table *table;
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm_dpipe_table *table;
 	struct nlattr *tables_attr;
 	struct sk_buff *skb = NULL;
 	struct nlmsghdr *nlh;
@@ -226,22 +228,22 @@ static int devlink_dpipe_tables_fill(struct genl_info *info,
 	int err;
 
 	table = list_first_entry(dpipe_tables,
-				 struct devlink_dpipe_table, list);
+				 struct mlxdevm_dpipe_table, list);
 start_again:
-	err = devlink_dpipe_send_and_alloc_skb(&skb, info);
+	err = mlxdevm_dpipe_send_and_alloc_skb(&skb, info);
 	if (err)
 		return err;
 
 	hdr = genlmsg_put(skb, info->snd_portid, info->snd_seq,
-			  &devlink_nl_family, NLM_F_MULTI, cmd);
+			  &mlxdevm_nl_family, NLM_F_MULTI, cmd);
 	if (!hdr) {
 		nlmsg_free(skb);
 		return -EMSGSIZE;
 	}
 
-	if (devlink_nl_put_handle(skb, devlink))
+	if (mlxdevm_nl_put_handle(skb, mlxdevm))
 		goto nla_put_failure;
-	tables_attr = nla_nest_start_noflag(skb, DEVLINK_ATTR_DPIPE_TABLES);
+	tables_attr = nla_nest_start_noflag(skb, MLXDEVM_ATTR_DPIPE_TABLES);
 	if (!tables_attr)
 		goto nla_put_failure;
 
@@ -249,7 +251,7 @@ start_again:
 	incomplete = false;
 	list_for_each_entry_from(table, dpipe_tables, list) {
 		if (!table_name) {
-			err = devlink_dpipe_table_put(skb, table);
+			err = mlxdevm_dpipe_table_put(skb, table);
 			if (err) {
 				if (!i)
 					goto err_table_put;
@@ -258,7 +260,7 @@ start_again:
 			}
 		} else {
 			if (!strcmp(table->name, table_name)) {
-				err = devlink_dpipe_table_put(skb, table);
+				err = mlxdevm_dpipe_table_put(skb, table);
 				if (err)
 					break;
 			}
@@ -275,7 +277,7 @@ send_done:
 	nlh = nlmsg_put(skb, info->snd_portid, info->snd_seq,
 			NLMSG_DONE, 0, flags | NLM_F_MULTI);
 	if (!nlh) {
-		err = devlink_dpipe_send_and_alloc_skb(&skb, info);
+		err = mlxdevm_dpipe_send_and_alloc_skb(&skb, info);
 		if (err)
 			return err;
 		goto send_done;
@@ -290,18 +292,19 @@ err_table_put:
 	return err;
 }
 
-int devlink_nl_dpipe_table_get_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_dpipe_table_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
 	const char *table_name =  NULL;
 
-	if (info->attrs[DEVLINK_ATTR_DPIPE_TABLE_NAME])
-		table_name = nla_data(info->attrs[DEVLINK_ATTR_DPIPE_TABLE_NAME]);
+	if (info->attrs[MLXDEVM_ATTR_DPIPE_TABLE_NAME])
+		table_name = nla_data(info->attrs[MLXDEVM_ATTR_DPIPE_TABLE_NAME]);
 
-	return devlink_dpipe_tables_fill(info, DEVLINK_CMD_DPIPE_TABLE_GET, 0,
-					 &devlink->dpipe_table_list,
+	return mlxdevm_dpipe_tables_fill(info, MLXDEVM_CMD_DPIPE_TABLE_GET, 0,
+					 &mlxdevm->dpipe_table_list,
 					 table_name);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static int devlink_dpipe_value_put(struct sk_buff *skb,
 				   struct devlink_dpipe_value *value)
@@ -404,12 +407,11 @@ static int devlink_dpipe_entry_put(struct sk_buff *skb,
 	if (!entry_attr)
 		return  -EMSGSIZE;
 
-	if (nla_put_u64_64bit(skb, DEVLINK_ATTR_DPIPE_ENTRY_INDEX, entry->index,
-			      DEVLINK_ATTR_PAD))
+	if (devlink_nl_put_u64(skb, DEVLINK_ATTR_DPIPE_ENTRY_INDEX, entry->index))
 		goto nla_put_failure;
 	if (entry->counter_valid)
-		if (nla_put_u64_64bit(skb, DEVLINK_ATTR_DPIPE_ENTRY_COUNTER,
-				      entry->counter, DEVLINK_ATTR_PAD))
+		if (devlink_nl_put_u64(skb, DEVLINK_ATTR_DPIPE_ENTRY_COUNTER,
+				       entry->counter))
 			goto nla_put_failure;
 
 	matches_attr = nla_nest_start_noflag(skb,

@@ -1,48 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
 
-Change-Id: Ic16c5ef6bd1876eae52ebbd53e6910745ffe260e
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2018 Mellanox Technologies. */
  
- void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
- {
-+#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
- 	u32 trunc_size = mapped_obj->sample.trunc_size;
- 	struct psample_group psample_group = {};
- 	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
- 	skb_push(skb, skb->mac_len);
- 
- 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
-+#else
-+	u32 trunc_size = mapped_obj->sample.trunc_size;
-+	struct psample_group psample_group = {};
-+	int iif = skb->dev->ifindex;
-+	u32 size;
++#if defined(HAVE_NET_BAREUDP_H) && defined(HAVE_FLOW_DISSECTOR_MPLS_LSE)
 +
-+	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
-+	psample_group.group_num = mapped_obj->sample.group_id;
-+	psample_group.net = &init_net;
-+	skb_push(skb, skb->mac_len);
-+
-+	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
-+#endif
- }
- 
- static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
- 	struct mlx5e_sample_attr *sample_attr;
- 	struct mlx5_flow_attr *pre_attr;
- 	struct mlx5_eswitch *esw;
--	u32 default_tbl_id;
-+	u32 default_tbl_id = 0;
- 	u32 obj_id;
- 	int err;
- 
+ #include <net/bareudp.h>
+ #include <net/mpls.h>
+ #include "en/tc_tun.h"
+@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
+ 	.parse_tunnel         = parse_tunnel,
+ 	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
+ };
++#endif /* HAVE_NET_BAREUDP_H */

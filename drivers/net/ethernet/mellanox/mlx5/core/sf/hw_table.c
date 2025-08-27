@@ -10,6 +10,7 @@
 #include "eswitch.h"
 #include "diag/sf_tracepoint.h"
 #include "devlink.h"
+#include "mlx5_devm.h"
 
 struct mlx5_sf_hw {
 	u32 usr_sfnum;
@@ -247,6 +248,7 @@ static void mlx5_sf_hw_table_hwc_cleanup(struct mlx5_sf_hwc_table *hwc)
 static void mlx5_sf_hw_table_res_unregister(struct mlx5_core_dev *dev)
 {
 	devl_resources_unregister(priv_to_devlink(dev));
+	devm_resources_unregister(&mlx5_devm_device_get(dev)->device);
 }
 
 static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
@@ -254,6 +256,8 @@ static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
 {
 	struct devlink_resource_size_params size_params;
 	struct devlink *devlink = priv_to_devlink(dev);
+	struct mlxdevm_resource_size_params mlxdevm_size_params;
+	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(dev)->device;
 	int err;
 
 	devlink_resource_size_params_init(&size_params, max_fn, max_fn, 1,
@@ -265,9 +269,24 @@ static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
 
 	devlink_resource_size_params_init(&size_params, max_ext_fn, max_ext_fn, 1,
 					  DEVLINK_RESOURCE_UNIT_ENTRY);
-	return devl_resource_register(devlink, "max_external_SFs", max_ext_fn,
+	err = devl_resource_register(devlink, "max_external_SFs", max_ext_fn,
 				      MLX5_DL_RES_MAX_EXTERNAL_SFS, DEVLINK_RESOURCE_ID_PARENT_TOP,
 				      &size_params);
+	if (err)
+		return err;
+
+	mlxdevm_resource_size_params_init(&mlxdevm_size_params, max_fn, max_fn, 1,
+					  MLXDEVM_RESOURCE_UNIT_ENTRY);
+	err = devm_resource_register(mlxdevm, "max_local_SFs", max_fn, MLX5_DEVM_RES_MAX_LOCAL_SFS,
+				     MLXDEVM_RESOURCE_ID_PARENT_TOP, &mlxdevm_size_params);
+	if (err)
+		return err;
+
+	mlxdevm_resource_size_params_init(&mlxdevm_size_params, max_ext_fn, max_ext_fn, 1,
+					  MLXDEVM_RESOURCE_UNIT_ENTRY);
+	return devm_resource_register(mlxdevm, "max_external_SFs", max_ext_fn,
+				      MLX5_DEVM_RES_MAX_EXTERNAL_SFS, MLXDEVM_RESOURCE_ID_PARENT_TOP,
+				      &mlxdevm_size_params);
 }
 
 int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)

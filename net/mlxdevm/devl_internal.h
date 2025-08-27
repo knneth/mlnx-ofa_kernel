@@ -60,6 +60,8 @@ struct mlxdevm {
 	struct rcu_work rwork;
 	struct mlxdevm_rel *rel;
 	struct xarray nested_rels;
+	struct devlink *devlink;
+	bool mlxdevm_flow;
 	char priv[] __aligned(NETDEV_ALIGN);
 };
 
@@ -120,14 +122,14 @@ typedef void mlxdevm_rel_notify_cb_t(struct mlxdevm *mlxdevm, u32 obj_index);
 typedef void mlxdevm_rel_cleanup_cb_t(struct mlxdevm *mlxdevm, u32 obj_index,
 				      u32 rel_index);
 
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_rel_nested_in_clear(u32 rel_index);
 int devlink_rel_nested_in_add(u32 *rel_index, u32 devlink_index,
 			      u32 obj_index, devlink_rel_notify_cb_t *notify_cb,
 			      devlink_rel_cleanup_cb_t *cleanup_cb,
 			      struct devlink *devlink);
-void devlink_rel_nested_in_notify(struct devlink *devlink);
 #endif
+void mlxdevm_rel_nested_in_notify(struct mlxdevm *mlxdevm);
 int mlxdevm_rel_mlxdevm_handle_put(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 				   u32 rel_index, int attrtype,
 				   bool *msg_updated);
@@ -168,7 +170,7 @@ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
 static inline struct mlxdevm_nl_dump_state *
 mlxdevm_dump_state(struct netlink_callback *cb)
 {
-	NL_ASSERT_DUMP_CTX_FITS(struct mlxdevm_nl_dump_state);
+	NL_ASSERT_CTX_FITS(struct mlxdevm_nl_dump_state);
 
 	return (struct mlxdevm_nl_dump_state *)cb->ctx;
 }
@@ -183,11 +185,14 @@ mlxdevm_nl_put_handle(struct sk_buff *msg, struct mlxdevm *mlxdevm)
 	return 0;
 }
 
+static inline int mlxdevm_nl_put_u64(struct sk_buff *msg, int attrtype, u64 val)
+{
+	return nla_put_u64_64bit(msg, attrtype, val, MLXDEVM_ATTR_PAD);
+}
+
 int mlxdevm_nl_put_nested_handle(struct sk_buff *msg, struct net *net,
 				 struct mlxdevm *mlxdevm, int attrtype);
-#if 0
-int devlink_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info);
-#endif
+int mlxdevm_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info);
 
 static inline bool mlxdevm_nl_notify_need(struct mlxdevm *mlxdevm)
 {
@@ -240,7 +245,7 @@ static inline void mlxdevm_nl_notify_send(struct mlxdevm *mlxdevm,
 	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Notify */
 void devlink_notify_register(struct devlink *devlink);
@@ -269,7 +274,7 @@ void devlink_linecards_notify_unregister(struct devlink *devlink);
 
 struct mlxdevm_port *mlxdevm_port_get_by_index(struct mlxdevm *mlxdevm,
 					       unsigned int port_index);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 int devlink_port_netdevice_event(struct notifier_block *nb,
 				 unsigned long event, void *ptr);
 #endif
@@ -277,35 +282,36 @@ struct mlxdevm_port *
 mlxdevm_port_get_from_info(struct mlxdevm *mlxdevm, struct genl_info *info);
 struct mlxdevm_port *mlxdevm_port_get_from_attrs(struct mlxdevm *mlxdevm,
 						 struct nlattr **attrs);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Reload */
 bool devlink_reload_actions_valid(const struct devlink_ops *ops);
-int devlink_reload(struct devlink *devlink, struct net *dest_net,
-		   enum devlink_reload_action action,
-		   enum devlink_reload_limit limit,
-		   u32 *actions_performed, struct netlink_ext_ack *extack);
 #endif
+int mlxdevm_reload(struct mlxdevm *mlxdevm, struct net *dest_net,
+		   enum mlxdevm_reload_action action,
+		   enum mlxdevm_reload_limit limit,
+		   u32 *actions_performed, struct netlink_ext_ack *extack);
 
 static inline bool mlxdevm_reload_supported(const struct mlxdevm_ops *ops)
 {
 	return ops->reload_down && ops->reload_up;
 }
-#if 0
 
 /* Params */
-void devlink_params_driverinit_load_new(struct devlink *devlink);
+void mlxdevm_params_driverinit_load_new(struct mlxdevm *mlxdevm);
 
 /* Resources */
-struct devlink_resource;
-int devlink_resources_validate(struct devlink *devlink,
-			       struct devlink_resource *resource,
+struct mlxdevm_resource;
+int mlxdevm_resources_validate(struct mlxdevm *mlxdevm,
+			       struct mlxdevm_resource *resource,
 			       struct genl_info *info);
 
 /* Rates */
-int devlink_rate_nodes_check(struct devlink *devlink, u16 mode,
+int mlxdevm_rate_nodes_check(struct mlxdevm *mlxdevm, u16 mode,
 			     struct netlink_ext_ack *extack);
-#endif
 
 /* Linecards */
 unsigned int mlxdevm_linecard_index(struct mlxdevm_linecard *linecard);
+
+/* mlxdevm global work queue replacing system_wq*/
+bool mlxdevm_schedule_delayed_work(struct delayed_work *dwork, unsigned long delay);

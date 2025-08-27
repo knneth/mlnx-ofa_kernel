@@ -5,6 +5,7 @@
  */
 #include <net/genetlink.h>
 #include <net/sock.h>
+#include <net/devlink.h>
 
 #include "devl_internal.h"
 
@@ -37,7 +38,7 @@ static void mlxdevm_nl_sock_priv_destroy(void *priv)
 	flt = rcu_dereference_protected(sk_priv->flt, true);
 	kfree_rcu(flt, rcu);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
 				      struct genl_info *info)
@@ -183,9 +184,8 @@ nla_put_failure:
 	nla_nest_cancel(msg, nested_attr);
 	return -EMSGSIZE;
 }
-#if 0
 
-int devlink_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info)
+int mlxdevm_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info)
 {
 	int err;
 
@@ -199,13 +199,13 @@ int devlink_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info)
 		return -ENOMEM;
 	return 0;
 }
-#endif
 
 struct mlxdevm *
 mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
 			    bool dev_lock)
 {
 	struct mlxdevm *mlxdevm;
+	struct devlink *devlink;
 	unsigned long index;
 	char *busname;
 	char *devname;
@@ -219,10 +219,17 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
 	mlxdevms_xa_for_each_registered_get(net, index, mlxdevm) {
 		if (strcmp(mlxdevm->dev->bus->name, busname) == 0 &&
 		    strcmp(dev_name(mlxdevm->dev), devname) == 0) {
+			devlink = mlxdevm->devlink;
+			if (devlink)
+				devl_lock(devlink);
 			devm_dev_lock(mlxdevm, dev_lock);
+			mlxdevm->mlxdevm_flow = true;
 			if (devm_is_registered(mlxdevm))
 				return mlxdevm;
+			mlxdevm->mlxdevm_flow = false;
 			devm_dev_unlock(mlxdevm, dev_lock);
+			if (devlink)
+				devl_unlock(devlink);
 		}
 		mlxdevm_put(mlxdevm);
 	}
@@ -235,6 +242,7 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
 {
 	bool dev_lock = flags & MLXDEVM_NL_FLAG_NEED_DEV_LOCK;
 	struct mlxdevm_port *mlxdevm_port;
+	struct devlink *devlink;
 	struct mlxdevm *mlxdevm;
 	int err;
 
@@ -260,6 +268,9 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
 
 unlock:
 	devm_dev_unlock(mlxdevm, dev_lock);
+	devlink = mlxdevm->devlink;
+	if (devlink)
+		devl_unlock(devlink);
 	mlxdevm_put(mlxdevm);
 	return err;
 }
@@ -275,13 +286,13 @@ int mlxdevm_nl_pre_doit_port(const struct genl_split_ops *ops,
 {
 	return __mlxdevm_nl_pre_doit(skb, info, MLXDEVM_NL_FLAG_NEED_PORT);
 }
-#if 0
 
-int devlink_nl_pre_doit_dev_lock(const struct genl_split_ops *ops,
+int mlxdevm_nl_pre_doit_dev_lock(const struct genl_split_ops *ops,
 				 struct sk_buff *skb, struct genl_info *info)
 {
-	return __devlink_nl_pre_doit(skb, info, DEVLINK_NL_FLAG_NEED_DEV_LOCK);
+	return __mlxdevm_nl_pre_doit(skb, info, MLXDEVM_NL_FLAG_NEED_DEV_LOCK);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
 				      struct sk_buff *skb,
@@ -296,9 +307,14 @@ static void __mlxdevm_nl_post_doit(struct sk_buff *skb, struct genl_info *info,
 {
 	bool dev_lock = flags & MLXDEVM_NL_FLAG_NEED_DEV_LOCK;
 	struct mlxdevm *mlxdevm;
+	struct devlink *devlink;
 
 	mlxdevm = info->user_ptr[0];
+	mlxdevm->mlxdevm_flow = false;
 	devm_dev_unlock(mlxdevm, dev_lock);
+	devlink = mlxdevm->devlink;
+	if (devlink)
+		devl_unlock(devlink);
 	mlxdevm_put(mlxdevm);
 }
 
@@ -307,15 +323,13 @@ void mlxdevm_nl_post_doit(const struct genl_split_ops *ops,
 {
 	__mlxdevm_nl_post_doit(skb, info, 0);
 }
-#if 0
 
 void
-devlink_nl_post_doit_dev_lock(const struct genl_split_ops *ops,
+mlxdevm_nl_post_doit_dev_lock(const struct genl_split_ops *ops,
 			      struct sk_buff *skb, struct genl_info *info)
 {
-	__devlink_nl_post_doit(skb, info, DEVLINK_NL_FLAG_NEED_DEV_LOCK);
+	__mlxdevm_nl_post_doit(skb, info, MLXDEVM_NL_FLAG_NEED_DEV_LOCK);
 }
-#endif
 
 static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
 					 struct netlink_callback *cb, int flags,
@@ -323,6 +337,7 @@ static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
 					 struct nlattr **attrs)
 {
 	struct mlxdevm *mlxdevm;
+	struct devlink *devlink;
 	int err;
 
 	mlxdevm = mlxdevm_get_from_attrs_lock(sock_net(msg->sk), attrs, false);
@@ -331,6 +346,9 @@ static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
 	err = dump_one(msg, mlxdevm, cb, flags | NLM_F_DUMP_FILTERED);
 
 	devm_unlock(mlxdevm);
+	devlink = mlxdevm->devlink;
+	if (devlink)
+		devl_unlock(devlink);
 	mlxdevm_put(mlxdevm);
 
 	if (err != -EMSGSIZE)
@@ -344,10 +362,14 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
 {
 	struct mlxdevm_nl_dump_state *state = mlxdevm_dump_state(cb);
 	struct mlxdevm *mlxdevm;
+	struct devlink *devlink;
 	int err = 0;
 
 	while ((mlxdevm = mlxdevms_xa_find_get(sock_net(msg->sk),
 					       &state->instance))) {
+		devlink = mlxdevm->devlink;
+		if (devlink)
+			devl_lock(devlink);
 		devm_lock(mlxdevm);
 
 		if (devm_is_registered(mlxdevm))
@@ -356,6 +378,8 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
 			err = 0;
 
 		devm_unlock(mlxdevm);
+		if (devlink)
+			devl_unlock(devlink);
 		mlxdevm_put(mlxdevm);
 
 		if (err)

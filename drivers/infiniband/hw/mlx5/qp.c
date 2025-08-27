@@ -3602,7 +3602,7 @@ static int ib_to_mlx5_rate_map(u8 rate)
 	return 0;
 }
 
-int mlx5_ib_rate_to_mlx5(struct mlx5_ib_dev *dev, u8 rate)
+int mlx5r_ib_rate(struct mlx5_ib_dev *dev, u8 rate)
 {
 	u32 stat_rate_support;
 
@@ -3764,7 +3764,7 @@ static int mlx5_set_path(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 		MLX5_SET(ads, path, sl, sl);
 	}
 
-	err = mlx5_ib_rate_to_mlx5(dev, rdma_ah_get_static_rate(ah));
+	err = mlx5r_ib_rate(dev, rdma_ah_get_static_rate(ah));
 	if (err < 0)
 		return err;
 	MLX5_SET(ads, path, stat_rate, err);
@@ -4778,6 +4778,7 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 
 		set_id = mlx5_ib_get_counters_id(dev, attr->port_num - 1);
 		MLX5_SET(dctc, dctc, counter_set_id, set_id);
+
 		qp->port = attr->port_num;
 	} else if (cur_state == IB_QPS_INIT && new_state == IB_QPS_RTR) {
 		struct mlx5_ib_modify_qp_resp resp = {};
@@ -4806,7 +4807,6 @@ static int mlx5_ib_modify_dct(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		MLX5_SET(dctc, dctc, flow_label, attr->ah_attr.grh.flow_label);
 		MLX5_SET(dctc, dctc, mtu, attr->path_mtu);
 		MLX5_SET(dctc, dctc, my_addr_index, attr->ah_attr.grh.sgid_index);
-
 		attr->ah_attr.type = rdma_ah_find_type(&dev->ib_dev, port);
 		if ((attr->ah_attr.type == RDMA_AH_ATTR_TYPE_ROCE) &&
 		    (attr->ah_attr.grh.hop_limit < 2))

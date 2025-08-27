@@ -138,8 +138,6 @@ mlx5e_ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 
 	return true;
 }
-
-__wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb, struct mlx5_cqe64 *cqe);
 #else
 static inline
 void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
@@ -163,11 +161,6 @@ mlx5e_ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 {
 	return false;
 }
-
-static inline __wsum mlx5e_ipsec_offload_handle_rx_csum(struct sk_buff *skb,
-							struct mlx5_cqe64 *cqe)
-{ return 0; }
-
 #endif /* CONFIG_MLX5_EN_IPSEC */
 
 #endif /* __MLX5E_IPSEC_RXTX_H__ */

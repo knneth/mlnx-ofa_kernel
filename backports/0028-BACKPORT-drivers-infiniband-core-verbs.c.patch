@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
+
+---
+ drivers/infiniband/core/verbs.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/infiniband/core/verbs.c
++++ b/drivers/infiniband/core/verbs.c
+@@ -2018,7 +2018,11 @@ int ib_get_eth_speed(struct ib_device *d
+ 				netdev->name, netdev_speed);
+ 	}
+ 
++#ifdef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
+ 	ib_get_width_and_speed(netdev_speed, lksettings.lanes,
++#else
++	ib_get_width_and_speed(netdev_speed, 0,
++#endif
+ 			       speed, width);
+ 
+ 	return 0;

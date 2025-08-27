@@ -1,0 +1,56 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+
+---
+ drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+@@ -97,13 +97,23 @@ out_err:
+ 	return ret;
+ }
+ 
+-static int ipoib_new_child_link(struct net_device *dev,
++static int ipoib_new_child_link(
++#ifndef HAVE_RTNL_NEWLINK_PARAMS
++				struct net *src_net,
++#endif
++				struct net_device *dev,
++#ifdef HAVE_RTNL_NEWLINK_PARAMS
+ 				struct rtnl_newlink_params *params,
++#else
++				struct nlattr *tb[], struct nlattr *data[],
++#endif
+ 				struct netlink_ext_ack *extack)
+ {
++#ifdef HAVE_RTNL_NEWLINK_PARAMS
+ 	struct net *link_net = rtnl_newlink_link_net(params);
+ 	struct nlattr **data = params->data;
+ 	struct nlattr **tb = params->tb;
++#endif
+ 	struct net_device *pdev;
+ 	struct ipoib_dev_priv *ppriv;
+ 	u16 child_pkey;
+@@ -112,7 +122,11 @@ static int ipoib_new_child_link(struct n
+ 	if (!tb[IFLA_LINK])
+ 		return -EINVAL;
+ 
++#ifdef HAVE_RTNL_NEWLINK_PARAMS
+ 	pdev = __dev_get_by_index(link_net, nla_get_u32(tb[IFLA_LINK]));
++#else
++	pdev = __dev_get_by_index(src_net, nla_get_u32(tb[IFLA_LINK]));
++#endif
+ 	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
+ 		return -ENODEV;
+ 
+@@ -170,7 +184,9 @@ static size_t ipoib_get_size(const struc
+ 
+ static struct rtnl_link_ops ipoib_link_ops __read_mostly = {
+ 	.kind		= "ipoib",
++#ifdef HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND
+ 	.netns_refund   = true,
++#endif
+ 	.maxtype	= IFLA_IPOIB_MAX,
+ 	.policy		= ipoib_policy,
+ 	.priv_size	= sizeof(struct ipoib_dev_priv),

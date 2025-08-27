@@ -1,0 +1,148 @@
+From: Oren Sidi <osidi@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+
+Change-Id: I4743a8530e8395b8bac6ca24c972a91c55e03bdc
+---
+ .../net/ethernet/mellanox/mlx5/core/devlink.h | 52 +++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+@@ -23,6 +23,9 @@ enum mlx5_devlink_param_id {
+ 	MLX5_DEVLINK_PARAM_ID_ESW_MULTIPORT,
+ 	MLX5_DEVLINK_PARAM_ID_HAIRPIN_NUM_QUEUES,
+ 	MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE,
++#ifndef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_REMOTE_DEV_RESET
++	MLX5_DEVLINK_PARAM_ID_ENABLE_REMOTE_DEV_RESET,
++#endif
+ };
+ 
+ struct mlx5_trap_ctx {
+@@ -41,6 +44,7 @@ struct mlx5_devlink_trap_event_ctx {
+ 	int err;
+ };
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ struct mlx5_core_dev;
+ void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_buff *skb,
+ 			      struct devlink_port *dl_port);
+@@ -49,53 +53,90 @@ int mlx5_devlink_traps_get_action(struct
+ 				  enum devlink_trap_action *action);
+ int mlx5_devlink_traps_register(struct devlink *devlink);
+ void mlx5_devlink_traps_unregister(struct devlink *devlink);
++#endif
+ 
++#if defined(HAVE_DEVLINK_HAS_INFO_GET) && defined(HAVE_DEVLINK_INFO_VERSION_FIXED_PUT)
+ int mlx5_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
+ 			  struct netlink_ext_ack *extack);
++#endif
++#ifdef HAVE_DEVLINK_HAS_FLASH_UPDATE
+ int mlx5_devlink_flash_update(struct devlink *devlink,
++#ifdef HAVE_FLASH_UPDATE_GET_3_PARAMS
+ 			      struct devlink_flash_update_params *params,
++#else
++			      const char *file_name,
++			      const char *component,
++#endif
+ 			      struct netlink_ext_ack *extack);
++#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
+ int mlx5_devlink_reload_down(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
+ 			     bool netns_change,
+                              enum devlink_reload_action action,
+                              enum devlink_reload_limit limit,
++#elif defined(HAVE_DEVLINK_RELOAD_DOWN_HAS_3_PARAMS)
++			     bool netns_change,
++#endif
+                              struct netlink_ext_ack *extack);
+ int mlx5_devlink_reload_up(struct devlink *devlink,
++#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
+ 			   enum devlink_reload_action action,
+                            enum devlink_reload_limit limit, u32 *actions_performed,
++#endif
+                            struct netlink_ext_ack *extack);
++#endif
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_trap *trap,
+ 			   void *trap_ctx);
+ void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink_trap *trap,
+ 			    void *trap_ctx);
+ int mlx5_devlink_trap_action_set(struct devlink *devlink,
+ 				 const struct devlink_trap *trap,
++#ifdef HAVE_DEVLINK_TRAP_ACTION_SET_4_ARGS
+ 				 enum devlink_trap_action action,
+ 				 struct netlink_ext_ack *extack);
++#else
++				 enum devlink_trap_action action);
++#endif
++#endif
+ 
+ struct devlink *mlx5_devlink_alloc(struct device *dev);
+ void mlx5_devlink_free(struct devlink *devlink);
++#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
+ int mlx5_devlink_params_register(struct devlink *devlink);
++#else
++int mlx5_devlink_params_register(struct devlink *devlink, struct device *pdev);
++#endif
+ void mlx5_devlink_params_unregister(struct devlink *devlink);
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ROCE
+ int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
+ 				      union devlink_param_value val,
+ 				      struct netlink_ext_ack *extack);
++#endif
+ #ifdef CONFIG_MLX5_ESWITCH
+ int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
+ 					  union devlink_param_value val,
+ 					  struct netlink_ext_ack *extack);
+ #endif
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+ int mlx5_devlink_eq_depth_validate(struct devlink *devlink, u32 id,
+ 				   union devlink_param_value val,
+ 				   struct netlink_ext_ack *extack);
++#endif
+ int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
+ 					    struct devlink_param_gset_ctx *ctx,
+ 					    struct netlink_ext_ack *extack);
++#else
++					    struct devlink_param_gset_ctx *ctx);
++#endif
+ int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 id,
+ 					    struct devlink_param_gset_ctx *ctx);
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
+ int mlx5_devlink_hairpin_num_queues_validate(struct devlink *devlink, u32 id,
+ 					     union devlink_param_value val,
+ 					     struct netlink_ext_ack *extack);
+@@ -108,17 +149,28 @@ int mlx5_devlink_enable_rdma_validate(st
+ int mlx5_devlink_max_uc_list_validate(struct devlink *devlink, u32 id,
+ 				      union devlink_param_value val,
+ 				      struct netlink_ext_ack *extack);
++#endif
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH
+ static inline bool mlx5_core_is_eth_enabled(struct mlx5_core_dev *dev)
+ {
++#if defined(HAVE_DEVLINK_PARAM_REGISTER) || defined(HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET)
+ 	union devlink_param_value val;
+ 	int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	err = devl_param_driverinit_value_get(priv_to_devlink(dev),
++#else
++	err = devlink_param_driverinit_value_get(priv_to_devlink(dev),
++#endif
+ 					      DEVLINK_PARAM_GENERIC_ID_ENABLE_ETH,
+ 					      &val);
+ 	return err ? false : val.vbool;
++#else
++	return true;
++#endif
+ }
++#endif
+ 
+ int
+ mlx5_devlink_ct_labels_mapping_set(struct devlink *devlink, u32 id,

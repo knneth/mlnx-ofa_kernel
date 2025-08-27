@@ -10,10 +10,11 @@
  * (at your option) any later version.
  */
 
-#ifndef _COMPAT_UAPI_LINUX_MLXDEVM_H
-#define _COMPAT_UAPI_LINUX_MLXDEVM_H
+#ifndef _UAPI_LINUX_MLXDEVM_H_
+#define _UAPI_LINUX_MLXDEVM_H_
 
 #include "../../../compat/config.h"
+
 #include <linux/const.h>
 
 #define MLXDEVM_GENL_NAME "mlxdevm"
@@ -176,7 +177,7 @@ enum mlxdevm_sb_threshold_type {
 	MLXDEVM_SB_THRESHOLD_TYPE_STATIC,
 	MLXDEVM_SB_THRESHOLD_TYPE_DYNAMIC,
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #define DEVLINK_SB_THRESHOLD_TO_ALPHA_MAX 20
 
@@ -238,7 +239,7 @@ enum mlxdevm_param_cmode {
 	__MLXDEVM_PARAM_CMODE_MAX,
 	MLXDEVM_PARAM_CMODE_MAX = __MLXDEVM_PARAM_CMODE_MAX - 1
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 enum devlink_param_fw_load_policy_value {
 	DEVLINK_PARAM_FW_LOAD_POLICY_VALUE_DRIVER,
@@ -253,15 +254,17 @@ enum devlink_param_reset_dev_on_drv_probe_value {
 	DEVLINK_PARAM_RESET_DEV_ON_DRV_PROBE_VALUE_NEVER,
 	DEVLINK_PARAM_RESET_DEV_ON_DRV_PROBE_VALUE_DISK,
 };
+#endif
 
 enum {
-	DEVLINK_ATTR_STATS_RX_PACKETS,		/* u64 */
-	DEVLINK_ATTR_STATS_RX_BYTES,		/* u64 */
-	DEVLINK_ATTR_STATS_RX_DROPPED,		/* u64 */
+	MLXDEVM_ATTR_STATS_RX_PACKETS,		/* u64 */
+	MLXDEVM_ATTR_STATS_RX_BYTES,		/* u64 */
+	MLXDEVM_ATTR_STATS_RX_DROPPED,		/* u64 */
 
-	__DEVLINK_ATTR_STATS_MAX,
-	DEVLINK_ATTR_STATS_MAX = __DEVLINK_ATTR_STATS_MAX - 1
+	__MLXDEVM_ATTR_STATS_MAX,
+	MLXDEVM_ATTR_STATS_MAX = __MLXDEVM_ATTR_STATS_MAX - 1
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Specify what sections of a flash component can be overwritten when
  * performing an update. Overwriting of firmware binary sections is always
@@ -346,16 +349,14 @@ enum mlxdevm_trap_type {
 	MLXDEVM_TRAP_TYPE_EXCEPTION,
 	MLXDEVM_TRAP_TYPE_CONTROL,
 };
-#if 0
 
 enum {
 	/* Trap can report input port as metadata */
-	DEVLINK_ATTR_TRAP_METADATA_TYPE_IN_PORT,
+	MLXDEVM_ATTR_TRAP_METADATA_TYPE_IN_PORT,
 	/* Trap can report flow action cookie as metadata */
-	DEVLINK_ATTR_TRAP_METADATA_TYPE_FA_COOKIE,
+	MLXDEVM_ATTR_TRAP_METADATA_TYPE_FA_COOKIE,
 };
 
-#endif
 enum mlxdevm_reload_action {
 	MLXDEVM_RELOAD_ACTION_UNSPEC,
 	MLXDEVM_RELOAD_ACTION_DRIVER_REINIT,	/* Driver entities re-instantiation */
@@ -376,7 +377,7 @@ enum mlxdevm_reload_limit {
 	__MLXDEVM_RELOAD_LIMIT_MAX,
 	MLXDEVM_RELOAD_LIMIT_MAX = __MLXDEVM_RELOAD_LIMIT_MAX - 1
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #define DEVLINK_RELOAD_LIMITS_VALID_MASK (_BITUL(__DEVLINK_RELOAD_LIMIT_MAX) - 1)
 #endif
@@ -641,7 +642,7 @@ enum mlxdevm_dpipe_field_mapping_type {
 	MLXDEVM_DPIPE_FIELD_MAPPING_TYPE_NONE,
 	MLXDEVM_DPIPE_FIELD_MAPPING_TYPE_IFINDEX,
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Match type - specify the type of the match */
 enum devlink_dpipe_match_type {
@@ -670,11 +671,11 @@ enum devlink_dpipe_header_id {
 	DEVLINK_DPIPE_HEADER_IPV4,
 	DEVLINK_DPIPE_HEADER_IPV6,
 };
-
-enum devlink_resource_unit {
-	DEVLINK_RESOURCE_UNIT_ENTRY,
-};
 #endif
+
+enum mlxdevm_resource_unit {
+	MLXDEVM_RESOURCE_UNIT_ENTRY,
+};
 
 enum mlxdevm_port_fn_attr_cap {
 	MLXDEVM_PORT_FN_ATTR_CAP_ROCE_BIT,
@@ -725,4 +726,4 @@ enum mlxdevm_port_fn_opstate {
 	MLXDEVM_PORT_FN_OPSTATE_ATTACHED,
 };
 
-#endif /* _COMPAT_UAPI_LINUX_MLXDEVM_H */
+#endif /* _UAPI_LINUX_DEVLINK_H_ */

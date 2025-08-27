@@ -209,15 +209,12 @@ struct mlx5e_sw_stats {
 	u64 rx_arfs_err;
 #endif
 	u64 rx_recover;
-	u64 rx_pet_hdr_lookup_drop;
-	u64 rx_pet_mdata_lookup_drop;
 	u64 ch_events;
 	u64 ch_poll;
 	u64 ch_arm;
 	u64 ch_aff_change;
 	u64 ch_force_irq;
 	u64 ch_eq_rearm;
-#ifdef CONFIG_PAGE_POOL_STATS
 	u64 rx_pp_alloc_fast;
 	u64 rx_pp_alloc_slow;
 	u64 rx_pp_alloc_slow_high_order;
@@ -229,7 +226,6 @@ struct mlx5e_sw_stats {
 	u64 rx_pp_recycle_ring;
 	u64 rx_pp_recycle_ring_full;
 	u64 rx_pp_recycle_released_ref;
-#endif
 #ifdef CONFIG_MLX5_EN_TLS
 	u64 tx_tls_encrypted_packets;
 	u64 tx_tls_encrypted_bytes;
@@ -311,6 +307,9 @@ struct mlx5e_vport_stats {
 #define PPORT_PHY_STATISTICAL_GET(pstats, c) \
 	MLX5_GET64(ppcnt_reg, (pstats)->phy_statistical_counters, \
 		   counter_set.phys_layer_statistical_cntrs.c##_high)
+#define PPORT_PHY_RECOVERY_GET(pstats, c) \
+	MLX5_GET64(ppcnt_reg, (pstats)->phy_recovery_counters, \
+		   counter_set.phys_layer_recovery_cntrs.c)
 #define PPORT_PER_PRIO_GET(pstats, prio, c) \
 	MLX5_GET64(ppcnt_reg, pstats->per_prio_counters[prio], \
 		   counter_set.eth_per_prio_grp_data_layout.c##_high)
@@ -326,6 +325,7 @@ struct mlx5e_pport_stats {
 	__be64 per_prio_counters[NUM_PPORT_PRIO][MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 phy_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 phy_statistical_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
+	__be64 phy_recovery_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 eth_ext_counters[MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 per_tc_prio_counters[NUM_PPORT_PRIO][MLX5_ST_SZ_QW(ppcnt_reg)];
 	__be64 per_tc_congest_prio_counters[NUM_PPORT_PRIO][MLX5_ST_SZ_QW(ppcnt_reg)];
@@ -383,9 +383,6 @@ struct mlx5e_rq_stats {
 	u64 arfs_err;
 #endif
 	u64 recover;
-	u64 pet_hdr_lookup_drop;
-	u64 pet_mdata_lookup_drop;
-#ifdef CONFIG_PAGE_POOL_STATS
 	u64 pp_alloc_fast;
 	u64 pp_alloc_slow;
 	u64 pp_alloc_slow_high_order;
@@ -397,7 +394,6 @@ struct mlx5e_rq_stats {
 	u64 pp_recycle_ring;
 	u64 pp_recycle_ring_full;
 	u64 pp_recycle_released_ref;
-#endif
 #ifdef CONFIG_MLX5_EN_TLS
 	u64 tls_decrypted_packets;
 	u64 tls_decrypted_bytes;

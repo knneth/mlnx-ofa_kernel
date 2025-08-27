@@ -32,6 +32,12 @@
 #include <linux/refcount.h>
 #include <linux/user_namespace.h>
 
+/*
+ * Work around for packaging build issues
+ *
+ * During package build, config vars passed via make command line
+ * arguments are silently ignored, so hardcode them here.
+*/
 #undef CONFIG_FUSE_DAX
 #undef CONFIG_FUSE_PASSTHROUGH
 #define CONFIG_VIRTIO_FS 1

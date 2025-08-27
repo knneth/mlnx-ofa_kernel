@@ -4,8 +4,8 @@
  * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
-#ifndef _COMPAT_NET_MLXDEVM_H
-#define _COMPAT_NET_MLXDEVM_H
+#ifndef _NET_MLXDEVM_H_
+#define _NET_MLXDEVM_H_
 
 #include "../../compat/config.h"
 
@@ -22,11 +22,8 @@
 #include <uapi/linux/mlxdevm.h>
 #include <linux/xarray.h>
 #include <linux/firmware.h>
-#ifdef HAVE_BASECODE_EXTRAS
-#include <linux/dcbnl.h>
-#endif
 
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 struct devlink;
 struct devlink_linecard;
 #endif
@@ -42,7 +39,7 @@ struct mlxdevm_port_phys_attrs {
 /**
  * struct mlxdevm_port_pci_pf_attrs - mlxdevm port's PCI PF attributes
  * @controller: Associated controller number
- * @pf: Associated PCI PF number for this port.
+ * @pf: associated PCI function number for the devlink port instance
  * @external: when set, indicates if a port is for an external controller
  */
 struct mlxdevm_port_pci_pf_attrs {
@@ -54,8 +51,9 @@ struct mlxdevm_port_pci_pf_attrs {
 /**
  * struct mlxdevm_port_pci_vf_attrs - mlxdevm port's PCI VF attributes
  * @controller: Associated controller number
- * @pf: Associated PCI PF number for this port.
- * @vf: Associated PCI VF for of the PCI PF for this port.
+ * @pf: associated PCI function number for the mlxdevm port instance
+ * @vf: associated PCI VF number of a PF for the mlxdevm port instance;
+ *	VF number starts from 0 for the first PCI virtual function
  * @external: when set, indicates if a port is for an external controller
  */
 struct mlxdevm_port_pci_vf_attrs {
@@ -68,8 +66,8 @@ struct mlxdevm_port_pci_vf_attrs {
 /**
  * struct mlxdevm_port_pci_sf_attrs - mlxdevm port's PCI SF attributes
  * @controller: Associated controller number
- * @sf: Associated PCI SF for of the PCI PF for this port.
- * @pf: Associated PCI PF number for this port.
+ * @sf: associated SF number of a PF for the mlxdevm port instance
+ * @pf: associated PCI function number for the mlxdevm port instance
  * @external: when set, indicates if a port is for an external controller
  */
 struct mlxdevm_port_pci_sf_attrs {
@@ -248,7 +246,7 @@ struct mlxdevm_dpipe_header {
 	unsigned int fields_count;
 	bool global;
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /**
  * struct devlink_dpipe_match - represents match operation
  * @type: type of match
@@ -321,28 +319,29 @@ struct devlink_dpipe_entry {
 	u64 counter;
 	bool counter_valid;
 };
+#endif
 
 /**
- * struct devlink_dpipe_dump_ctx - context provided to driver in order
+ * struct mlxdevm_dpipe_dump_ctx - context provided to driver in order
  *				   to dump
  * @info: info
- * @cmd: devlink command
+ * @cmd: mlxdevm command
  * @skb: skb
  * @nest: top attribute
  * @hdr: hdr
  */
-struct devlink_dpipe_dump_ctx {
+struct mlxdevm_dpipe_dump_ctx {
 	struct genl_info *info;
-	enum devlink_command cmd;
+	enum mlxdevm_command cmd;
 	struct sk_buff *skb;
 	struct nlattr *nest;
 	void *hdr;
 };
 
-struct devlink_dpipe_table_ops;
+struct mlxdevm_dpipe_table_ops;
 
 /**
- * struct devlink_dpipe_table - table object
+ * struct mlxdevm_dpipe_table - table object
  * @priv: private
  * @name: table name
  * @counters_enabled: indicates if counters are active
@@ -354,7 +353,7 @@ struct devlink_dpipe_table_ops;
  * @table_ops: table operations
  * @rcu: rcu
  */
-struct devlink_dpipe_table {
+struct mlxdevm_dpipe_table {
 	void *priv;
 	/* private: */
 	struct list_head list;
@@ -365,12 +364,12 @@ struct devlink_dpipe_table {
 	bool resource_valid;
 	u64 resource_id;
 	u64 resource_units;
-	const struct devlink_dpipe_table_ops *table_ops;
+	const struct mlxdevm_dpipe_table_ops *table_ops;
 	struct rcu_head rcu;
 };
 
 /**
- * struct devlink_dpipe_table_ops - dpipe_table ops
+ * struct mlxdevm_dpipe_table_ops - dpipe_table ops
  * @actions_dump: dumps all tables actions
  * @matches_dump: dumps all tables matches
  * @entries_dump: dumps all active entries in the table
@@ -379,15 +378,14 @@ struct devlink_dpipe_table {
  *			  resources
  * @size_get: get size
  */
-struct devlink_dpipe_table_ops {
+struct mlxdevm_dpipe_table_ops {
 	int (*actions_dump)(void *priv, struct sk_buff *skb);
 	int (*matches_dump)(void *priv, struct sk_buff *skb);
 	int (*entries_dump)(void *priv, bool counters_enabled,
-			    struct devlink_dpipe_dump_ctx *dump_ctx);
+			    struct mlxdevm_dpipe_dump_ctx *dump_ctx);
 	int (*counters_set_update)(void *priv, bool enable);
 	u64 (*size_get)(void *priv);
 };
-#endif
 
 /**
  * struct mlxdevm_dpipe_headers - dpipe headers
@@ -398,27 +396,26 @@ struct mlxdevm_dpipe_headers {
 	struct mlxdevm_dpipe_header **headers;
 	unsigned int headers_count;
 };
-#if 0
 
 /**
- * struct devlink_resource_size_params - resource's size parameters
+ * struct mlxdevm_resource_size_params - resource's size parameters
  * @size_min: minimum size which can be set
  * @size_max: maximum size which can be set
  * @size_granularity: size granularity
  * @unit: resource's basic unit
  */
-struct devlink_resource_size_params {
+struct mlxdevm_resource_size_params {
 	u64 size_min;
 	u64 size_max;
 	u64 size_granularity;
-	enum devlink_resource_unit unit;
+	enum mlxdevm_resource_unit unit;
 };
 
 static inline void
-devlink_resource_size_params_init(struct devlink_resource_size_params *size_params,
+mlxdevm_resource_size_params_init(struct mlxdevm_resource_size_params *size_params,
 				  u64 size_min, u64 size_max,
 				  u64 size_granularity,
-				  enum devlink_resource_unit unit)
+				  enum mlxdevm_resource_unit unit)
 {
 	size_params->size_min = size_min;
 	size_params->size_max = size_max;
@@ -426,9 +423,10 @@ devlink_resource_size_params_init(struct devlink_resource_size_params *size_para
 	size_params->unit = unit;
 }
 
-typedef u64 devlink_resource_occ_get_t(void *priv);
+typedef u64 mlxdevm_resource_occ_get_t(void *priv);
 
-#define DEVLINK_RESOURCE_ID_PARENT_TOP 0
+#define MLXDEVM_RESOURCE_ID_PARENT_TOP 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #define DEVLINK_RESOURCE_GENERIC_NAME_PORTS "physical_ports"
 
@@ -463,10 +461,9 @@ struct mlxdevm_param_gset_ctx {
 	union mlxdevm_param_value val;
 	enum mlxdevm_param_cmode cmode;
 };
-#if 0
 
 /**
- * struct devlink_flash_notify - devlink dev flash notify data
+ * struct mlxdevm_flash_notify - mlxdevm dev flash notify data
  * @status_msg: current status string
  * @component: firmware component being updated
  * @done: amount of work completed of total amount
@@ -476,14 +473,13 @@ struct mlxdevm_param_gset_ctx {
  * These are values to be given to userland to be displayed in order
  * to show current activity in a firmware update process.
  */
-struct devlink_flash_notify {
+struct mlxdevm_flash_notify {
 	const char *status_msg;
 	const char *component;
 	unsigned long done;
 	unsigned long total;
 	unsigned long timeout;
 };
-#endif
 
 /**
  * struct mlxdevm_param - mlxdevm configuration parameter data
@@ -603,20 +599,18 @@ enum mlxdevm_param_generic_id {
 
 #define MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_NAME "event_eq_size"
 #define MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_TYPE MLXDEVM_PARAM_TYPE_U32
-#if 0
 
-#define DEVLINK_PARAM_GENERIC(_id, _cmodes, _get, _set, _validate)	\
+#define MLXDEVM_PARAM_GENERIC(_id, _cmodes, _get, _set, _validate)	\
 {									\
-	.id = DEVLINK_PARAM_GENERIC_ID_##_id,				\
-	.name = DEVLINK_PARAM_GENERIC_##_id##_NAME,			\
-	.type = DEVLINK_PARAM_GENERIC_##_id##_TYPE,			\
+	.id = MLXDEVM_PARAM_GENERIC_ID_##_id,				\
+	.name = MLXDEVM_PARAM_GENERIC_##_id##_NAME,			\
+	.type = MLXDEVM_PARAM_GENERIC_##_id##_TYPE,			\
 	.generic = true,						\
 	.supported_cmodes = _cmodes,					\
 	.get = _get,							\
 	.set = _set,							\
 	.validate = _validate,						\
 }
-#endif
 
 #define MLXDEVM_PARAM_DRIVER(_id, _name, _type, _cmodes, _get, _set, _validate)	\
 {									\
@@ -628,7 +622,7 @@ enum mlxdevm_param_generic_id {
 	.set = _set,							\
 	.validate = _validate,						\
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* Identifier of board design */
 #define DEVLINK_INFO_VERSION_GENERIC_BOARD_ID	"board.id"
 /* Revision of board design */
@@ -680,14 +674,14 @@ struct mlxdevm_flash_update_params {
 	const char *component;
 	u32 overwrite_mask;
 };
-#if 0
 
-#define DEVLINK_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK	BIT(0)
+#define MLXDEVM_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK	BIT(0)
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 struct devlink_region;
 #endif
 struct mlxdevm_info_req;
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  * struct devlink_region_ops - Region operations
@@ -838,11 +832,9 @@ struct mlxdevm_trap_group {
 	bool generic;
 	u32 init_policer_id;
 };
-#if 0
 
-#define DEVLINK_TRAP_METADATA_TYPE_F_IN_PORT	BIT(0)
-#define DEVLINK_TRAP_METADATA_TYPE_F_FA_COOKIE	BIT(1)
-#endif
+#define MLXDEVM_TRAP_METADATA_TYPE_F_IN_PORT	BIT(0)
+#define MLXDEVM_TRAP_METADATA_TYPE_F_FA_COOKIE	BIT(1)
 
 /**
  * struct mlxdevm_trap - Immutable packet trap attributes.
@@ -866,393 +858,393 @@ struct mlxdevm_trap {
 	u16 init_group_id;
 	u32 metadata_cap;
 };
-#if 0
 
 /* All traps must be documented in
- * Documentation/networking/devlink/devlink-trap.rst
+ * Documentation/networking/mlxdevm/mlxdevm-trap.rst
  */
-enum devlink_trap_generic_id {
-	DEVLINK_TRAP_GENERIC_ID_SMAC_MC,
-	DEVLINK_TRAP_GENERIC_ID_VLAN_TAG_MISMATCH,
-	DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
-	DEVLINK_TRAP_GENERIC_ID_INGRESS_STP_FILTER,
-	DEVLINK_TRAP_GENERIC_ID_EMPTY_TX_LIST,
-	DEVLINK_TRAP_GENERIC_ID_PORT_LOOPBACK_FILTER,
-	DEVLINK_TRAP_GENERIC_ID_BLACKHOLE_ROUTE,
-	DEVLINK_TRAP_GENERIC_ID_TTL_ERROR,
-	DEVLINK_TRAP_GENERIC_ID_TAIL_DROP,
-	DEVLINK_TRAP_GENERIC_ID_NON_IP_PACKET,
-	DEVLINK_TRAP_GENERIC_ID_UC_DIP_MC_DMAC,
-	DEVLINK_TRAP_GENERIC_ID_DIP_LB,
-	DEVLINK_TRAP_GENERIC_ID_SIP_MC,
-	DEVLINK_TRAP_GENERIC_ID_SIP_LB,
-	DEVLINK_TRAP_GENERIC_ID_CORRUPTED_IP_HDR,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_SIP_BC,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_MC_DIP_RESERVED_SCOPE,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_MC_DIP_INTERFACE_LOCAL_SCOPE,
-	DEVLINK_TRAP_GENERIC_ID_MTU_ERROR,
-	DEVLINK_TRAP_GENERIC_ID_UNRESOLVED_NEIGH,
-	DEVLINK_TRAP_GENERIC_ID_RPF,
-	DEVLINK_TRAP_GENERIC_ID_REJECT_ROUTE,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_LPM_UNICAST_MISS,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_LPM_UNICAST_MISS,
-	DEVLINK_TRAP_GENERIC_ID_NON_ROUTABLE,
-	DEVLINK_TRAP_GENERIC_ID_DECAP_ERROR,
-	DEVLINK_TRAP_GENERIC_ID_OVERLAY_SMAC_MC,
-	DEVLINK_TRAP_GENERIC_ID_INGRESS_FLOW_ACTION_DROP,
-	DEVLINK_TRAP_GENERIC_ID_EGRESS_FLOW_ACTION_DROP,
-	DEVLINK_TRAP_GENERIC_ID_STP,
-	DEVLINK_TRAP_GENERIC_ID_LACP,
-	DEVLINK_TRAP_GENERIC_ID_LLDP,
-	DEVLINK_TRAP_GENERIC_ID_IGMP_QUERY,
-	DEVLINK_TRAP_GENERIC_ID_IGMP_V1_REPORT,
-	DEVLINK_TRAP_GENERIC_ID_IGMP_V2_REPORT,
-	DEVLINK_TRAP_GENERIC_ID_IGMP_V3_REPORT,
-	DEVLINK_TRAP_GENERIC_ID_IGMP_V2_LEAVE,
-	DEVLINK_TRAP_GENERIC_ID_MLD_QUERY,
-	DEVLINK_TRAP_GENERIC_ID_MLD_V1_REPORT,
-	DEVLINK_TRAP_GENERIC_ID_MLD_V2_REPORT,
-	DEVLINK_TRAP_GENERIC_ID_MLD_V1_DONE,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_DHCP,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_DHCP,
-	DEVLINK_TRAP_GENERIC_ID_ARP_REQUEST,
-	DEVLINK_TRAP_GENERIC_ID_ARP_RESPONSE,
-	DEVLINK_TRAP_GENERIC_ID_ARP_OVERLAY,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_NEIGH_SOLICIT,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_NEIGH_ADVERT,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_BFD,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_BFD,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_OSPF,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_OSPF,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_BGP,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_BGP,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_VRRP,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_VRRP,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_PIM,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_PIM,
-	DEVLINK_TRAP_GENERIC_ID_UC_LB,
-	DEVLINK_TRAP_GENERIC_ID_LOCAL_ROUTE,
-	DEVLINK_TRAP_GENERIC_ID_EXTERNAL_ROUTE,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_UC_DIP_LINK_LOCAL_SCOPE,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_DIP_ALL_NODES,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_DIP_ALL_ROUTERS,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_ROUTER_SOLICIT,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_ROUTER_ADVERT,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_REDIRECT,
-	DEVLINK_TRAP_GENERIC_ID_IPV4_ROUTER_ALERT,
-	DEVLINK_TRAP_GENERIC_ID_IPV6_ROUTER_ALERT,
-	DEVLINK_TRAP_GENERIC_ID_PTP_EVENT,
-	DEVLINK_TRAP_GENERIC_ID_PTP_GENERAL,
-	DEVLINK_TRAP_GENERIC_ID_FLOW_ACTION_SAMPLE,
-	DEVLINK_TRAP_GENERIC_ID_FLOW_ACTION_TRAP,
-	DEVLINK_TRAP_GENERIC_ID_EARLY_DROP,
-	DEVLINK_TRAP_GENERIC_ID_VXLAN_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_LLC_SNAP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_VLAN_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_PPPOE_PPP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_MPLS_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_ARP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_IP_1_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_IP_N_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_GRE_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_UDP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_TCP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_IPSEC_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_SCTP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_DCCP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_GTP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_ESP_PARSING,
-	DEVLINK_TRAP_GENERIC_ID_BLACKHOLE_NEXTHOP,
-	DEVLINK_TRAP_GENERIC_ID_DMAC_FILTER,
-	DEVLINK_TRAP_GENERIC_ID_EAPOL,
-	DEVLINK_TRAP_GENERIC_ID_LOCKED_PORT,
+enum mlxdevm_trap_generic_id {
+	MLXDEVM_TRAP_GENERIC_ID_SMAC_MC,
+	MLXDEVM_TRAP_GENERIC_ID_VLAN_TAG_MISMATCH,
+	MLXDEVM_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
+	MLXDEVM_TRAP_GENERIC_ID_INGRESS_STP_FILTER,
+	MLXDEVM_TRAP_GENERIC_ID_EMPTY_TX_LIST,
+	MLXDEVM_TRAP_GENERIC_ID_PORT_LOOPBACK_FILTER,
+	MLXDEVM_TRAP_GENERIC_ID_BLACKHOLE_ROUTE,
+	MLXDEVM_TRAP_GENERIC_ID_TTL_ERROR,
+	MLXDEVM_TRAP_GENERIC_ID_TAIL_DROP,
+	MLXDEVM_TRAP_GENERIC_ID_NON_IP_PACKET,
+	MLXDEVM_TRAP_GENERIC_ID_UC_DIP_MC_DMAC,
+	MLXDEVM_TRAP_GENERIC_ID_DIP_LB,
+	MLXDEVM_TRAP_GENERIC_ID_SIP_MC,
+	MLXDEVM_TRAP_GENERIC_ID_SIP_LB,
+	MLXDEVM_TRAP_GENERIC_ID_CORRUPTED_IP_HDR,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_SIP_BC,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_MC_DIP_RESERVED_SCOPE,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_MC_DIP_INTERFACE_LOCAL_SCOPE,
+	MLXDEVM_TRAP_GENERIC_ID_MTU_ERROR,
+	MLXDEVM_TRAP_GENERIC_ID_UNRESOLVED_NEIGH,
+	MLXDEVM_TRAP_GENERIC_ID_RPF,
+	MLXDEVM_TRAP_GENERIC_ID_REJECT_ROUTE,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_LPM_UNICAST_MISS,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_LPM_UNICAST_MISS,
+	MLXDEVM_TRAP_GENERIC_ID_NON_ROUTABLE,
+	MLXDEVM_TRAP_GENERIC_ID_DECAP_ERROR,
+	MLXDEVM_TRAP_GENERIC_ID_OVERLAY_SMAC_MC,
+	MLXDEVM_TRAP_GENERIC_ID_INGRESS_FLOW_ACTION_DROP,
+	MLXDEVM_TRAP_GENERIC_ID_EGRESS_FLOW_ACTION_DROP,
+	MLXDEVM_TRAP_GENERIC_ID_STP,
+	MLXDEVM_TRAP_GENERIC_ID_LACP,
+	MLXDEVM_TRAP_GENERIC_ID_LLDP,
+	MLXDEVM_TRAP_GENERIC_ID_IGMP_QUERY,
+	MLXDEVM_TRAP_GENERIC_ID_IGMP_V1_REPORT,
+	MLXDEVM_TRAP_GENERIC_ID_IGMP_V2_REPORT,
+	MLXDEVM_TRAP_GENERIC_ID_IGMP_V3_REPORT,
+	MLXDEVM_TRAP_GENERIC_ID_IGMP_V2_LEAVE,
+	MLXDEVM_TRAP_GENERIC_ID_MLD_QUERY,
+	MLXDEVM_TRAP_GENERIC_ID_MLD_V1_REPORT,
+	MLXDEVM_TRAP_GENERIC_ID_MLD_V2_REPORT,
+	MLXDEVM_TRAP_GENERIC_ID_MLD_V1_DONE,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_DHCP,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_DHCP,
+	MLXDEVM_TRAP_GENERIC_ID_ARP_REQUEST,
+	MLXDEVM_TRAP_GENERIC_ID_ARP_RESPONSE,
+	MLXDEVM_TRAP_GENERIC_ID_ARP_OVERLAY,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_NEIGH_SOLICIT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_NEIGH_ADVERT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_BFD,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_BFD,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_OSPF,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_OSPF,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_BGP,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_BGP,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_VRRP,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_VRRP,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_PIM,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_PIM,
+	MLXDEVM_TRAP_GENERIC_ID_UC_LB,
+	MLXDEVM_TRAP_GENERIC_ID_LOCAL_ROUTE,
+	MLXDEVM_TRAP_GENERIC_ID_EXTERNAL_ROUTE,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_UC_DIP_LINK_LOCAL_SCOPE,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_DIP_ALL_NODES,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_DIP_ALL_ROUTERS,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_ROUTER_SOLICIT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_ROUTER_ADVERT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_REDIRECT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV4_ROUTER_ALERT,
+	MLXDEVM_TRAP_GENERIC_ID_IPV6_ROUTER_ALERT,
+	MLXDEVM_TRAP_GENERIC_ID_PTP_EVENT,
+	MLXDEVM_TRAP_GENERIC_ID_PTP_GENERAL,
+	MLXDEVM_TRAP_GENERIC_ID_FLOW_ACTION_SAMPLE,
+	MLXDEVM_TRAP_GENERIC_ID_FLOW_ACTION_TRAP,
+	MLXDEVM_TRAP_GENERIC_ID_EARLY_DROP,
+	MLXDEVM_TRAP_GENERIC_ID_VXLAN_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_LLC_SNAP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_VLAN_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_PPPOE_PPP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_MPLS_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_ARP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_IP_1_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_IP_N_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_GRE_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_UDP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_TCP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_IPSEC_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_SCTP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_DCCP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_GTP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_ESP_PARSING,
+	MLXDEVM_TRAP_GENERIC_ID_BLACKHOLE_NEXTHOP,
+	MLXDEVM_TRAP_GENERIC_ID_DMAC_FILTER,
+	MLXDEVM_TRAP_GENERIC_ID_EAPOL,
+	MLXDEVM_TRAP_GENERIC_ID_LOCKED_PORT,
 
 	/* Add new generic trap IDs above */
-	__DEVLINK_TRAP_GENERIC_ID_MAX,
-	DEVLINK_TRAP_GENERIC_ID_MAX = __DEVLINK_TRAP_GENERIC_ID_MAX - 1,
+	__MLXDEVM_TRAP_GENERIC_ID_MAX,
+	MLXDEVM_TRAP_GENERIC_ID_MAX = __MLXDEVM_TRAP_GENERIC_ID_MAX - 1,
 };
 
 /* All trap groups must be documented in
- * Documentation/networking/devlink/devlink-trap.rst
+ * Documentation/networking/mlxdevm/mlxdevm-trap.rst
  */
-enum devlink_trap_group_generic_id {
-	DEVLINK_TRAP_GROUP_GENERIC_ID_L2_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_L3_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_L3_EXCEPTIONS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_BUFFER_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_TUNNEL_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_ACL_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_STP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_LACP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_LLDP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_MC_SNOOPING,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_DHCP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_NEIGH_DISCOVERY,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_BFD,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_OSPF,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_BGP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_VRRP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_PIM,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_UC_LB,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_LOCAL_DELIVERY,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_EXTERNAL_DELIVERY,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_IPV6,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_PTP_EVENT,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_PTP_GENERAL,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_ACL_SAMPLE,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_ACL_TRAP,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_PARSER_ERROR_DROPS,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_EAPOL,
+enum mlxdevm_trap_group_generic_id {
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_L2_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_L3_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_L3_EXCEPTIONS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_BUFFER_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_TUNNEL_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_ACL_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_STP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_LACP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_LLDP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_MC_SNOOPING,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_DHCP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_NEIGH_DISCOVERY,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_BFD,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_OSPF,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_BGP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_VRRP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_PIM,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_UC_LB,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_LOCAL_DELIVERY,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_EXTERNAL_DELIVERY,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_IPV6,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_PTP_EVENT,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_PTP_GENERAL,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_ACL_SAMPLE,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_ACL_TRAP,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_PARSER_ERROR_DROPS,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_EAPOL,
 
 	/* Add new generic trap group IDs above */
-	__DEVLINK_TRAP_GROUP_GENERIC_ID_MAX,
-	DEVLINK_TRAP_GROUP_GENERIC_ID_MAX =
-		__DEVLINK_TRAP_GROUP_GENERIC_ID_MAX - 1,
+	__MLXDEVM_TRAP_GROUP_GENERIC_ID_MAX,
+	MLXDEVM_TRAP_GROUP_GENERIC_ID_MAX =
+		__MLXDEVM_TRAP_GROUP_GENERIC_ID_MAX - 1,
 };
 
-#define DEVLINK_TRAP_GENERIC_NAME_SMAC_MC \
+#define MLXDEVM_TRAP_GENERIC_NAME_SMAC_MC \
 	"source_mac_is_multicast"
-#define DEVLINK_TRAP_GENERIC_NAME_VLAN_TAG_MISMATCH \
+#define MLXDEVM_TRAP_GENERIC_NAME_VLAN_TAG_MISMATCH \
 	"vlan_tag_mismatch"
-#define DEVLINK_TRAP_GENERIC_NAME_INGRESS_VLAN_FILTER \
+#define MLXDEVM_TRAP_GENERIC_NAME_INGRESS_VLAN_FILTER \
 	"ingress_vlan_filter"
-#define DEVLINK_TRAP_GENERIC_NAME_INGRESS_STP_FILTER \
+#define MLXDEVM_TRAP_GENERIC_NAME_INGRESS_STP_FILTER \
 	"ingress_spanning_tree_filter"
-#define DEVLINK_TRAP_GENERIC_NAME_EMPTY_TX_LIST \
+#define MLXDEVM_TRAP_GENERIC_NAME_EMPTY_TX_LIST \
 	"port_list_is_empty"
-#define DEVLINK_TRAP_GENERIC_NAME_PORT_LOOPBACK_FILTER \
+#define MLXDEVM_TRAP_GENERIC_NAME_PORT_LOOPBACK_FILTER \
 	"port_loopback_filter"
-#define DEVLINK_TRAP_GENERIC_NAME_BLACKHOLE_ROUTE \
+#define MLXDEVM_TRAP_GENERIC_NAME_BLACKHOLE_ROUTE \
 	"blackhole_route"
-#define DEVLINK_TRAP_GENERIC_NAME_TTL_ERROR \
+#define MLXDEVM_TRAP_GENERIC_NAME_TTL_ERROR \
 	"ttl_value_is_too_small"
-#define DEVLINK_TRAP_GENERIC_NAME_TAIL_DROP \
+#define MLXDEVM_TRAP_GENERIC_NAME_TAIL_DROP \
 	"tail_drop"
-#define DEVLINK_TRAP_GENERIC_NAME_NON_IP_PACKET \
+#define MLXDEVM_TRAP_GENERIC_NAME_NON_IP_PACKET \
 	"non_ip"
-#define DEVLINK_TRAP_GENERIC_NAME_UC_DIP_MC_DMAC \
+#define MLXDEVM_TRAP_GENERIC_NAME_UC_DIP_MC_DMAC \
 	"uc_dip_over_mc_dmac"
-#define DEVLINK_TRAP_GENERIC_NAME_DIP_LB \
+#define MLXDEVM_TRAP_GENERIC_NAME_DIP_LB \
 	"dip_is_loopback_address"
-#define DEVLINK_TRAP_GENERIC_NAME_SIP_MC \
+#define MLXDEVM_TRAP_GENERIC_NAME_SIP_MC \
 	"sip_is_mc"
-#define DEVLINK_TRAP_GENERIC_NAME_SIP_LB \
+#define MLXDEVM_TRAP_GENERIC_NAME_SIP_LB \
 	"sip_is_loopback_address"
-#define DEVLINK_TRAP_GENERIC_NAME_CORRUPTED_IP_HDR \
+#define MLXDEVM_TRAP_GENERIC_NAME_CORRUPTED_IP_HDR \
 	"ip_header_corrupted"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_SIP_BC \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_SIP_BC \
 	"ipv4_sip_is_limited_bc"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_MC_DIP_RESERVED_SCOPE \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_MC_DIP_RESERVED_SCOPE \
 	"ipv6_mc_dip_reserved_scope"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_MC_DIP_INTERFACE_LOCAL_SCOPE \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_MC_DIP_INTERFACE_LOCAL_SCOPE \
 	"ipv6_mc_dip_interface_local_scope"
-#define DEVLINK_TRAP_GENERIC_NAME_MTU_ERROR \
+#define MLXDEVM_TRAP_GENERIC_NAME_MTU_ERROR \
 	"mtu_value_is_too_small"
-#define DEVLINK_TRAP_GENERIC_NAME_UNRESOLVED_NEIGH \
+#define MLXDEVM_TRAP_GENERIC_NAME_UNRESOLVED_NEIGH \
 	"unresolved_neigh"
-#define DEVLINK_TRAP_GENERIC_NAME_RPF \
+#define MLXDEVM_TRAP_GENERIC_NAME_RPF \
 	"mc_reverse_path_forwarding"
-#define DEVLINK_TRAP_GENERIC_NAME_REJECT_ROUTE \
+#define MLXDEVM_TRAP_GENERIC_NAME_REJECT_ROUTE \
 	"reject_route"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_LPM_UNICAST_MISS \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_LPM_UNICAST_MISS \
 	"ipv4_lpm_miss"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_LPM_UNICAST_MISS \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_LPM_UNICAST_MISS \
 	"ipv6_lpm_miss"
-#define DEVLINK_TRAP_GENERIC_NAME_NON_ROUTABLE \
+#define MLXDEVM_TRAP_GENERIC_NAME_NON_ROUTABLE \
 	"non_routable_packet"
-#define DEVLINK_TRAP_GENERIC_NAME_DECAP_ERROR \
+#define MLXDEVM_TRAP_GENERIC_NAME_DECAP_ERROR \
 	"decap_error"
-#define DEVLINK_TRAP_GENERIC_NAME_OVERLAY_SMAC_MC \
+#define MLXDEVM_TRAP_GENERIC_NAME_OVERLAY_SMAC_MC \
 	"overlay_smac_is_mc"
-#define DEVLINK_TRAP_GENERIC_NAME_INGRESS_FLOW_ACTION_DROP \
+#define MLXDEVM_TRAP_GENERIC_NAME_INGRESS_FLOW_ACTION_DROP \
 	"ingress_flow_action_drop"
-#define DEVLINK_TRAP_GENERIC_NAME_EGRESS_FLOW_ACTION_DROP \
+#define MLXDEVM_TRAP_GENERIC_NAME_EGRESS_FLOW_ACTION_DROP \
 	"egress_flow_action_drop"
-#define DEVLINK_TRAP_GENERIC_NAME_STP \
+#define MLXDEVM_TRAP_GENERIC_NAME_STP \
 	"stp"
-#define DEVLINK_TRAP_GENERIC_NAME_LACP \
+#define MLXDEVM_TRAP_GENERIC_NAME_LACP \
 	"lacp"
-#define DEVLINK_TRAP_GENERIC_NAME_LLDP \
+#define MLXDEVM_TRAP_GENERIC_NAME_LLDP \
 	"lldp"
-#define DEVLINK_TRAP_GENERIC_NAME_IGMP_QUERY \
+#define MLXDEVM_TRAP_GENERIC_NAME_IGMP_QUERY \
 	"igmp_query"
-#define DEVLINK_TRAP_GENERIC_NAME_IGMP_V1_REPORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IGMP_V1_REPORT \
 	"igmp_v1_report"
-#define DEVLINK_TRAP_GENERIC_NAME_IGMP_V2_REPORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IGMP_V2_REPORT \
 	"igmp_v2_report"
-#define DEVLINK_TRAP_GENERIC_NAME_IGMP_V3_REPORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IGMP_V3_REPORT \
 	"igmp_v3_report"
-#define DEVLINK_TRAP_GENERIC_NAME_IGMP_V2_LEAVE \
+#define MLXDEVM_TRAP_GENERIC_NAME_IGMP_V2_LEAVE \
 	"igmp_v2_leave"
-#define DEVLINK_TRAP_GENERIC_NAME_MLD_QUERY \
+#define MLXDEVM_TRAP_GENERIC_NAME_MLD_QUERY \
 	"mld_query"
-#define DEVLINK_TRAP_GENERIC_NAME_MLD_V1_REPORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_MLD_V1_REPORT \
 	"mld_v1_report"
-#define DEVLINK_TRAP_GENERIC_NAME_MLD_V2_REPORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_MLD_V2_REPORT \
 	"mld_v2_report"
-#define DEVLINK_TRAP_GENERIC_NAME_MLD_V1_DONE \
+#define MLXDEVM_TRAP_GENERIC_NAME_MLD_V1_DONE \
 	"mld_v1_done"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_DHCP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_DHCP \
 	"ipv4_dhcp"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_DHCP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_DHCP \
 	"ipv6_dhcp"
-#define DEVLINK_TRAP_GENERIC_NAME_ARP_REQUEST \
+#define MLXDEVM_TRAP_GENERIC_NAME_ARP_REQUEST \
 	"arp_request"
-#define DEVLINK_TRAP_GENERIC_NAME_ARP_RESPONSE \
+#define MLXDEVM_TRAP_GENERIC_NAME_ARP_RESPONSE \
 	"arp_response"
-#define DEVLINK_TRAP_GENERIC_NAME_ARP_OVERLAY \
+#define MLXDEVM_TRAP_GENERIC_NAME_ARP_OVERLAY \
 	"arp_overlay"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_NEIGH_SOLICIT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_NEIGH_SOLICIT \
 	"ipv6_neigh_solicit"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_NEIGH_ADVERT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_NEIGH_ADVERT \
 	"ipv6_neigh_advert"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_BFD \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_BFD \
 	"ipv4_bfd"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_BFD \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_BFD \
 	"ipv6_bfd"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_OSPF \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_OSPF \
 	"ipv4_ospf"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_OSPF \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_OSPF \
 	"ipv6_ospf"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_BGP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_BGP \
 	"ipv4_bgp"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_BGP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_BGP \
 	"ipv6_bgp"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_VRRP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_VRRP \
 	"ipv4_vrrp"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_VRRP \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_VRRP \
 	"ipv6_vrrp"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_PIM \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_PIM \
 	"ipv4_pim"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_PIM \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_PIM \
 	"ipv6_pim"
-#define DEVLINK_TRAP_GENERIC_NAME_UC_LB \
+#define MLXDEVM_TRAP_GENERIC_NAME_UC_LB \
 	"uc_loopback"
-#define DEVLINK_TRAP_GENERIC_NAME_LOCAL_ROUTE \
+#define MLXDEVM_TRAP_GENERIC_NAME_LOCAL_ROUTE \
 	"local_route"
-#define DEVLINK_TRAP_GENERIC_NAME_EXTERNAL_ROUTE \
+#define MLXDEVM_TRAP_GENERIC_NAME_EXTERNAL_ROUTE \
 	"external_route"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_UC_DIP_LINK_LOCAL_SCOPE \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_UC_DIP_LINK_LOCAL_SCOPE \
 	"ipv6_uc_dip_link_local_scope"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_DIP_ALL_NODES \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_DIP_ALL_NODES \
 	"ipv6_dip_all_nodes"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_DIP_ALL_ROUTERS \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_DIP_ALL_ROUTERS \
 	"ipv6_dip_all_routers"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_ROUTER_SOLICIT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_ROUTER_SOLICIT \
 	"ipv6_router_solicit"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_ROUTER_ADVERT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_ROUTER_ADVERT \
 	"ipv6_router_advert"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_REDIRECT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_REDIRECT \
 	"ipv6_redirect"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV4_ROUTER_ALERT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV4_ROUTER_ALERT \
 	"ipv4_router_alert"
-#define DEVLINK_TRAP_GENERIC_NAME_IPV6_ROUTER_ALERT \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPV6_ROUTER_ALERT \
 	"ipv6_router_alert"
-#define DEVLINK_TRAP_GENERIC_NAME_PTP_EVENT \
+#define MLXDEVM_TRAP_GENERIC_NAME_PTP_EVENT \
 	"ptp_event"
-#define DEVLINK_TRAP_GENERIC_NAME_PTP_GENERAL \
+#define MLXDEVM_TRAP_GENERIC_NAME_PTP_GENERAL \
 	"ptp_general"
-#define DEVLINK_TRAP_GENERIC_NAME_FLOW_ACTION_SAMPLE \
+#define MLXDEVM_TRAP_GENERIC_NAME_FLOW_ACTION_SAMPLE \
 	"flow_action_sample"
-#define DEVLINK_TRAP_GENERIC_NAME_FLOW_ACTION_TRAP \
+#define MLXDEVM_TRAP_GENERIC_NAME_FLOW_ACTION_TRAP \
 	"flow_action_trap"
-#define DEVLINK_TRAP_GENERIC_NAME_EARLY_DROP \
+#define MLXDEVM_TRAP_GENERIC_NAME_EARLY_DROP \
 	"early_drop"
-#define DEVLINK_TRAP_GENERIC_NAME_VXLAN_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_VXLAN_PARSING \
 	"vxlan_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_LLC_SNAP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_LLC_SNAP_PARSING \
 	"llc_snap_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_VLAN_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_VLAN_PARSING \
 	"vlan_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_PPPOE_PPP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_PPPOE_PPP_PARSING \
 	"pppoe_ppp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_MPLS_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_MPLS_PARSING \
 	"mpls_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_ARP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_ARP_PARSING \
 	"arp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_IP_1_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_IP_1_PARSING \
 	"ip_1_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_IP_N_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_IP_N_PARSING \
 	"ip_n_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_GRE_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_GRE_PARSING \
 	"gre_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_UDP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_UDP_PARSING \
 	"udp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_TCP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_TCP_PARSING \
 	"tcp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_IPSEC_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_IPSEC_PARSING \
 	"ipsec_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_SCTP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_SCTP_PARSING \
 	"sctp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_DCCP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_DCCP_PARSING \
 	"dccp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_GTP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_GTP_PARSING \
 	"gtp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_ESP_PARSING \
+#define MLXDEVM_TRAP_GENERIC_NAME_ESP_PARSING \
 	"esp_parsing"
-#define DEVLINK_TRAP_GENERIC_NAME_BLACKHOLE_NEXTHOP \
+#define MLXDEVM_TRAP_GENERIC_NAME_BLACKHOLE_NEXTHOP \
 	"blackhole_nexthop"
-#define DEVLINK_TRAP_GENERIC_NAME_DMAC_FILTER \
+#define MLXDEVM_TRAP_GENERIC_NAME_DMAC_FILTER \
 	"dmac_filter"
-#define DEVLINK_TRAP_GENERIC_NAME_EAPOL \
+#define MLXDEVM_TRAP_GENERIC_NAME_EAPOL \
 	"eapol"
-#define DEVLINK_TRAP_GENERIC_NAME_LOCKED_PORT \
+#define MLXDEVM_TRAP_GENERIC_NAME_LOCKED_PORT \
 	"locked_port"
 
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_L2_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_L2_DROPS \
 	"l2_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_L3_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_L3_DROPS \
 	"l3_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_L3_EXCEPTIONS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_L3_EXCEPTIONS \
 	"l3_exceptions"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_BUFFER_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_BUFFER_DROPS \
 	"buffer_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_TUNNEL_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_TUNNEL_DROPS \
 	"tunnel_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_ACL_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_ACL_DROPS \
 	"acl_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_STP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_STP \
 	"stp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_LACP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_LACP \
 	"lacp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_LLDP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_LLDP \
 	"lldp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_MC_SNOOPING  \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_MC_SNOOPING  \
 	"mc_snooping"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_DHCP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_DHCP \
 	"dhcp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_NEIGH_DISCOVERY \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_NEIGH_DISCOVERY \
 	"neigh_discovery"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_BFD \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_BFD \
 	"bfd"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_OSPF \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_OSPF \
 	"ospf"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_BGP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_BGP \
 	"bgp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_VRRP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_VRRP \
 	"vrrp"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_PIM \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_PIM \
 	"pim"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_UC_LB \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_UC_LB \
 	"uc_loopback"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_LOCAL_DELIVERY \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_LOCAL_DELIVERY \
 	"local_delivery"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_EXTERNAL_DELIVERY \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_EXTERNAL_DELIVERY \
 	"external_delivery"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_IPV6 \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_IPV6 \
 	"ipv6"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_PTP_EVENT \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_PTP_EVENT \
 	"ptp_event"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_PTP_GENERAL \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_PTP_GENERAL \
 	"ptp_general"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_ACL_SAMPLE \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_ACL_SAMPLE \
 	"acl_sample"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_ACL_TRAP \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_ACL_TRAP \
 	"acl_trap"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_PARSER_ERROR_DROPS \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_PARSER_ERROR_DROPS \
 	"parser_error_drops"
-#define DEVLINK_TRAP_GROUP_GENERIC_NAME_EAPOL \
+#define MLXDEVM_TRAP_GROUP_GENERIC_NAME_EAPOL \
 	"eapol"
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #define DEVLINK_TRAP_GENERIC(_type, _init_action, _id, _group_id,	      \
 			     _metadata_cap)				      \
@@ -1265,12 +1257,13 @@ enum devlink_trap_group_generic_id {
 		.init_group_id = _group_id,				      \
 		.metadata_cap = _metadata_cap,				      \
 	}
+#endif
 
-#define DEVLINK_TRAP_DRIVER(_type, _init_action, _id, _name, _group_id,	      \
+#define MLXDEVM_TRAP_DRIVER(_type, _init_action, _id, _name, _group_id,	      \
 			    _metadata_cap)				      \
 	{								      \
-		.type = DEVLINK_TRAP_TYPE_##_type,			      \
-		.init_action = DEVLINK_TRAP_ACTION_##_init_action,	      \
+		.type = MLXDEVM_TRAP_TYPE_##_type,			      \
+		.init_action = MLXDEVM_TRAP_ACTION_##_init_action,	      \
 		.generic = false,					      \
 		.id = _id,						      \
 		.name = _name,						      \
@@ -1278,13 +1271,14 @@ enum devlink_trap_group_generic_id {
 		.metadata_cap = _metadata_cap,				      \
 	}
 
-#define DEVLINK_TRAP_GROUP_GENERIC(_id, _policer_id)			      \
+#define MLXDEVM_TRAP_GROUP_GENERIC(_id, _policer_id)			      \
 	{								      \
-		.name = DEVLINK_TRAP_GROUP_GENERIC_NAME_##_id,		      \
-		.id = DEVLINK_TRAP_GROUP_GENERIC_ID_##_id,		      \
+		.name = MLXDEVM_TRAP_GROUP_GENERIC_NAME_##_id,		      \
+		.id = MLXDEVM_TRAP_GROUP_GENERIC_ID_##_id,		      \
 		.generic = true,					      \
 		.init_policer_id = _policer_id,				      \
 	}
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #define DEVLINK_TRAP_POLICER(_id, _rate, _burst, _max_rate, _min_rate,	      \
 			     _max_burst, _min_burst)			      \
@@ -1297,6 +1291,18 @@ enum devlink_trap_group_generic_id {
 		.max_burst = _max_burst,				      \
 		.min_burst = _min_burst,				      \
 	}
+
+#define devlink_fmsg_put(fmsg, name, value) (			\
+	_Generic((value),					\
+		bool :		devlink_fmsg_bool_pair_put,	\
+		u8 :		devlink_fmsg_u8_pair_put,	\
+		u16 :		devlink_fmsg_u32_pair_put,	\
+		u32 :		devlink_fmsg_u32_pair_put,	\
+		u64 :		devlink_fmsg_u64_pair_put,	\
+		int :		devlink_fmsg_u32_pair_put,	\
+		char * :	devlink_fmsg_string_pair_put,	\
+		const char * :	devlink_fmsg_string_pair_put)	\
+	(fmsg, name, (value)))
 
 enum {
 	/* device supports reload operations */
@@ -1549,28 +1555,29 @@ struct mlxdevm_ops {
 	(*selftest_run)(struct mlxdevm *mlxdevm, unsigned int id,
 			struct netlink_ext_ack *extack);
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 void *devlink_priv(struct devlink *devlink);
 struct devlink *priv_to_devlink(void *priv);
-struct device *devlink_to_dev(const struct devlink *devlink);
+#endif
+struct device *mlxdevm_to_dev(const struct mlxdevm *mlxdevm);
 
 /* Devlink instance explicit locking */
-#endif
 void devm_lock(struct mlxdevm *mlxdevm);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 int devl_trylock(struct devlink *devlink);
 #endif
 void devm_unlock(struct mlxdevm *mlxdevm);
 void devm_assert_locked(struct mlxdevm *mlxdevm);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 bool devl_lock_is_held(struct devlink *devlink);
+DEFINE_GUARD(devl, struct devlink *, devl_lock(_T), devl_unlock(_T));
 
 struct ib_device;
 #endif
 
 struct net *mlxdevm_net(const struct mlxdevm *mlxdevm);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* This call is intended for software devices that can create
  * devlink instances in other namespaces than init_net.
  *
@@ -1591,7 +1598,7 @@ int devm_register(struct mlxdevm *mlxdevm);
 void devm_unregister(struct mlxdevm *mlxdevm);
 int mlxdevm_register(struct mlxdevm *mldevm);
 void mlxdevm_unregister(struct mlxdevm *mlxdevm);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_free(struct devlink *devlink);
 #endif
 
@@ -1739,7 +1746,7 @@ struct mlxdevm_port_ops {
 
 void mlxdevm_port_init(struct mlxdevm *mlxdevm,
 		       struct mlxdevm_port *mlxdevm_port);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_port_fini(struct devlink_port *devlink_port);
 #endif
 
@@ -1772,21 +1779,21 @@ static inline int mlxdevm_port_register(struct mlxdevm *mlxdevm,
 void devm_port_unregister(struct mlxdevm_port *mlxdevm_port);
 void mlxdevm_port_unregister(struct mlxdevm_port *mlxdevm_port);
 void mlxdevm_port_type_eth_set(struct mlxdevm_port *mlxdevm_port, struct net_device *netdev);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_port_type_ib_set(struct devlink_port *devlink_port,
 			      struct ib_device *ibdev);
 #endif
 void mlxdevm_port_type_clear(struct mlxdevm_port *mlxdevm_port);
 void mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
 			    struct mlxdevm_port_attrs *mlxdevm_port_attrs);
-#if 0
-void devlink_port_attrs_pci_pf_set(struct devlink_port *devlink_port, u32 controller,
+void mlxdevm_port_attrs_pci_pf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, bool external);
-void devlink_port_attrs_pci_vf_set(struct devlink_port *devlink_port, u32 controller,
+void mlxdevm_port_attrs_pci_vf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, u16 vf, bool external);
-void devlink_port_attrs_pci_sf_set(struct devlink_port *devlink_port,
+void mlxdevm_port_attrs_pci_sf_set(struct mlxdevm_port *mlxdevm_port,
 				   u32 controller, u16 pf, u32 sf,
 				   bool external);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 int devl_port_fn_devlink_set(struct devlink_port *devlink_port,
 			     struct devlink *fn_devlink);
 struct devlink_rate *
@@ -1798,7 +1805,7 @@ devm_rate_leaf_create(struct mlxdevm_port *mlxdevm_port, void *priv,
 		      struct mlxdevm_rate *parent);
 void devm_rate_leaf_destroy(struct mlxdevm_port *mlxdevm_port);
 void devm_rate_nodes_destroy(struct mlxdevm *mlxdevm);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_port_linecard_set(struct devlink_port *devlink_port,
 			       struct devlink_linecard *linecard);
 struct devlink_linecard *
@@ -1846,20 +1853,16 @@ int devlink_dpipe_match_put(struct sk_buff *skb,
 extern struct devlink_dpipe_header devlink_dpipe_header_ethernet;
 extern struct devlink_dpipe_header devlink_dpipe_header_ipv4;
 extern struct devlink_dpipe_header devlink_dpipe_header_ipv6;
+#endif
 
-int devl_resource_register(struct devlink *devlink,
+int devm_resource_register(struct mlxdevm *mlxdevm,
 			   const char *resource_name,
 			   u64 resource_size,
 			   u64 resource_id,
 			   u64 parent_resource_id,
-			   const struct devlink_resource_size_params *size_params);
-int devlink_resource_register(struct devlink *devlink,
-			      const char *resource_name,
-			      u64 resource_size,
-			      u64 resource_id,
-			      u64 parent_resource_id,
-			      const struct devlink_resource_size_params *size_params);
-void devl_resources_unregister(struct devlink *devlink);
+			   const struct mlxdevm_resource_size_params *size_params);
+void devm_resources_unregister(struct mlxdevm *mlxdevm);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_resources_unregister(struct devlink *devlink);
 int devl_resource_size_get(struct devlink *devlink,
 			   u64 resource_id,
@@ -1871,15 +1874,8 @@ void devl_resource_occ_get_register(struct devlink *devlink,
 				    u64 resource_id,
 				    devlink_resource_occ_get_t *occ_get,
 				    void *occ_get_priv);
-void devlink_resource_occ_get_register(struct devlink *devlink,
-				       u64 resource_id,
-				       devlink_resource_occ_get_t *occ_get,
-				       void *occ_get_priv);
 void devl_resource_occ_get_unregister(struct devlink *devlink,
 				      u64 resource_id);
-
-void devlink_resource_occ_get_unregister(struct devlink *devlink,
-					 u64 resource_id);
 #endif
 int devm_params_register(struct mlxdevm *mlxdevm,
 			 const struct mlxdevm_param *params,
@@ -1897,7 +1893,7 @@ int devm_param_driverinit_value_get(struct mlxdevm *mlxdevm, u32 param_id,
 				    union mlxdevm_param_value *val);
 void devm_param_driverinit_value_set(struct mlxdevm *mlxdevm, u32 param_id,
 				     union mlxdevm_param_value init_val);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devl_param_value_changed(struct devlink *devlink, u32 param_id);
 struct devlink_region *devl_region_create(struct devlink *devlink,
 					  const struct devlink_region_ops *ops,
@@ -1929,7 +1925,7 @@ enum mlxdevm_info_version_type {
 					      * component by name.
 					      */
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_info_version_fixed_put(struct devlink_info_req *req,
 				   const char *version_name,
@@ -2032,16 +2028,20 @@ void devlink_flash_update_timeout_notify(struct devlink *devlink,
 					 const char *status_msg,
 					 const char *component,
 					 unsigned long timeout);
+#endif
 
-int devl_traps_register(struct devlink *devlink,
-			const struct devlink_trap *traps,
+int devm_traps_register(struct mlxdevm *mlxdevm,
+			const struct mlxdevm_trap *traps,
 			size_t traps_count, void *priv);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 int devlink_traps_register(struct devlink *devlink,
 			   const struct devlink_trap *traps,
 			   size_t traps_count, void *priv);
-void devl_traps_unregister(struct devlink *devlink,
-			   const struct devlink_trap *traps,
+#endif
+void devm_traps_unregister(struct mlxdevm *mlxdevm,
+			   const struct mlxdevm_trap *traps,
 			   size_t traps_count);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_traps_unregister(struct devlink *devlink,
 			      const struct devlink_trap *traps,
 			      size_t traps_count);
@@ -2049,15 +2049,19 @@ void devlink_trap_report(struct devlink *devlink, struct sk_buff *skb,
 			 void *trap_ctx, struct devlink_port *in_devlink_port,
 			 const struct flow_action_cookie *fa_cookie);
 void *devlink_trap_ctx_priv(void *trap_ctx);
-int devl_trap_groups_register(struct devlink *devlink,
-			      const struct devlink_trap_group *groups,
+#endif
+int devm_trap_groups_register(struct mlxdevm *mlxdevm,
+			      const struct mlxdevm_trap_group *groups,
 			      size_t groups_count);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 int devlink_trap_groups_register(struct devlink *devlink,
 				 const struct devlink_trap_group *groups,
 				 size_t groups_count);
-void devl_trap_groups_unregister(struct devlink *devlink,
-				 const struct devlink_trap_group *groups,
+#endif
+void devm_trap_groups_unregister(struct mlxdevm *mlxdevm,
+				 const struct mlxdevm_trap_group *groups,
 				 size_t groups_count);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_trap_groups_unregister(struct devlink *devlink,
 				    const struct devlink_trap_group *groups,
 				    size_t groups_count);
@@ -2073,8 +2077,7 @@ devl_trap_policers_unregister(struct devlink *devlink,
 
 struct mlxdevm *__must_check mlxdevm_try_get(struct mlxdevm *mlxdevm);
 void mlxdevm_put(struct mlxdevm *mlxdevm);
-
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_compat_running_version(struct devlink *devlink,
 				    char *buf, size_t len);
 int devlink_compat_flash_update(struct devlink *devlink, const char *file_name);
@@ -2085,7 +2088,7 @@ int devlink_compat_switch_id_get(struct net_device *dev,
 
 int devlink_nl_port_handle_fill(struct sk_buff *msg, struct devlink_port *devlink_port);
 size_t devlink_nl_port_handle_size(struct devlink_port *devlink_port);
+void devlink_fmsg_dump_skb(struct devlink_fmsg *fmsg, const struct sk_buff *skb);
 #endif
 
-
-#endif /* _COMPAT_NET_MLXDEVM_H */
+#endif /* _NET_DEVLINK_H_ */

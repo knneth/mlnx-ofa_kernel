@@ -1,0 +1,139 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucma.c
+
+Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
+---
+ drivers/infiniband/core/ucma.c | 51 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 48 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/core/ucma.c
++++ b/drivers/infiniband/core/ucma.c
+@@ -43,9 +43,10 @@
+ #include <linux/sysctl.h>
+ #include <linux/module.h>
+ #include <linux/nsproxy.h>
+-
+ #include <linux/nospec.h>
+-
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/vfio.h>
++#endif
+ #include <rdma/rdma_user_cm.h>
+ #include <rdma/ib_marshall.h>
+ #include <rdma/rdma_cm.h>
+@@ -59,6 +60,9 @@
+ MODULE_AUTHOR("Sean Hefty");
+ MODULE_DESCRIPTION("RDMA Userspace Connection Manager Access");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ static unsigned int max_backlog = 1024;
+ 
+@@ -70,9 +74,14 @@ static struct ctl_table ucma_ctl_table[]
+ 		.maxlen		= sizeof max_backlog,
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_dointvec_minmax,
++#ifdef HAVE_SYSCTL_ZERO_ENABLED
+ 		.extra1		= SYSCTL_ZERO,
+ 		.extra2		= SYSCTL_INT_MAX,
++#endif
+ 	},
++#ifndef HAVE_REMOVE_SENTINEL_FROM_CTL_TABLE
++	{ }
++#endif
+ };
+ 
+ struct ucma_file {
+@@ -1618,23 +1627,49 @@ static ssize_t ucma_migrate_id(struct uc
+ 	struct ucma_context *ctx;
+ 	LIST_HEAD(event_list);
+ 	struct ucma_file *cur_file;
++#ifndef HAVE_FD_FILE
++	struct fd f;
++#endif
+ 	int ret = 0;
+ 
+ 	if (copy_from_user(&cmd, inbuf, sizeof(cmd)))
+ 		return -EFAULT;
+ 
+ 	/* Get current fd to protect against it being closed */
++#ifdef HAVE_FD_FILE
+ 	CLASS(fd, f)(cmd.fd);
+ 	if (fd_empty(f))
++#else
++	f = fdget(cmd.fd);
++	if (!f.file)
++#endif
+ 		return -ENOENT;
++#ifdef HAVE_FD_FILE
+ 	if (fd_file(f)->f_op != &ucma_fops)
+ 		return -EINVAL;
++#else
++	if (f.file->f_op != &ucma_fops) {
++		ret = -EINVAL;
++		goto file_put;
++	}
++#endif
++#ifdef HAVE_FD_FILE
+ 	cur_file = fd_file(f)->private_data;
++#else
++	cur_file = f.file->private_data;
++#endif
+ 
+ 	/* Validate current fd and prevent destruction of id. */
+ 	ctx = ucma_get_ctx(cur_file, cmd.id);
++#ifdef HAVE_FD_FILE
+ 	if (IS_ERR(ctx))
+ 		return PTR_ERR(ctx);
++#else
++	if (IS_ERR(ctx)) {
++		ret = PTR_ERR(ctx);
++		goto file_put;
++	}
++#endif
+ 
+ 	rdma_lock_handler(ctx->cm_id);
+ 	/*
+@@ -1675,6 +1710,10 @@ static ssize_t ucma_migrate_id(struct uc
+ err_unlock:
+ 	rdma_unlock_handler(ctx->cm_id);
+ 	ucma_put_ctx(ctx);
++#ifndef HAVE_FD_FILE
++file_put:
++	fdput(f);
++#endif
+ 	return ret;
+ }
+ 
+@@ -1728,7 +1767,6 @@ static ssize_t ucma_write(struct file *f
+ 	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
+ 		return -EINVAL;
+ 	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucma_cmd_table));
+-
+ 	if (hdr.in + sizeof(hdr) > len)
+ 		return -EINVAL;
+ 
+@@ -1779,7 +1817,11 @@ static int ucma_open(struct inode *inode
+ 	filp->private_data = file;
+ 	file->filp = filp;
+ 
++#ifdef HAVE_STREAM_OPEN
+ 	return stream_open(inode, filp);
++#else
++	return nonseekable_open(inode, filp);
++#endif
+ }
+ 
+ static int ucma_close(struct inode *inode, struct file *filp)
+@@ -1812,6 +1854,9 @@ static const struct file_operations ucma
+ 	.release = ucma_close,
+ 	.write	 = ucma_write,
+ 	.poll    = ucma_poll,
++#ifdef HAVE_NO_LLSEEK
++	.llseek	 = no_llseek,
++#endif
+ };
+ 
+ static struct miscdevice ucma_misc = {

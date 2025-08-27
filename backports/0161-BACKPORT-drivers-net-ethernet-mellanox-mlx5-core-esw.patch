@@ -1,56 +1,79 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+ drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
 
-Change-Id: I93af65adb3a12951f82ef065ac5a09c2b85f162e
 ---
- .../ethernet/mellanox/mlx5/core/esw/bridge.c   | 18 +++++++++++++++++-
- 1 file changed, 17 insertions(+), 1 deletion(-)
+ .../mlx5/core/eswitch_devlink_compat.c        | 24 ++++++++++++++++---
+ 1 file changed, 21 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-@@ -1862,9 +1862,14 @@ int mlx5_esw_bridge_port_mdb_add(struct
- 		esw_warn(br_offloads->esw->dev,
- 			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
- 			 addr, vport_num);
--		NL_SET_ERR_MSG_FMT_MOD(extack,
-+#ifdef NL_SET_ERR_MSG_FMT_MOD
-+			NL_SET_ERR_MSG_FMT_MOD(extack,
- 				       "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
- 				       addr, vport_num);
-+#else
-+			NL_SET_ERR_MSG_MOD(extack,
-+					"Failed to lookup bridge port to add MDB\n");
-+#endif
- 		return -EINVAL;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
+@@ -36,10 +36,12 @@ static char *steering_mode_to_str[] = {
+ 	[DEVLINK_ESWITCH_STEERING_MODE_HMFS] = "hmfs",
+ };
  
-@@ -1875,17 +1880,28 @@ int mlx5_esw_bridge_port_mdb_add(struct
- 			esw_warn(br_offloads->esw->dev,
- 				 "Failed to lookup bridge port vlan metadata to create MDB (MAC=%pM,vid=%u,vport=%u)\n",
- 				 addr, vid, vport_num);
-+#ifdef NL_SET_ERR_MSG_FMT_MOD
- 			NL_SET_ERR_MSG_FMT_MOD(extack,
- 					       "Failed to lookup vlan metadata for MDB (MAC=%pM,vid=%u,vport=%u)\n",
- 					       addr, vid, vport_num);
-+#else
-+			NL_SET_ERR_MSG_MOD(extack,
-+					"Failed to lookup bridge port vlan metadata to create MDB\n");
++#ifdef HAVE_XFRM_OFFLOAD_PACKET
+ static char *ipsec_to_str[] = {
+ 	[DEVLINK_ESWITCH_IPSEC_MODE_NONE] = "none",
+ 	[DEVLINK_ESWITCH_IPSEC_MODE_FULL] = "full",
+ };
 +#endif
+ 
+ static char *vport_match_to_str[] = {
+ 	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_METADATA] = "metadata",
+@@ -101,22 +103,36 @@ struct devlink_compat_op {
+ 	char *compat_name;
+ };
+ 
+-static int mlx5_devlink_eswitch_mode_set_compat(struct devlink *devlink, u16 mode,
+-						struct netlink_ext_ack *extack)
++#if defined(HAVE_DEVL_PORT_REGISTER) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++static int mlx5_devlink_eswitch_mode_set_compat(struct devlink *devlink, u16 mode
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 +
- 			return -EINVAL;
- 		}
- 	}
- 
- 	err = mlx5_esw_bridge_port_mdb_attach(dev, port, addr, vid);
- 	if (err) {
-+#ifdef NL_SET_ERR_MSG_FMT_MOD
- 		NL_SET_ERR_MSG_FMT_MOD(extack, "Failed to add MDB (MAC=%pM,vid=%u,vport=%u)\n",
- 				       addr, vid, vport_num);
-+#else
-+		NL_SET_ERR_MSG_MOD(extack,
-+				"Failed to add MDB\n");
++						, struct netlink_ext_ack *extack
 +#endif
- 		return err;
- 	}
++)
+ {
+ int ret;
+ devl_lock(devlink);
  
+-ret = mlx5_devlink_eswitch_mode_set(devlink, mode, extack);
++ret = mlx5_devlink_eswitch_mode_set(devlink, mode
++#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
++				    , extack
++#endif
++);
+ devl_unlock(devlink);
+ 
+ return ret;
+ }
++#endif
+ 
+ static struct devlink_compat_op devlink_compat_ops[] =  {
+ 	{
+ 		.read_u16 = mlx5_devlink_eswitch_mode_get,
++#if defined(HAVE_DEVL_PORT_REGISTER) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
+ 		.write_u16 = mlx5_devlink_eswitch_mode_set_compat,
++#else
++		.write_u16 = mlx5_devlink_eswitch_mode_set,
++#endif
+ 		.map = mode_to_str,
+ 		.map_size = ARRAY_SIZE(mode_to_str),
+ 		.compat_name = "mode",
+@@ -148,6 +164,7 @@ static struct devlink_compat_op devlink_
+ 		.compat_name = "steering_mode",
+ 	},
+ /* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
++#ifdef HAVE_XFRM_OFFLOAD_PACKET
+ 	{
+ 		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
+ 		.write_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_set,
+@@ -155,6 +172,7 @@ static struct devlink_compat_op devlink_
+ 		.map_size = ARRAY_SIZE(ipsec_to_str),
+ 		.compat_name = "ipsec_mode",
+ 	},
++#endif
+ 
+ 	{
+ 		.read_vport_match_mode = mlx5_devlink_eswitch_vport_match_mode_get,

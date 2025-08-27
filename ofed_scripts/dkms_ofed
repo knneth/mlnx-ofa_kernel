@@ -201,6 +201,10 @@ get-modules()
 	modules="$modules \
 		drivers/net/ethernet/mellanox/mlx5/core/mlx5_dpll"
 
+	modules="$modules \
+		drivers/fwctl/fwctl \
+		drivers/fwctl/mlx5/mlx5_fwctl"
+
 	echo $modules
 }
 

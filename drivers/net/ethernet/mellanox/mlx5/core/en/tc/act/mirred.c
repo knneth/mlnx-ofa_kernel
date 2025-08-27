@@ -168,10 +168,6 @@ tc_act_can_offload_mirred(struct mlx5e_tc_act_parse_state *parse_state,
 	}
 
 	NL_SET_ERR_MSG_MOD(extack, "devices are not on same switch HW, can't offload forwarding");
-	pr_err_once("devices %s %s not on same switch HW, can't offload forwarding\n",
-			priv->netdev->name, out_dev->name);
-	pr_debug("devices %s %s not on same switch HW, can't offload forwarding\n",
-			priv->netdev->name, out_dev->name);
 
 	return false;
 }

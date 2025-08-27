@@ -56,7 +56,7 @@ AC_DEFUN([LB_ARG_CANON_PATH], [
 AC_DEFUN([LB_LINUX_PATH],
 [# prep some default values
 for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
-	if readlink -q -e $DEFAULT_LINUX; then
+	if readlink -q -e $DEFAULT_LINUX >/dev/null; then
 		break
 	fi
 done
@@ -65,7 +65,7 @@ if test "$DEFAULT_LINUX" = "/lib/modules/$(uname -r)/source"; then
 fi
 PATHS="$PATHS $DEFAULT_LINUX"
 for DEFAULT_LINUX_OBJ in $PATHS; do
-	if readlink -q -e $DEFAULT_LINUX_OBJ; then
+	if readlink -q -e $DEFAULT_LINUX_OBJ >/dev/null; then
 		break
 	fi
 done

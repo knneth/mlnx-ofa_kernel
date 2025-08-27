@@ -1,0 +1,91 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/devl_internal.h
+
+Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
+---
+ net/mlxdevm/devl_internal.h | 33 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+--- a/net/mlxdevm/devl_internal.h
++++ b/net/mlxdevm/devl_internal.h
+@@ -55,18 +55,27 @@ struct mlxdevm {
+ 	 */
+ 	struct mutex lock;
+ 	struct lock_class_key lock_key;
++#ifndef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++	struct rw_semaphore rate_node_rwsem;   /* Protects rate node access */
++	struct list_head rate_node_list;
++#endif
+ 	u8 reload_failed:1;
+ 	refcount_t refcount;
+ 	struct rcu_work rwork;
+ 	struct mlxdevm_rel *rel;
+ 	struct xarray nested_rels;
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	struct devlink *devlink;
++#endif
+ 	bool mlxdevm_flow;
+ 	char priv[] __aligned(NETDEV_ALIGN);
+ };
+ 
+ extern struct xarray mlxdevms;
+ extern struct genl_family mlxdevm_nl_family;
++#ifndef HAVE_GENL_OPS_MAXATTR 
++extern struct nla_policy mlxdevm_nl_policy[MLXDEVM_ATTR_MAX + 1];
++#endif
+ 
+ /* devlink instances are open to the access from the user space after
+  * devlink_register() call. Such logical barrier allows us to have certain
+@@ -167,6 +176,13 @@ mlxdevm_get_from_attrs_lock(struct net *
+ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
+ 		      mlxdevm_nl_dump_one_func_t *dump_one);
+ 
++#ifdef HAVE_NETLINK_CALLBACK_HAS_CTX
++#ifndef HAVE_NL_ASSERT_CTX_FITS
++#define NL_ASSERT_CTX_FITS(type_name)                      \
++	BUILD_BUG_ON(sizeof(type_name) >                        \
++	sizeof_field(struct netlink_callback, ctx))
++#endif
++
+ static inline struct mlxdevm_nl_dump_state *
+ mlxdevm_dump_state(struct netlink_callback *cb)
+ {
+@@ -174,6 +190,19 @@ mlxdevm_dump_state(struct netlink_callba
+ 
+ 	return (struct mlxdevm_nl_dump_state *)cb->ctx;
+ }
++#else
++#define NL_ASSERT_CTX_FITS(type_name)                      \
++	BUILD_BUG_ON(sizeof(type_name) >                        \
++	sizeof_field(struct netlink_callback, args))
++
++static inline struct mlxdevm_nl_dump_state *
++mlxdevm_dump_state(struct netlink_callback *cb)
++{
++	NL_ASSERT_CTX_FITS(struct mlxdevm_nl_dump_state);
++
++	return (struct mlxdevm_nl_dump_state *)cb->args;
++}
++#endif
+ 
+ static inline int
+ mlxdevm_nl_put_handle(struct sk_buff *msg, struct mlxdevm *mlxdevm)
+@@ -226,6 +255,7 @@ static inline void mlxdevm_nl_obj_desc_p
+ 
+ int mlxdevm_nl_notify_filter(struct sock *dsk, struct sk_buff *skb, void *data);
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ static inline void mlxdevm_nl_notify_send_desc(struct mlxdevm *mlxdevm,
+ 					       struct sk_buff *msg,
+ 					       struct mlxdevm_obj_desc *desc)
+@@ -245,8 +275,9 @@ static inline void mlxdevm_nl_notify_sen
+ 	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
+ 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
+ }
+-#ifdef HAVE_BLOCKED_DEVLINK_CODE
++#endif
+ 
++#ifdef HAVE_BLOCKED_DEVLINK_CODE
+ /* Notify */
+ void devlink_notify_register(struct devlink *devlink);
+ void devlink_notify_unregister(struct devlink *devlink);

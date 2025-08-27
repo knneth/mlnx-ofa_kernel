@@ -32,4 +32,4 @@ full_path=`realpath $my_dir`
 ERROR_FLAGS=`awk -F'"' '/ERROR_FLAGS=/{print $2}' $my_dir/config/rdma.m4`
 
 
-make -C "$KSRC" M=$full_path/modtest MLNX_TEST_$test=m modules EXTRA_CFLAGS="$ERROR_FLAGS"
+make -C "$KSRC" M=$full_path/modtest MLNX_TEST_$test=m modules ccflags-y="$ERROR_FLAGS"

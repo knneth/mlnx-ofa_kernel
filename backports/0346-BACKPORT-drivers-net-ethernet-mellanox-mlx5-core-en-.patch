@@ -1,0 +1,68 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/en/rss.c  | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+@@ -160,8 +160,9 @@ err_free_rss:
+ static void mlx5e_rss_params_init(struct mlx5e_rss *rss)
+ {
+ 	enum mlx5_traffic_types tt;
+-
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
+ 	rss->hash.symmetric = true;
++#endif
+ 	rss->hash.hfunc = ETH_RSS_HASH_TOP;
+ 	netdev_rss_key_fill(rss->hash.toeplitz_hash_key,
+ 			    sizeof(rss->hash.toeplitz_hash_key));
+@@ -566,8 +567,11 @@ inner_tir:
+ 	mlx5e_tir_builder_free(builder);
+ 	return final_err;
+ }
+-
+-int mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc, bool *symmetric)
++int mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++			 ,bool *symmetric
++#endif
++		      )
+ {
+ 	if (indir)
+ 		memcpy(indir, rss->indir.table,
+@@ -580,14 +584,19 @@ int mlx5e_rss_get_rxfh(struct mlx5e_rss
+ 	if (hfunc)
+ 		*hfunc = rss->hash.hfunc;
+ 
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
+ 	if (symmetric)
+ 		*symmetric = rss->hash.symmetric;
++#endif
+ 
+ 	return 0;
+ }
+ 
+ int mlx5e_rss_set_rxfh(struct mlx5e_rss *rss, const u32 *indir,
+-		       const u8 *key, const u8 *hfunc, const bool *symmetric,
++		       const u8 *key, const u8 *hfunc,
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++		       const bool *symmetric,
++#endif
+ 		       u32 *rqns, u32 *vhca_ids, unsigned int num_rqns)
+ {
+ 	bool changed_indir = false;
+@@ -627,10 +636,12 @@ int mlx5e_rss_set_rxfh(struct mlx5e_rss
+ 		       rss->indir.actual_table_size * sizeof(*rss->indir.table));
+ 	}
+ 
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
+ 	if (symmetric) {
+ 		rss->hash.symmetric = *symmetric;
+ 		changed_hash = true;
+ 	}
++#endif
+ 
+ 	if (changed_indir && rss->enabled) {
+ 		err = mlx5e_rss_apply(rss, rqns, vhca_ids, num_rqns);

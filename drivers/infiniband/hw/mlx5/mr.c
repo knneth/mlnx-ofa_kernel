@@ -45,7 +45,6 @@
 #include "dm.h"
 #include "mlx5_ib.h"
 #include "umr.h"
-#include "ib_rep.h"
 #include "data_direct.h"
 
 static void mlx5_invalidate_umem(struct ib_umem *umem, void *priv);
@@ -62,7 +61,7 @@ static void
 create_mkey_callback(int status, struct mlx5_async_work *context);
 static struct mlx5_ib_mr *reg_create(struct ib_pd *pd, struct ib_umem *umem,
 				     u64 iova, int access_flags,
-				     unsigned int page_size, bool populate,
+				     unsigned long page_size, bool populate,
 				     int access_mode);
 static int __mlx5_ib_dereg_mr(struct ib_mr *ibmr);
 
@@ -846,8 +845,7 @@ mkey_cache_ent_from_rb_key(struct mlx5_ib_dev *dev,
 }
 
 static struct mlx5_ib_mr *_mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
-					struct mlx5_cache_ent *ent,
-					int access_flags)
+					       struct mlx5_cache_ent *ent)
 {
 	struct mlx5_ib_mr *mr;
 	int err;
@@ -922,7 +920,7 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
 	if (!ent)
 		return ERR_PTR(-EOPNOTSUPP);
 
-	return _mlx5_mr_cache_alloc(dev, ent, access_flags);
+	return _mlx5_mr_cache_alloc(dev, ent);
 }
 
 static void delay_time_func(struct timer_list *t)
@@ -1007,6 +1005,25 @@ mkeys_err:
 	return ERR_PTR(ret);
 }
 
+static void mlx5r_destroy_cache_entries(struct mlx5_ib_dev *dev)
+{
+	struct rb_root *root = &dev->cache.rb_root;
+	struct mlx5_cache_ent *ent;
+	struct rb_node *node;
+
+	mutex_lock(&dev->cache.rb_lock);
+	node = rb_first(root);
+	while (node) {
+		ent = rb_entry(node, struct mlx5_cache_ent, node);
+		node = rb_next(node);
+		clean_keys(dev, ent);
+		rb_erase(&ent->node, root);
+		mlx5r_mkeys_uninit(ent);
+		kfree(ent);
+	}
+	mutex_unlock(&dev->cache.rb_lock);
+}
+
 int mlx5_mkey_cache_init(struct mlx5_ib_dev *dev)
 {
 	struct mlx5_mkey_cache *cache = &dev->cache;
@@ -1064,6 +1081,8 @@ err:
 	}
 
 	mlx5_mkey_cache_sysfs_cleanup(dev);
+	mlx5r_destroy_cache_entries(dev);
+	destroy_workqueue(cache->wq);
 	mlx5_ib_warn(dev, "failed to create mkey cache entry\n");
 	return ret;
 }
@@ -1098,20 +1117,10 @@ void mlx5_mkey_cache_cleanup(struct mlx5_ib_dev *dev)
 	mlx5_cmd_cleanup_async_ctx(&dev->async_ctx);
 
 	/* At this point all entries are disabled and have no concurrent work. */
-	mutex_lock(&dev->cache.rb_lock);
-	node = rb_first(root);
-	while (node) {
-		ent = rb_entry(node, struct mlx5_cache_ent, node);
-		node = rb_next(node);
-		clean_keys(dev, ent);
-		rb_erase(&ent->node, root);
-		mlx5r_mkeys_uninit(ent);
-		kfree(ent);
-	}
-	mutex_unlock(&dev->cache.rb_lock);
+	mlx5r_destroy_cache_entries(dev);
 
 	destroy_workqueue(dev->cache.wq);
-	del_timer_sync(&dev->delay_timer);
+	timer_delete_sync(&dev->delay_timer);
 }
 
 struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc)
@@ -1210,12 +1219,13 @@ static struct mlx5_ib_mr *alloc_cacheable_mr(struct ib_pd *pd,
 	struct mlx5r_cache_rb_key rb_key = {};
 	struct mlx5_cache_ent *ent;
 	struct mlx5_ib_mr *mr;
-	unsigned int page_size;
+	unsigned long page_size;
 
 	if (umem->is_dmabuf)
 		page_size = mlx5_umem_dmabuf_default_pgsz(umem, iova);
 	else
-		page_size = mlx5_umem_mkc_find_best_pgsz(dev, umem, iova);
+		page_size = mlx5_umem_mkc_find_best_pgsz(dev, umem, iova,
+							 access_mode);
 	if (WARN_ON(!page_size))
 		return ERR_PTR(-EINVAL);
 
@@ -1239,7 +1249,7 @@ static struct mlx5_ib_mr *alloc_cacheable_mr(struct ib_pd *pd,
 		return mr;
 	}
 
-	mr = _mlx5_mr_cache_alloc(dev, ent, access_flags);
+	mr = _mlx5_mr_cache_alloc(dev, ent);
 	if (IS_ERR(mr))
 		return mr;
 
@@ -1314,7 +1324,7 @@ err_1:
  */
 static struct mlx5_ib_mr *reg_create(struct ib_pd *pd, struct ib_umem *umem,
 				     u64 iova, int access_flags,
-				     unsigned int page_size, bool populate,
+				     unsigned long page_size, bool populate,
 				     int access_mode)
 {
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
@@ -1384,7 +1394,6 @@ static struct mlx5_ib_mr *reg_create(struct ib_pd *pd, struct ib_umem *umem,
 	MLX5_SET(mkc, mkc, log_page_size, mr->page_shift);
 	if (mlx5_umem_needs_ats(dev, umem, access_flags))
 		MLX5_SET(mkc, mkc, ma_translation_mode, 1);
-
 	if (populate) {
 		MLX5_SET(create_mkey_in, in, translations_octword_actual_size,
 			 get_octo_len(iova, umem->length, mr->page_shift));
@@ -1521,8 +1530,8 @@ static struct ib_mr *create_real_mr(struct ib_pd *pd, struct ib_umem *umem,
 		mr = alloc_cacheable_mr(pd, umem, iova, access_flags,
 					MLX5_MKC_ACCESS_MODE_MTT);
 	} else {
-		unsigned int page_size =
-			mlx5_umem_mkc_find_best_pgsz(dev, umem, iova);
+		unsigned long page_size = mlx5_umem_mkc_find_best_pgsz(
+			dev, umem, iova, MLX5_MKC_ACCESS_MODE_MTT);
 
 		mutex_lock(&dev->slow_path_mutex);
 		mr = reg_create(pd, umem, iova, access_flags, page_size,
@@ -1637,7 +1646,7 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	if (err)
 		return ERR_PTR(err);
 
-	if ((access_flags & IB_ACCESS_ON_DEMAND) && (dev->profile != &raw_eth_profile))
+	if (access_flags & IB_ACCESS_ON_DEMAND)
 		return create_user_odp_mr(pd, start, length, iova, access_flags,
 					  udata);
 	umem = ib_umem_get_peer(&dev->ib_dev, start, length, access_flags,
@@ -1748,11 +1757,11 @@ reg_user_mr_dmabuf_by_data_direct(struct ib_pd *pd, u64 offset,
 		goto end;
 	}
 
-	/* The device's 'data direct mkey' was created without RO flags to
-	 * simplify things and allow for a single mkey per device.
-	 * Since RO is not a must, mask it out accordingly.
+	/* If no device's 'data direct mkey' with RO flags exists
+	 * mask it out accordingly.
 	 */
-	access_flags &= ~IB_ACCESS_RELAXED_ORDERING;
+	if (!dev->ddr.mkey_ro_valid)
+		access_flags &= ~IB_ACCESS_RELAXED_ORDERING;
 	crossed_mr = reg_user_mr_dmabuf(pd, &data_direct_dev->pdev->dev,
 					offset, length, virt_addr, fd,
 					access_flags, MLX5_MKC_ACCESS_MODE_KSM);
@@ -1848,7 +1857,8 @@ static bool can_use_umr_rereg_pas(struct mlx5_ib_mr *mr,
 	if (!mlx5r_umr_can_load_pas(dev, new_umem->length))
 		return false;
 
-	*page_size = mlx5_umem_mkc_find_best_pgsz(dev, new_umem, iova);
+	*page_size = mlx5_umem_mkc_find_best_pgsz(
+		dev, new_umem, iova, mr->mmkey.cache_ent->rb_key.access_mode);
 	if (WARN_ON(!*page_size))
 		return false;
 	return (mr->mmkey.cache_ent->rb_key.ndescs) >=
@@ -2072,7 +2082,6 @@ static int cache_ent_find_and_store(struct mlx5_ib_dev *dev,
 
 	if (mr->mmkey.cache_ent) {
 		spin_lock_irq(&mr->mmkey.cache_ent->mkeys_queue.lock);
-		mr->mmkey.cache_ent->in_use--;
 		goto end;
 	}
 
@@ -2133,63 +2142,102 @@ void mlx5_ib_revoke_data_direct_mrs(struct mlx5_ib_dev *dev)
 	}
 }
 
-static int mlx5_revoke_mr(struct mlx5_ib_mr *mr)
+static int mlx5_umr_revoke_mr_with_lock(struct mlx5_ib_mr *mr)
 {
-	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
-	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
-	bool is_odp = is_odp_mr(mr);
 	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
-		!to_ib_umem_dmabuf(mr->umem)->pinned;
-	int rc = 0;
+			      !to_ib_umem_dmabuf(mr->umem)->pinned;
+	bool is_odp = is_odp_mr(mr);
+	int ret;
 
 	if (is_odp)
 		mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
 
 	if (is_odp_dma_buf)
-		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv, NULL);
+		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv,
+			      NULL);
 
-	if (mr->mmkey.cacheable && !mlx5r_umr_revoke_mr(mr) && !cache_ent_find_and_store(dev, mr)) {
+	ret = mlx5r_umr_revoke_mr(mr);
+
+	if (is_odp) {
+		if (!ret)
+			to_ib_umem_odp(mr->umem)->private = NULL;
+		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+	}
+
+	if (is_odp_dma_buf) {
+		if (!ret)
+			to_ib_umem_dmabuf(mr->umem)->private = NULL;
+		dma_resv_unlock(
+			to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
+	}
+
+	return ret;
+}
+
+static int mlx5r_handle_mkey_cleanup(struct mlx5_ib_mr *mr)
+{
+	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
+			      !to_ib_umem_dmabuf(mr->umem)->pinned;
+	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
+	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
+	bool is_odp = is_odp_mr(mr);
+	bool from_cache = !!ent;
+	int ret = 0;
+
+	if (mr->mmkey.cacheable && !mlx5_umr_revoke_mr_with_lock(mr) &&
+	    !cache_ent_find_and_store(dev, mr)) {
 		ent = mr->mmkey.cache_ent;
 		/* upon storing to a clean temp entry - schedule its cleanup */
 		spin_lock_irq(&ent->mkeys_queue.lock);
+		if (from_cache)
+			ent->in_use--;
 		if (ent->is_tmp && !ent->tmp_cleanup_scheduled) {
 			mod_delayed_work(ent->dev->cache.wq, &ent->dwork,
 					 msecs_to_jiffies(30 * 1000));
 			ent->tmp_cleanup_scheduled = true;
 		}
 		spin_unlock_irq(&ent->mkeys_queue.lock);
-		goto out;
-	}
+	} else {
+		if (ent) {
+			spin_lock_irq(&ent->mkeys_queue.lock);
+			ent->in_use--;
+			mr->mmkey.cache_ent = NULL;
+			spin_unlock_irq(&ent->mkeys_queue.lock);
+		}
 
-	if (ent) {
-		spin_lock_irq(&ent->mkeys_queue.lock);
-		ent->in_use--;
-		mr->mmkey.cache_ent = NULL;
-		spin_unlock_irq(&ent->mkeys_queue.lock);
-	}
+		if (is_odp)
+			mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
 
-	if (mr->umem && mr->umem->is_peer) {
-		rc = mlx5r_umr_revoke_mr(mr);
-		if (rc)
-			goto out;
-		ib_umem_stop_invalidation_notifier(mr->umem);
-	}
+		if (is_odp_dma_buf)
+			dma_resv_lock(to_ib_umem_dmabuf(mr->umem)
+					      ->attach->dmabuf->resv,
+				      NULL);
 
-	rc = destroy_mkey(dev, mr);
+		if (mr->umem && mr->umem->is_peer) {
+			ret = mlx5r_umr_revoke_mr(mr);
+			if (ret)
+				goto out;
+			ib_umem_stop_invalidation_notifier(mr->umem);
+		}
+
+		ret = destroy_mkey(dev, mr);
+
 out:
-	if (is_odp) {
-		if (!rc)
-			to_ib_umem_odp(mr->umem)->private = NULL;
-		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+		if (is_odp) {
+			if (!ret)
+				to_ib_umem_odp(mr->umem)->private = NULL;
+			mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+		}
+
+		if (is_odp_dma_buf) {
+			if (!ret)
+				to_ib_umem_dmabuf(mr->umem)->private = NULL;
+			dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)
+						->attach->dmabuf->resv);
+		}
 	}
 
-	if (is_odp_dma_buf) {
-		if (!rc)
-			to_ib_umem_dmabuf(mr->umem)->private = NULL;
-		dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
-	}
-
-	return rc;
+	return ret;
 }
 
 static int __mlx5_ib_dereg_mr(struct ib_mr *ibmr)
@@ -2237,7 +2285,7 @@ static int __mlx5_ib_dereg_mr(struct ib_mr *ibmr)
 	}
 
 	/* Stop DMA */
-	rc = mlx5_revoke_mr(mr);
+	rc = mlx5r_handle_mkey_cleanup(mr);
 	if (rc)
 		return rc;
 

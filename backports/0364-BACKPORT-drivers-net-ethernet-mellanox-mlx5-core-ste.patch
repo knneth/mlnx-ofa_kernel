@@ -1,0 +1,19 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
+@@ -1224,7 +1224,7 @@ hws_action_create_modify_header_hws(stru
+ 		action[i].modify_header.nop_locations = nop_locations;
+ 		action[i].modify_header.num_of_actions = new_num_actions;
+ 
+-		max_mh_actions = max(max_mh_actions, new_num_actions);
++		max_mh_actions = max(max_mh_actions, (u16)new_num_actions);
+ 	}
+ 
+ 	if (mlx5hws_arg_get_arg_log_size(max_mh_actions) >= MLX5HWS_ARG_CHUNK_SIZE_MAX) {

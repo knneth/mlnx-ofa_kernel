@@ -1,41 +1,141 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 
-Change-Id: I14cbeddf3a53ff3d02e9a6f9256b0d535e60e59b
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 38 ++++++++++++++++---
+ 1 file changed, 32 insertions(+), 6 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-@@ -68,6 +68,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		else
- 			*action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
- 		break;
-+#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
- 	case FLOW_ACTION_VLAN_POP_ETH:
- 		parse_state->eth_pop = true;
- 		break;
-@@ -78,6 +79,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		memcpy(attr->eth.h_dest, act->vlan_push_eth.dst, ETH_ALEN);
- 		memcpy(attr->eth.h_source, act->vlan_push_eth.src, ETH_ALEN);
- 		break;
-+#endif
- 	default:
- 		NL_SET_ERR_MSG_MOD(extack, "Unexpected action id for VLAN");
- 		return -EINVAL;
-@@ -127,10 +129,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
- 	struct flow_action_entry vlan_act = {
- 		.id = FLOW_ACTION_VLAN_POP,
- 	};
--	int nest_level, err = 0;
-+	int nest_level = 1, err = 0;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
  
-+#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
- 	nest_level = attr->parse_attr->filter_dev->lower_level -
- 						priv->netdev->lower_level;
+ 	ct_state |= MLX5_CT_STATE_TRK_BIT;
+ 	ct_state |= ctinfo == IP_CT_NEW ? MLX5_CT_STATE_NEW_BIT : MLX5_CT_STATE_ESTABLISHED_BIT;
++#ifdef HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR
+ 	ct_state |= meta->ct_metadata.orig_dir ? 0 : MLX5_CT_STATE_REPLY_BIT;
 +#endif
- 	while (nest_level--) {
- 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
- 					   extack, NULL);
+ 	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
+ 					     ct_state,
+ 					     meta->ct_metadata.mark,
+@@ -1232,9 +1234,9 @@ mlx5_tc_ct_block_flow_offload_update(str
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+-	struct flow_rule *flow_rule = flow_cls_offload_flow_rule(flow);
++	struct flow_rule *flow_rule = flow_cls_offload_flow_rule1(flow);
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	struct flow_action_entry *meta_action;
+ 	unsigned long cookie = flow->cookie;
+@@ -1343,7 +1345,7 @@ err_set:
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
+-				  struct flow_cls_offload *flow)
++				  struct flow_cls_offload1 *flow)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = flow->cookie;
+@@ -1371,7 +1373,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+ 
+ static int
+ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
+-				    struct flow_cls_offload *f)
++				    struct flow_cls_offload1 *f)
+ {
+ 	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
+ 	unsigned long cookie = f->cookie;
+@@ -1393,8 +1395,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+ 	spin_unlock_bh(&ct_priv->ht_lock);
+ 
+ 	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
++#ifdef HAVE_FLOW_STATS_UPDATE_6_PARAMS
+ 	flow_stats_update(&f->stats, bytes, packets, 0, lastuse,
+ 			  FLOW_ACTION_HW_STATS_DELAYED);
++#elif defined(HAVE_FLOW_STATS_UPDATE_5_PARAMS)
++	flow_stats_update(&f->stats, bytes, packets, lastuse,
++			  FLOW_ACTION_HW_STATS_DELAYED);
++#else
++	flow_stats_update(&f->stats, bytes, packets, lastuse);
++#endif
+ 
+ 	mlx5_tc_ct_entry_put(entry);
+ 	return 0;
+@@ -1430,7 +1439,7 @@ static int
+ mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
+ 			      void *cb_priv)
+ {
+-	struct flow_cls_offload *f = type_data;
++	struct flow_cls_offload1 *f = type_data;
+ 	struct mlx5_ct_ft *ft = cb_priv;
+ 
+ 	if (type != TC_SETUP_CLSFLOWER)
+@@ -1647,7 +1656,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_c
+ 	attr->ct_attr.zone = act->ct.zone;
+ 	if (!(act->ct.action & TCA_CT_ACT_CLEAR))
+ 		attr->ct_attr.nf_ft = act->ct.flow_table;
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	attr->ct_attr.act_miss_cookie = act->miss_cookie;
++#endif
+ 
+ 	return 0;
+ }
+@@ -2038,8 +2049,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+ 	}
+ 	attr->ct_attr.ft = ft;
+ 
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	err = mlx5e_tc_action_miss_mapping_get(ct_priv->priv, attr, attr->ct_attr.act_miss_cookie,
+ 					       &act_miss_mapping);
++#else
++	err = mlx5_chains_get_chain_mapping(ct_priv->chains, attr->chain, &act_miss_mapping);
++#endif
+ 	if (err) {
+ 		ct_dbg("Failed to get register mapping for act miss");
+ 		goto err_get_act_miss;
+@@ -2075,7 +2090,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+ 	return 0;
+ 
+ err_mapping:
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	mlx5e_tc_action_miss_mapping_put(ct_priv->priv, attr, act_miss_mapping);
++#else
++	mlx5_chains_put_chain_mapping(ct_priv->chains, act_miss_mapping);
++#endif
+ err_get_act_miss:
+ 	mlx5_tc_ct_del_ft_cb(ct_priv, ft);
+ err_ft:
+@@ -2121,7 +2140,11 @@ static void
+ __mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *ct_priv,
+ 			 struct mlx5_flow_attr *attr)
+ {
++#ifdef HAVE_TC_SKB_EXT_ACT_MISS
+ 	mlx5e_tc_action_miss_mapping_put(ct_priv->priv, attr, attr->ct_attr.act_miss_mapping);
++#else
++	mlx5_chains_put_chain_mapping(ct_priv->chains, attr->ct_attr.act_miss_mapping);
++#endif
+ 	mlx5_tc_ct_del_ft_cb(ct_priv, attr->ct_attr.ft);
+ }
+ 
+@@ -2535,7 +2558,6 @@ static bool mlx5e_tc_ct_valid_used_disse
+ 	return (used_keys == ipv4_tcp || used_keys == ipv4_udp || used_keys == ipv6_tcp ||
+ 		used_keys == ipv6_udp || used_keys == ipv4_gre || used_keys == ipv6_gre);
+ }
+-
+ bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_rule *flow_rule)
+ {
+ 	struct flow_match_ipv4_addrs ipv4_addrs;
+@@ -2546,7 +2568,11 @@ bool mlx5e_tc_ct_is_valid_flow_rule(cons
+ 	struct flow_match_tcp tcp;
+ 
+ 	if (!mlx5e_tc_ct_valid_used_dissector_keys(flow_rule->match.dissector->used_keys)) {
++#ifdef HAVE_FLOW_DISSECTOR_USED_KEYS_ULL
+ 		netdev_dbg(dev, "ct_debug: rule uses unexpected dissectors (0x%016llx)",
++#else
++		netdev_dbg(dev, "ct_debug: rule uses unexpected dissectors (0x%016x)",
++#endif
+ 			   flow_rule->match.dissector->used_keys);
+ 		return false;
+ 	}

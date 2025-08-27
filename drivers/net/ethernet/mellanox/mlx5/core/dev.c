@@ -236,7 +236,8 @@ enum {
 
 static bool is_fwctl_supported(struct mlx5_core_dev *dev)
 {
-	return MLX5_CAP_GEN(dev, uctx_cap);
+	/* fwctl is most useful on PFs, prevent fwctl on SFs for now */
+	return MLX5_CAP_GEN(dev, uctx_cap) && !mlx5_core_is_sf(dev);
 }
 
 static const struct mlx5_adev_device {

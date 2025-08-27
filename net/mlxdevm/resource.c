@@ -3,14 +3,13 @@
  * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
-#if 0
 
 #include "devl_internal.h"
 
 /**
- * struct devlink_resource - devlink resource
+ * struct mlxdevm_resource - mlxdevm resource
  * @name: name of the resource
- * @id: id, per devlink instance
+ * @id: id, per mlxdevm instance
  * @size: size of the resource
  * @size_new: updated size of the resource, reload is needed
  * @size_valid: valid in case the total size of the resource is valid
@@ -22,44 +21,45 @@
  * @occ_get: occupancy getter callback
  * @occ_get_priv: occupancy getter callback priv
  */
-struct devlink_resource {
+struct mlxdevm_resource {
 	const char *name;
 	u64 id;
 	u64 size;
 	u64 size_new;
 	bool size_valid;
-	struct devlink_resource *parent;
-	struct devlink_resource_size_params size_params;
+	struct mlxdevm_resource *parent;
+	struct mlxdevm_resource_size_params size_params;
 	struct list_head list;
 	struct list_head resource_list;
-	devlink_resource_occ_get_t *occ_get;
+	mlxdevm_resource_occ_get_t *occ_get;
 	void *occ_get_priv;
 };
 
-static struct devlink_resource *
-devlink_resource_find(struct devlink *devlink,
-		      struct devlink_resource *resource, u64 resource_id)
+static struct mlxdevm_resource *
+mlxdevm_resource_find(struct mlxdevm *mlxdevm,
+		      struct mlxdevm_resource *resource, u64 resource_id)
 {
 	struct list_head *resource_list;
 
 	if (resource)
 		resource_list = &resource->resource_list;
 	else
-		resource_list = &devlink->resource_list;
+		resource_list = &mlxdevm->resource_list;
 
 	list_for_each_entry(resource, resource_list, list) {
-		struct devlink_resource *child_resource;
+		struct mlxdevm_resource *child_resource;
 
 		if (resource->id == resource_id)
 			return resource;
 
-		child_resource = devlink_resource_find(devlink, resource,
+		child_resource = mlxdevm_resource_find(mlxdevm, resource,
 						       resource_id);
 		if (child_resource)
 			return child_resource;
 	}
 	return NULL;
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void
 devlink_resource_validate_children(struct devlink_resource *resource)
@@ -134,74 +134,72 @@ int devlink_nl_resource_set_doit(struct sk_buff *skb, struct genl_info *info)
 		devlink_resource_validate_children(resource->parent);
 	return 0;
 }
+#endif
 
 static int
-devlink_resource_size_params_put(struct devlink_resource *resource,
+mlxdevm_resource_size_params_put(struct mlxdevm_resource *resource,
 				 struct sk_buff *skb)
 {
-	struct devlink_resource_size_params *size_params;
+	struct mlxdevm_resource_size_params *size_params;
 
 	size_params = &resource->size_params;
-	if (nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_SIZE_GRAN,
-			      size_params->size_granularity, DEVLINK_ATTR_PAD) ||
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_SIZE_MAX,
-			      size_params->size_max, DEVLINK_ATTR_PAD) ||
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_SIZE_MIN,
-			      size_params->size_min, DEVLINK_ATTR_PAD) ||
-	    nla_put_u8(skb, DEVLINK_ATTR_RESOURCE_UNIT, size_params->unit))
+	if (mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_SIZE_GRAN,
+			       size_params->size_granularity) ||
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_SIZE_MAX,
+			       size_params->size_max) ||
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_SIZE_MIN,
+			       size_params->size_min) ||
+	    nla_put_u8(skb, MLXDEVM_ATTR_RESOURCE_UNIT, size_params->unit))
 		return -EMSGSIZE;
 	return 0;
 }
 
-static int devlink_resource_occ_put(struct devlink_resource *resource,
+static int mlxdevm_resource_occ_put(struct mlxdevm_resource *resource,
 				    struct sk_buff *skb)
 {
 	if (!resource->occ_get)
 		return 0;
-	return nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_OCC,
-				 resource->occ_get(resource->occ_get_priv),
-				 DEVLINK_ATTR_PAD);
+	return mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_OCC,
+				  resource->occ_get(resource->occ_get_priv));
 }
 
-static int devlink_resource_put(struct devlink *devlink, struct sk_buff *skb,
-				struct devlink_resource *resource)
+static int mlxdevm_resource_put(struct mlxdevm *mlxdevm, struct sk_buff *skb,
+				struct mlxdevm_resource *resource)
 {
-	struct devlink_resource *child_resource;
+	struct mlxdevm_resource *child_resource;
 	struct nlattr *child_resource_attr;
 	struct nlattr *resource_attr;
 
-	resource_attr = nla_nest_start_noflag(skb, DEVLINK_ATTR_RESOURCE);
+	resource_attr = nla_nest_start_noflag(skb, MLXDEVM_ATTR_RESOURCE);
 	if (!resource_attr)
 		return -EMSGSIZE;
 
-	if (nla_put_string(skb, DEVLINK_ATTR_RESOURCE_NAME, resource->name) ||
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_SIZE, resource->size,
-			      DEVLINK_ATTR_PAD) ||
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_ID, resource->id,
-			      DEVLINK_ATTR_PAD))
+	if (nla_put_string(skb, MLXDEVM_ATTR_RESOURCE_NAME, resource->name) ||
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_SIZE, resource->size) ||
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_ID, resource->id))
 		goto nla_put_failure;
 	if (resource->size != resource->size_new &&
-	    nla_put_u64_64bit(skb, DEVLINK_ATTR_RESOURCE_SIZE_NEW,
-			      resource->size_new, DEVLINK_ATTR_PAD))
+	    mlxdevm_nl_put_u64(skb, MLXDEVM_ATTR_RESOURCE_SIZE_NEW,
+			       resource->size_new))
 		goto nla_put_failure;
-	if (devlink_resource_occ_put(resource, skb))
+	if (mlxdevm_resource_occ_put(resource, skb))
 		goto nla_put_failure;
-	if (devlink_resource_size_params_put(resource, skb))
+	if (mlxdevm_resource_size_params_put(resource, skb))
 		goto nla_put_failure;
 	if (list_empty(&resource->resource_list))
 		goto out;
 
-	if (nla_put_u8(skb, DEVLINK_ATTR_RESOURCE_SIZE_VALID,
+	if (nla_put_u8(skb, MLXDEVM_ATTR_RESOURCE_SIZE_VALID,
 		       resource->size_valid))
 		goto nla_put_failure;
 
 	child_resource_attr = nla_nest_start_noflag(skb,
-						    DEVLINK_ATTR_RESOURCE_LIST);
+						    MLXDEVM_ATTR_RESOURCE_LIST);
 	if (!child_resource_attr)
 		goto nla_put_failure;
 
 	list_for_each_entry(child_resource, &resource->resource_list, list) {
-		if (devlink_resource_put(devlink, skb, child_resource))
+		if (mlxdevm_resource_put(mlxdevm, skb, child_resource))
 			goto resource_put_failure;
 	}
 
@@ -217,11 +215,11 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static int devlink_resource_fill(struct genl_info *info,
-				 enum devlink_command cmd, int flags)
+static int mlxdevm_resource_fill(struct genl_info *info,
+				 enum mlxdevm_command cmd, int flags)
 {
-	struct devlink *devlink = info->user_ptr[0];
-	struct devlink_resource *resource;
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm_resource *resource;
 	struct nlattr *resources_attr;
 	struct sk_buff *skb = NULL;
 	struct nlmsghdr *nlh;
@@ -230,32 +228,32 @@ static int devlink_resource_fill(struct genl_info *info,
 	int i;
 	int err;
 
-	resource = list_first_entry(&devlink->resource_list,
-				    struct devlink_resource, list);
+	resource = list_first_entry(&mlxdevm->resource_list,
+				    struct mlxdevm_resource, list);
 start_again:
-	err = devlink_nl_msg_reply_and_new(&skb, info);
+	err = mlxdevm_nl_msg_reply_and_new(&skb, info);
 	if (err)
 		return err;
 
 	hdr = genlmsg_put(skb, info->snd_portid, info->snd_seq,
-			  &devlink_nl_family, NLM_F_MULTI, cmd);
+			  &mlxdevm_nl_family, NLM_F_MULTI, cmd);
 	if (!hdr) {
 		nlmsg_free(skb);
 		return -EMSGSIZE;
 	}
 
-	if (devlink_nl_put_handle(skb, devlink))
+	if (mlxdevm_nl_put_handle(skb, mlxdevm))
 		goto nla_put_failure;
 
 	resources_attr = nla_nest_start_noflag(skb,
-					       DEVLINK_ATTR_RESOURCE_LIST);
+					       MLXDEVM_ATTR_RESOURCE_LIST);
 	if (!resources_attr)
 		goto nla_put_failure;
 
 	incomplete = false;
 	i = 0;
-	list_for_each_entry_from(resource, &devlink->resource_list, list) {
-		err = devlink_resource_put(devlink, skb, resource);
+	list_for_each_entry_from(resource, &mlxdevm->resource_list, list) {
+		err = mlxdevm_resource_put(mlxdevm, skb, resource);
 		if (err) {
 			if (!i)
 				goto err_resource_put;
@@ -272,7 +270,7 @@ send_done:
 	nlh = nlmsg_put(skb, info->snd_portid, info->snd_seq,
 			NLMSG_DONE, 0, flags | NLM_F_MULTI);
 	if (!nlh) {
-		err = devlink_nl_msg_reply_and_new(&skb, info);
+		err = mlxdevm_nl_msg_reply_and_new(&skb, info);
 		if (err)
 			return err;
 		goto send_done;
@@ -286,18 +284,18 @@ err_resource_put:
 	return err;
 }
 
-int devlink_nl_resource_dump_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_resource_dump_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
 
-	if (list_empty(&devlink->resource_list))
+	if (list_empty(&mlxdevm->resource_list))
 		return -EOPNOTSUPP;
 
-	return devlink_resource_fill(info, DEVLINK_CMD_RESOURCE_DUMP, 0);
+	return mlxdevm_resource_fill(info, MLXDEVM_CMD_RESOURCE_DUMP, 0);
 }
 
-int devlink_resources_validate(struct devlink *devlink,
-			       struct devlink_resource *resource,
+int mlxdevm_resources_validate(struct mlxdevm *mlxdevm,
+			       struct mlxdevm_resource *resource,
 			       struct genl_info *info)
 {
 	struct list_head *resource_list;
@@ -306,12 +304,12 @@ int devlink_resources_validate(struct devlink *devlink,
 	if (resource)
 		resource_list = &resource->resource_list;
 	else
-		resource_list = &devlink->resource_list;
+		resource_list = &mlxdevm->resource_list;
 
 	list_for_each_entry(resource, resource_list, list) {
 		if (!resource->size_valid)
 			return -EINVAL;
-		err = devlink_resources_validate(devlink, resource, info);
+		err = mlxdevm_resources_validate(mlxdevm, resource, info);
 		if (err)
 			return err;
 	}
@@ -319,9 +317,9 @@ int devlink_resources_validate(struct devlink *devlink,
 }
 
 /**
- * devl_resource_register - devlink resource register
+ * devm_resource_register - mlxdevm resource register
  *
- * @devlink: devlink
+ * @mlxdevm: mlxdevm
  * @resource_name: resource's name
  * @resource_size: resource's size
  * @resource_id: resource's id
@@ -330,37 +328,37 @@ int devlink_resources_validate(struct devlink *devlink,
  *
  * Generic resources should reuse the same names across drivers.
  * Please see the generic resources list at:
- * Documentation/networking/devlink/devlink-resource.rst
+ * Documentation/networking/mlxdevm/mlxdevm-resource.rst
  */
-int devl_resource_register(struct devlink *devlink,
+int devm_resource_register(struct mlxdevm *mlxdevm,
 			   const char *resource_name,
 			   u64 resource_size,
 			   u64 resource_id,
 			   u64 parent_resource_id,
-			   const struct devlink_resource_size_params *size_params)
+			   const struct mlxdevm_resource_size_params *size_params)
 {
-	struct devlink_resource *resource;
+	struct mlxdevm_resource *resource;
 	struct list_head *resource_list;
 	bool top_hierarchy;
 
-	lockdep_assert_held(&devlink->lock);
+	lockdep_assert_held(&mlxdevm->lock);
 
-	top_hierarchy = parent_resource_id == DEVLINK_RESOURCE_ID_PARENT_TOP;
+	top_hierarchy = parent_resource_id == MLXDEVM_RESOURCE_ID_PARENT_TOP;
 
-	resource = devlink_resource_find(devlink, NULL, resource_id);
+	resource = mlxdevm_resource_find(mlxdevm, NULL, resource_id);
 	if (resource)
-		return -EINVAL;
+		return -EEXIST;
 
 	resource = kzalloc(sizeof(*resource), GFP_KERNEL);
 	if (!resource)
 		return -ENOMEM;
 
 	if (top_hierarchy) {
-		resource_list = &devlink->resource_list;
+		resource_list = &mlxdevm->resource_list;
 	} else {
-		struct devlink_resource *parent_resource;
+		struct mlxdevm_resource *parent_resource;
 
-		parent_resource = devlink_resource_find(devlink, NULL,
+		parent_resource = mlxdevm_resource_find(mlxdevm, NULL,
 							parent_resource_id);
 		if (parent_resource) {
 			resource_list = &parent_resource->resource_list;
@@ -383,73 +381,41 @@ int devl_resource_register(struct devlink *devlink,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(devl_resource_register);
+EXPORT_SYMBOL_GPL(devm_resource_register);
 
-/**
- *	devlink_resource_register - devlink resource register
- *
- *	@devlink: devlink
- *	@resource_name: resource's name
- *	@resource_size: resource's size
- *	@resource_id: resource's id
- *	@parent_resource_id: resource's parent id
- *	@size_params: size parameters
- *
- *	Generic resources should reuse the same names across drivers.
- *	Please see the generic resources list at:
- *	Documentation/networking/devlink/devlink-resource.rst
- *
- *	Context: Takes and release devlink->lock <mutex>.
- */
-int devlink_resource_register(struct devlink *devlink,
-			      const char *resource_name,
-			      u64 resource_size,
-			      u64 resource_id,
-			      u64 parent_resource_id,
-			      const struct devlink_resource_size_params *size_params)
+static void mlxdevm_resource_unregister(struct mlxdevm *mlxdevm,
+					struct mlxdevm_resource *resource)
 {
-	int err;
-
-	devl_lock(devlink);
-	err = devl_resource_register(devlink, resource_name, resource_size,
-				     resource_id, parent_resource_id, size_params);
-	devl_unlock(devlink);
-	return err;
-}
-EXPORT_SYMBOL_GPL(devlink_resource_register);
-
-static void devlink_resource_unregister(struct devlink *devlink,
-					struct devlink_resource *resource)
-{
-	struct devlink_resource *tmp, *child_resource;
+	struct mlxdevm_resource *tmp, *child_resource;
 
 	list_for_each_entry_safe(child_resource, tmp, &resource->resource_list,
 				 list) {
-		devlink_resource_unregister(devlink, child_resource);
+		mlxdevm_resource_unregister(mlxdevm, child_resource);
 		list_del(&child_resource->list);
 		kfree(child_resource);
 	}
 }
 
 /**
- * devl_resources_unregister - free all resources
+ * devm_resources_unregister - free all resources
  *
- * @devlink: devlink
+ * @mlxdevm: mlxdevm
  */
-void devl_resources_unregister(struct devlink *devlink)
+void devm_resources_unregister(struct mlxdevm *mlxdevm)
 {
-	struct devlink_resource *tmp, *child_resource;
+	struct mlxdevm_resource *tmp, *child_resource;
 
-	lockdep_assert_held(&devlink->lock);
+	lockdep_assert_held(&mlxdevm->lock);
 
-	list_for_each_entry_safe(child_resource, tmp, &devlink->resource_list,
+	list_for_each_entry_safe(child_resource, tmp, &mlxdevm->resource_list,
 				 list) {
-		devlink_resource_unregister(devlink, child_resource);
+		mlxdevm_resource_unregister(mlxdevm, child_resource);
 		list_del(&child_resource->list);
 		kfree(child_resource);
 	}
 }
-EXPORT_SYMBOL_GPL(devl_resources_unregister);
+EXPORT_SYMBOL_GPL(devm_resources_unregister);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devlink_resources_unregister - free all resources
@@ -518,28 +484,6 @@ void devl_resource_occ_get_register(struct devlink *devlink,
 EXPORT_SYMBOL_GPL(devl_resource_occ_get_register);
 
 /**
- *	devlink_resource_occ_get_register - register occupancy getter
- *
- *	@devlink: devlink
- *	@resource_id: resource id
- *	@occ_get: occupancy getter callback
- *	@occ_get_priv: occupancy getter callback priv
- *
- *	Context: Takes and release devlink->lock <mutex>.
- */
-void devlink_resource_occ_get_register(struct devlink *devlink,
-				       u64 resource_id,
-				       devlink_resource_occ_get_t *occ_get,
-				       void *occ_get_priv)
-{
-	devl_lock(devlink);
-	devl_resource_occ_get_register(devlink, resource_id,
-				       occ_get, occ_get_priv);
-	devl_unlock(devlink);
-}
-EXPORT_SYMBOL_GPL(devlink_resource_occ_get_register);
-
-/**
  * devl_resource_occ_get_unregister - unregister occupancy getter
  *
  * @devlink: devlink
@@ -561,21 +505,4 @@ void devl_resource_occ_get_unregister(struct devlink *devlink,
 	resource->occ_get_priv = NULL;
 }
 EXPORT_SYMBOL_GPL(devl_resource_occ_get_unregister);
-
-/**
- *	devlink_resource_occ_get_unregister - unregister occupancy getter
- *
- *	@devlink: devlink
- *	@resource_id: resource id
- *
- *	Context: Takes and release devlink->lock <mutex>.
- */
-void devlink_resource_occ_get_unregister(struct devlink *devlink,
-					 u64 resource_id)
-{
-	devl_lock(devlink);
-	devl_resource_occ_get_unregister(devlink, resource_id);
-	devl_unlock(devlink);
-}
-EXPORT_SYMBOL_GPL(devlink_resource_occ_get_unregister);
 #endif

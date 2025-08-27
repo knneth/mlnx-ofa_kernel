@@ -1,0 +1,32 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
+
+Change-Id: Ie6ddaab5ac7117277163885cd5f6b96f748c3f74
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
+@@ -1079,7 +1079,9 @@ static void hws_send_queues_bwc_locks_de
+ 
+ 	for (i = 0; i < bwc_queues; i++) {
+ 		mutex_destroy(&ctx->bwc_send_queue_locks[i]);
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 		lockdep_unregister_key(ctx->bwc_lock_class_keys + i);
++#endif
+ 	}
+ 
+ 	kfree(ctx->bwc_lock_class_keys);
+@@ -1119,8 +1121,10 @@ static int hws_bwc_send_queues_init(stru
+ 
+ 	for (i = 0; i < bwc_queues; i++) {
+ 		mutex_init(&ctx->bwc_send_queue_locks[i]);
++#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
+ 		lockdep_register_key(ctx->bwc_lock_class_keys + i);
+ 		lockdep_set_class(ctx->bwc_send_queue_locks + i, ctx->bwc_lock_class_keys + i);
++#endif
+ 	}
+ 
+ 	return 0;

@@ -1,0 +1,19 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tir.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
+@@ -9,7 +9,9 @@
+ struct mlx5e_rss_params_hash {
+ 	u8 hfunc;
+ 	u8 toeplitz_hash_key[40];
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
+ 	bool symmetric;
++#endif
+ };
+ 
+ struct mlx5e_rss_params_traffic_type {

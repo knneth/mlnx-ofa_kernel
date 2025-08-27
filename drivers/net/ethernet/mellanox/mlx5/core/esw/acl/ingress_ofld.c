@@ -395,7 +395,6 @@ int mlx5_esw_acl_ingress_vport_metadata_update(struct mlx5_eswitch *esw, u16 vpo
 
 	esw_acl_ingress_ofld_rules_destroy(esw, vport);
 
-	vport->prev_metadata = metadata ? vport->default_metadata : metadata;
 	vport->metadata = metadata ? metadata : vport->default_metadata;
 
 	/* Recreate ingress acl rules with vport->metadata */

@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/trace.h
+
+---
+ drivers/nvme/target/trace.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/nvme/target/trace.h
++++ b/drivers/nvme/target/trace.h
+@@ -59,7 +59,11 @@ static inline void __assign_req_name(cha
+ 		return;
+ 	}
+ 
++#ifdef HAVE_STRSCPY_PAD
+ 	strscpy_pad(name, req->ns->device_path, DISK_NAME_LEN);
++#else
++	strncpy(name, req->ns->device_path, DISK_NAME_LEN);
++#endif
+ }
+ #endif
+ 

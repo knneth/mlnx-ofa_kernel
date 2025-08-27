@@ -1,0 +1,74 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
+
+---
+ include/linux/auxiliary_bus.h | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+--- a/include/linux/auxiliary_bus.h
++++ b/include/linux/auxiliary_bus.h
+@@ -8,8 +8,13 @@
+ #ifndef _AUXILIARY_BUS_H_
+ #define _AUXILIARY_BUS_H_
+ 
++#include "../../compat/config.h"
++
+ #include <linux/device.h>
+ #include <linux/mod_devicetable.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/xarray.h>
++#endif
+ 
+ /**
+  * DOC: DEVICE_LIFESPAN
+@@ -143,11 +148,13 @@ struct auxiliary_device {
+ 	struct device dev;
+ 	const char *name;
+ 	u32 id;
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS) || defined(CONFIG_AUXILIARY_BUS)
+ 	struct {
+ 		struct xarray irqs;
+ 		struct mutex lock; /* Synchronize irq sysfs creation */
+ 		bool irq_dir_exists;
+ 	} sysfs;
++#endif
+ };
+ 
+ /**
+@@ -222,18 +229,17 @@ int __auxiliary_device_add(struct auxili
+ #define auxiliary_device_add(auxdev) __auxiliary_device_add(auxdev, KBUILD_MODNAME)
+ 
+ #ifdef CONFIG_SYSFS
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) || defined(CONFIG_AUXILIARY_BUS)
+ int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
+ void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
+ 				       int irq);
+-/*
+-* Add mlx5_compat_sf_auxiliary_device_sysfs_irq_(add|remove)
+-* declarations in base code until 4097699 fix is accepted upstream.
+-* Needed to build base code w/o backports.
+-*/
++#else
+ int mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq);
+ void mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev,
+                                                      int irq);
++#endif
+ #else /* CONFIG_SYSFS */
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) || defined(CONFIG_AUXILIARY_BUS)
+ static inline int
+ auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
+ {
+@@ -243,10 +249,13 @@ auxiliary_device_sysfs_irq_add(struct au
+ static inline void
+ auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
+ #endif
++#endif /* CONFIG_SYSFS */
+ 
+ static inline void auxiliary_device_uninit(struct auxiliary_device *auxdev)
+ {
++#if defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) || defined(CONFIG_AUXILIARY_BUS)
+ 	mutex_destroy(&auxdev->sysfs.lock);
++#endif
+ 	put_device(&auxdev->dev);
+ }
+ 

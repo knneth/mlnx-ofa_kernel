@@ -57,47 +57,6 @@ u32 mlx5e_tc_int_port_get_metadata_for_match(struct mlx5e_tc_int_port *int_port)
 	return int_port->match_metadata << (32 - ESW_SOURCE_PORT_METADATA_BITS);
 }
 
-static int mlx5e_tc_int_port_rep_map_insert(struct mlx5_eswitch *esw,
-					    struct mlx5e_tc_int_port *int_port)
-{
-	struct mlx5e_rep_priv *rpriv_uplink;
-	u32 metadata;
-	int err;
-
-	if (!mlx5e_esw_offloads_pet_enabled(esw))
-		return 0;
-
-	rpriv_uplink = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-
-	metadata = mlx5e_tc_int_port_get_metadata_for_match(int_port);
-	err = xa_insert(&rpriv_uplink->vport_rep_map,
-			metadata,
-			rpriv_uplink->rep, GFP_KERNEL);
-	if (err) {
-		esw_warn(esw->dev, "Error %d inserting int_vport metadata\n", err);
-		goto err;
-	}
-
-	return 0;
-
-err:
-	return err;
-}
-
-static void mlx5e_tc_int_port_rep_map_remove(struct mlx5_eswitch *esw,
-					     struct mlx5e_tc_int_port *int_port)
-{
-	struct mlx5e_rep_priv *rpriv_uplink;
-	u32 metadata;
-
-	if (!mlx5e_esw_offloads_pet_enabled(esw))
-		return;
-
-	rpriv_uplink = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
-	metadata = mlx5e_tc_int_port_get_metadata_for_match(int_port);
-	xa_erase(&rpriv_uplink->vport_rep_map, metadata);
-}
-
 static struct mlx5_flow_handle *
 mlx5e_int_port_create_rx_rule(struct mlx5_eswitch *esw,
 			      struct mlx5e_tc_int_port *int_port,
@@ -232,10 +191,6 @@ mlx5e_int_port_add(struct mlx5e_tc_int_port_priv *priv,
 	int_port->match_metadata = match_metadata;
 	int_port->mapping = mapping;
 
-	err = mlx5e_tc_int_port_rep_map_insert(esw, int_port);
-	if (err)
-		goto err_rep_map;
-
 	/* Create a match on internal vport metadata in vport table */
 	uplink_rpriv = mlx5_eswitch_get_uplink_priv(esw, REP_ETH);
 
@@ -256,9 +211,6 @@ mlx5e_int_port_add(struct mlx5e_tc_int_port_priv *priv,
 	return int_port;
 
 err_rx_rule:
-	mlx5e_tc_int_port_rep_map_remove(esw, int_port);
-
-err_rep_map:
 	mapping_remove(ctx, int_port->mapping);
 
 err_map:
@@ -281,7 +233,6 @@ mlx5e_int_port_remove(struct mlx5e_tc_int_port_priv *priv,
 	ctx = esw->offloads.reg_c0_obj_pool;
 
 	list_del_rcu(&int_port->list);
-	mlx5e_tc_int_port_rep_map_remove(esw, int_port);
 
 	/* The following parameters are not used by the
 	 * rcu readers of this int_port object so it is

@@ -370,7 +370,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
 
 	mlxdevm_nl_notify_send(mlxdevm, msg);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void devlink_params_notify(struct devlink *devlink,
 				  enum devlink_command cmd)
@@ -622,7 +622,7 @@ int mlxdevm_nl_param_set_doit(struct sk_buff *skb, struct genl_info *info)
 	return __mlxdevm_nl_cmd_param_set_doit(mlxdevm, 0, &mlxdevm->params,
 					       info, MLXDEVM_CMD_PARAM_NEW);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_nl_port_param_get_dumpit(struct sk_buff *msg,
 				     struct netlink_callback *cb)
@@ -857,16 +857,15 @@ void devm_param_driverinit_value_set(struct mlxdevm *mlxdevm, u32 param_id,
 	mlxdevm_param_notify(mlxdevm, 0, param_item, MLXDEVM_CMD_PARAM_NEW);
 }
 EXPORT_SYMBOL_GPL(devm_param_driverinit_value_set);
-#if 0
 
-void devlink_params_driverinit_load_new(struct devlink *devlink)
+void mlxdevm_params_driverinit_load_new(struct mlxdevm *mlxdevm)
 {
-	struct devlink_param_item *param_item;
+	struct mlxdevm_param_item *param_item;
 	unsigned long param_id;
 
-	xa_for_each(&devlink->params, param_id, param_item) {
-		if (!devlink_param_cmode_is_supported(param_item->param,
-						      DEVLINK_PARAM_CMODE_DRIVERINIT) ||
+	xa_for_each(&mlxdevm->params, param_id, param_item) {
+		if (!mlxdevm_param_cmode_is_supported(param_item->param,
+						      MLXDEVM_PARAM_CMODE_DRIVERINIT) ||
 		    !param_item->driverinit_value_new_valid)
 			continue;
 		param_item->driverinit_value = param_item->driverinit_value_new;
@@ -874,6 +873,7 @@ void devlink_params_driverinit_load_new(struct devlink *devlink)
 		param_item->driverinit_value_new_valid = false;
 	}
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devl_param_value_changed - notify devlink on a parameter's value

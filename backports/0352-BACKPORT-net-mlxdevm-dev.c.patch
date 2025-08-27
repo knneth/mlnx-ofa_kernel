@@ -1,0 +1,117 @@
+From: Oren Sidi <osidi@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
+
+Change-Id: Ia361bd57c5f6d6da39d5dc1f44d3fc2799b31406
+---
+ net/mlxdevm/dev.c | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+
+--- a/net/mlxdevm/dev.c
++++ b/net/mlxdevm/dev.c
+@@ -217,7 +217,9 @@ static void mlxdevm_notify(struct mlxdev
+ 		return;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ }
+ 
+ int mlxdevm_nl_get_doit(struct sk_buff *skb, struct genl_info *info)
+@@ -381,6 +383,24 @@ void devlink_remote_reload_actions_perfo
+ EXPORT_SYMBOL_GPL(devlink_remote_reload_actions_performed);
+ #endif
+ 
++#ifndef HAVE_GET_NET_NS_BY_ID_EXPORTED
++static struct net *mlx5_get_net_ns_by_id(const struct net *net, int id)
++{
++        struct net *peer;
++
++        if (id < 0)
++                return NULL;
++
++        rcu_read_lock();
++        peer = idr_find(&net->netns_ids, id);
++        if (peer)
++                peer = maybe_get_net(peer);
++        rcu_read_unlock();
++
++        return peer;
++}
++#endif
++
+ static struct net *mlxdevm_netns_get(struct sk_buff *skb,
+ 				     struct genl_info *info)
+ {
+@@ -399,7 +419,11 @@ static struct net *mlxdevm_netns_get(str
+ 	} else if (netns_fd_attr) {
+ 		net = get_net_ns_by_fd(nla_get_u32(netns_fd_attr));
+ 	} else if (netns_id_attr) {
++#ifdef HAVE_GET_NET_NS_BY_ID_EXPORTED
+ 		net = get_net_ns_by_id(sock_net(skb->sk),
++#else
++		net = mlx5_get_net_ns_by_id(sock_net(skb->sk),
++#endif
+ 				       nla_get_u32(netns_id_attr));
+ 		if (!net)
+ 			net = ERR_PTR(-EINVAL);
+@@ -537,8 +561,15 @@ int mlxdevm_nl_reload_doit(struct sk_buf
+ 		return err;
+ 	}
+ 
++#ifdef HAVE_NLA_GET_U8_DEFAULT
+ 	action = nla_get_u8_default(info->attrs[MLXDEVM_ATTR_RELOAD_ACTION],
+ 				    MLXDEVM_RELOAD_ACTION_DRIVER_REINIT);
++#else
++	if (info->attrs[MLXDEVM_ATTR_RELOAD_ACTION])
++		action = nla_get_u8(info->attrs[MLXDEVM_ATTR_RELOAD_ACTION]);
++	else
++		action = MLXDEVM_RELOAD_ACTION_DRIVER_REINIT;
++#endif
+ 
+ 	if (!mlxdevm_reload_action_is_supported(mlxdevm, action)) {
+ 		NL_SET_ERR_MSG(info->extack, "Requested reload action is not supported by the driver");
+@@ -943,7 +974,11 @@ mlxdevm_nl_info_get_dump_one(struct sk_b
+ 	err = mlxdevm_nl_info_fill(msg, mlxdevm, MLXDEVM_CMD_INFO_GET,
+ 				   NETLINK_CB(cb->skb).portid,
+ 				   cb->nlh->nlmsg_seq, flags,
++#ifdef HAVE_NETLINK_CALLBACK_EXTACK
+ 				   cb->extack);
++#else
++				   NULL);
++#endif
+ 	if (err == -EOPNOTSUPP)
+ 		err = 0;
+ 	return err;
+@@ -1020,7 +1055,9 @@ static void __mlxdevm_flash_update_notif
+ 	if (err)
+ 		goto out_free_msg;
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ 	return;
+ 
+ out_free_msg:
+@@ -1153,7 +1190,11 @@ int mlxdevm_nl_flash_update_doit(struct
+ 	if (!mlxdevm->ops->flash_update)
+ 		return -EOPNOTSUPP;
+ 
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME])
++#endif
+ 		return -EINVAL;
+ 
+ 	ret = mlxdevm_flash_component_get(mlxdevm,
+@@ -1179,6 +1220,9 @@ int mlxdevm_nl_flash_update_doit(struct
+ 
+ 	nla_file_name = info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME];
+ 	file_name = nla_data(nla_file_name);
++#ifndef HAVE_FLASH_UPDATE_GET_3_PARAMS
++	params.file_name = file_name;
++#endif
+ 	ret = request_firmware(&params.fw, file_name, mlxdevm->dev);
+ 	if (ret) {
+ 		NL_SET_ERR_MSG_ATTR(info->extack, nla_file_name,

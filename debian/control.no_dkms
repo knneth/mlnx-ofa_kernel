@@ -16,8 +16,8 @@ Package: mlnx-ofed-kernel-modules
 Section: kernel
 Architecture: any
 Depends: ${misc:Depends}, ${extra:Depends}, mlnx-ofed-kernel-utils
-Provides: mlnx-rdma-rxe-modules
-Conflicts: mlnx-rdma-rxe-modules
-Replaces: mlnx-rdma-rxe-modules
+Provides: mlnx-rdma-rxe-modules, fwctl-modules
+Conflicts: mlnx-rdma-rxe-modules, fwctl-modules
+Replaces: mlnx-rdma-rxe-modules, fwctl-modules
 Description: mlnx-ofed kernel modules
  This package provides the binary and source code for the mlnx-ofed kernel modules.

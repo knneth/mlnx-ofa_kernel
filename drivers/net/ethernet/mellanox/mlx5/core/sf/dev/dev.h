@@ -12,6 +12,15 @@
 
 struct mlx5_sf_dev {
 	struct auxiliary_device adev;
+	/* Add sysfs struct in base code until
+	 * 4097699 fix is accepted upstream.
+	 * Needed to build base code w/o backports.
+	 */
+	struct {
+		struct xarray irqs;
+		struct mutex lock; /* Synchronize irq sysfs creation */
+		bool irq_dir_exists;
+	} sysfs;
 	struct mlx5_core_dev *parent_mdev;
 	struct mlx5_core_dev *mdev;
 	phys_addr_t bar_base_addr;

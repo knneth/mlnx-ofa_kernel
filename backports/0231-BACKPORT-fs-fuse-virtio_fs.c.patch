@@ -1,0 +1,156 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
+
+---
+ fs/fuse/virtio_fs.c | 60 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 59 insertions(+), 1 deletion(-)
+
+--- a/fs/fuse/virtio_fs.c
++++ b/fs/fuse/virtio_fs.c
+@@ -983,7 +983,9 @@ static void virtio_fs_end_notify(struct
+ 		virtio_fs_notify_send_ack(fs, fs_req->req.out.h.unique, err);
+ 		break;
+ 	case FUSE_NOTIFY_RETRIEVE:
++#ifdef HAVE_FUSE_NOTIFY_RESEND
+ 	case FUSE_NOTIFY_RESEND:
++#endif
+ 	case FUSE_NOTIFY_POLL:
+ 	default:
+ 		break;
+@@ -1437,8 +1439,15 @@ static void virtio_fs_cleanup_vqs(struct
+ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
+ 			       struct virtio_fs *fs)
+ {
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	struct virtqueue_info *vqs_info;
++#else
++	vq_callback_t **callbacks;
++#endif
+ 	struct virtqueue **vqs;
++#ifndef HAVE_VIRTQUEUE_INFO
++	const char **names;
++#endif
+ 	unsigned int info_idx = 0;
+ 	unsigned int vq_nvqs;
+ 	unsigned int i;
+@@ -1472,25 +1481,50 @@ static int virtio_fs_setup_vqs(struct vi
+ 
+ 	vq_nvqs = 1 + fs->notify_enabled + fs->num_request_queues;
+ 	vqs = kmalloc_array(vq_nvqs, sizeof(vqs[VQ_HIPRIO]), GFP_KERNEL);
++#ifndef HAVE_VIRTQUEUE_INFO
++	callbacks = kmalloc_array(vq_nvqs, sizeof(callbacks[VQ_HIPRIO]),
++				  GFP_KERNEL);
++	names = kmalloc_array(vq_nvqs, sizeof(names[VQ_HIPRIO]), GFP_KERNEL);
++#endif
+ 	fs->mq_map = kcalloc_node(nr_cpu_ids, sizeof(*fs->mq_map), GFP_KERNEL,
+ 					dev_to_node(&vdev->dev));
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	vqs_info = kcalloc(vq_nvqs, sizeof(*vqs_info), GFP_KERNEL);
+ 	if (!vqs || !vqs_info || !fs->mq_map) {
++#else
++	if (!vqs || !callbacks || !names || !fs->mq_map) {
++#endif
+ 		ret = -ENOMEM;
+ 		goto out;
+ 	}
+ 
+ 	/* Initialize the hiprio/forget request virtqueue */
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	vqs_info[info_idx].callback = virtio_fs_vq_done;
++#else
++	callbacks[info_idx] = virtio_fs_vq_done;
++#endif
+ 	virtio_fs_init_vq(&fs->vqs[info_idx], "hiprio", VQ_HIPRIO);
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	vqs_info[info_idx].name = fs->vqs[VQ_HIPRIO].name;
++#else
++	names[info_idx] = fs->vqs[VQ_HIPRIO].name;
++#endif
+ 	info_idx++;
+ 
+ 	if (fs->notify_enabled) {
+ 		/* Initialize the notify request virtqueue */
++#ifdef HAVE_VIRTQUEUE_INFO
+ 		vqs_info[info_idx].callback = virtio_fs_vq_done;
++#else
++		callbacks[info_idx] = virtio_fs_vq_done;
++#endif
+ 		virtio_fs_init_vq(&fs->vqs[VQ_NOTIFY], "notify", VQ_NOTIFY);
++#ifdef HAVE_VIRTQUEUE_INFO
+ 		vqs_info[info_idx].name = fs->vqs[VQ_NOTIFY].name;
++#else
++		names[info_idx] = fs->vqs[VQ_NOTIFY].name;
++#endif
+ 		info_idx++;
+ 	}
+ 
+@@ -1501,12 +1535,20 @@ static int virtio_fs_setup_vqs(struct vi
+ 
+ 		snprintf(vq_name, VQ_NAME_LEN, "requests.%u", i - VQ_REQUEST);
+ 		virtio_fs_init_vq(&fs->vqs[i], vq_name, VQ_REQUEST);
++#ifdef HAVE_VIRTQUEUE_INFO
+ 		vqs_info[info_idx].callback = virtio_fs_vq_done;
+ 		vqs_info[info_idx].name = fs->vqs[i].name;
++#else
++		callbacks[info_idx] = virtio_fs_vq_done;
++		names[info_idx] = fs->vqs[i].name;
++#endif
+ 		info_idx++;
+ 	}
+-
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, NULL);
++#else
++	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, callbacks, names, NULL);
++#endif
+ 	if (ret < 0)
+ 		goto out;
+ 
+@@ -1525,7 +1567,12 @@ static int virtio_fs_setup_vqs(struct vi
+ 
+ 	virtio_fs_start_all_queues(fs);
+ 
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	kfree(vqs_info);
++#else
++	kfree(names);
++	kfree(callbacks);
++#endif
+ 	kfree(vqs);
+ 	return 0;
+ 
+@@ -1533,7 +1580,12 @@ out_del_vqs:
+ 	virtio_reset_device(vdev);
+ 	virtio_fs_cleanup_vqs(vdev);
+ out:
++#ifdef HAVE_VIRTQUEUE_INFO
+ 	kfree(vqs_info);
++#else
++	kfree(names);
++	kfree(callbacks);
++#endif
+ 	kfree(vqs);
+ 	if (ret) {
+ 		kfree(fs->vqs);
+@@ -2472,7 +2524,9 @@ static void virtio_fs_conn_resend(struct
+ 		list_for_each_entry_safe(fs_req, next, &fsvq->processing, entry) {
+ 			__virtio_fs_get_request(fs_req);
+ 			/* mark the request as resend request */
++#ifdef HAVE_FUSE_NOTIFY_RESEND
+ 			fs_req->req.in.h.unique |= FUSE_UNIQUE_RESEND;
++#endif
+ 			list_move_tail(&fs_req->entry, &fsvq->queued_reqs);
+ 		}
+ 
+@@ -2686,7 +2740,11 @@ static int __init virtio_fs_init(void)
+ {
+ 	int ret;
+ 
++#ifdef HAVE_ITER_ALLOW_P2PDMA
+ 	pr_info("virtio-fs: Loading NVIDIA-virtiofs +mq +lockless +nvq +gds\n");
++#else
++	pr_info("virtio-fs: Loading NVIDIA-virtiofs +mq +lockless +nvq\n");
++#endif
+ 
+ 	fuse_inode_cachep = kmem_cache_create("fuse_inode",
+ 					      sizeof(struct fuse_inode), 0,

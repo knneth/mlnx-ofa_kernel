@@ -35,7 +35,6 @@ static int auxiliary_irq_dir_prepare(struct auxiliary_device *auxdev)
 		return ret;
 
 	auxdev->sysfs.irq_dir_exists = true;
-	xa_init(&auxdev->sysfs.irqs);
 	return 0;
 }
 

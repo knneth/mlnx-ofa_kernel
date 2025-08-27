@@ -33,6 +33,7 @@ static char *encap_to_str[] = {
 static char *steering_mode_to_str[] = {
 	[DEVLINK_ESWITCH_STEERING_MODE_DMFS] = "dmfs",
 	[DEVLINK_ESWITCH_STEERING_MODE_SMFS] = "smfs",
+	[DEVLINK_ESWITCH_STEERING_MODE_HMFS] = "hmfs",
 };
 
 static char *ipsec_to_str[] = {
@@ -162,7 +163,7 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.map_size = ARRAY_SIZE(vport_match_to_str),
 		.compat_name = "vport_match_mode",
 	},
- 	{
+	{
 		.read_lag_port_select_mode =
 			mlx5_devlink_eswitch_lag_port_select_mode_get,
 		.write_lag_port_select_mode =

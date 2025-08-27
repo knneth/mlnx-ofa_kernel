@@ -1,0 +1,34 @@
+From: root <root@c-235-252-1-007.mtl.labs.mlnx>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c    | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+@@ -6,7 +6,11 @@
+ static u16 hws_bwc_gen_queue_idx(struct mlx5hws_context *ctx)
+ {
+ 	/* assign random queue */
++#ifdef HAVE_GET_RANDOM_U8
+ 	return get_random_u8() % mlx5hws_bwc_queues(ctx);
++#else
++	return (u8)(get_random_u32() && 0xffU) % mlx5hws_bwc_queues(ctx);
++#endif
+ }
+ 
+ static u16
+@@ -380,7 +384,11 @@ int mlx5hws_bwc_queue_poll(struct mlx5hw
+ 			   bool drain)
+ {
+ 	unsigned long timeout = jiffies +
++#ifdef HAVE_SECS_TO_JIFFIES
+ 				secs_to_jiffies(MLX5HWS_BWC_POLLING_TIMEOUT);
++#else
++				msecs_to_jiffies(MLX5HWS_BWC_POLLING_TIMEOUT * 1000);
++#endif
+ 	struct mlx5hws_flow_op_result comp[MLX5HWS_BWC_MATCHER_REHASH_BURST_TH];
+ 	u16 burst_th = hws_bwc_get_burst_th(ctx, queue_id);
+ 	bool got_comp = *pending_rules >= burst_th;

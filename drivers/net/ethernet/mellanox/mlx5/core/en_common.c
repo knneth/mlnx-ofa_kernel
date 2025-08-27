@@ -144,7 +144,8 @@ err_close_tises:
 int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 {
 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
-	int err;
+	unsigned int num_doorbells;
+	int i, err;
 
 	err = mlx5_core_alloc_pd(mdev, &res->pdn);
 	if (err) {
@@ -164,17 +165,37 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 		goto err_dealloc_transport_domain;
 	}
 
-	err = mlx5_alloc_bfreg(mdev, &res->bfreg, false, false);
-	if (err) {
-		mlx5_core_err(mdev, "alloc bfreg failed, %d\n", err);
+	num_doorbells = 1 + min(MLX5_DEFAULT_NUM_DOORBELLS,
+				mlx5e_get_max_num_channels(mdev));
+	res->bfregs = kcalloc(num_doorbells, sizeof(struct mlx5_sq_bfreg),
+			      GFP_KERNEL);
+	if (!res->bfregs) {
+		err = -ENOMEM;
 		goto err_destroy_mkey;
 	}
+
+	for (i = 0; i < num_doorbells; i++) {
+		err = mlx5_alloc_bfreg(mdev, res->bfregs + i, false, false);
+		if (err) {
+			/* Continue with at least a doorbell, with a warning. */
+			if (i == 0) {
+				mlx5_core_err(mdev, "alloc bfreg 0 failed, %d\n",
+					      err);
+				goto err_free_bfregs;
+			}
+			mlx5_core_warn(mdev,
+				       "err %d, could only allocate %d/%d doorbells, performance might be affected.\n",
+				       err, i, num_doorbells);
+			break;
+		}
+	}
+	res->num_bfregs = i;
 
 	if (create_tises) {
 		err = mlx5e_create_tises(mdev, res->tisn);
 		if (err) {
 			mlx5_core_err(mdev, "alloc tises failed, %d\n", err);
-			goto err_destroy_bfreg;
+			goto err_destroy_bfregs;
 		}
 		res->tisn_valid = true;
 	}
@@ -191,8 +212,11 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 
 	return 0;
 
-err_destroy_bfreg:
-	mlx5_free_bfreg(mdev, &res->bfreg);
+err_destroy_bfregs:
+	for (i = 0; i < res->num_bfregs; i++)
+		mlx5_free_bfreg(mdev, res->bfregs + i);
+err_free_bfregs:
+	kfree(res->bfregs);
 err_destroy_mkey:
 	mlx5_core_destroy_mkey(mdev, res->mkey);
 err_dealloc_transport_domain:
@@ -206,14 +230,13 @@ void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
 {
 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
 
-	if (!res->bfreg.up)
-		return;
-
 	mlx5_crypto_dek_cleanup(mdev->mlx5e_res.dek_priv);
 	mdev->mlx5e_res.dek_priv = NULL;
 	if (res->tisn_valid)
 		mlx5e_destroy_tises(mdev, res->tisn);
-	mlx5_free_bfreg(mdev, &res->bfreg);
+	for (int i = 0; i < res->num_bfregs; i++)
+		mlx5_free_bfreg(mdev, res->bfregs + i);
+	kfree(res->bfregs);
 	mlx5_core_destroy_mkey(mdev, res->mkey);
 	mlx5_core_dealloc_transport_domain(mdev, res->td.tdn);
 	mlx5_core_dealloc_pd(mdev, res->pdn);

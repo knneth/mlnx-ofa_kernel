@@ -3,6 +3,7 @@
  * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
+
 #include <linux/device.h>
 #include <net/genetlink.h>
 #include <net/sock.h>
@@ -194,32 +195,30 @@ nla_put_failure:
 	genlmsg_cancel(msg, hdr);
 	return -EMSGSIZE;
 }
-#if 0
 
-static void devlink_notify(struct devlink *devlink, enum devlink_command cmd)
+static void mlxdevm_notify(struct mlxdevm *mlxdevm, enum mlxdevm_command cmd)
 {
 	struct sk_buff *msg;
 	int err;
 
-	WARN_ON(cmd != DEVLINK_CMD_NEW && cmd != DEVLINK_CMD_DEL);
-	WARN_ON(!devl_is_registered(devlink));
+	WARN_ON(cmd != MLXDEVM_CMD_NEW && cmd != MLXDEVM_CMD_DEL);
+	WARN_ON(!devm_is_registered(mlxdevm));
 
-	if (!devlink_nl_notify_need(devlink))
+	if (!mlxdevm_nl_notify_need(mlxdevm))
 		return;
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg)
 		return;
 
-	err = devlink_nl_fill(msg, devlink, cmd, 0, 0, 0);
+	err = mlxdevm_nl_fill(msg, mlxdevm, cmd, 0, 0, 0);
 	if (err) {
 		nlmsg_free(msg);
 		return;
 	}
 
-	devlink_nl_notify_send(devlink, msg);
+	mlxdevm_nl_notify_send(mlxdevm, msg);
 }
-#endif
 
 int mlxdevm_nl_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
@@ -254,7 +253,7 @@ int mlxdevm_nl_get_dumpit(struct sk_buff *msg, struct netlink_callback *cb)
 {
 	return mlxdevm_nl_dumpit(msg, cb, mlxdevm_nl_get_dump_one);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void devlink_rel_notify_cb(struct devlink *devlink, u32 obj_index)
 {
@@ -309,44 +308,48 @@ void devlink_notify_unregister(struct devlink *devlink)
 	devlink_linecards_notify_unregister(devlink);
 	devlink_notify(devlink, DEVLINK_CMD_DEL);
 }
+#endif
 
-static void devlink_reload_failed_set(struct devlink *devlink,
+static void mlxdevm_reload_failed_set(struct mlxdevm *mlxdevm,
 				      bool reload_failed)
 {
-	if (devlink->reload_failed == reload_failed)
+	if (mlxdevm->reload_failed == reload_failed)
 		return;
-	devlink->reload_failed = reload_failed;
-	devlink_notify(devlink, DEVLINK_CMD_NEW);
+	mlxdevm->reload_failed = reload_failed;
+	mlxdevm_notify(mlxdevm, MLXDEVM_CMD_NEW);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 bool devlink_is_reload_failed(const struct devlink *devlink)
 {
 	return devlink->reload_failed;
 }
 EXPORT_SYMBOL_GPL(devlink_is_reload_failed);
+#endif
 
 static void
-__devlink_reload_stats_update(struct devlink *devlink, u32 *reload_stats,
-			      enum devlink_reload_limit limit, u32 actions_performed)
+__mlxdevm_reload_stats_update(struct mlxdevm *mlxdevm, u32 *reload_stats,
+			      enum mlxdevm_reload_limit limit, u32 actions_performed)
 {
 	unsigned long actions = actions_performed;
 	int stat_idx;
 	int action;
 
-	for_each_set_bit(action, &actions, __DEVLINK_RELOAD_ACTION_MAX) {
-		stat_idx = limit * __DEVLINK_RELOAD_ACTION_MAX + action;
+	for_each_set_bit(action, &actions, __MLXDEVM_RELOAD_ACTION_MAX) {
+		stat_idx = limit * __MLXDEVM_RELOAD_ACTION_MAX + action;
 		reload_stats[stat_idx]++;
 	}
-	devlink_notify(devlink, DEVLINK_CMD_NEW);
+	mlxdevm_notify(mlxdevm, MLXDEVM_CMD_NEW);
 }
 
 static void
-devlink_reload_stats_update(struct devlink *devlink, enum devlink_reload_limit limit,
+mlxdevm_reload_stats_update(struct mlxdevm *mlxdevm, enum mlxdevm_reload_limit limit,
 			    u32 actions_performed)
 {
-	__devlink_reload_stats_update(devlink, devlink->stats.reload_stats, limit,
+	__mlxdevm_reload_stats_update(mlxdevm, mlxdevm->stats.reload_stats, limit,
 				      actions_performed);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devlink_remote_reload_actions_performed - Update devlink on reload actions
@@ -376,13 +379,14 @@ void devlink_remote_reload_actions_performed(struct devlink *devlink,
 				      actions_performed);
 }
 EXPORT_SYMBOL_GPL(devlink_remote_reload_actions_performed);
+#endif
 
-static struct net *devlink_netns_get(struct sk_buff *skb,
+static struct net *mlxdevm_netns_get(struct sk_buff *skb,
 				     struct genl_info *info)
 {
-	struct nlattr *netns_pid_attr = info->attrs[DEVLINK_ATTR_NETNS_PID];
-	struct nlattr *netns_fd_attr = info->attrs[DEVLINK_ATTR_NETNS_FD];
-	struct nlattr *netns_id_attr = info->attrs[DEVLINK_ATTR_NETNS_ID];
+	struct nlattr *netns_pid_attr = info->attrs[MLXDEVM_ATTR_NETNS_PID];
+	struct nlattr *netns_fd_attr = info->attrs[MLXDEVM_ATTR_NETNS_FD];
+	struct nlattr *netns_id_attr = info->attrs[MLXDEVM_ATTR_NETNS_ID];
 	struct net *net;
 
 	if (!!netns_pid_attr + !!netns_fd_attr + !!netns_id_attr > 1) {
@@ -414,39 +418,39 @@ static struct net *devlink_netns_get(struct sk_buff *skb,
 	return net;
 }
 
-static void devlink_reload_netns_change(struct devlink *devlink,
+static void mlxdevm_reload_netns_change(struct mlxdevm *mlxdevm,
 					struct net *curr_net,
 					struct net *dest_net)
 {
-	/* Userspace needs to be notified about devlink objects
+	/* Userspace needs to be notified about mlxdevm objects
 	 * removed from original and entering new network namespace.
-	 * The rest of the devlink objects are re-created during
+	 * The rest of the mlxdevm objects are re-created during
 	 * reload process so the notifications are generated separatelly.
 	 */
-	devlink_notify_unregister(devlink);
-	write_pnet(&devlink->_net, dest_net);
-	devlink_notify_register(devlink);
-	devlink_rel_nested_in_notify(devlink);
+	//mlxdevm_notify_unregister(mlxdevm);
+	write_pnet(&mlxdevm->_net, dest_net);
+	//mlxdevm_notify_register(mlxdevm);
+	mlxdevm_rel_nested_in_notify(mlxdevm);
 }
 
-static void devlink_reload_reinit_sanity_check(struct devlink *devlink)
+static void mlxdevm_reload_reinit_sanity_check(struct mlxdevm *mlxdevm)
 {
-	WARN_ON(!list_empty(&devlink->trap_policer_list));
-	WARN_ON(!list_empty(&devlink->trap_group_list));
-	WARN_ON(!list_empty(&devlink->trap_list));
-	WARN_ON(!list_empty(&devlink->dpipe_table_list));
-	WARN_ON(!list_empty(&devlink->sb_list));
-	WARN_ON(!list_empty(&devlink->rate_list));
-	WARN_ON(!list_empty(&devlink->linecard_list));
-	WARN_ON(!xa_empty(&devlink->ports));
+	WARN_ON(!list_empty(&mlxdevm->trap_policer_list));
+	WARN_ON(!list_empty(&mlxdevm->trap_group_list));
+	WARN_ON(!list_empty(&mlxdevm->trap_list));
+	WARN_ON(!list_empty(&mlxdevm->dpipe_table_list));
+	WARN_ON(!list_empty(&mlxdevm->sb_list));
+	WARN_ON(!list_empty(&mlxdevm->rate_list));
+	WARN_ON(!list_empty(&mlxdevm->linecard_list));
+	WARN_ON(!xa_empty(&mlxdevm->ports));
 }
 
-int devlink_reload(struct devlink *devlink, struct net *dest_net,
-		   enum devlink_reload_action action,
-		   enum devlink_reload_limit limit,
+int mlxdevm_reload(struct mlxdevm *mlxdevm, struct net *dest_net,
+		   enum mlxdevm_reload_action action,
+		   enum mlxdevm_reload_limit limit,
 		   u32 *actions_performed, struct netlink_ext_ack *extack)
 {
-	u32 remote_reload_stats[DEVLINK_RELOAD_STATS_ARRAY_SIZE];
+	u32 remote_reload_stats[MLXDEVM_RELOAD_STATS_ARRAY_SIZE];
 	struct net *curr_net;
 	int err;
 
@@ -455,40 +459,40 @@ int devlink_reload(struct devlink *devlink, struct net *dest_net,
 	 * (e.g., PCI reset) and to close possible races between these
 	 * operations and probe/remove.
 	 */
-	device_lock_assert(devlink->dev);
+	device_lock_assert(mlxdevm->dev);
 
-	memcpy(remote_reload_stats, devlink->stats.remote_reload_stats,
+	memcpy(remote_reload_stats, mlxdevm->stats.remote_reload_stats,
 	       sizeof(remote_reload_stats));
 
-	err = devlink->ops->reload_down(devlink, !!dest_net, action, limit, extack);
+	err = mlxdevm->ops->reload_down(mlxdevm, !!dest_net, action, limit, extack);
 	if (err)
 		return err;
 
-	curr_net = devlink_net(devlink);
+	curr_net = mlxdevm_net(mlxdevm);
 	if (dest_net && !net_eq(dest_net, curr_net))
-		devlink_reload_netns_change(devlink, curr_net, dest_net);
+		mlxdevm_reload_netns_change(mlxdevm, curr_net, dest_net);
 
-	if (action == DEVLINK_RELOAD_ACTION_DRIVER_REINIT) {
-		devlink_params_driverinit_load_new(devlink);
-		devlink_reload_reinit_sanity_check(devlink);
+	if (action == MLXDEVM_RELOAD_ACTION_DRIVER_REINIT) {
+		mlxdevm_params_driverinit_load_new(mlxdevm);
+		mlxdevm_reload_reinit_sanity_check(mlxdevm);
 	}
 
-	err = devlink->ops->reload_up(devlink, action, limit, actions_performed, extack);
-	devlink_reload_failed_set(devlink, !!err);
+	err = mlxdevm->ops->reload_up(mlxdevm, action, limit, actions_performed, extack);
+	mlxdevm_reload_failed_set(mlxdevm, !!err);
 	if (err)
 		return err;
 
 	WARN_ON(!(*actions_performed & BIT(action)));
-	/* Catch driver on updating the remote action within devlink reload */
-	WARN_ON(memcmp(remote_reload_stats, devlink->stats.remote_reload_stats,
+	/* Catch driver on updating the remote action within mlxdevm reload */
+	WARN_ON(memcmp(remote_reload_stats, mlxdevm->stats.remote_reload_stats,
 		       sizeof(remote_reload_stats)));
-	devlink_reload_stats_update(devlink, limit, *actions_performed);
+	mlxdevm_reload_stats_update(mlxdevm, limit, *actions_performed);
 	return 0;
 }
 
 static int
-devlink_nl_reload_actions_performed_snd(struct devlink *devlink, u32 actions_performed,
-					enum devlink_command cmd, struct genl_info *info)
+mlxdevm_nl_reload_actions_performed_snd(struct mlxdevm *mlxdevm, u32 actions_performed,
+					enum mlxdevm_command cmd, struct genl_info *info)
 {
 	struct sk_buff *msg;
 	void *hdr;
@@ -497,14 +501,14 @@ devlink_nl_reload_actions_performed_snd(struct devlink *devlink, u32 actions_per
 	if (!msg)
 		return -ENOMEM;
 
-	hdr = genlmsg_put(msg, info->snd_portid, info->snd_seq, &devlink_nl_family, 0, cmd);
+	hdr = genlmsg_put(msg, info->snd_portid, info->snd_seq, &mlxdevm_nl_family, 0, cmd);
 	if (!hdr)
 		goto free_msg;
 
-	if (devlink_nl_put_handle(msg, devlink))
+	if (mlxdevm_nl_put_handle(msg, mlxdevm))
 		goto nla_put_failure;
 
-	if (nla_put_bitfield32(msg, DEVLINK_ATTR_RELOAD_ACTIONS_PERFORMED, actions_performed,
+	if (nla_put_bitfield32(msg, MLXDEVM_ATTR_RELOAD_ACTIONS_PERFORMED, actions_performed,
 			       actions_performed))
 		goto nla_put_failure;
 	genlmsg_end(msg, hdr);
@@ -518,43 +522,41 @@ free_msg:
 	return -EMSGSIZE;
 }
 
-int devlink_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
-	enum devlink_reload_action action;
-	enum devlink_reload_limit limit;
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	enum mlxdevm_reload_action action;
+	enum mlxdevm_reload_limit limit;
 	struct net *dest_net = NULL;
 	u32 actions_performed;
 	int err;
 
-	err = devlink_resources_validate(devlink, NULL, info);
+	err = mlxdevm_resources_validate(mlxdevm, NULL, info);
 	if (err) {
 		NL_SET_ERR_MSG(info->extack, "resources size validation failed");
 		return err;
 	}
 
-	if (info->attrs[DEVLINK_ATTR_RELOAD_ACTION])
-		action = nla_get_u8(info->attrs[DEVLINK_ATTR_RELOAD_ACTION]);
-	else
-		action = DEVLINK_RELOAD_ACTION_DRIVER_REINIT;
+	action = nla_get_u8_default(info->attrs[MLXDEVM_ATTR_RELOAD_ACTION],
+				    MLXDEVM_RELOAD_ACTION_DRIVER_REINIT);
 
-	if (!devlink_reload_action_is_supported(devlink, action)) {
+	if (!mlxdevm_reload_action_is_supported(mlxdevm, action)) {
 		NL_SET_ERR_MSG(info->extack, "Requested reload action is not supported by the driver");
 		return -EOPNOTSUPP;
 	}
 
-	limit = DEVLINK_RELOAD_LIMIT_UNSPEC;
-	if (info->attrs[DEVLINK_ATTR_RELOAD_LIMITS]) {
+	limit = MLXDEVM_RELOAD_LIMIT_UNSPEC;
+	if (info->attrs[MLXDEVM_ATTR_RELOAD_LIMITS]) {
 		struct nla_bitfield32 limits;
 		u32 limits_selected;
 
-		limits = nla_get_bitfield32(info->attrs[DEVLINK_ATTR_RELOAD_LIMITS]);
+		limits = nla_get_bitfield32(info->attrs[MLXDEVM_ATTR_RELOAD_LIMITS]);
 		limits_selected = limits.value & limits.selector;
 		if (!limits_selected) {
 			NL_SET_ERR_MSG(info->extack, "Invalid limit selected");
 			return -EINVAL;
 		}
-		for (limit = 0 ; limit <= DEVLINK_RELOAD_LIMIT_MAX ; limit++)
+		for (limit = 0 ; limit <= MLXDEVM_RELOAD_LIMIT_MAX ; limit++)
 			if (limits_selected & BIT(limit))
 				break;
 		/* UAPI enables multiselection, but currently it is not used */
@@ -562,30 +564,30 @@ int devlink_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 			NL_SET_ERR_MSG(info->extack, "Multiselection of limit is not supported");
 			return -EOPNOTSUPP;
 		}
-		if (!devlink_reload_limit_is_supported(devlink, limit)) {
+		if (!mlxdevm_reload_limit_is_supported(mlxdevm, limit)) {
 			NL_SET_ERR_MSG(info->extack, "Requested limit is not supported by the driver");
 			return -EOPNOTSUPP;
 		}
-		if (devlink_reload_combination_is_invalid(action, limit)) {
+		if (mlxdevm_reload_combination_is_invalid(action, limit)) {
 			NL_SET_ERR_MSG(info->extack, "Requested limit is invalid for this action");
 			return -EINVAL;
 		}
 	}
-	if (info->attrs[DEVLINK_ATTR_NETNS_PID] ||
-	    info->attrs[DEVLINK_ATTR_NETNS_FD] ||
-	    info->attrs[DEVLINK_ATTR_NETNS_ID]) {
-		dest_net = devlink_netns_get(skb, info);
+	if (info->attrs[MLXDEVM_ATTR_NETNS_PID] ||
+	    info->attrs[MLXDEVM_ATTR_NETNS_FD] ||
+	    info->attrs[MLXDEVM_ATTR_NETNS_ID]) {
+		dest_net = mlxdevm_netns_get(skb, info);
 		if (IS_ERR(dest_net))
 			return PTR_ERR(dest_net);
-		if (!net_eq(dest_net, devlink_net(devlink)) &&
-		    action != DEVLINK_RELOAD_ACTION_DRIVER_REINIT) {
+		if (!net_eq(dest_net, mlxdevm_net(mlxdevm)) &&
+		    action != MLXDEVM_RELOAD_ACTION_DRIVER_REINIT) {
 			NL_SET_ERR_MSG_MOD(info->extack,
 					   "Changing namespace is only supported for reinit action");
 			return -EOPNOTSUPP;
 		}
 	}
 
-	err = devlink_reload(devlink, dest_net, action, limit, &actions_performed, info->extack);
+	err = mlxdevm_reload(mlxdevm, dest_net, action, limit, &actions_performed, info->extack);
 
 	if (dest_net)
 		put_net(dest_net);
@@ -593,12 +595,13 @@ int devlink_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		return err;
 	/* For backward compatibility generate reply only if attributes used by user */
-	if (!info->attrs[DEVLINK_ATTR_RELOAD_ACTION] && !info->attrs[DEVLINK_ATTR_RELOAD_LIMITS])
+	if (!info->attrs[MLXDEVM_ATTR_RELOAD_ACTION] && !info->attrs[MLXDEVM_ATTR_RELOAD_LIMITS])
 		return 0;
 
-	return devlink_nl_reload_actions_performed_snd(devlink, actions_performed,
-						       DEVLINK_CMD_RELOAD, info);
+	return mlxdevm_nl_reload_actions_performed_snd(mlxdevm, actions_performed,
+						       MLXDEVM_CMD_RELOAD, info);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 bool devlink_reload_actions_valid(const struct devlink_ops *ops)
 {
@@ -628,50 +631,51 @@ bool devlink_reload_actions_valid(const struct devlink_ops *ops)
 	}
 	return true;
 }
+#endif
 
-static int devlink_nl_eswitch_fill(struct sk_buff *msg, struct devlink *devlink,
-				   enum devlink_command cmd, u32 portid,
+static int mlxdevm_nl_eswitch_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
+				   enum mlxdevm_command cmd, u32 portid,
 				   u32 seq, int flags)
 {
-	const struct devlink_ops *ops = devlink->ops;
-	enum devlink_eswitch_encap_mode encap_mode;
+	const struct mlxdevm_ops *ops = mlxdevm->ops;
+	enum mlxdevm_eswitch_encap_mode encap_mode;
 	u8 inline_mode;
 	void *hdr;
 	int err = 0;
 	u16 mode;
 
-	hdr = genlmsg_put(msg, portid, seq, &devlink_nl_family, flags, cmd);
+	hdr = genlmsg_put(msg, portid, seq, &mlxdevm_nl_family, flags, cmd);
 	if (!hdr)
 		return -EMSGSIZE;
 
-	err = devlink_nl_put_handle(msg, devlink);
+	err = mlxdevm_nl_put_handle(msg, mlxdevm);
 	if (err)
 		goto nla_put_failure;
 
 	if (ops->eswitch_mode_get) {
-		err = ops->eswitch_mode_get(devlink, &mode);
+		err = ops->eswitch_mode_get(mlxdevm, &mode);
 		if (err)
 			goto nla_put_failure;
-		err = nla_put_u16(msg, DEVLINK_ATTR_ESWITCH_MODE, mode);
+		err = nla_put_u16(msg, MLXDEVM_ATTR_ESWITCH_MODE, mode);
 		if (err)
 			goto nla_put_failure;
 	}
 
 	if (ops->eswitch_inline_mode_get) {
-		err = ops->eswitch_inline_mode_get(devlink, &inline_mode);
+		err = ops->eswitch_inline_mode_get(mlxdevm, &inline_mode);
 		if (err)
 			goto nla_put_failure;
-		err = nla_put_u8(msg, DEVLINK_ATTR_ESWITCH_INLINE_MODE,
+		err = nla_put_u8(msg, MLXDEVM_ATTR_ESWITCH_INLINE_MODE,
 				 inline_mode);
 		if (err)
 			goto nla_put_failure;
 	}
 
 	if (ops->eswitch_encap_mode_get) {
-		err = ops->eswitch_encap_mode_get(devlink, &encap_mode);
+		err = ops->eswitch_encap_mode_get(mlxdevm, &encap_mode);
 		if (err)
 			goto nla_put_failure;
-		err = nla_put_u8(msg, DEVLINK_ATTR_ESWITCH_ENCAP_MODE, encap_mode);
+		err = nla_put_u8(msg, MLXDEVM_ATTR_ESWITCH_ENCAP_MODE, encap_mode);
 		if (err)
 			goto nla_put_failure;
 	}
@@ -684,9 +688,9 @@ nla_put_failure:
 	return err;
 }
 
-int devlink_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
 	struct sk_buff *msg;
 	int err;
 
@@ -694,7 +698,7 @@ int devlink_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
 	if (!msg)
 		return -ENOMEM;
 
-	err = devlink_nl_eswitch_fill(msg, devlink, DEVLINK_CMD_ESWITCH_GET,
+	err = mlxdevm_nl_eswitch_fill(msg, mlxdevm, MLXDEVM_CMD_ESWITCH_GET,
 				      info->snd_portid, info->snd_seq, 0);
 
 	if (err) {
@@ -705,42 +709,42 @@ int devlink_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
 	return genlmsg_reply(msg, info);
 }
 
-int devlink_nl_eswitch_set_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_eswitch_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
-	const struct devlink_ops *ops = devlink->ops;
-	enum devlink_eswitch_encap_mode encap_mode;
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	const struct mlxdevm_ops *ops = mlxdevm->ops;
+	enum mlxdevm_eswitch_encap_mode encap_mode;
 	u8 inline_mode;
 	int err = 0;
 	u16 mode;
 
-	if (info->attrs[DEVLINK_ATTR_ESWITCH_MODE]) {
+	if (info->attrs[MLXDEVM_ATTR_ESWITCH_MODE]) {
 		if (!ops->eswitch_mode_set)
 			return -EOPNOTSUPP;
-		mode = nla_get_u16(info->attrs[DEVLINK_ATTR_ESWITCH_MODE]);
-		err = devlink_rate_nodes_check(devlink, mode, info->extack);
+		mode = nla_get_u16(info->attrs[MLXDEVM_ATTR_ESWITCH_MODE]);
+		err = mlxdevm_rate_nodes_check(mlxdevm, mode, info->extack);
 		if (err)
 			return err;
-		err = ops->eswitch_mode_set(devlink, mode, info->extack);
+		err = ops->eswitch_mode_set(mlxdevm, mode, info->extack);
 		if (err)
 			return err;
 	}
 
-	if (info->attrs[DEVLINK_ATTR_ESWITCH_INLINE_MODE]) {
+	if (info->attrs[MLXDEVM_ATTR_ESWITCH_INLINE_MODE]) {
 		if (!ops->eswitch_inline_mode_set)
 			return -EOPNOTSUPP;
-		inline_mode = nla_get_u8(info->attrs[DEVLINK_ATTR_ESWITCH_INLINE_MODE]);
-		err = ops->eswitch_inline_mode_set(devlink, inline_mode,
+		inline_mode = nla_get_u8(info->attrs[MLXDEVM_ATTR_ESWITCH_INLINE_MODE]);
+		err = ops->eswitch_inline_mode_set(mlxdevm, inline_mode,
 						   info->extack);
 		if (err)
 			return err;
 	}
 
-	if (info->attrs[DEVLINK_ATTR_ESWITCH_ENCAP_MODE]) {
+	if (info->attrs[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE]) {
 		if (!ops->eswitch_encap_mode_set)
 			return -EOPNOTSUPP;
-		encap_mode = nla_get_u8(info->attrs[DEVLINK_ATTR_ESWITCH_ENCAP_MODE]);
-		err = ops->eswitch_encap_mode_set(devlink, encap_mode,
+		encap_mode = nla_get_u8(info->attrs[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE]);
+		err = ops->eswitch_encap_mode_set(mlxdevm, encap_mode,
 						  info->extack);
 		if (err)
 			return err;
@@ -748,6 +752,7 @@ int devlink_nl_eswitch_set_doit(struct sk_buff *skb, struct genl_info *info)
 
 	return 0;
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_info_serial_number_put(struct devlink_info_req *req, const char *sn)
 {
@@ -856,46 +861,47 @@ int devlink_info_version_running_put_ext(struct devlink_info_req *req,
 					version_type);
 }
 EXPORT_SYMBOL_GPL(devlink_info_version_running_put_ext);
+#endif
 
-static int devlink_nl_driver_info_get(struct device_driver *drv,
-				      struct devlink_info_req *req)
+static int mlxdevm_nl_driver_info_get(struct device_driver *drv,
+				      struct mlxdevm_info_req *req)
 {
 	if (!drv)
 		return 0;
 
 	if (drv->name[0])
-		return nla_put_string(req->msg, DEVLINK_ATTR_INFO_DRIVER_NAME,
+		return nla_put_string(req->msg, MLXDEVM_ATTR_INFO_DRIVER_NAME,
 				      drv->name);
 
 	return 0;
 }
 
 static int
-devlink_nl_info_fill(struct sk_buff *msg, struct devlink *devlink,
-		     enum devlink_command cmd, u32 portid,
+mlxdevm_nl_info_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
+		     enum mlxdevm_command cmd, u32 portid,
 		     u32 seq, int flags, struct netlink_ext_ack *extack)
 {
-	struct device *dev = devlink_to_dev(devlink);
-	struct devlink_info_req req = {};
+	struct device *dev = mlxdevm_to_dev(mlxdevm);
+	struct mlxdevm_info_req req = {};
 	void *hdr;
 	int err;
 
-	hdr = genlmsg_put(msg, portid, seq, &devlink_nl_family, flags, cmd);
+	hdr = genlmsg_put(msg, portid, seq, &mlxdevm_nl_family, flags, cmd);
 	if (!hdr)
 		return -EMSGSIZE;
 
 	err = -EMSGSIZE;
-	if (devlink_nl_put_handle(msg, devlink))
+	if (mlxdevm_nl_put_handle(msg, mlxdevm))
 		goto err_cancel_msg;
 
 	req.msg = msg;
-	if (devlink->ops->info_get) {
-		err = devlink->ops->info_get(devlink, &req, extack);
+	if (mlxdevm->ops->info_get) {
+		err = mlxdevm->ops->info_get(mlxdevm, &req, extack);
 		if (err)
 			goto err_cancel_msg;
 	}
 
-	err = devlink_nl_driver_info_get(dev->driver, &req);
+	err = mlxdevm_nl_driver_info_get(dev->driver, &req);
 	if (err)
 		goto err_cancel_msg;
 
@@ -907,9 +913,9 @@ err_cancel_msg:
 	return err;
 }
 
-int devlink_nl_info_get_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_info_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
 	struct sk_buff *msg;
 	int err;
 
@@ -917,7 +923,7 @@ int devlink_nl_info_get_doit(struct sk_buff *skb, struct genl_info *info)
 	if (!msg)
 		return -ENOMEM;
 
-	err = devlink_nl_info_fill(msg, devlink, DEVLINK_CMD_INFO_GET,
+	err = mlxdevm_nl_info_fill(msg, mlxdevm, MLXDEVM_CMD_INFO_GET,
 				   info->snd_portid, info->snd_seq, 0,
 				   info->extack);
 	if (err) {
@@ -929,12 +935,12 @@ int devlink_nl_info_get_doit(struct sk_buff *skb, struct genl_info *info)
 }
 
 static int
-devlink_nl_info_get_dump_one(struct sk_buff *msg, struct devlink *devlink,
+mlxdevm_nl_info_get_dump_one(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 			     struct netlink_callback *cb, int flags)
 {
 	int err;
 
-	err = devlink_nl_info_fill(msg, devlink, DEVLINK_CMD_INFO_GET,
+	err = mlxdevm_nl_info_fill(msg, mlxdevm, MLXDEVM_CMD_INFO_GET,
 				   NETLINK_CB(cb->skb).portid,
 				   cb->nlh->nlmsg_seq, flags,
 				   cb->extack);
@@ -943,44 +949,44 @@ devlink_nl_info_get_dump_one(struct sk_buff *msg, struct devlink *devlink,
 	return err;
 }
 
-int devlink_nl_info_get_dumpit(struct sk_buff *msg, struct netlink_callback *cb)
+int mlxdevm_nl_info_get_dumpit(struct sk_buff *msg, struct netlink_callback *cb)
 {
-	return devlink_nl_dumpit(msg, cb, devlink_nl_info_get_dump_one);
+	return mlxdevm_nl_dumpit(msg, cb, mlxdevm_nl_info_get_dump_one);
 }
 
-static int devlink_nl_flash_update_fill(struct sk_buff *msg,
-					struct devlink *devlink,
-					enum devlink_command cmd,
-					struct devlink_flash_notify *params)
+static int mlxdevm_nl_flash_update_fill(struct sk_buff *msg,
+					struct mlxdevm *mlxdevm,
+					enum mlxdevm_command cmd,
+					struct mlxdevm_flash_notify *params)
 {
 	void *hdr;
 
-	hdr = genlmsg_put(msg, 0, 0, &devlink_nl_family, 0, cmd);
+	hdr = genlmsg_put(msg, 0, 0, &mlxdevm_nl_family, 0, cmd);
 	if (!hdr)
 		return -EMSGSIZE;
 
-	if (devlink_nl_put_handle(msg, devlink))
+	if (mlxdevm_nl_put_handle(msg, mlxdevm))
 		goto nla_put_failure;
 
-	if (cmd != DEVLINK_CMD_FLASH_UPDATE_STATUS)
+	if (cmd != MLXDEVM_CMD_FLASH_UPDATE_STATUS)
 		goto out;
 
 	if (params->status_msg &&
-	    nla_put_string(msg, DEVLINK_ATTR_FLASH_UPDATE_STATUS_MSG,
+	    nla_put_string(msg, MLXDEVM_ATTR_FLASH_UPDATE_STATUS_MSG,
 			   params->status_msg))
 		goto nla_put_failure;
 	if (params->component &&
-	    nla_put_string(msg, DEVLINK_ATTR_FLASH_UPDATE_COMPONENT,
+	    nla_put_string(msg, MLXDEVM_ATTR_FLASH_UPDATE_COMPONENT,
 			   params->component))
 		goto nla_put_failure;
-	if (nla_put_u64_64bit(msg, DEVLINK_ATTR_FLASH_UPDATE_STATUS_DONE,
-			      params->done, DEVLINK_ATTR_PAD))
+	if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_FLASH_UPDATE_STATUS_DONE,
+			       params->done))
 		goto nla_put_failure;
-	if (nla_put_u64_64bit(msg, DEVLINK_ATTR_FLASH_UPDATE_STATUS_TOTAL,
-			      params->total, DEVLINK_ATTR_PAD))
+	if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_FLASH_UPDATE_STATUS_TOTAL,
+			       params->total))
 		goto nla_put_failure;
-	if (nla_put_u64_64bit(msg, DEVLINK_ATTR_FLASH_UPDATE_STATUS_TIMEOUT,
-			      params->timeout, DEVLINK_ATTR_PAD))
+	if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_FLASH_UPDATE_STATUS_TIMEOUT,
+			       params->timeout))
 		goto nla_put_failure;
 
 out:
@@ -992,52 +998,53 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static void __devlink_flash_update_notify(struct devlink *devlink,
-					  enum devlink_command cmd,
-					  struct devlink_flash_notify *params)
+static void __mlxdevm_flash_update_notify(struct mlxdevm *mlxdevm,
+					  enum mlxdevm_command cmd,
+					  struct mlxdevm_flash_notify *params)
 {
 	struct sk_buff *msg;
 	int err;
 
-	WARN_ON(cmd != DEVLINK_CMD_FLASH_UPDATE &&
-		cmd != DEVLINK_CMD_FLASH_UPDATE_END &&
-		cmd != DEVLINK_CMD_FLASH_UPDATE_STATUS);
+	WARN_ON(cmd != MLXDEVM_CMD_FLASH_UPDATE &&
+		cmd != MLXDEVM_CMD_FLASH_UPDATE_END &&
+		cmd != MLXDEVM_CMD_FLASH_UPDATE_STATUS);
 
-	if (!devl_is_registered(devlink) || !devlink_nl_notify_need(devlink))
+	if (!devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
 		return;
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg)
 		return;
 
-	err = devlink_nl_flash_update_fill(msg, devlink, cmd, params);
+	err = mlxdevm_nl_flash_update_fill(msg, mlxdevm, cmd, params);
 	if (err)
 		goto out_free_msg;
 
-	devlink_nl_notify_send(devlink, msg);
+	mlxdevm_nl_notify_send(mlxdevm, msg);
 	return;
 
 out_free_msg:
 	nlmsg_free(msg);
 }
 
-static void devlink_flash_update_begin_notify(struct devlink *devlink)
+static void mlxdevm_flash_update_begin_notify(struct mlxdevm *mlxdevm)
 {
-	struct devlink_flash_notify params = {};
+	struct mlxdevm_flash_notify params = {};
 
-	__devlink_flash_update_notify(devlink,
-				      DEVLINK_CMD_FLASH_UPDATE,
+	__mlxdevm_flash_update_notify(mlxdevm,
+				      MLXDEVM_CMD_FLASH_UPDATE,
 				      &params);
 }
 
-static void devlink_flash_update_end_notify(struct devlink *devlink)
+static void mlxdevm_flash_update_end_notify(struct mlxdevm *mlxdevm)
 {
-	struct devlink_flash_notify params = {};
+	struct mlxdevm_flash_notify params = {};
 
-	__devlink_flash_update_notify(devlink,
-				      DEVLINK_CMD_FLASH_UPDATE_END,
+	__mlxdevm_flash_update_notify(mlxdevm,
+				      MLXDEVM_CMD_FLASH_UPDATE_END,
 				      &params);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 void devlink_flash_update_status_notify(struct devlink *devlink,
 					const char *status_msg,
@@ -1074,20 +1081,21 @@ void devlink_flash_update_timeout_notify(struct devlink *devlink,
 				      &params);
 }
 EXPORT_SYMBOL_GPL(devlink_flash_update_timeout_notify);
+#endif
 
-struct devlink_flash_component_lookup_ctx {
+struct mlxdevm_flash_component_lookup_ctx {
 	const char *lookup_name;
 	bool lookup_name_found;
 };
 
 static void
-devlink_flash_component_lookup_cb(const char *version_name,
-				  enum devlink_info_version_type version_type,
+mlxdevm_flash_component_lookup_cb(const char *version_name,
+				  enum mlxdevm_info_version_type version_type,
 				  void *version_cb_priv)
 {
-	struct devlink_flash_component_lookup_ctx *lookup_ctx = version_cb_priv;
+	struct mlxdevm_flash_component_lookup_ctx *lookup_ctx = version_cb_priv;
 
-	if (version_type != DEVLINK_INFO_VERSION_TYPE_COMPONENT ||
+	if (version_type != MLXDEVM_INFO_VERSION_TYPE_COMPONENT ||
 	    lookup_ctx->lookup_name_found)
 		return;
 
@@ -1095,13 +1103,13 @@ devlink_flash_component_lookup_cb(const char *version_name,
 		!strcmp(lookup_ctx->lookup_name, version_name);
 }
 
-static int devlink_flash_component_get(struct devlink *devlink,
+static int mlxdevm_flash_component_get(struct mlxdevm *mlxdevm,
 				       struct nlattr *nla_component,
 				       const char **p_component,
 				       struct netlink_ext_ack *extack)
 {
-	struct devlink_flash_component_lookup_ctx lookup_ctx = {};
-	struct devlink_info_req req = {};
+	struct mlxdevm_flash_component_lookup_ctx lookup_ctx = {};
+	struct mlxdevm_info_req req = {};
 	const char *component;
 	int ret;
 
@@ -1110,17 +1118,17 @@ static int devlink_flash_component_get(struct devlink *devlink,
 
 	component = nla_data(nla_component);
 
-	if (!devlink->ops->info_get) {
+	if (!mlxdevm->ops->info_get) {
 		NL_SET_ERR_MSG_ATTR(extack, nla_component,
 				    "component update is not supported by this device");
 		return -EOPNOTSUPP;
 	}
 
 	lookup_ctx.lookup_name = component;
-	req.version_cb = devlink_flash_component_lookup_cb;
+	req.version_cb = mlxdevm_flash_component_lookup_cb;
 	req.version_cb_priv = &lookup_ctx;
 
-	ret = devlink->ops->info_get(devlink, &req, NULL);
+	ret = mlxdevm->ops->info_get(mlxdevm, &req, NULL);
 	if (ret)
 		return ret;
 
@@ -1133,34 +1141,34 @@ static int devlink_flash_component_get(struct devlink *devlink,
 	return 0;
 }
 
-int devlink_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
+int mlxdevm_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *nla_overwrite_mask, *nla_file_name;
-	struct devlink_flash_update_params params = {};
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm_flash_update_params params = {};
+	struct mlxdevm *mlxdevm = info->user_ptr[0];
 	const char *file_name;
 	u32 supported_params;
 	int ret;
 
-	if (!devlink->ops->flash_update)
+	if (!mlxdevm->ops->flash_update)
 		return -EOPNOTSUPP;
 
-	if (GENL_REQ_ATTR_CHECK(info, DEVLINK_ATTR_FLASH_UPDATE_FILE_NAME))
+	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME))
 		return -EINVAL;
 
-	ret = devlink_flash_component_get(devlink,
-					  info->attrs[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT],
+	ret = mlxdevm_flash_component_get(mlxdevm,
+					  info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_COMPONENT],
 					  &params.component, info->extack);
 	if (ret)
 		return ret;
 
-	supported_params = devlink->ops->supported_flash_update_params;
+	supported_params = mlxdevm->ops->supported_flash_update_params;
 
-	nla_overwrite_mask = info->attrs[DEVLINK_ATTR_FLASH_UPDATE_OVERWRITE_MASK];
+	nla_overwrite_mask = info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_OVERWRITE_MASK];
 	if (nla_overwrite_mask) {
 		struct nla_bitfield32 sections;
 
-		if (!(supported_params & DEVLINK_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK)) {
+		if (!(supported_params & MLXDEVM_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK)) {
 			NL_SET_ERR_MSG_ATTR(info->extack, nla_overwrite_mask,
 					    "overwrite settings are not supported by this device");
 			return -EOPNOTSUPP;
@@ -1169,23 +1177,24 @@ int devlink_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
 		params.overwrite_mask = sections.value & sections.selector;
 	}
 
-	nla_file_name = info->attrs[DEVLINK_ATTR_FLASH_UPDATE_FILE_NAME];
+	nla_file_name = info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME];
 	file_name = nla_data(nla_file_name);
-	ret = request_firmware(&params.fw, file_name, devlink->dev);
+	ret = request_firmware(&params.fw, file_name, mlxdevm->dev);
 	if (ret) {
 		NL_SET_ERR_MSG_ATTR(info->extack, nla_file_name,
 				    "failed to locate the requested firmware file");
 		return ret;
 	}
 
-	devlink_flash_update_begin_notify(devlink);
-	ret = devlink->ops->flash_update(devlink, &params, info->extack);
-	devlink_flash_update_end_notify(devlink);
+	mlxdevm_flash_update_begin_notify(mlxdevm);
+	ret = mlxdevm->ops->flash_update(mlxdevm, &params, info->extack);
+	mlxdevm_flash_update_end_notify(mlxdevm);
 
 	release_firmware(params.fw);
 
 	return ret;
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void __devlink_compat_running_version(struct devlink *devlink,
 					     char *buf, size_t len)

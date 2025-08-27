@@ -405,3 +405,4 @@ MODULE_IMPORT_NS("FWCTL");
 MODULE_DESCRIPTION("mlx5 ConnectX fwctl driver");
 MODULE_AUTHOR("Saeed Mahameed <saeedm@nvidia.com>");
 MODULE_LICENSE("Dual BSD/GPL");
+MODULE_INFO(supported, "external");

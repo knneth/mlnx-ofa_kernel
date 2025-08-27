@@ -1,19 +1,45 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
 
-Change-Id: I50d79889659789a652ff2306174bafa1cd43d593
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h | 1 +
- 1 file changed, 1 insertion(+)
+ .../net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-@@ -4,6 +4,7 @@
- #ifndef __MLX5_EN_POST_METER_H__
- #define __MLX5_EN_POST_METER_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+@@ -31,16 +31,22 @@ static int mlx5e_gen_ip_tunnel_header_gr
+ 	const struct ip_tunnel_key *tun_key  = &e->tun_info->key;
+ 	struct gre_base_hdr *greh = (struct gre_base_hdr *)(buf);
+ 	__be32 tun_id = tunnel_id_to_key32(tun_key->tun_id);
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	IP_TUNNEL_DECLARE_FLAGS(unsupp) = { };
++#endif
+ 	int hdr_len;
  
-+
- #define packet_color_to_reg { \
- 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
- 	.moffset = 0, \
+ 	*ip_proto = IPPROTO_GRE;
+ 
+ 	/* the HW does not calculate GRE csum or sequences */
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	__set_bit(IP_TUNNEL_CSUM_BIT, unsupp);
+ 	__set_bit(IP_TUNNEL_SEQ_BIT, unsupp);
+ 
+ 	if (ip_tunnel_flags_intersect(tun_key->tun_flags, unsupp))
++#else
++	if (tun_key->tun_flags & (TUNNEL_CSUM | TUNNEL_SEQ))
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	greh->protocol = htons(ETH_P_TEB);
+@@ -48,7 +54,11 @@ static int mlx5e_gen_ip_tunnel_header_gr
+ 	/* GRE key */
+ 	hdr_len	= mlx5e_tc_tun_calc_hlen_gretap(e);
+ 	greh->flags = gre_tnl_flags_to_gre_flags(tun_key->tun_flags);
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	if (test_bit(IP_TUNNEL_KEY_BIT, tun_key->tun_flags)) {
++#else
++	if (tun_key->tun_flags & TUNNEL_KEY) {
++#endif
+ 		__be32 *ptr = (__be32 *)(((u8 *)greh) + hdr_len - 4);
+ 		*ptr = tun_id;
+ 	}

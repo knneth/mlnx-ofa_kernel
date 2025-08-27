@@ -1,4 +1,4 @@
-EXTRA_CFLAGS += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
+ccflags-y += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		$(KERNEL_MEMTRACK_CFLAGS) \
 		-I$(CWD)/include \
 		-I$(CWD)/drivers/infiniband/ulp/ipoib$(CONFIG_IPOIB_VERSION) \
@@ -52,6 +52,9 @@ obj-$(CONFIG_SMC)		+= net/smc/
 obj-$(CONFIG_SMC_DIAG)		+= net/smc/
 obj-$(CONFIG_AUXILIARY_BUS)     += drivers/base/
 obj-$(CONFIG_FWCTL)     	+= drivers/fwctl/
+ifeq ($(CONFIG_FWCTL),)
+obj-$(CONFIG_FWCTL_MLX5)     	+= drivers/fwctl/mlx5/
+endif
 obj-$(CONFIG_CIFS_SMB_DIRECT)		+= fs/cifs/
 obj-$(CONFIG_MLX5_VDPA_NET)	+= drivers/vdpa/mlx5/
 obj-$(CONFIG_MLX5_VFIO_PCI) += drivers/vfio/pci/mlx5/

@@ -40,7 +40,6 @@
 #include <linux/mlx5/driver.h>
 #include <linux/mlx5/eq.h>
 #include <linux/debugfs.h>
-#include <linux/sysfs.h>
 
 #include "mlx5_core.h"
 #include "lib/eq.h"
@@ -115,9 +114,6 @@ static bool mlx5_cmd_is_throttle_opcode(u16 op)
 	}
 	return false;
 }
-
-static int cmd_sysfs_init(struct mlx5_core_dev *dev);
-static void cmd_sysfs_cleanup(struct mlx5_core_dev *dev);
 
 static struct mlx5_cmd_work_ent *
 cmd_alloc_ent(struct mlx5_cmd *cmd, struct mlx5_cmd_msg *in,
@@ -399,8 +395,6 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_PAGE_FAULT_RESUME:
 	case MLX5_CMD_OP_QUERY_ESW_FUNCTIONS:
 	case MLX5_CMD_OP_DEALLOC_SF:
-	case MLX5_CMD_OP_QUERY_HCA_VPORT_PKEY:
-	case MLX5_CMD_OP_ACCESS_REG:
 	case MLX5_CMD_OP_DESTROY_UCTX:
 	case MLX5_CMD_OP_DESTROY_UMEM:
 	case MLX5_CMD_OP_MODIFY_RQT:
@@ -456,6 +450,7 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_MODIFY_HCA_VPORT_CONTEXT:
 	case MLX5_CMD_OP_QUERY_HCA_VPORT_GID:
+	case MLX5_CMD_OP_QUERY_HCA_VPORT_PKEY:
 	case MLX5_CMD_OP_QUERY_VNIC_ENV:
 	case MLX5_CMD_OP_QUERY_VPORT_COUNTER:
 	case MLX5_CMD_OP_ALLOC_Q_COUNTER:
@@ -471,6 +466,7 @@ static int mlx5_internal_err_ret_value(struct mlx5_core_dev *dev, u16 op,
 	case MLX5_CMD_OP_ALLOC_PD:
 	case MLX5_CMD_OP_ALLOC_UAR:
 	case MLX5_CMD_OP_CONFIG_INT_MODERATION:
+	case MLX5_CMD_OP_ACCESS_REG:
 	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_PARAMS:
 	case MLX5_CMD_OP_SET_DIAGNOSTIC_PARAMS:
 	case MLX5_CMD_OP_QUERY_DIAGNOSTIC_COUNTERS:
@@ -1696,7 +1692,6 @@ static void free_msg(struct mlx5_core_dev *dev, struct mlx5_cmd_msg *msg)
 	if (msg->parent) {
 		spin_lock_irqsave(&msg->parent->lock, flags);
 		list_add_tail(&msg->list, &msg->parent->head);
-		msg->parent->free++;
 		spin_unlock_irqrestore(&msg->parent->lock, flags);
 	} else {
 		mlx5_free_cmd_msg(dev, msg);
@@ -1733,7 +1728,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 				}
 				if ((vec & MLX5_TRIGGERED_CMD_COMP) &&
 				    ent->ret == -ETIMEDOUT &&
-				    test_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state))
+				    !test_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state))
 					cmd_ent_put(ent);
 				if (comp_type != MLX5_CMD_COMP_TYPE_POLLING)
 					continue;
@@ -1878,8 +1873,6 @@ static struct mlx5_cmd_msg *alloc_msg(struct mlx5_core_dev *dev, int in_size,
 	struct mlx5_cmd_msg *msg = ERR_PTR(-ENOMEM);
 	struct cmd_msg_cache *ch = NULL;
 	struct mlx5_cmd *cmd = &dev->cmd;
-	bool total_accounted = false;
-	bool miss_accounted = false;
 	int i;
 
 	if (in_size <= 16)
@@ -1890,15 +1883,7 @@ static struct mlx5_cmd_msg *alloc_msg(struct mlx5_core_dev *dev, int in_size,
 		if (in_size > ch->max_inbox_size)
 			continue;
 		spin_lock_irq(&ch->lock);
-		if (!total_accounted) {
-			ch->total_commands++;
-			total_accounted = true;
-		}
 		if (list_empty(&ch->head)) {
-			if (!miss_accounted) {
-				ch->miss++;
-				miss_accounted = true;
-			}
 			spin_unlock_irq(&ch->lock);
 			continue;
 		}
@@ -1908,7 +1893,6 @@ static struct mlx5_cmd_msg *alloc_msg(struct mlx5_core_dev *dev, int in_size,
 		 */
 		msg->len = in_size;
 		list_del(&msg->list);
-		ch->free--;
 		spin_unlock_irq(&ch->lock);
 		break;
 	}
@@ -1917,8 +1901,6 @@ static struct mlx5_cmd_msg *alloc_msg(struct mlx5_core_dev *dev, int in_size,
 		return msg;
 
 cache_miss:
-	if (in_size > 16)
-		atomic_inc(&cmd->real_miss);
 	msg = mlx5_alloc_cmd_msg(dev, gfp, in_size, 0);
 	return msg;
 }
@@ -2041,7 +2023,7 @@ static void cmd_status_log(struct mlx5_core_dev *dev, u16 opcode, u8 status,
 	struct mlx5_cmd_stats *stats;
 	unsigned long flags;
 
-	if (!err || mlx5_cmd_is_down(dev) || !(strcmp(namep, "unknown command opcode")))
+	if (!err || !(strcmp(namep, "unknown command opcode")))
 		return;
 
 	stats = xa_load(&dev->cmd.stats, opcode);
@@ -2222,7 +2204,7 @@ int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
 	if (WARN_ON(!atomic_inc_not_zero(&ctx->num_inflight)))
 		return -EIO;
 
-	if (uid && mlx5_has_privileged_uid(ctx->dev)) {
+	if (uid && mlx5_has_privileged_uid(dev)) {
 		if (!mlx5_cmd_is_privileged_uid(dev, uid)) {
 			if (down_trylock(&dev->cmd.vars.unprivileged_sem)) {
 				ret = -EBUSY;
@@ -2238,7 +2220,7 @@ int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
 		work->throttle_locked = true;
 	}
 
-	ret = cmd_exec(ctx->dev, in, in_size, out, out_size,
+	ret = cmd_exec(dev, in, in_size, out, out_size,
 		       mlx5_cmd_exec_cb_handler, work, false);
 	if (ret)
 		goto sem_up;
@@ -2247,11 +2229,11 @@ int mlx5_cmd_exec_cb(struct mlx5_async_ctx *ctx, void *in, int in_size,
 
 sem_up:
 	if (work->throttle_locked)
-		up(&ctx->dev->cmd.vars.throttle_sem);
+		up(&dev->cmd.vars.throttle_sem);
 	if (work->unpriv_locked)
 		up(&dev->cmd.vars.unprivileged_sem);
 dec_num_inflight:
-		if (atomic_dec_and_test(&ctx->num_inflight))
+	if (atomic_dec_and_test(&ctx->num_inflight))
 		complete(&ctx->inflight_done);
 
 	return ret;
@@ -2340,12 +2322,9 @@ static void destroy_msg_cache(struct mlx5_core_dev *dev)
 		ch = &dev->cmd.cache[i];
 		list_for_each_entry_safe(msg, n, &ch->head, list) {
 			list_del(&msg->list);
-			ch->free--;
 			mlx5_free_cmd_msg(dev, msg);
 		}
 	}
-
-    cmd_sysfs_cleanup(dev);
 }
 
 static unsigned cmd_cache_num_ent[MLX5_NUM_COMMAND_CACHES] = {
@@ -2378,21 +2357,15 @@ static void create_msg_cache(struct mlx5_core_dev *dev)
 		INIT_LIST_HEAD(&ch->head);
 		ch->num_ent = cmd_cache_num_ent[k];
 		ch->max_inbox_size = cmd_cache_ent_size[k];
-		ch->miss = 0;
-		ch->total_commands = 0;
-		ch->free = 0;
 		for (i = 0; i < ch->num_ent; i++) {
 			msg = mlx5_alloc_cmd_msg(dev, GFP_KERNEL | __GFP_NOWARN,
 						 ch->max_inbox_size, 0);
 			if (IS_ERR(msg))
 				break;
 			msg->parent = ch;
-			ch->free++;
 			list_add_tail(&msg->list, &ch->head);
 		}
 	}
-
-	cmd_sysfs_init(dev);
 }
 
 static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
@@ -2473,7 +2446,6 @@ int mlx5_cmd_enable(struct mlx5_core_dev *dev)
 	int err;
 
 	memset(&cmd->vars, 0, sizeof(cmd->vars));
-	memset(&cmd->cache, 0, sizeof(cmd->cache));
 	cmd->vars.cmdif_rev = cmdif_rev(dev);
 	if (cmd->vars.cmdif_rev != CMD_IF_REV) {
 		mlx5_core_err(dev,
@@ -2583,304 +2555,3 @@ void mlx5_cmd_remove_privileged_uid(struct mlx5_core_dev *dev, u16 uid)
 	WARN(!data, "Privileged UID %u does not exist\n", uid);
 }
 EXPORT_SYMBOL(mlx5_cmd_remove_privileged_uid);
-
-struct cmd_cache_attribute {
-	struct attribute attr;
-	ssize_t (*show)(struct cmd_msg_cache *,
-			struct cmd_cache_attribute *, char *buf);
-	ssize_t (*store)(struct cmd_msg_cache *, struct cmd_cache_attribute *,
-			 const char *buf, size_t count);
-};
-
-static ssize_t free_show(struct cmd_msg_cache *ch,
-			 struct cmd_cache_attribute *ca,
-			 char *buf)
-{
-	return snprintf(buf, 20, "%d\n", ch->free);
-}
-
-static ssize_t num_ent_show(struct cmd_msg_cache *ch,
-			    struct cmd_cache_attribute *ca,
-			    char *buf)
-{
-	return snprintf(buf, 20, "%d\n", ch->num_ent);
-}
-
-static ssize_t num_ent_store(struct cmd_msg_cache *ch,
-			     struct cmd_cache_attribute *ca,
-			     const char *buf, size_t count)
-{
-	struct mlx5_cmd_msg *msg;
-	struct mlx5_cmd_msg *n;
-	LIST_HEAD(remove_list);
-	LIST_HEAD(add_list);
-	unsigned long flags;
-	int err = count;
-	int add = 0;
-	int remove;
-	u32 var;
-	int i;
-
-	if (kstrtouint(buf, 0, &var))
-		return -EINVAL;
-
-	spin_lock_irqsave(&ch->lock, flags);
-	if (var < ch->num_ent) {
-		remove = ch->num_ent - var;
-		for (i = 0; i < remove; i++) {
-			if (!list_empty(&ch->head)) {
-				msg = list_entry(ch->head.next, typeof(*msg), list);
-				list_del(&msg->list);
-				list_add(&msg->list, &remove_list);
-				ch->free--;
-				ch->num_ent--;
-			} else {
-				err = -EBUSY;
-				break;
-			}
-		}
-	} else if (var > ch->num_ent) {
-		add = var - ch->num_ent;
-	}
-	spin_unlock_irqrestore(&ch->lock, flags);
-
-	list_for_each_entry_safe(msg, n, &remove_list, list) {
-		list_del(&msg->list);
-		mlx5_free_cmd_msg(ch->dev, msg);
-	}
-
-	for (i = 0; i < add; i++) {
-		msg = mlx5_alloc_cmd_msg(ch->dev, GFP_KERNEL, ch->max_inbox_size, 0);
-		if (IS_ERR(msg)) {
-			err = PTR_ERR(msg);
-			if (i)
-				pr_warn("could add only %d entries\n", i);
-			break;
-		}
-		list_add(&msg->list, &add_list);
-	}
-
-	spin_lock_irqsave(&ch->lock, flags);
-	list_for_each_entry_safe(msg, n, &add_list, list) {
-		list_del(&msg->list);
-		list_add_tail(&msg->list, &ch->head);
-		ch->num_ent++;
-		ch->free++;
-		msg->parent = ch;
-	}
-	spin_unlock_irqrestore(&ch->lock, flags);
-
-	return err;
-}
-
-static ssize_t miss_store(struct cmd_msg_cache *ch,
-			  struct cmd_cache_attribute *ca,
-			  const char *buf, size_t count)
-{
-	unsigned long flags;
-	u32 var;
-
-	if (kstrtouint(buf, 0, &var))
-		return -EINVAL;
-
-	if (var) {
-		pr_warn("you may only clear the miss value\n");
-		return -EINVAL;
-	}
-
-	spin_lock_irqsave(&ch->lock, flags);
-	ch->miss = 0;
-	spin_unlock_irqrestore(&ch->lock, flags);
-
-	return count;
-}
-
-static ssize_t miss_show(struct cmd_msg_cache *ch,
-			 struct cmd_cache_attribute *ca,
-			 char *buf)
-{
-	return snprintf(buf, 20, "%d\n", ch->miss);
-}
-
-static ssize_t total_commands_show(struct cmd_msg_cache *ch,
-				   struct cmd_cache_attribute *ca,
-				   char *buf)
-{
-	return snprintf(buf, 20, "%d\n", ch->total_commands);
-}
-
-static ssize_t total_commands_store(struct cmd_msg_cache *ch,
-				    struct cmd_cache_attribute *ca,
-				    const char *buf, size_t count)
-{
-	unsigned long flags;
-	u32 var;
-
-	if (kstrtouint(buf, 0, &var))
-		return -EINVAL;
-
-	if (var) {
-		pr_warn("you may only clear the total_commands value\n");
-		return -EINVAL;
-	}
-
-	spin_lock_irqsave(&ch->lock, flags);
-	ch->total_commands = 0;
-	spin_unlock_irqrestore(&ch->lock, flags);
-
-	return count;
-}
-
-static ssize_t cmd_cache_attr_show(struct kobject *kobj,
-				   struct attribute *attr, char *buf)
-{
-	struct cmd_cache_attribute *ca =
-		container_of(attr, struct cmd_cache_attribute, attr);
-	struct cmd_msg_cache *ch = container_of(kobj, struct cmd_msg_cache, kobj);
-
-	if (!ca->show)
-		return -EIO;
-
-	return ca->show(ch, ca, buf);
-}
-
-static ssize_t cmd_cache_attr_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buf,
-				    size_t size)
-{
-	struct cmd_cache_attribute *ca =
-		container_of(attr, struct cmd_cache_attribute, attr);
-	struct cmd_msg_cache *ch = container_of(kobj, struct cmd_msg_cache, kobj);
-
-	if (!ca->store)
-		return -EIO;
-
-	return ca->store(ch, ca, buf, size);
-}
-
-static ssize_t real_miss_show(struct device *dev, struct device_attribute *attr,
-			      char *buf)
-{
-	struct pci_dev *pdev = container_of(dev, struct pci_dev, dev);
-	struct mlx5_core_dev *cdev = pci_get_drvdata(pdev);
-
-	return snprintf(buf, 20, "%d\n", atomic_read(&cdev->cmd.real_miss));
-}
-
-static ssize_t real_miss_store(struct device *dev, struct device_attribute *attr,
-			       const char *buf, size_t count)
-{
-	struct pci_dev *pdev = container_of(dev, struct pci_dev, dev);
-	struct mlx5_core_dev *cdev = pci_get_drvdata(pdev);
-	u32 var;
-
-	if (kstrtouint(buf, 0, &var))
-		return -EINVAL;
-
-	if (var) {
-		pr_warn("you may only clear this value\n");
-		return -EINVAL;
-	}
-
-	atomic_set(&cdev->cmd.real_miss, 0);
-
-	return count;
-}
-
-static const struct sysfs_ops cmd_cache_sysfs_ops = {
-	.show = cmd_cache_attr_show,
-	.store = cmd_cache_attr_store,
-};
-
-#define CMD_CACHE_ATTR(_name) struct cmd_cache_attribute cmd_cache_attr_##_name = \
-	__ATTR(_name, 0644, _name##_show, _name##_store)
-#define CMD_CACHE_ATTR_RO(_name) struct cmd_cache_attribute cmd_cache_attr_##_name = \
-	__ATTR(_name, 0444, _name##_show, NULL)
-
-static CMD_CACHE_ATTR_RO(free);
-static CMD_CACHE_ATTR(num_ent);
-static CMD_CACHE_ATTR(miss);
-static CMD_CACHE_ATTR(total_commands);
-
-struct cache_pdev_attr {
-	struct attribute		attr;
-	struct mlx5_core_dev	       *dev;
-	struct kobject			kobj;
-};
-
-static struct attribute *cmd_cache_default_attrs[] = {
-	&cmd_cache_attr_free.attr,
-	&cmd_cache_attr_num_ent.attr,
-	&cmd_cache_attr_miss.attr,
-	&cmd_cache_attr_total_commands.attr,
-	NULL
-};
-
-ATTRIBUTE_GROUPS(cmd_cache_default);
-
-static struct kobj_type cmd_cache_type = {
-	.sysfs_ops     = &cmd_cache_sysfs_ops,
-	.default_groups = cmd_cache_default_groups
-};
-
-static DEVICE_ATTR(real_miss, 0600, real_miss_show, real_miss_store);
-
-static int cmd_sysfs_init(struct mlx5_core_dev *dev)
-{
-	struct mlx5_cmd *cmd = &dev->cmd;
-	struct cmd_msg_cache *cache = cmd->cache;
-	struct cmd_msg_cache *ch;
-	struct device *class_dev = dev->device;
-	int err;
-	int i;
-
-	cmd->ko = kobject_create_and_add("commands_cache", &class_dev->kobj);
-	if (!cmd->ko)
-		return -ENOMEM;
-
-	err = device_create_file(class_dev, &dev_attr_real_miss);
-	if (err)
-		goto err_rm;
-
-	for (i = 0; i < MLX5_NUM_COMMAND_CACHES; i++) {
-		ch = &cache[i];
-		err = kobject_init_and_add(&ch->kobj, &cmd_cache_type,
-					   cmd->ko, "%d", cmd_cache_ent_size[i]);
-		if (err)
-			goto err_put;
-		ch->dev = dev;
-		kobject_uevent(&ch->kobj, KOBJ_ADD);
-	}
-
-	return 0;
-
-err_put:
-	device_remove_file(class_dev, &dev_attr_real_miss);
-	for (; i >= 0; i--) {
-		ch = &cache[i];
-		kobject_put(&ch->kobj);
-	}
-
-err_rm:
-	kobject_put(cmd->ko);
-	return err;
-}
-
-static void cmd_sysfs_cleanup(struct mlx5_core_dev *dev)
-{
-	struct device *class_dev = dev->device;
-	struct cmd_msg_cache *ch;
-	int i;
-
-	device_remove_file(class_dev, &dev_attr_real_miss);
-	for (i = MLX5_NUM_COMMAND_CACHES - 1; i >= 0; i--) {
-		ch = &dev->cmd.cache[i];
-		if (ch->dev)
-			kobject_put(&ch->kobj);
-	}
-	if (dev->cmd.ko) {
-		kobject_put(dev->cmd.ko);
-		dev->cmd.ko = NULL;
-	}
-}

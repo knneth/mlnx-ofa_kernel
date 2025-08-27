@@ -1,103 +1,42 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
 
-Change-Id: Ic4ff9460a971541cf23c8393ec85f012e4598352
 ---
- .../mellanox/mlx5/core/en_accel/ktls.h        | 35 ++++++++++++++++---
- 1 file changed, 31 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-@@ -13,10 +13,16 @@
- #include "lib/crypto.h"
- #include "lib/mlx5.h"
- 
-+#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
-+int mlx5_ktls_create_key(struct mlx5_core_dev *mdev,
-+			 struct tls_crypto_info *crypto_info, u32 *p_key_id);
-+void mlx5_ktls_destroy_key(struct mlx5_core_dev *mdev, u32 key_id);
-+#else
- struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_pool,
- 					     struct tls_crypto_info *crypto_info);
- void mlx5_ktls_destroy_key(struct mlx5_crypto_dek_pool *dek_pool,
- 			   struct mlx5_crypto_dek *dek);
-+#endif
- 
- static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
- {
-@@ -41,16 +47,30 @@ static inline bool mlx5e_ktls_type_check
- 		if (crypto_info->version == TLS_1_2_VERSION)
- 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_128);
- 		break;
-+#ifdef TLS_CIPHER_AES_GCM_256
- 	case TLS_CIPHER_AES_GCM_256:
- 		if (crypto_info->version == TLS_1_2_VERSION)
- 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_256);
- 		break;
-+#endif
- 	}
- 
- 	return false;
- }
- 
- void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
-+#ifdef HAVE_KTLS_STRUCTS
-+int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
-+void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
-+#else
-+static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
-+{
-+}
-+static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
-+{
-+	return 0;
-+}
-+#endif
- int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
- void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
- int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
-@@ -58,7 +78,12 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
- int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
- struct mlx5e_ktls_resync_resp *
- mlx5e_ktls_rx_resync_create_resp_list(void);
-+#ifdef HAVE_KTLS_RX_SUPPORT
- void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
-+#else
-+static inline void
-+mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list) {}
-+#endif
- 
- static inline bool mlx5e_is_ktls_tx(struct mlx5_core_dev *mdev)
- {
-@@ -87,7 +112,9 @@ struct mlx5e_tls {
- 	struct mlx5e_tls_sw_stats sw_stats;
- 	struct workqueue_struct *rx_wq;
- 	struct mlx5e_tls_tx_pool *tx_pool;
-+#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
- 	struct mlx5_crypto_dek_pool *dek_pool;
-+#endif
- 	struct mlx5e_tls_debugfs debugfs;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+@@ -19,9 +19,21 @@ enum {
+ 	MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_SEARCHING = 2,
  };
  
-@@ -103,16 +130,16 @@ static inline void mlx5e_ktls_build_netd
- {
- }
++#ifdef HAVE_KTLS_STRUCTS
+ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx);
++#else
++static inline int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
++				    struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
++{
++}
++#endif
+ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
+ 		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
+ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
+@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
+ union mlx5e_crypto_info {
+ 	struct tls_crypto_info crypto_info;
+ 	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;
++#ifdef HAVE_TLS_CIPHER_AES_GCM_256
+ 	struct tls12_crypto_info_aes_gcm_256 crypto_info_256;
++#endif
+ };
  
--static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
-+static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
- {
--	return 0;
- }
- 
--static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
-+static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
- {
-+	return 0;
- }
- 
--static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
-+static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
- {
- 	return 0;
- }
+ struct mlx5e_set_tls_static_params_wqe {

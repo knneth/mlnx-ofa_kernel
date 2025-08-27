@@ -108,12 +108,12 @@ static int mlxdevm_nl_rate_fill(struct sk_buff *msg,
 			goto nla_put_failure;
 	}
 
-	if (nla_put_u64_64bit(msg, MLXDEVM_ATTR_RATE_TX_SHARE,
-			      mlxdevm_rate->tx_share, MLXDEVM_ATTR_PAD))
+	if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_RATE_TX_SHARE,
+			       mlxdevm_rate->tx_share))
 		goto nla_put_failure;
 
-	if (nla_put_u64_64bit(msg, MLXDEVM_ATTR_RATE_TX_MAX,
-			      mlxdevm_rate->tx_max, MLXDEVM_ATTR_PAD))
+	if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_RATE_TX_MAX,
+			       mlxdevm_rate->tx_max))
 		goto nla_put_failure;
 
 	if (nla_put_u32(msg, MLXDEVM_ATTR_RATE_TX_PRIORITY,
@@ -161,7 +161,7 @@ static void mlxdevm_rate_notify(struct mlxdevm_rate *mlxdevm_rate,
 
 	mlxdevm_nl_notify_send(mlxdevm, msg);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 void devlink_rates_notify_register(struct devlink *devlink)
 {
@@ -566,20 +566,20 @@ int mlxdevm_nl_rate_del_doit(struct sk_buff *skb, struct genl_info *info)
 	kfree(rate_node);
 	return err;
 }
-#if 0
 
-int devlink_rate_nodes_check(struct devlink *devlink, u16 mode,
+int mlxdevm_rate_nodes_check(struct mlxdevm *mlxdevm, u16 mode,
 			     struct netlink_ext_ack *extack)
 {
-	struct devlink_rate *devlink_rate;
+	struct mlxdevm_rate *mlxdevm_rate;
 
-	list_for_each_entry(devlink_rate, &devlink->rate_list, list)
-		if (devlink_rate_is_node(devlink_rate)) {
+	list_for_each_entry(mlxdevm_rate, &mlxdevm->rate_list, list)
+		if (mlxdevm_rate_is_node(mlxdevm_rate)) {
 			NL_SET_ERR_MSG(extack, "Rate node(s) exists.");
 			return -EBUSY;
 		}
 	return 0;
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  * devl_rate_node_create - create devlink rate node

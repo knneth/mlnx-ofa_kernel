@@ -102,11 +102,11 @@ ifeq ($(WITH_DKMS),1)
 	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	$(CURDIR)/ofed_scripts/generate_dkms_conf.sh > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+	$(CURDIR)/ofed_scripts/generate_dkms_conf.sh > debian/dkms.conf
 ifeq ($(DKMS3),1)
 	# Removed in DKMS 3. Should be removed from the script when we
 	# make it the default:
-	sed -i -e '/REMAKE_INITRD/d' debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
+	sed -i -e '/REMAKE_INITRD/d' debian/dkms.conf
 endif
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/configure
 	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/makefile

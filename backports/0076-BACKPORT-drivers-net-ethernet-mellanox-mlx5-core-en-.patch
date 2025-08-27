@@ -1,0 +1,32 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+@@ -6,6 +6,9 @@
+ 
+ #include "mod_hdr.h"
+ #include "lib/fs_ttc.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/rhashtable.h>
++#endif
+ 
+ struct mlx5_prio_hp {
+ 	u32 rate;
+@@ -278,10 +281,12 @@ void mlx5e_fs_set_state_destroy(struct m
+ void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
+ 
+ struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ int mlx5e_add_vlan_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_vlan_trap(struct mlx5e_flow_steering *fs);
+ int mlx5e_add_mac_trap(struct mlx5e_flow_steering *fs, int  trap_id, int tir_num);
+ void mlx5e_remove_mac_trap(struct mlx5e_flow_steering *fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs, struct net_device *netdev);
+ int mlx5e_fs_vlan_rx_add_vid(struct mlx5e_flow_steering *fs,
+ 			     struct net_device *netdev,

@@ -43,6 +43,10 @@ STATUS_DB="NA \
 		   rejected \
 "
 
+# Global constants for tracking issue IDs and validation patterns
+IGNORE_TRACKING_ISSUE_ID="4468524"
+NA_TRACKING_ISSUE_ID="4468530"
+
 usage()
 {
 	cat <<EOF
@@ -126,6 +130,99 @@ get_tag_from_csv()
 	local line=$1; shift
 
 	echo "$line" | sed -e 's/.*tag://g' -e 's/;//g'
+}
+
+validate_revert_upstream_status()
+{
+	local revert_metadata_entry=$1
+	local revert_upstream_status=$2
+
+	if [[ "$revert_upstream_status" != "ignore" && "$revert_upstream_status" != "NA" ]]; then
+		echo "- The following entry is of a Revert commit and must have upstream_status=ignore or NA: \n$revert_metadata_entry"
+		return 1
+	fi
+	return 0
+}
+
+validate_revert_tracking_issue()
+{
+	local revert_commit_hash=$1
+	local revert_commit_msg=$2
+	local revert_upstream_status=$3
+
+	# Skip validation for commits already in remote branches as we can't update the commit messages of merged commits
+	if git branch --remotes --contains "$revert_commit_hash" | grep --quiet .; then
+		return 0
+	fi
+
+	if [ "$revert_upstream_status" = "ignore" ]; then
+		if ! echo "$revert_commit_msg" | grep --quiet "Issue: $IGNORE_TRACKING_ISSUE_ID"; then
+			echo "- Commit $revert_commit_hash is a Revert commit with upstream_status=ignore, but is missing 'Issue: $IGNORE_TRACKING_ISSUE_ID'. Please insert this issue number to the commit message."
+			return 1
+		fi
+	elif [ "$revert_upstream_status" = "NA" ]; then
+		if ! echo "$revert_commit_msg" | grep --quiet "Issue: $NA_TRACKING_ISSUE_ID"; then
+			echo "- Commit $revert_commit_hash is a Revert commit with upstream_status=NA, but is missing 'Issue: $NA_TRACKING_ISSUE_ID'. Please insert this issue number to the commit message."
+			return 1
+		fi
+	fi
+	return 0
+}
+
+validate_reverted_commit_status()
+{
+	local reverted_commit_change_id=$1
+	local all_metadata_files=$2
+	local revert_metadata_entry=$3
+
+	for meta_file in $all_metadata_files; do
+		if grep --quiet "Change-Id=$reverted_commit_change_id;" "$meta_file" && \
+		   ! grep --quiet "Change-Id=$reverted_commit_change_id;.*upstream_status=ignore;" "$meta_file"; then
+			# Find and print the actual reverted commit entry, not the revert entry
+			local reverted_commit_entry=$(grep "Change-Id=$reverted_commit_change_id;" "$meta_file")
+			echo "- In file '$meta_file': The following entry is of a reverted commit and must have upstream_status=ignore: \n$reverted_commit_entry"
+			return 1
+		fi
+	done
+	return 0
+}
+
+validate_revert_and_reverted_metadata()
+{
+	local revert_metadata_entry=$1
+	local all_metadata_files=$2
+	local revert_errors=""
+	local revert_upstream_status=$(echo "$revert_metadata_entry" | grep --only-matching 'upstream_status=[^;]*' | cut --delimiter='=' --fields=2)
+	local revert_change_id=$(echo "$revert_metadata_entry" | grep --only-matching 'Change-Id=[^;]*' | cut --delimiter='=' --fields=2)
+
+	# Validate the Revert commit upstream status is ignore or NA
+	local error_msg=$(validate_revert_upstream_status "$revert_metadata_entry" "$revert_upstream_status")
+	if [ ! -z "$error_msg" ]; then
+		revert_errors="$revert_errors\n$error_msg"
+	fi
+
+	# Validate the correct tracking issue is in the Revert commit message (ignore or NA tracking issues based on the Revert commit upstream status)
+	local revert_commit_hash=$(git log --all --grep="Change-Id: $revert_change_id" --format='%H' | head --lines=1)
+	local revert_commit_msg=$(git show --no-patch --format=%B "$revert_commit_hash")
+	error_msg=$(validate_revert_tracking_issue "$revert_commit_hash" "$revert_commit_msg" "$revert_upstream_status")
+	if [ ! -z "$error_msg" ]; then
+		revert_errors="$revert_errors\n$error_msg"
+	fi
+
+	# Extract and validate the metadata entry of the commit that was reverted
+	local reverted_commit_hash=$(echo "$revert_commit_msg" | grep --only-matching '[a-fA-F0-9]\{7,40\}' | head --lines=1)
+	local reverted_commit_change_id=$(git show "$reverted_commit_hash" 2>/dev/null | grep "Change-Id:" | grep --only-matching 'I[a-fA-F0-9]\{40\}')
+	error_msg=$(validate_reverted_commit_status "$reverted_commit_change_id" "$all_metadata_files" "$revert_metadata_entry")
+	if [ ! -z "$error_msg" ]; then
+		revert_errors="$revert_errors\n$error_msg"
+	fi
+
+	# Return accumulated errors if any
+	if [ ! -z "$revert_errors" ]; then
+		echo "$revert_errors"
+		return 1
+	fi
+	return 0
 }
 
 ##################################################################
@@ -221,6 +318,16 @@ do
 		fi
 	fi
 
+	# Check for revert commits and make sure that the metadata entries of both the Revert commit and the commit that was reverted are valid
+	if echo "$line" | grep -q 'subject=Revert \"'; then
+		all_metadata_files=$(find metadata/ -name '*.csv' ! -name 'features_metadata_db.csv')
+		revert_errors=$(validate_revert_and_reverted_metadata "$line" "$all_metadata_files")
+		if [ ! -z "$revert_errors" ]; then
+			cerrs="$cerrs\n$revert_errors"
+			RC=$(( $RC + 1))
+		fi
+	fi
+
 	if [ ! -z "$cerrs" ]; then
 		echo -n "At line --> '$line'"
 		echo -e "$cerrs"
@@ -229,6 +336,31 @@ do
 
 done < <(cat $path)
 
+
+# Check all metadata csv files to ensure upstream_issue is used in each entry
+# in which upstream_status=in_progress.
+
+all_metadata_files=$(find metadata/ -name '*.csv' ! -name 'features_metadata_db.csv')
+
+for file in $all_metadata_files; do
+    lines=$(grep -v 'sep=' "$file")
+    missing_upstream_issues=""
+    while read -r line; do
+        upstream_status=$(echo "$line" | sed -n -E 's/.*;[[:space:]]*upstream_status=([a-zA-Z_]+);.*/\1/p')
+        upstream_issue=$(echo "$line" | sed -n -E 's/.*;[[:space:]]*upstream_issue=([^;]*);.*/\1/p')
+        change_id=$(echo "$line" | sed -n -E 's/.*Change-Id=([^;]+);.*/\1/p')
+
+        if [ "$upstream_status" = "in_progress" ] && [ -z "$upstream_issue" ]; then
+            missing_upstream_issues+="\n$line"
+            RC=$((RC + 1))
+        fi
+    done <<< "$lines"
+
+    if [ -n "$missing_upstream_issues" ]; then
+        echo -e "-E- In file '$file': entries with upstream_status=in_progress but missing or empty upstream_issue: $missing_upstream_issue\n"
+    fi
+
+done
 
 echo "Found $RC issues."
 if [ $RC -ne 0 ]; then

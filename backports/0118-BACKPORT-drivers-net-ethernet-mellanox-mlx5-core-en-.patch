@@ -1,92 +1,137 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 
-Change-Id: Ia4e3a2f262b7095e8b4a38296df04765b1306e90
 ---
- .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
+ .../mellanox/mlx5/core/en/tc_tun_encap.c      | 36 +++++++++++++++++++
+ 1 file changed, 36 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-@@ -3,9 +3,15 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
+@@ -1,8 +1,14 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2021 Mellanox Technologies. */
  
- #include <linux/math64.h>
- #include "lib/aso.h"
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #include "en/tc/post_act.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/arp.h>
++#include <net/ipv6_stubs.h>
 +#endif
- #include "meter.h"
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- #include "en/tc_priv.h"
-+#elif defined(CONFIG_MLX5_ESWITCH)
-+#include "en_tc.h"
+ #include <net/fib_notifier.h>
++#ifdef HAVE_FIB_INFO_NH
+ #include <net/nexthop.h>
 +#endif
- 
- #define MLX5_START_COLOR_SHIFT 28
- #define MLX5_METER_MODE_SHIFT 24
-@@ -370,8 +376,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
- 	struct mlx5e_flow_meters *flow_meters;
- 	struct mlx5e_flow_meter_handle *meter;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(dev);
- 	if (!flow_meters)
+ #include <net/ip_tunnels.h>
+ #include "tc_tun_encap.h"
+ #include "fs_core.h"
+@@ -401,9 +407,11 @@ void mlx5e_tc_update_neigh_used_value(st
+ 	if (m_neigh->family == AF_INET)
+ 		tbl = &arp_tbl;
+ #if IS_ENABLED(CONFIG_IPV6)
++#if defined(HAVE_IPV6_STUBS_H)
+ 	else if (m_neigh->family == AF_INET6)
+ 		tbl = ipv6_stub->nd_tbl;
+ #endif
 +#endif
- 		return ERR_PTR(-EOPNOTSUPP);
+ 	else
+ 		return;
  
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -415,9 +423,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
- 	struct mlx5e_flow_meters *flow_meters;
- 	struct mlx5e_flow_meter_handle *meter;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
- 		return ERR_PTR(-EOPNOTSUPP);
-+#endif
- 
- 	mutex_lock(&flow_meters->sync_lock);
- 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
-@@ -489,12 +499,16 @@ int
- mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
- 		      struct mlx5e_flow_meter_params *params)
- {
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
-+#endif
- 	struct mlx5e_flow_meters *flow_meters;
- 	int err;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
-+#endif
- 		return -EOPNOTSUPP;
- 
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -510,8 +524,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
- 	struct mlx5e_flow_meter_handle *meter;
- 	int err;
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	flow_meters = mlx5e_get_flow_meters(mdev);
- 	if (!flow_meters)
-+#endif
- 		return ERR_PTR(-EOPNOTSUPP);
- 
- 	mutex_lock(&flow_meters->sync_lock);
-@@ -557,11 +573,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
- 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
- 		return ERR_PTR(-EOPNOTSUPP);
- 
-+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
- 	if (IS_ERR_OR_NULL(post_act)) {
- 		netdev_dbg(priv->netdev,
- 			   "flow meter offload is not supported, post action is missing\n");
- 		return ERR_PTR(-EOPNOTSUPP);
+@@ -444,7 +452,9 @@ void mlx5e_tc_update_neigh_used_value(st
+ 		}
  	}
+ 
++#ifndef MLX_DISABLE_TRACEPOINTS
+ 	trace_mlx5e_tc_update_neigh_used_value(nhe, neigh_used);
 +#endif
  
- 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
- 	if (!flow_meters)
+ 	if (neigh_used) {
+ 		nhe->reported_lastuse = jiffies;
+@@ -595,7 +605,11 @@ bool mlx5e_tc_tun_encap_info_equal_gener
+ 
+ bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
+ 					   struct mlx5e_encap_key *b,
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 					   u32 tun_type)
++#else
++					   __be16 tun_flags)
++#endif
+ {
+ 	struct ip_tunnel_info *a_info;
+ 	struct ip_tunnel_info *b_info;
+@@ -604,8 +618,14 @@ bool mlx5e_tc_tun_encap_info_equal_optio
+ 	if (!mlx5e_tc_tun_encap_info_equal_generic(a, b))
+ 		return false;
+ 
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 	a_has_opts = test_bit(tun_type, a->ip_tun_key->tun_flags);
+ 	b_has_opts = test_bit(tun_type, b->ip_tun_key->tun_flags);
++#else
++	a_has_opts = !!(a->ip_tun_key->tun_flags & tun_flags);
++	b_has_opts = !!(b->ip_tun_key->tun_flags & tun_flags);
++
++#endif
+ 
+ 	/* keys are equal when both don't have any options attached */
+ 	if (!a_has_opts && !b_has_opts)
+@@ -1740,15 +1760,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+ 	struct mlx5e_tc_fib_event_data *fib_work;
+ 	struct mlx5e_route_entry *r;
+ 	struct mlx5e_route_key key;
++#ifdef HAVE_FIB_INFO_NH
+ 	struct net_device *fib_dev;
++#endif
+ 
+ 	fen_info = container_of(info, struct fib_entry_notifier_info, info);
++#ifdef HAVE_FIB_INFO_NH
+ 	if (fen_info->fi->nh)
+ 		return NULL;
+ 	fib_dev = fib_info_nh(fen_info->fi, 0)->fib_nh_dev;
+ 	if (!fib_dev || fib_dev->netdev_ops != &mlx5e_netdev_ops ||
+ 	    fen_info->dst_len != 32)
+ 		return NULL;
++#endif
+ 
+ 	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
+ 	if (!fib_work)
+@@ -1785,13 +1809,17 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+ 	struct mlx5e_tc_fib_event_data *fib_work;
+ 	struct mlx5e_route_entry *r;
+ 	struct mlx5e_route_key key;
++#ifdef HAVE_FIB6_INFO_NH_DEV
+ 	struct net_device *fib_dev;
++#endif
+ 
+ 	fen_info = container_of(info, struct fib6_entry_notifier_info, info);
++#ifdef HAVE_FIB6_INFO_NH_DEV
+ 	fib_dev = fib6_info_nh_dev(fen_info->rt);
+ 	if (fib_dev->netdev_ops != &mlx5e_netdev_ops ||
+ 	    fen_info->rt->fib6_dst.plen != 128)
+ 		return NULL;
++#endif
+ 
+ 	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
+ 	if (!fib_work)
+@@ -1870,8 +1898,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+ 	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
+ 	spin_lock_init(&encap->route_lock);
+ 	hash_init(encap->route_tbl);
++#if defined(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS)
+ 	err = register_fib_notifier(dev_net(priv->netdev), &encap->fib_nb,
+ 				    NULL, NULL);
++#else
++	err = register_fib_notifier(&encap->fib_nb, NULL);
++#endif
+ 	if (err) {
+ 		kvfree(encap);
+ 		return ERR_PTR(err);
+@@ -1885,7 +1917,11 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+ 	if (!encap)
+ 		return;
+ 
++#if defined(HAVE_REGISTER_FIB_NOTIFIER_HAS_4_PARAMS)
+ 	unregister_fib_notifier(dev_net(encap->priv->netdev), &encap->fib_nb);
++#else
++	unregister_fib_notifier(&encap->fib_nb);
++#endif
+ 	flush_workqueue(encap->priv->wq); /* flush fib event works */
+ 	kvfree(encap);
+ }

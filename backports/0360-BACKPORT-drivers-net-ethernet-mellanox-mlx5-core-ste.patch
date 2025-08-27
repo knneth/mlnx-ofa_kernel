@@ -1,0 +1,60 @@
+From: root <root@c-235-252-1-007.mtl.labs.mlnx>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+
+---
+ .../mlx5/core/steering/hws/action_ste_pool.c  | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+@@ -139,7 +139,7 @@ hws_action_ste_table_alloc(struct mlx5hw
+ 			     parent_elem->log_sz +
+ 				     MLX5HWS_ACTION_STE_TABLE_STEP_LOG_SZ :
+ 				   MLX5HWS_ACTION_STE_TABLE_INIT_LOG_SZ,
+-		     MLX5HWS_ACTION_STE_TABLE_MAX_LOG_SZ);
++		    (size_t)MLX5HWS_ACTION_STE_TABLE_MAX_LOG_SZ);
+ 
+ 	action_tbl = kzalloc(sizeof(*action_tbl), GFP_KERNEL);
+ 	if (!action_tbl)
+@@ -277,7 +277,12 @@ static void hws_action_ste_pool_element_
+ 	struct mlx5hws_action_ste_table *action_tbl, *p;
+ 	unsigned long expire_time, now;
+ 
+-	expire_time = secs_to_jiffies(MLX5HWS_ACTION_STE_POOL_EXPIRE_SECONDS);
++	expire_time = 
++#ifdef HAVE_SECS_TO_JIFFIES
++		secs_to_jiffies(MLX5HWS_ACTION_STE_POOL_EXPIRE_SECONDS);
++#else
++		msecs_to_jiffies(MLX5HWS_ACTION_STE_POOL_EXPIRE_SECONDS * 1000);
++#endif
+ 	now = jiffies;
+ 
+ 	list_for_each_entry_safe(action_tbl, p, &elem->available, list_node) {
+@@ -319,8 +324,14 @@ static void hws_action_ste_pool_cleanup(
+ 	hws_action_ste_table_cleanup_list(&cleanup);
+ 
+ 	schedule_delayed_work(&ctx->action_ste_cleanup,
++#ifdef HAVE_SECS_TO_JIFFIES
+ 			      secs_to_jiffies(
+ 				  MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS));
++#else
++			     msecs_to_jiffies(
++				  MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS * 1000));
++#endif
++
+ }
+ 
+ int mlx5hws_action_ste_pool_init(struct mlx5hws_context *ctx)
+@@ -345,7 +356,11 @@ int mlx5hws_action_ste_pool_init(struct
+ 			  hws_action_ste_pool_cleanup);
+ 	schedule_delayed_work(
+ 		&ctx->action_ste_cleanup,
++#ifdef HAVE_SECS_TO_JIFFIES
+ 		secs_to_jiffies(MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS));
++#else
++		msecs_to_jiffies(MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS * 1000));
++#endif
+ 
+ 	return 0;
+ 

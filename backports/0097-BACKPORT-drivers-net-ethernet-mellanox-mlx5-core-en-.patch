@@ -1,32 +1,35 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 
-Change-Id: I5fc3f02335bf131e226b66162ca74566e5072384
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/selq.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-@@ -10,6 +10,10 @@
- #include <linux/notifier.h>
- #include <net/netevent.h>
- #include <net/arp.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <net/addrconf.h>
-+#include <net/ipv6_stubs.h>
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_EN_SELQ_H__
+ 
+ #include <linux/kernel.h>
++#include <linux/netdevice.h>
+ 
+ struct mlx5e_selq_params;
+ 
+@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+ 	return txq;
+ }
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev);
+ 
++#else
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback);
 +#endif
- #include "neigh.h"
- #include "tc.h"
- #include "en_rep.h"
-@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
- 
- 	neigh_connected = (nud_state & NUD_VALID) && !dead;
- 
-+#ifndef MLX_DISABLE_TRACEPOINTS
- 	trace_mlx5e_rep_neigh_update(nhe, ha, neigh_connected);
-+#endif
- 
- 	if (!same_dev)
- 		goto out;
+ #endif /* __MLX5_EN_SELQ_H__ */

@@ -117,7 +117,7 @@ static int mapping_show(struct seq_file *file, void *priv)
 					      &num_ports);
 			hash = true;
 		} else {
-			ldev_for_each(i, 0, ldev)
+			mlx5_ldev_for_each(i, 0, ldev)
 				ports[idx++] = ldev->v2p_map[i];
 			num_ports = ldev->ports;
 		}
@@ -144,7 +144,7 @@ static int members_show(struct seq_file *file, void *priv)
 
 	ldev = mlx5_lag_dev(dev);
 	mutex_lock(&ldev->lock);
-	ldev_for_each(i, 0, ldev)
+	mlx5_ldev_for_each(i, 0, ldev)
 		seq_printf(file, "%s\n", dev_name(ldev->pf[i].dev->device));
 	mutex_unlock(&ldev->lock);
 

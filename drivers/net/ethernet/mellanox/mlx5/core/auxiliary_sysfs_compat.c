@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 // Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
-#if !defined(HAVE_AUX_DEV_IRQS_SYSFS) && !defined(CONFIG_AUXILIARY_BUS)
+#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
 
 #include <linux/auxiliary_bus.h>
 #include <linux/slab.h>

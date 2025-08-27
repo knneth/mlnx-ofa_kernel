@@ -159,7 +159,7 @@ static ssize_t page_limit_show(struct kobject *kobj,
 	int err;
 
 	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
-		err = mlx5_esw_query_vport_vhca_id(esw, tmp->vport, &vhca_id);
+		err = mlx5_vport_get_vhca_id(esw->dev, tmp->vport, &vhca_id);
 		if (err)
 			return err;
 
@@ -196,7 +196,7 @@ static ssize_t page_limit_store(struct kobject *kobj,
 		return -EINVAL;
 
 	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
-		err = mlx5_esw_query_vport_vhca_id(esw, tmp->vport, &vhca_id);
+		err = mlx5_vport_get_vhca_id(esw->dev, tmp->vport, &vhca_id);
 		if (err)
 			return err;
 

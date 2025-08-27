@@ -5,7 +5,7 @@
  */
 
 #include <net/genetlink.h>
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 #define CREATE_TRACE_POINTS
 #include <trace/events/devlink.h>
 #endif
@@ -16,7 +16,7 @@ MODULE_DESCRIPTION("Nvidia's device manager module");
 MODULE_INFO(supported, "external");
 
 #include "devl_internal.h"
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 EXPORT_TRACEPOINT_SYMBOL_GPL(devlink_hwmsg);
 EXPORT_TRACEPOINT_SYMBOL_GPL(devlink_hwerr);
@@ -24,7 +24,20 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(devlink_trap_report);
 #endif
 
 DEFINE_XARRAY_FLAGS(mlxdevms, XA_FLAGS_ALLOC);
-static struct workqueue_struct *mlxdevm_rwork_wq;
+static struct workqueue_struct *mlxdevm_global_wq;
+
+/**
+ * schedule_delayed_work - put work task in global workqueue after delay
+ * @dwork: job to be done
+ * @delay: number of jiffies to wait or 0 for immediate execution
+ *
+ * After waiting for a given time this puts a job in the kernel-global
+ * workqueue.
+ */
+bool mlxdevm_schedule_delayed_work(struct delayed_work *dwork, unsigned long delay)
+{
+	return queue_delayed_work(mlxdevm_global_wq, dwork, delay);
+}
 
 static struct mlxdevm *mlxdevms_xa_get(unsigned long index)
 {
@@ -59,18 +72,20 @@ struct mlxdevm_rel {
 		struct delayed_work notify_work;
 	} nested_in;
 };
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void devlink_rel_free(struct devlink_rel *rel)
 {
 	xa_erase(&devlink_rels, rel->index);
 	kfree(rel);
 }
+#endif
 
-static void __devlink_rel_get(struct devlink_rel *rel)
+static void __mlxdevm_rel_get(struct mlxdevm_rel *rel)
 {
 	refcount_inc(&rel->refcount);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void __devlink_rel_put(struct devlink_rel *rel)
 {
@@ -109,12 +124,14 @@ rel_put:
 reschedule_work:
 	schedule_delayed_work(&rel->nested_in.notify_work, 1);
 }
+#endif
 
-static void devlink_rel_nested_in_notify_work_schedule(struct devlink_rel *rel)
+static void mlxdevm_rel_nested_in_notify_work_schedule(struct mlxdevm_rel *rel)
 {
-	__devlink_rel_get(rel);
-	schedule_delayed_work(&rel->nested_in.notify_work, 0);
+	__mlxdevm_rel_get(rel);
+	mlxdevm_schedule_delayed_work(&rel->nested_in.notify_work, 0);
 }
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static struct devlink_rel *devlink_rel_alloc(void)
 {
@@ -128,7 +145,7 @@ static struct devlink_rel *devlink_rel_alloc(void)
 
 	err = xa_alloc_cyclic(&devlink_rels, &rel->index, rel,
 			      xa_limit_32b, &next, GFP_KERNEL);
-	if (err) {
+	if (err < 0) {
 		kfree(rel);
 		return ERR_PTR(err);
 	}
@@ -178,30 +195,30 @@ int devlink_rel_nested_in_add(u32 *rel_index, u32 devlink_index,
 	devlink->rel = rel;
 	return 0;
 }
+#endif
 
 /**
- * devlink_rel_nested_in_notify - Notify the object this devlink
+ * mlxdevm_rel_nested_in_notify - Notify the object this mlxdevm
  *				  instance is nested in.
- * @devlink: devlink
+ * @mlxdevm: mlxdevm
  *
- * This is called upon network namespace change of devlink instance.
- * In case this devlink instance is nested in another devlink object,
+ * This is called upon network namespace change of mlxdevm instance.
+ * In case this mlxdevm instance is nested in another mlxdevm object,
  * a notification of a change of this object should be sent
- * over netlink. The parent devlink instance lock needs to be
+ * over netlink. The parent mlxdevm instance lock needs to be
  * taken during the notification preparation.
- * However, since the devlink lock of nested instance is held here,
- * we would end with wrong devlink instance lock ordering and
+ * However, since the mlxdevm lock of nested instance is held here,
+ * we would end with wrong mlxdevm instance lock ordering and
  * deadlock. Therefore the work is utilized to avoid that.
  */
-void devlink_rel_nested_in_notify(struct devlink *devlink)
+void mlxdevm_rel_nested_in_notify(struct mlxdevm *mlxdevm)
 {
-	struct devlink_rel *rel = devlink->rel;
+	struct mlxdevm_rel *rel = mlxdevm->rel;
 
 	if (!rel)
 		return;
-	devlink_rel_nested_in_notify_work_schedule(rel);
+	mlxdevm_rel_nested_in_notify_work_schedule(rel);
 }
-#endif
 
 static struct mlxdevm_rel *mlxdevm_rel_find(unsigned long rel_index)
 {
@@ -243,7 +260,7 @@ int mlxdevm_rel_mlxdevm_handle_put(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 		*msg_updated = true;
 	return err;
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 void *devlink_priv(struct devlink *devlink)
 {
@@ -256,13 +273,13 @@ struct devlink *priv_to_devlink(void *priv)
 	return container_of(priv, struct devlink, priv);
 }
 EXPORT_SYMBOL_GPL(priv_to_devlink);
-
-struct device *devlink_to_dev(const struct devlink *devlink)
-{
-	return devlink->dev;
-}
-EXPORT_SYMBOL_GPL(devlink_to_dev);
 #endif
+
+struct device *mlxdevm_to_dev(const struct mlxdevm *mlxdevm)
+{
+	return mlxdevm->dev;
+}
+EXPORT_SYMBOL_GPL(mlxdevm_to_dev);
 
 struct net *mlxdevm_net(const struct mlxdevm *mlxdevm)
 {
@@ -275,7 +292,7 @@ void devm_assert_locked(struct mlxdevm *mlxdevm)
 	lockdep_assert_held(&mlxdevm->lock);
 }
 EXPORT_SYMBOL_GPL(devm_assert_locked);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #ifdef CONFIG_LOCKDEP
 /* For use in conjunction with LOCKDEP only e.g. rcu_dereference_protected() */
@@ -292,7 +309,7 @@ void devm_lock(struct mlxdevm *mlxdevm)
 	mutex_lock(&mlxdevm->lock);
 }
 EXPORT_SYMBOL_GPL(devm_lock);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devl_trylock(struct devlink *devlink)
 {
@@ -337,7 +354,7 @@ static void mlxdevm_release(struct work_struct *work)
 void mlxdevm_put(struct mlxdevm *mlxdevm)
 {
 	if (refcount_dec_and_test(&mlxdevm->refcount))
-		queue_rcu_work(mlxdevm_rwork_wq, &mlxdevm->rwork);
+		queue_rcu_work(mlxdevm_global_wq, &mlxdevm->rwork);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_put);
 
@@ -397,7 +414,6 @@ int devm_register(struct mlxdevm *mlxdevm)
 	INIT_LIST_HEAD(&mlxdevm->trap_policer_list);
 	INIT_RCU_WORK(&mlxdevm->rwork, mlxdevm_release);
 	lockdep_register_key(&mlxdevm->lock_key);
-	mutex_init(&mlxdevm->lock);
 	lockdep_set_class(&mlxdevm->lock, &mlxdevm->lock_key);
 	refcount_set(&mlxdevm->refcount, 1);
 
@@ -458,7 +474,7 @@ void mlxdevm_unregister(struct mlxdevm *mlxdevm)
 	devm_unlock(mlxdevm);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_unregister);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devlink_alloc_ns - Allocate new devlink instance resources
@@ -617,19 +633,26 @@ subsys_initcall(devlink_init);
 
 static int __init mlxdevm_init_module(void)
 {
-	char *rwq_name = "mlxdevm release work queue";
+	char *wq_name = "mlxdevm global work queue";
+	int err;
 
-	mlxdevm_rwork_wq = create_singlethread_workqueue(rwq_name);
-	if (!mlxdevm_rwork_wq)
+	mlxdevm_global_wq = alloc_workqueue(wq_name, 0, 0);
+	if (!mlxdevm_global_wq)
 		return -ENOMEM;
-	return genl_register_family(&mlxdevm_nl_family);
+
+	err = genl_register_family(&mlxdevm_nl_family);
+	if (err)
+		destroy_workqueue(mlxdevm_global_wq);
+
+	return err;
+
 }
 
 static void __exit mlxdevm_cleanup(void)
 {
 	genl_unregister_family(&mlxdevm_nl_family);
-	flush_workqueue(mlxdevm_rwork_wq);
-	destroy_workqueue(mlxdevm_rwork_wq);
+	flush_workqueue(mlxdevm_global_wq);
+	destroy_workqueue(mlxdevm_global_wq);
 }
 
 module_init(mlxdevm_init_module);

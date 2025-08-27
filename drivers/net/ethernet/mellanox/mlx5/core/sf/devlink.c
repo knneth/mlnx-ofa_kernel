@@ -286,7 +286,7 @@ mlx5_sf_new_check_attr(struct mlx5_core_dev *dev, const struct devlink_port_new_
 		NL_SET_ERR_MSG_MOD(extack, "External controller is unsupported");
 		return -EOPNOTSUPP;
 	}
-	if (new_attr->pfnum != mlx5_get_dev_index(dev)) {
+	if (new_attr->pfnum != PCI_FUNC(dev->pdev->devfn)) {
 		NL_SET_ERR_MSG_MOD(extack, "Invalid pfnum supplied");
 		return -EOPNOTSUPP;
 	}
@@ -304,26 +304,38 @@ int mlx5_devlink_sf_port_new(struct devlink *devlink,
 			     struct netlink_ext_ack *extack,
 			     struct devlink_port **dl_port)
 {
+	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(devlink_priv(devlink))->device;
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_sf_table *table = dev->priv.sf_table;
 	int err;
 
+	if (!mlxdevm->mlxdevm_flow)
+		devm_lock(mlxdevm);
+
 	err = mlx5_sf_new_check_attr(dev, new_attr, extack);
 	if (err)
-		return err;
+		goto unlock_mlxdevm;
 
 	if (!mlx5_sf_table_supported(dev)) {
 		NL_SET_ERR_MSG_MOD(extack, "SF ports are not supported.");
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto unlock_mlxdevm;
 	}
 
 	if (!is_mdev_switchdev_mode(dev)) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "SF ports are only supported in eswitch switchdev mode.");
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto unlock_mlxdevm;
 	}
 
-	return mlx5_sf_add(dev, table, new_attr, extack, dl_port);
+	err = mlx5_sf_add(dev, table, new_attr, extack, dl_port);
+
+unlock_mlxdevm:
+	if (!mlxdevm->mlxdevm_flow)
+		devm_unlock(mlxdevm);
+
+	return err;
 }
 
 static void mlx5_sf_dealloc(struct mlx5_sf_table *table, struct mlx5_sf *sf)
@@ -367,21 +379,21 @@ int mlx5_devlink_sf_port_del(struct devlink *devlink,
 			     struct devlink_port *dl_port,
 			     struct netlink_ext_ack *extack)
 {
+	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(devlink_priv(devlink))->device;
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_sf_table *table = dev->priv.sf_table;
 	struct mlx5_sf *sf = mlx5_sf_by_dl_port(dl_port);
 
+	if (!mlxdevm->mlxdevm_flow)
+		devm_lock(mlxdevm);
+
 	mlx5_sf_del(table, sf);
+
+	if (!mlxdevm->mlxdevm_flow)
+		devm_unlock(mlxdevm);
+
 	return 0;
 }
-
-#if IS_ENABLED(CONFIG_MLXDEVM)
-void mlx5_sf_index_to_hw_id(struct devlink *devlink, u16 *hw_fn_id, struct devlink_port *dl_port)
-{
-	struct mlx5_sf *sf = mlx5_sf_by_dl_port(dl_port);
-	*hw_fn_id = sf->hw_fn_id;
-}
-#endif
 
 static bool mlx5_sf_state_update_check(const struct mlx5_sf *sf, u8 new_state)
 {

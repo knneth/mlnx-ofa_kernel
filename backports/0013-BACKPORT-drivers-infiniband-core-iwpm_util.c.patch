@@ -1,0 +1,40 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwpm_util.c
+
+---
+ drivers/infiniband/core/iwpm_util.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/iwpm_util.c
++++ b/drivers/infiniband/core/iwpm_util.c
+@@ -462,13 +462,21 @@ int iwpm_parse_nlmsg(struct netlink_call
+ 	int ret;
+ 	const char *err_str = "";
+ 
++#ifdef HAVE_NLMSG_VALIDATE_DEPRECATED
+ 	ret = nlmsg_validate_deprecated(cb->nlh, nlh_len, policy_max - 1,
+ 					nlmsg_policy, NULL);
++#else
++       ret = nlmsg_validate(cb->nlh, nlh_len, policy_max - 1, nlmsg_policy, NULL);
++#endif
+ 	if (ret) {
+ 		err_str = "Invalid attribute";
+ 		goto parse_nlmsg_error;
+ 	}
++#ifdef HAVE_NLMSG_PARSE_DEPRECATED
+ 	ret = nlmsg_parse_deprecated(cb->nlh, nlh_len, nltb, policy_max - 1,
++#else
++	ret = nlmsg_parse(cb->nlh, nlh_len, nltb, policy_max - 1,
++#endif
+ 				     nlmsg_policy, NULL);
+ 	if (ret) {
+ 		err_str = "Unable to parse the nlmsg";
+@@ -644,7 +652,7 @@ int iwpm_send_mapinfo(u8 nl_client, int
+ 	int i = 0, nlmsg_bytes = 0;
+ 	unsigned long flags;
+ 	const char *err_str = "";
+-	int ret;
++	int ret = 0;
+ 
+ 	skb = dev_alloc_skb(NLMSG_GOODSIZE);
+ 	if (!skb) {

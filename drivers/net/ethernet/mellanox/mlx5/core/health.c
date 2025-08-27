@@ -82,7 +82,7 @@ void mlx5_set_nic_state(struct mlx5_core_dev *dev, u8 state)
 		    &dev->iseg->cmdq_addr_l_sz);
 }
 
-bool mlx5_sensor_pci_not_working(struct mlx5_core_dev *dev)
+static bool sensor_pci_not_working(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;
 	struct health_buffer __iomem *h = health->health;
@@ -117,7 +117,7 @@ static bool sensor_fw_synd_rfr(struct mlx5_core_dev *dev)
 
 u32 mlx5_health_check_fatal_sensors(struct mlx5_core_dev *dev)
 {
-	if (mlx5_sensor_pci_not_working(dev))
+	if (sensor_pci_not_working(dev))
 		return MLX5_SENSOR_PCI_COMM_ERR;
 	if (pci_channel_offline(dev->pdev))
 		return MLX5_SENSOR_PCI_ERR;
@@ -327,7 +327,7 @@ int mlx5_health_wait_pci_up(struct mlx5_core_dev *dev)
 	unsigned long end;
 
 	end = jiffies + msecs_to_jiffies(mlx5_tout_ms(dev, FW_RESET));
-	while (mlx5_sensor_pci_not_working(dev)) {
+	while (sensor_pci_not_working(dev)) {
 		if (time_after(jiffies, end))
 			return -ETIMEDOUT;
 		if (test_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
@@ -870,7 +870,7 @@ void mlx5_stop_health_poll(struct mlx5_core_dev *dev, bool disable_health)
 	if (disable_health)
 		set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
 
-	del_timer_sync(&health->timer);
+	timer_delete_sync(&health->timer);
 }
 
 void mlx5_start_health_fw_log_up(struct mlx5_core_dev *dev)

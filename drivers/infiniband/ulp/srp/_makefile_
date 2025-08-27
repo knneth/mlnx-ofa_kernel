@@ -119,7 +119,7 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		modules
 else
 # compile with inbox driver
-		make EXTRA_CFLAGS="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) \
+		make ccflags-y="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) \
 		CONFIG_SCSI_SRP_ATTRS_STANDALONE=m \
 		CONFIG_SCSI_SRP_ATTRS=m \
 		CONFIG_INFINIBAND_SRP=m \
@@ -154,7 +154,6 @@ binrpm: rpmcheck $(rpmspec)
 dist: prep
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),Kconfig,makefile,Kbuild,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
-	cp common.postinst $(rpmroot)/$(PACKAGE)/
 	cp *.c $(rpmroot)/$(PACKAGE)/
 	cp *.h $(rpmroot)/$(PACKAGE)/
 	cp -r debian $(rpmroot)/$(PACKAGE)/

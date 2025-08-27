@@ -3,7 +3,6 @@
  * Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved
  */
 
-#include <linux/slab.h>
 #include <linux/kref.h>
 #include <linux/cdev.h>
 #include <linux/mutex.h>
@@ -54,15 +53,13 @@ static const struct file_operations ucaps_cdev_fops = {
  */
 void ib_cleanup_ucaps(void)
 {
-	int i;
-
 	mutex_lock(&ucaps_mutex);
 	if (!ucaps_class_is_registered) {
 		mutex_unlock(&ucaps_mutex);
 		return;
 	}
 
-	for (i = RDMA_UCAP_FIRST; i < RDMA_UCAP_MAX; i++)
+	for (int i = RDMA_UCAP_FIRST; i < RDMA_UCAP_MAX; i++)
 		WARN_ON(ucaps_list[i]);
 
 	class_unregister(&ucaps_class);
@@ -73,9 +70,7 @@ void ib_cleanup_ucaps(void)
 
 static int get_ucap_from_devt(dev_t devt, u64 *idx_mask)
 {
-	int type;
-
-	for (type = RDMA_UCAP_FIRST; type < RDMA_UCAP_MAX; type++) {
+	for (int type = RDMA_UCAP_FIRST; type < RDMA_UCAP_MAX; type++) {
 		if (ucaps_list[type] && ucaps_list[type]->dev.devt == devt) {
 			*idx_mask |= 1 << type;
 			return 0;
@@ -175,7 +170,7 @@ int ib_create_ucap(enum rdma_user_cap type)
 	ucap->dev.class = &ucaps_class;
 	ucap->dev.devt = MKDEV(MAJOR(ucaps_base_dev), type);
 	ucap->dev.release = ucap_dev_release;
-	ret = dev_set_name(&ucap->dev, ucap_names[type]);
+	ret = dev_set_name(&ucap->dev, "%s", ucap_names[type]);
 	if (ret)
 		goto err_device;
 
@@ -253,11 +248,10 @@ int ib_get_ucaps(int *fds, int fd_count, uint64_t *idx_mask)
 {
 	int ret = 0;
 	dev_t dev;
-	int i;
 
 	*idx_mask = 0;
 	mutex_lock(&ucaps_mutex);
-	for (i = 0; i < fd_count; i++) {
+	for (int i = 0; i < fd_count; i++) {
 		ret = get_devt_from_fd(fds[i], &dev);
 		if (ret)
 			goto end;

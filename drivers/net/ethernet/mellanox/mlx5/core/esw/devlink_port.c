@@ -5,7 +5,7 @@
 #include "eswitch.h"
 #include "mlx5_esw_devm.h"
 
-static void
+void
 mlx5_esw_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
 {
 	u64 parent_id;
@@ -15,7 +15,7 @@ mlx5_esw_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_i
 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
 }
 
-static bool mlx5_esw_devlink_port_supported(struct mlx5_eswitch *esw, u16 vport_num)
+bool mlx5_esw_devlink_port_supported(struct mlx5_eswitch *esw, u16 vport_num)
 {
 	return (mlx5_core_is_ecpf(esw->dev) && vport_num == MLX5_VPORT_PF) ||
 	       mlx5_eswitch_is_vf_vport(esw, vport_num) ||
@@ -28,12 +28,13 @@ static void mlx5_esw_offloads_pf_vf_devlink_port_attrs_set(struct mlx5_eswitch *
 {
 	struct mlx5_core_dev *dev = esw->dev;
 	struct netdev_phys_item_id ppid = {};
+	struct mlx5_vport *vport;
 	u32 controller_num = 0;
 	bool external;
 	u16 pfnum;
 
 	mlx5_esw_get_port_parent_id(dev, &ppid);
-	pfnum = mlx5_get_dev_index(dev);
+	pfnum = PCI_FUNC(dev->pdev->devfn);
 	external = mlx5_core_is_ecpf_esw_manager(dev);
 	if (external)
 		controller_num = dev->priv.eswitch->offloads.host_number + 1;
@@ -43,10 +44,18 @@ static void mlx5_esw_offloads_pf_vf_devlink_port_attrs_set(struct mlx5_eswitch *
 		dl_port->attrs.switch_id.id_len = ppid.id_len;
 		devlink_port_attrs_pci_pf_set(dl_port, controller_num, pfnum, external);
 	} else if (mlx5_eswitch_is_vf_vport(esw, vport_num)) {
+		u16 func_id = vport_num - 1;
+
+		vport = mlx5_eswitch_get_vport(esw, vport_num);
 		memcpy(dl_port->attrs.switch_id.id, ppid.id, ppid.id_len);
 		dl_port->attrs.switch_id.id_len = ppid.id_len;
+		if (vport->adjacent) {
+			func_id = vport->adj_info.function_id;
+			pfnum = vport->adj_info.parent_pci_devfn;
+		}
+
 		devlink_port_attrs_pci_vf_set(dl_port, controller_num, pfnum,
-					      vport_num - 1, external);
+					      func_id, external);
 	}  else if (mlx5_core_is_ec_vf_vport(esw->dev, vport_num)) {
 		memcpy(dl_port->attrs.switch_id.id, ppid.id, ppid.id_len);
 		dl_port->attrs.switch_id.id_len = ppid.id_len;
@@ -111,7 +120,7 @@ static void mlx5_esw_offloads_sf_devlink_port_attrs_set(struct mlx5_eswitch *esw
 	struct netdev_phys_item_id ppid = {};
 	u16 pfnum;
 
-	pfnum = mlx5_get_dev_index(dev);
+	pfnum = PCI_FUNC(dev->pdev->devfn);
 	mlx5_esw_get_port_parent_id(dev, &ppid);
 	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
 	dl_port->attrs.switch_id.id_len = ppid.id_len;
@@ -123,7 +132,6 @@ int mlx5_esw_offloads_sf_devlink_port_init(struct mlx5_eswitch *esw, struct mlx5
 					   u32 controller, u32 sfnum)
 {
 	mlx5_esw_offloads_sf_devlink_port_attrs_set(esw, &dl_port->dl_port, controller, sfnum);
-	mlx5_devm_sf_port_register(esw->dev, vport, controller, sfnum, &dl_port->dl_port);
 
 	vport->dl_port = dl_port;
 	mlx5_devlink_port_init(dl_port, vport);

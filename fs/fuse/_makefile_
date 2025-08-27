@@ -108,7 +108,7 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		modules
 else
 # compile with inbox driver
-		make EXTRA_CFLAGS="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
+		make ccflags-y="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		modules
 endif
 
@@ -136,8 +136,7 @@ binrpm: rpmcheck $(rpmspec)
 		(exit 1); exit 1; \
 		fi
 
-dist_files = $(rpmspec) makefile Makefile dkms.conf Module.supported \
-	common.postinst
+dist_files = $(rpmspec) makefile Makefile dkms.conf Module.supported
 dist_dirs = debian tools
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/

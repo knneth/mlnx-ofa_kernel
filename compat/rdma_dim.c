@@ -3,6 +3,7 @@
  * Copyright (c) 2019, Mellanox Technologies inc.  All rights reserved.
  */
 
+#ifndef HAVE_DIM_CQ_PERIOD_MODE
 #include <linux/dim.h>
 
 static int rdma_dim_step(struct dim *dim)
@@ -107,3 +108,4 @@ void rdma_dim(struct dim *dim, u64 completions)
 	}
 }
 EXPORT_SYMBOL(rdma_dim);
+#endif

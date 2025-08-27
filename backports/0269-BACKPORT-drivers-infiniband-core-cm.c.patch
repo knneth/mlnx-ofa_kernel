@@ -1,0 +1,382 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
+
+---
+ drivers/infiniband/core/cm.c | 73 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 73 insertions(+)
+
+--- a/drivers/infiniband/core/cm.c
++++ b/drivers/infiniband/core/cm.c
+@@ -33,6 +33,9 @@
+ MODULE_AUTHOR("Sean Hefty");
+ MODULE_DESCRIPTION("InfiniBand CM");
+ MODULE_LICENSE("Dual BSD/GPL");
++#ifdef RETPOLINE_MLNX
++MODULE_INFO(retpoline, "Y");
++#endif
+ 
+ #define CM_DESTROY_ID_WAIT_TIMEOUT 10000 /* msecs */
+ #define CM_DIRECT_RETRY_CTX ((void *) 1UL)
+@@ -1585,7 +1588,9 @@ int ib_send_cm_req(struct ib_cm_id *cm_i
+ 	cm_id_priv->local_qpn = cpu_to_be32(IBA_GET(CM_REQ_LOCAL_QPN, req_msg));
+ 	cm_id_priv->rq_psn = cpu_to_be32(IBA_GET(CM_REQ_STARTING_PSN, req_msg));
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_req(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		goto out_free;
+@@ -1632,9 +1637,11 @@ static int cm_issue_rej(struct cm_port *
+ 		IBA_SET_MEM(CM_REJ_ARI, rej_msg, ari, ari_length);
+ 	}
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_issue_rej(
+ 		IBA_GET(CM_REJ_LOCAL_COMM_ID, rcv_msg),
+ 		IBA_GET(CM_REJ_REMOTE_COMM_ID, rcv_msg));
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		cm_free_msg(msg);
+@@ -1986,7 +1993,9 @@ static void cm_dup_req_handler(struct cm
+ 	}
+ 	spin_unlock_irq(&cm_id_priv->lock);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_dup_req(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		goto free;
+@@ -2150,7 +2159,9 @@ static int cm_req_handler(struct cm_work
+ 
+ 	listen_cm_id_priv = cm_match_req(work, cm_id_priv);
+ 	if (!listen_cm_id_priv) {
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_no_listener_err(&cm_id_priv->id);
++#endif
+ 		cm_id_priv->id.state = IB_CM_IDLE;
+ 		ret = -EINVAL;
+ 		goto destroy;
+@@ -2302,7 +2313,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+ 	spin_lock_irqsave(&cm_id_priv->lock, flags);
+ 	if (cm_id->state != IB_CM_REQ_RCVD &&
+ 	    cm_id->state != IB_CM_MRA_REQ_SENT) {
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_rep_err(cm_id_priv->id.local_id, cm_id->state);
++#endif
+ 		ret = -EINVAL;
+ 		goto out;
+ 	}
+@@ -2316,7 +2329,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+ 	rep_msg = (struct cm_rep_msg *) msg->mad;
+ 	cm_format_rep(rep_msg, cm_id_priv, param);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_rep(cm_id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		goto out_free;
+@@ -2377,7 +2392,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+ 	spin_lock_irqsave(&cm_id_priv->lock, flags);
+ 	if (cm_id->state != IB_CM_REP_RCVD &&
+ 	    cm_id->state != IB_CM_MRA_REP_SENT) {
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_cm_rtu_err(cm_id);
++#endif
+ 		ret = -EINVAL;
+ 		goto error;
+ 	}
+@@ -2391,7 +2408,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+ 	cm_format_rtu((struct cm_rtu_msg *) msg->mad, cm_id_priv,
+ 		      private_data, private_data_len);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_rtu(cm_id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret) {
+ 		spin_unlock_irqrestore(&cm_id_priv->lock, flags);
+@@ -2473,7 +2492,9 @@ static void cm_dup_rep_handler(struct cm
+ 		goto unlock;
+ 	spin_unlock_irq(&cm_id_priv->lock);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_dup_rep(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		goto free;
+@@ -2497,8 +2518,10 @@ static int cm_rep_handler(struct cm_work
+ 		cpu_to_be32(IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg)), 0);
+ 	if (!cm_id_priv) {
+ 		cm_dup_rep_handler(work);
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_remote_no_priv_err(
+ 			 IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg));
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -2511,10 +2534,12 @@ static int cm_rep_handler(struct cm_work
+ 		break;
+ 	default:
+ 		ret = -EINVAL;
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_rep_unknown_err(
+ 			IBA_GET(CM_REP_LOCAL_COMM_ID, rep_msg),
+ 			IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg),
+ 			cm_id_priv->id.state);
++#endif
+ 		spin_unlock_irq(&cm_id_priv->lock);
+ 		goto error;
+ 	}
+@@ -2531,8 +2556,10 @@ static int cm_rep_handler(struct cm_work
+ 		spin_unlock(&cm.lock);
+ 		spin_unlock_irq(&cm_id_priv->lock);
+ 		ret = -EINVAL;
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_insert_failed_err(
+ 			 IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg));
++#endif
+ 		goto error;
+ 	}
+ 	/* Check for a stale connection. */
+@@ -2548,9 +2575,11 @@ static int cm_rep_handler(struct cm_work
+ 			     IB_CM_REJ_STALE_CONN, CM_MSG_RESPONSE_REP,
+ 			     NULL, 0);
+ 		ret = -EINVAL;
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_staleconn_err(
+ 			IBA_GET(CM_REP_LOCAL_COMM_ID, rep_msg),
+ 			IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg));
++#endif
+ 
+ 		if (cur_cm_id_priv) {
+ 			ib_send_cm_dreq(&cur_cm_id_priv->id, NULL, 0);
+@@ -2677,7 +2706,9 @@ static void cm_issue_dreq(struct cm_id_p
+ 
+ 	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv, NULL, 0);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_dreq(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		cm_free_msg(msg);
+@@ -2697,7 +2728,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+ 
+ 	spin_lock_irqsave(&cm_id_priv->lock, flags);
+ 	if (cm_id_priv->id.state != IB_CM_ESTABLISHED) {
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_dreq_skipped(&cm_id_priv->id);
++#endif
+ 		ret = -EINVAL;
+ 		goto unlock;
+ 	}
+@@ -2716,7 +2749,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+ 	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv,
+ 		       private_data, private_data_len);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_dreq(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret) {
+ 		cm_enter_timewait(cm_id_priv);
+@@ -2759,7 +2794,9 @@ static int cm_send_drep_locked(struct cm
+ 		return -EINVAL;
+ 
+ 	if (cm_id_priv->id.state != IB_CM_DREQ_RCVD) {
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_drep_err(&cm_id_priv->id);
++#endif
+ 		kfree(private_data);
+ 		return -EINVAL;
+ 	}
+@@ -2774,7 +2811,9 @@ static int cm_send_drep_locked(struct cm
+ 	cm_format_drep((struct cm_drep_msg *) msg->mad, cm_id_priv,
+ 		       private_data, private_data_len);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_drep(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret) {
+ 		cm_free_msg(msg);
+@@ -2824,9 +2863,11 @@ static int cm_issue_drep(struct cm_port
+ 	IBA_SET(CM_DREP_LOCAL_COMM_ID, drep_msg,
+ 		IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg));
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_issue_drep(
+ 		IBA_GET(CM_DREQ_LOCAL_COMM_ID, dreq_msg),
+ 		IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg));
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		cm_free_msg(msg);
+@@ -2848,9 +2889,11 @@ static int cm_dreq_handler(struct cm_wor
+ 		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
+ 						     [CM_DREQ_COUNTER]);
+ 		cm_issue_drep(work->port, work->mad_recv_wc);
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_no_priv_err(
+ 			IBA_GET(CM_DREQ_LOCAL_COMM_ID, dreq_msg),
+ 			IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg));
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -2895,7 +2938,9 @@ static int cm_dreq_handler(struct cm_wor
+ 						     [CM_DREQ_COUNTER]);
+ 		goto unlock;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_dreq_unknown_err(&cm_id_priv->id);
++#endif
+ 		goto unlock;
+ 	}
+ 	cm_id_priv->id.state = IB_CM_DREQ_RCVD;
+@@ -2954,7 +2999,9 @@ static int cm_send_rej_locked(struct cm_
+ 	    (ari && ari_length > IB_CM_REJ_ARI_LENGTH))
+ 		return -EINVAL;
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_rej(&cm_id_priv->id, reason);
++#endif
+ 
+ 	switch (state) {
+ 	case IB_CM_REQ_SENT:
+@@ -2982,7 +3029,9 @@ static int cm_send_rej_locked(struct cm_
+ 			      state);
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_unknown_rej_err(&cm_id_priv->id);
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -3094,7 +3143,9 @@ static int cm_rej_handler(struct cm_work
+ 		}
+ 		fallthrough;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_rej_unknown_err(&cm_id_priv->id);
++#endif
+ 		spin_unlock_irq(&cm_id_priv->lock);
+ 		goto out;
+ 	}
+@@ -3150,7 +3201,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+ 		}
+ 		fallthrough;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_mra_unknown_err(&cm_id_priv->id);
++#endif
+ 		ret = -EINVAL;
+ 		goto error_unlock;
+ 	}
+@@ -3165,7 +3218,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+ 		cm_format_mra((struct cm_mra_msg *) msg->mad, cm_id_priv,
+ 			      msg_response, service_timeout,
+ 			      private_data, private_data_len);
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_send_mra(cm_id);
++#endif
+ 		ret = ib_post_send_mad(msg, NULL);
+ 		if (ret)
+ 			goto error_free_msg;
+@@ -3257,7 +3312,9 @@ static int cm_mra_handler(struct cm_work
+ 						     [CM_MRA_COUNTER]);
+ 		fallthrough;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_mra_unknown_err(&cm_id_priv->id);
++#endif
+ 		goto out;
+ 	}
+ 
+@@ -3544,7 +3601,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id
+ 	cm_format_sidr_req((struct cm_sidr_req_msg *)msg->mad, cm_id_priv,
+ 			   param);
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_sidr_req(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret)
+ 		goto out_free;
+@@ -3705,7 +3764,9 @@ static int cm_send_sidr_rep_locked(struc
+ 
+ 	cm_format_sidr_rep((struct cm_sidr_rep_msg *) msg->mad, cm_id_priv,
+ 			   param);
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_send_sidr_rep(&cm_id_priv->id);
++#endif
+ 	ret = ib_post_send_mad(msg, NULL);
+ 	if (ret) {
+ 		cm_free_msg(msg);
+@@ -3808,7 +3869,9 @@ static void cm_process_send_error(struct
+ 	    wc_status == IB_WC_WR_FLUSH_ERR)
+ 		goto out_unlock;
+ 
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 	trace_icm_mad_send_err(state, wc_status);
++#endif
+ 	switch (state) {
+ 	case IB_CM_REQ_SENT:
+ 	case IB_CM_MRA_REQ_RCVD:
+@@ -3919,7 +3982,9 @@ static void cm_work_handler(struct work_
+ 		ret = cm_timewait_handler(work);
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_handler_err(work->cm_event.event);
++#endif
+ 		ret = -EINVAL;
+ 		break;
+ 	}
+@@ -3954,7 +4019,9 @@ static int cm_establish(struct ib_cm_id
+ 		ret = -EISCONN;
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_establish_err(cm_id);
++#endif
+ 		ret = -EINVAL;
+ 		break;
+ 	}
+@@ -4151,7 +4218,9 @@ static int cm_init_qp_init_attr(struct c
+ 		ret = 0;
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_qp_init_err(&cm_id_priv->id);
++#endif
+ 		ret = -EINVAL;
+ 		break;
+ 	}
+@@ -4204,7 +4273,9 @@ static int cm_init_qp_rtr_attr(struct cm
+ 		ret = 0;
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_qp_rtr_err(&cm_id_priv->id);
++#endif
+ 		ret = -EINVAL;
+ 		break;
+ 	}
+@@ -4266,7 +4337,9 @@ static int cm_init_qp_rts_attr(struct cm
+ 		ret = 0;
+ 		break;
+ 	default:
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ 		trace_icm_qp_rts_err(&cm_id_priv->id);
++#endif
+ 		ret = -EINVAL;
+ 		break;
+ 	}

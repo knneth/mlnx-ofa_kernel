@@ -6,9 +6,6 @@
 #include <linux/xarray.h>
 #endif
 
-#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
-#include <net/netfilter/nf_flow_table.h>
-#endif
 MODULE_AUTHOR("Luis R. Rodriguez");
 MODULE_DESCRIPTION("Kernel backport module");
 MODULE_LICENSE("GPL");
@@ -74,9 +71,6 @@ static int __init backport_init(void)
 #ifndef HAVE_XARRAY
 	compat_radix_tree_init();
 #endif
-#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
-	nf_flow_table_offload_init();
-#endif
         return 0;
 }
 module_init(backport_init);
@@ -86,9 +80,6 @@ static void __exit backport_exit(void)
 #ifndef HAVE_XARRAY
 	compat_radix_tree_clean();
 #endif	
-#ifdef CONFIG_COMPAT_CLS_FLOWER_4_18_MOD
-	nf_flow_table_offload_exit();
-#endif
 
         return;
 }

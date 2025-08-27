@@ -1,24 +1,35 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 
-Change-Id: Ic17d6e3170042e2c5e085813030ede9e2efd6176
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/htb.h | 5 +++++
- 1 file changed, 5 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.h
-@@ -28,8 +28,13 @@ mlx5e_htb_leaf_alloc_queue(struct mlx5e_
- int
- mlx5e_htb_leaf_to_inner(struct mlx5e_htb *htb, u16 classid, u16 child_classid,
- 			u64 rate, u64 ceil, struct netlink_ext_ack *extack);
-+#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID
- int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
- 		       struct netlink_ext_ack *extack);
-+#else
-+int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 classid, u16 *old_qid,
-+		       u16 *new_qid, struct netlink_ext_ack *extack);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+@@ -3,8 +3,12 @@
+ 
+ #include <linux/netdevice.h>
+ #include <linux/list.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/bonding.h>
 +#endif
- int
- mlx5e_htb_leaf_del_last(struct mlx5e_htb *htb, u16 classid, bool force,
- 			struct netlink_ext_ack *extack);
++#ifdef HAVE_NET_LAG_H
+ #include <net/lag.h>
+-
++#endif
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ #include "esw/acl/ofld.h"
+@@ -212,8 +216,10 @@ static void mlx5e_rep_changelowerstate_e
+ 	if (!lag_dev)
+ 		return;
+ 
++#ifdef HAVE_NET_LAG_PORT_DEV_TXABLE
+ 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
+ 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
++#endif
+ 
+ 	/* Point everyone's egress acl to the vport of the active representor */
+ 	netdev_for_each_lower_dev(lag_dev, dev, iter) {

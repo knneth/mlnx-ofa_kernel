@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/acl.c
+
+---
+ fs/fuse/acl.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/fs/fuse/acl.c
++++ b/fs/fuse/acl.c
+@@ -146,8 +146,13 @@ int fuse_set_acl(struct mnt_idmap *idmap
+ 		 * be stripped.
+ 		 */
+ 		if (fc->posix_acl &&
++#ifdef HAVE_IN_GROUP_OR_CAPABLE
+ 		    !in_group_or_capable(&nop_mnt_idmap, inode,
+ 					 i_gid_into_vfsgid(&nop_mnt_idmap, inode)))
++#else
++			!vfsgid_in_group_p(i_gid_into_vfsgid(&nop_mnt_idmap, inode)) &&
++			!capable_wrt_inode_uidgid(&nop_mnt_idmap, inode, CAP_FSETID))
++#endif
+ 			extra_flags |= FUSE_SETXATTR_ACL_KILL_SGID;
+ 
+ 		ret = fuse_setxattr(inode, name, value, size, 0, extra_flags);

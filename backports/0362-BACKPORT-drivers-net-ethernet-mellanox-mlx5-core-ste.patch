@@ -1,0 +1,27 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
+
+Change-Id: I616a22178cdfaabb939d64e610d1e3dc8e325e93
+---
+ .../net/ethernet/mellanox/mlx5/core/steering/hws/debug.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
+@@ -7,6 +7,15 @@
+ #include <linux/version.h>
+ #include "internal.h"
+ 
++#ifndef LINUX_VERSION_MAJOR
++#define LINUX_VERSION_MAJOR 0
++#endif
++#ifndef LINUX_VERSION_PATCHLEVEL
++#define LINUX_VERSION_PATCHLEVEL 0
++#endif
++#ifndef LINUX_VERSION_SUBLEVEL
++#define LINUX_VERSION_SUBLEVEL 0
++#endif
+ static int
+ hws_debug_dump_matcher_template_definer(struct seq_file *f,
+ 					void *parent_obj,

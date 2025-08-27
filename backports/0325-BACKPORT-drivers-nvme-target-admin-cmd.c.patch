@@ -1,0 +1,300 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/admin-cmd.c
+
+Change-Id: I5afe9c2f3981f5f155841e89277d3c1db0405882
+---
+ drivers/nvme/target/admin-cmd.c | 70 +++++++++++++++++++++++++++++++++
+ 1 file changed, 70 insertions(+)
+
+--- a/drivers/nvme/target/admin-cmd.c
++++ b/drivers/nvme/target/admin-cmd.c
+@@ -9,7 +9,9 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/rculist.h>
++#ifdef HAVE_PART_STAT_H
+ #include <linux/part_stat.h>
++#endif
+ 
+ #include <generated/utsrelease.h>
+ #include <linux/unaligned.h>
+@@ -227,10 +229,14 @@ static void nvmet_execute_get_supported_
+ 	logs->lids[NVME_LOG_FW_SLOT] = cpu_to_le32(NVME_LIDS_LSUPP);
+ 	logs->lids[NVME_LOG_CHANGED_NS] = cpu_to_le32(NVME_LIDS_LSUPP);
+ 	logs->lids[NVME_LOG_CMD_EFFECTS] = cpu_to_le32(NVME_LIDS_LSUPP);
++#ifdef HAVE_BDEV_BD_STATS
+ 	logs->lids[NVME_LOG_ENDURANCE_GROUP] = cpu_to_le32(NVME_LIDS_LSUPP);
++#endif
+ 	logs->lids[NVME_LOG_ANA] = cpu_to_le32(NVME_LIDS_LSUPP);
+ 	logs->lids[NVME_LOG_FEATURES] = cpu_to_le32(NVME_LIDS_LSUPP);
++#if defined(HAVE_REQUEST_QUEUE_IA_RANGES) || defined(HAVE_GENDISK_IA_RANGES)
+ 	logs->lids[NVME_LOG_RMI] = cpu_to_le32(NVME_LIDS_LSUPP);
++#endif
+ 	logs->lids[NVME_LOG_RESERVATION] = cpu_to_le32(NVME_LIDS_LSUPP);
+ 
+ 	status = nvmet_copy_to_sgl(req, 0, logs, sizeof(*logs));
+@@ -253,12 +259,21 @@ static u16 nvmet_get_smart_log_nsid(stru
+ 	if (!req->ns->bdev)
+ 		return NVME_SC_SUCCESS;
+ 
++#ifdef HAVE_REQUEST_BDEV
+ 	host_reads = part_stat_read(req->ns->bdev, ios[READ]);
+ 	data_units_read =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[READ]), 1000);
+ 	host_writes = part_stat_read(req->ns->bdev, ios[WRITE]);
+ 	data_units_written =
+ 		DIV_ROUND_UP(part_stat_read(req->ns->bdev, sectors[WRITE]), 1000);
++#else
++	host_reads = part_stat_read(req->ns->bdev->bd_part, ios[READ]);
++	data_units_read = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[READ]), 1000);
++	host_writes = part_stat_read(req->ns->bdev->bd_part, ios[WRITE]);
++	data_units_written = DIV_ROUND_UP(part_stat_read(req->ns->bdev->bd_part,
++		sectors[WRITE]), 1000);
++#endif
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+ 	put_unaligned_le64(data_units_read, &slog->data_units_read[0]);
+@@ -282,12 +297,21 @@ static u16 nvmet_get_smart_log_all(struc
+ 		/* we don't have the right data for file backed ns */
+ 		if (!ns->bdev)
+ 			continue;
++#ifdef HAVE_REQUEST_BDEV
+ 		host_reads += part_stat_read(ns->bdev, ios[READ]);
+ 		data_units_read += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[READ]), 1000);
+ 		host_writes += part_stat_read(ns->bdev, ios[WRITE]);
+ 		data_units_written += DIV_ROUND_UP(
+ 			part_stat_read(ns->bdev, sectors[WRITE]), 1000);
++#else
++		host_reads += part_stat_read(ns->bdev->bd_part, ios[READ]);
++		data_units_read += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[READ]), 1000);
++		host_writes += part_stat_read(ns->bdev->bd_part, ios[WRITE]);
++		data_units_written += DIV_ROUND_UP(
++			part_stat_read(ns->bdev->bd_part, sectors[WRITE]), 1000);
++#endif
+ 	}
+ 
+ 	put_unaligned_le64(host_reads, &slog->host_reads[0]);
+@@ -298,6 +322,7 @@ static u16 nvmet_get_smart_log_all(struc
+ 	return NVME_SC_SUCCESS;
+ }
+ 
++#if defined(HAVE_REQUEST_QUEUE_IA_RANGES) || defined(HAVE_GENDISK_IA_RANGES)
+ static void nvmet_execute_get_log_page_rmi(struct nvmet_req *req)
+ {
+ 	struct nvme_rotational_media_log *log;
+@@ -310,7 +335,11 @@ static void nvmet_execute_get_log_page_r
+ 	if (status)
+ 		goto out;
+ 
++#ifdef HAVE_BDEV_NONROT
+ 	if (!req->ns->bdev || bdev_nonrot(req->ns->bdev)) {
++#else
++	if (!req->ns->bdev || blk_queue_nonrot(bdev_get_queue(req->ns->bdev))) {
++#endif
+ 		status = NVME_SC_INVALID_FIELD | NVME_STATUS_DNR;
+ 		goto out;
+ 	}
+@@ -326,8 +355,13 @@ static void nvmet_execute_get_log_page_r
+ 
+ 	log->endgid = req->cmd->get_log_page.lsi;
+ 	disk = req->ns->bdev->bd_disk;
++#ifdef HAVE_REQUEST_QUEUE_IA_RANGES
++	if (disk && disk->queue && disk->queue->ia_ranges)
++		log->numa = cpu_to_le16(disk->queue->ia_ranges->nr_ia_ranges);
++#else
+ 	if (disk && disk->ia_ranges)
+ 		log->numa = cpu_to_le16(disk->ia_ranges->nr_ia_ranges);
++#endif
+ 	else
+ 		log->numa = cpu_to_le16(1);
+ 
+@@ -336,6 +370,7 @@ static void nvmet_execute_get_log_page_r
+ out:
+ 	nvmet_req_complete(req, status);
+ }
++#endif
+ 
+ static void nvmet_execute_get_log_page_smart(struct nvmet_req *req)
+ {
+@@ -497,9 +532,14 @@ static u32 nvmet_format_ana_group(struct
+ 	desc->chgcnt = cpu_to_le64(nvmet_ana_chgcnt);
+ 	desc->state = req->port->ana_state[grpid];
+ 	memset(desc->rsvd17, 0, sizeof(desc->rsvd17));
++#ifdef struct_size
+ 	return struct_size(desc, nsids, count);
++#else
++	return sizeof(struct nvme_ana_group_desc) + count * sizeof(__le32);
++#endif
+ }
+ 
++#ifdef HAVE_BDEV_BD_STATS
+ static void nvmet_execute_get_log_page_endgrp(struct nvmet_req *req)
+ {
+ 	u64 host_reads, host_writes, data_units_read, data_units_written;
+@@ -542,6 +582,7 @@ copy:
+ out:
+ 	nvmet_req_complete(req, status);
+ }
++#endif
+ 
+ static void nvmet_execute_get_log_page_ana(struct nvmet_req *req)
+ {
+@@ -641,14 +682,18 @@ static void nvmet_execute_get_log_page(s
+ 		return nvmet_execute_get_log_changed_ns(req);
+ 	case NVME_LOG_CMD_EFFECTS:
+ 		return nvmet_execute_get_log_cmd_effects_ns(req);
++#ifdef HAVE_BDEV_BD_STATS
+ 	case NVME_LOG_ENDURANCE_GROUP:
+ 		return nvmet_execute_get_log_page_endgrp(req);
++#endif
+ 	case NVME_LOG_ANA:
+ 		return nvmet_execute_get_log_page_ana(req);
+ 	case NVME_LOG_FEATURES:
+ 		return nvmet_execute_get_log_page_features(req);
++#if defined(HAVE_REQUEST_QUEUE_IA_RANGES) || defined(HAVE_GENDISK_IA_RANGES)
+ 	case NVME_LOG_RMI:
+ 		return nvmet_execute_get_log_page_rmi(req);
++#endif
+ 	case NVME_LOG_RESERVATION:
+ 		return nvmet_execute_get_log_page_resv(req);
+ 	}
+@@ -704,7 +749,9 @@ static void nvmet_execute_identify_ctrl(
+ 	memcpy_and_pad(id->fr, sizeof(id->fr),
+ 		       subsys->firmware_rev, strlen(subsys->firmware_rev), ' ');
+ 
++#ifdef HAVE_PUT_UNALIGNED_LE24
+ 	put_unaligned_le24(subsys->ieee_oui, id->ieee);
++#endif
+ 
+ 	id->rab = 6;
+ 
+@@ -810,12 +857,14 @@ static void nvmet_execute_identify_ctrl(
+ 
+ 	id->msdbd = ctrl->ops->msdbd;
+ 
++#ifdef HAVE_BDEV_BD_STATS
+ 	/*
+ 	 * Endurance group identifier is 16 bits, so we can't let namespaces
+ 	 * overflow that since we reuse the nsid
+ 	 */
+ 	BUILD_BUG_ON(NVMET_MAX_NAMESPACES > USHRT_MAX);
+ 	id->endgidmax = cpu_to_le16(NVMET_MAX_NAMESPACES);
++#endif
+ 
+ 	id->anacap = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4);
+ 	id->anatt = 10; /* random value */
+@@ -914,11 +963,13 @@ static void nvmet_execute_identify_ns(st
+ 			NVME_PR_SUPPORT_EXCLUSIVE_ACCESS_ALL_REGS |
+ 			NVME_PR_SUPPORT_IEKEY_VER_1_3_DEF;
+ 
++#ifdef HAVE_BDEV_BD_STATS
+ 	/*
+ 	 * Since we don't know any better, every namespace is its own endurance
+ 	 * group.
+ 	 */
+ 	id->endgid = cpu_to_le16(req->ns->nsid);
++#endif
+ 
+ 	memcpy(&id->nguid, &req->ns->nguid, sizeof(id->nguid));
+ 
+@@ -948,6 +999,7 @@ out:
+ 	nvmet_req_complete(req, status);
+ }
+ 
++#ifdef HAVE_BDEV_BD_STATS
+ static void nvmet_execute_identify_endgrp_list(struct nvmet_req *req)
+ {
+ 	u16 min_endgid = le16_to_cpu(req->cmd->identify.cnssid);
+@@ -980,6 +1032,7 @@ static void nvmet_execute_identify_endgr
+ out:
+ 	nvmet_req_complete(req, status);
+ }
++#endif
+ 
+ static void nvmet_execute_identify_nslist(struct nvmet_req *req, bool match_css)
+ {
+@@ -1092,6 +1145,7 @@ static void nvmet_execute_identify_ctrl_
+ 		   nvmet_zero_sgl(req, 0, sizeof(struct nvme_id_ctrl_nvm)));
+ }
+ 
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ static void nvme_execute_identify_ns_nvm(struct nvmet_req *req)
+ {
+ 	u16 status;
+@@ -1111,6 +1165,7 @@ static void nvme_execute_identify_ns_nvm
+ out:
+ 	nvmet_req_complete(req, status);
+ }
++#endif
+ 
+ static void nvmet_execute_id_cs_indep(struct nvmet_req *req)
+ {
+@@ -1132,14 +1187,22 @@ static void nvmet_execute_id_cs_indep(st
+ 	id->nmic = NVME_NS_NMIC_SHARED;
+ 	if (req->ns->readonly)
+ 		id->nsattr |= NVME_NS_ATTR_RO;
++#ifdef HAVE_BDEV_NONROT
+ 	if (req->ns->bdev && !bdev_nonrot(req->ns->bdev))
++#else
++	if (req->ns->bdev && !blk_queue_nonrot(bdev_get_queue(req->ns->bdev)))
++#endif
+ 		id->nsfeat |= NVME_NS_ROTATIONAL;
+ 	/*
+ 	 * We need flush command to flush the file's metadata,
+ 	 * so report supporting vwc if backend is file, even
+ 	 * though buffered_io is disable.
+ 	 */
++#ifdef HAVE_BDEV_WRITE_CACHE
+ 	if (req->ns->bdev && !bdev_write_cache(req->ns->bdev))
++#else
++	if (req->ns->bdev && !(test_bit(QUEUE_FLAG_WC, &bdev_get_queue(req->ns->bdev)->queue_flags)))
++#endif
+ 		id->nsfeat |= NVME_NS_VWC_NOT_PRESENT;
+ 
+ 	status = nvmet_copy_to_sgl(req, 0, id, sizeof(*id));
+@@ -1167,6 +1230,7 @@ static void nvmet_execute_identify(struc
+ 		nvmet_execute_identify_desclist(req);
+ 		return;
+ 	case NVME_ID_CNS_CS_NS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		switch (req->cmd->identify.csi) {
+ 		case NVME_CSI_NVM:
+ 			nvme_execute_identify_ns_nvm(req);
+@@ -1178,18 +1242,22 @@ static void nvmet_execute_identify(struc
+ 			}
+ 			break;
+ 		}
++#endif
+ 		break;
+ 	case NVME_ID_CNS_CS_CTRL:
+ 		switch (req->cmd->identify.csi) {
+ 		case NVME_CSI_NVM:
+ 			nvmet_execute_identify_ctrl_nvm(req);
+ 			return;
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		case NVME_CSI_ZNS:
+ 			if (IS_ENABLED(CONFIG_BLK_DEV_ZONED)) {
+ 				nvmet_execute_identify_ctrl_zns(req);
+ 				return;
+ 			}
+ 			break;
++#endif
++		break;
+ 		}
+ 		break;
+ 	case NVME_ID_CNS_NS_ACTIVE_LIST_CS:
+@@ -1198,9 +1266,11 @@ static void nvmet_execute_identify(struc
+ 	case NVME_ID_CNS_NS_CS_INDEP:
+ 		nvmet_execute_id_cs_indep(req);
+ 		return;
++#ifdef HAVE_BDEV_BD_STATS
+ 	case NVME_ID_CNS_ENDGRP_LIST:
+ 		nvmet_execute_identify_endgrp_list(req);
+ 		return;
++#endif
+ 	}
+ 
+ 	pr_debug("unhandled identify cns %d on qid %d\n",

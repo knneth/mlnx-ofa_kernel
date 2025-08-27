@@ -48,7 +48,6 @@
 /* QP and CQ parameters */
 #define IB_MAD_QP_SEND_SIZE	128
 #define IB_MAD_QP_RECV_SIZE	512
-#define IB_MAD_QP_SMP_WINDOW	128 /* Use INT_MAX to disable the feature */
 #define IB_MAD_QP_MIN_SIZE	64
 #define IB_MAD_QP_MAX_SIZE	8192
 #define IB_MAD_SEND_REQ_MAX_SG	2
@@ -96,16 +95,19 @@ struct ib_mad_agent_private {
 
 	spinlock_t lock;
 	struct list_head send_list;
+	unsigned int sol_fc_send_count;
 	struct list_head wait_list;
-	struct list_head done_list;
+	unsigned int sol_fc_wait_count;
 	struct delayed_work timed_work;
 	unsigned long timeout;
 	struct list_head local_list;
 	struct work_struct local_work;
 	struct list_head rmpp_list;
+	unsigned int sol_fc_max;
+	struct list_head backlog_list;
+	unsigned int backlog_count;
 
 	refcount_t refcount;
-	int send_list_closed;
 	union {
 		struct completion comp;
 		struct rcu_head rcu;
@@ -120,12 +122,30 @@ struct ib_mad_snoop_private {
 	struct completion comp;
 };
 
-/* Structure for timeout-fifo entry */
-struct tf_entry {
-	unsigned long exp_time;	    /* entry expiration time */
-	struct list_head fifo_list; /* to keep entries in fifo order */
-	struct list_head to_list;   /* to keep entries in timeout order */
-	int canceled;		    /* indicates whether entry is canceled */
+enum ib_mad_state {
+	/* MAD is in the making and is not yet in any list */
+	IB_MAD_STATE_INIT,
+	/* MAD is in backlog list */
+	IB_MAD_STATE_QUEUED,
+	/*
+	 * MAD was sent to the QP and is waiting for completion
+	 * notification in send list.
+	 */
+	IB_MAD_STATE_SEND_START,
+	/*
+	 * MAD send completed successfully, waiting for a response
+	 * in wait list.
+	 */
+	IB_MAD_STATE_WAIT_RESP,
+	/*
+	 * Response came early, before send completion notification,
+	 * in send list.
+	 */
+	IB_MAD_STATE_EARLY_RESP,
+	/* MAD was canceled while in wait or send list */
+	IB_MAD_STATE_CANCELED,
+	/* MAD processing completed, MAD in no list */
+	IB_MAD_STATE_DONE
 };
 
 struct ib_mad_send_wr_private {
@@ -142,8 +162,6 @@ struct ib_mad_send_wr_private {
 	int max_retries;
 	int retries_left;
 	int retry;
-	int refcount;
-	enum ib_wc_status status;
 
 	/* RMPP control */
 	struct list_head rmpp_list;
@@ -154,13 +172,48 @@ struct ib_mad_send_wr_private {
 	int newwin;
 	int pad;
 
-	/* SMP window */
-	int is_smp_mad;
+	enum ib_mad_state state;
 
-	/* SA congestion controlled MAD */
-	int is_sa_cc_mad;
-	struct tf_entry tf_list;
+	/* Solicited MAD flow control */
+	bool is_solicited_fc;
+
+	bool is_sa_cc;
 };
+
+static inline void expect_mad_state(struct ib_mad_send_wr_private *mad_send_wr,
+				    enum ib_mad_state expected_state)
+{
+	if (IS_ENABLED(CONFIG_LOCKDEP))
+		WARN_ON(mad_send_wr->state != expected_state);
+}
+
+static inline void expect_mad_state2(struct ib_mad_send_wr_private *mad_send_wr,
+				     enum ib_mad_state expected_state1,
+				     enum ib_mad_state expected_state2)
+{
+	if (IS_ENABLED(CONFIG_LOCKDEP))
+		WARN_ON(mad_send_wr->state != expected_state1 &&
+			mad_send_wr->state != expected_state2);
+}
+
+static inline void expect_mad_state3(struct ib_mad_send_wr_private *mad_send_wr,
+				     enum ib_mad_state expected_state1,
+				     enum ib_mad_state expected_state2,
+				     enum ib_mad_state expected_state3)
+{
+	if (IS_ENABLED(CONFIG_LOCKDEP))
+		WARN_ON(mad_send_wr->state != expected_state1 &&
+			mad_send_wr->state != expected_state2 &&
+			mad_send_wr->state != expected_state3);
+}
+
+static inline void
+not_expect_mad_state(struct ib_mad_send_wr_private *mad_send_wr,
+		     enum ib_mad_state wrong_state)
+{
+	if (IS_ENABLED(CONFIG_LOCKDEP))
+		WARN_ON(mad_send_wr->state == wrong_state);
+}
 
 struct ib_mad_local_private {
 	struct list_head completion_list;
@@ -212,34 +265,13 @@ struct ib_mad_qp_info {
 	atomic_t snoop_count;
 };
 
-struct smp_window {
-	unsigned long outstanding;
-	unsigned long max_outstanding;
-	struct list_head overflow_list;
-	spinlock_t window_lock;
-};
-
-struct to_fifo {
-	struct list_head to_head;
-	struct list_head fifo_head;
-	spinlock_t lists_lock;
-	struct timer_list timer;
-	struct work_struct work;
-	u32 num_items;
-	int stop_enqueue;
-	struct workqueue_struct *workq;
-};
-
-/* SA congestion control data */
 struct sa_cc_data {
-	spinlock_t lock;
-	unsigned long outstanding;
-	unsigned long queue_size;
-	unsigned long time_sa_mad;
-	unsigned long max_outstanding;
-	unsigned long drops;
 	struct kobject kobj;
-	struct to_fifo  *tf;
+
+	unsigned int drops;
+	unsigned int queue_size;
+	unsigned int max_outstanding;
+	unsigned int time_sa_mad;
 };
 
 struct ib_mad_port_private {
@@ -254,7 +286,6 @@ struct ib_mad_port_private {
 	struct workqueue_struct *wq;
 	struct ib_mad_qp_info qp_info[IB_MAD_QPS_CORE];
 
-	struct smp_window smp_window;
 	struct sa_cc_data sa_cc;
 };
 
@@ -271,5 +302,8 @@ void ib_mark_mad_done(struct ib_mad_send_wr_private *mad_send_wr);
 
 void ib_reset_mad_timeout(struct ib_mad_send_wr_private *mad_send_wr,
 			  unsigned long timeout_ms);
+
+void change_mad_state(struct ib_mad_send_wr_private *mad_send_wr,
+		      enum ib_mad_state new_state);
 
 #endif	/* __IB_MAD_PRIV_H__ */

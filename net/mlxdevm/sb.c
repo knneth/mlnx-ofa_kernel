@@ -3,7 +3,7 @@
  * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 #include "devl_internal.h"
 

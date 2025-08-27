@@ -61,9 +61,11 @@ static int mlx5e_open_trap_rq(struct mlx5e_priv *priv, struct mlx5e_trap *t)
 	struct mlx5e_rq_param *rq_param = &t->rq_param;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_create_cq_param ccp = {};
+	struct dim_cq_moder trap_moder = {};
 	struct mlx5e_rq *rq = &t->rq;
 	u16 q_counter;
 	int node;
+	int err;
 
 	node = dev_to_node(mdev->device);
 	q_counter = priv->q_counter[0];
@@ -74,15 +76,28 @@ static int mlx5e_open_trap_rq(struct mlx5e_priv *priv, struct mlx5e_trap *t)
 	ccp.ch_stats = t->stats;
 	ccp.napi     = &t->napi;
 	ccp.ix       = 0;
+	ccp.db_ix    = MLX5_DEFAULT_DOORBELL_IX;
+	err = mlx5e_open_cq(priv->mdev, trap_moder, &rq_param->cqp, &ccp, &rq->cq);
+	if (err)
+		return err;
 
 	mlx5e_init_trap_rq(t, &t->params, rq);
+	err = mlx5e_open_rq(&t->params, rq_param, NULL, node, q_counter, rq);
+	if (err)
+		goto err_destroy_cq;
 
-	return mlx5e_open_rq(&t->params, rq_param, NULL, node, q_counter, rq, &ccp);
+	return 0;
+
+err_destroy_cq:
+	mlx5e_close_cq(&rq->cq);
+
+	return err;
 }
 
 static void mlx5e_close_trap_rq(struct mlx5e_rq *rq)
 {
-	mlx5e_close_rq(rq->priv, rq);
+	mlx5e_close_rq(rq);
+	mlx5e_close_cq(&rq->cq);
 }
 
 static int mlx5e_create_trap_direct_rq_tir(struct mlx5_core_dev *mdev, struct mlx5e_tir *tir,

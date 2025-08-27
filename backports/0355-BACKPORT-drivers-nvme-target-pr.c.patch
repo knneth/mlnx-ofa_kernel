@@ -1,0 +1,34 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/pr.c
+
+Change-Id: Ia1163fc3ef7c39143359b08349bcca6d9618d5dd
+---
+ drivers/nvme/target/pr.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/nvme/target/pr.c
++++ b/drivers/nvme/target/pr.c
+@@ -607,7 +607,11 @@ static void nvmet_pr_do_abort(struct wor
+ 			wait_for_completion(&pc_ref->free_done);
+ 			reinit_completion(&pc_ref->confirm_done);
+ 			reinit_completion(&pc_ref->free_done);
++#ifdef HAVE_PERCPU_REF_RESURRECT
+ 			percpu_ref_resurrect(&pc_ref->ref);
++#else
++			percpu_ref_reinit(&pc_ref->ref);
++#endif
+ 		}
+ 	}
+ 
+@@ -1022,7 +1026,11 @@ static int nvmet_pr_alloc_and_insert_pc_
+ 		return  -ENOMEM;
+ 
+ 	ret = percpu_ref_init(&pc_ref->ref, nvmet_pr_ctrl_ns_all_cmds_done,
++#ifdef HAVE_PERCPU_REF_ALLOW_REINIT
+ 			PERCPU_REF_ALLOW_REINIT, GFP_KERNEL);
++#else
++			0, GFP_KERNEL);
++#endif
+ 	if (ret)
+ 		goto free;
+ 

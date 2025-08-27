@@ -138,6 +138,9 @@ mlx5_tc_ct_labels_mapping_get(struct mlx5_core_dev *dev);
 void
 mlx5_tc_ct_lables_mapping_set(struct mlx5_core_dev *dev, bool enable);
 
+#define MLX5_CT_TCP_FLAGS_MASK cpu_to_be16(be32_to_cpu(TCP_FLAG_RST | TCP_FLAG_FIN) >> 16)
+bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_rule *flow_rule);
+
 #else /* CONFIG_MLX5_TC_CT */
 
 static inline struct mlx5_tc_ct_priv *
@@ -209,6 +212,13 @@ mlx5e_tc_ct_restore_flow(struct mlx5_tc_ct_priv *ct_priv,
 	if (!zone_restore_id)
 		return true;
 
+	return false;
+}
+
+static inline bool
+mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev,
+			       struct flow_rule *flow_rule)
+{
 	return false;
 }
 

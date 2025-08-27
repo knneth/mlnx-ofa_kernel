@@ -1,0 +1,25 @@
+From: Chris Mi <cmi@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+
+Change-Id: I2482b31a4ea9406d4b736d5191e6f76748cdd0ff
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+@@ -229,12 +229,13 @@ err_dealloc_pd:
+ void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
+ {
+ 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
++	int i;
+ 
+ 	mlx5_crypto_dek_cleanup(mdev->mlx5e_res.dek_priv);
+ 	mdev->mlx5e_res.dek_priv = NULL;
+ 	if (res->tisn_valid)
+ 		mlx5e_destroy_tises(mdev, res->tisn);
+-	for (int i = 0; i < res->num_bfregs; i++)
++	for (i = 0; i < res->num_bfregs; i++)
+ 		mlx5_free_bfreg(mdev, res->bfregs + i);
+ 	kfree(res->bfregs);
+ 	mlx5_core_destroy_mkey(mdev, res->mkey);

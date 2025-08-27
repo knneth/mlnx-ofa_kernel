@@ -1,7 +1,6 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/xprt_rdma.h
 
-Change-Id: I4a748521f15a3bea3e97d88cf6f3762a8c716057
 ---
  net/sunrpc/xprtrdma/xprt_rdma.h | 21 +++++++++++++++++++++
  1 file changed, 21 insertions(+)

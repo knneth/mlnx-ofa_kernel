@@ -1,0 +1,197 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+
+Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
+---
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 110 +++++++++++-------
+ 1 file changed, 71 insertions(+), 39 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+@@ -8,6 +8,9 @@
+ #include "mlx5_devm.h"
+ #define CREATE_TRACE_POINTS
+ #include "diag/qos_tracepoint.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
++#endif
+ 
+ /* Minimum supported BW share value by the HW is 1 Mbit/sec */
+ #define MLX5_MIN_BW_SHARE 1
+@@ -382,7 +385,10 @@ static void __esw_qos_free_node(struct m
+ 	kfree(node);
+ }
+ 
+-static void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++static
++#endif
++void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
+ {
+ 	esw_qos_node_destroy_sched_element(node, extack);
+ 	__esw_qos_free_node(node);
+@@ -733,8 +739,8 @@ out:
+ 	return speed;
+ }
+ 
+-static int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
+-					   bool hold_rtnl_lock, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
++				    bool hold_rtnl_lock, struct netlink_ext_ack *extack)
+ {
+ 	int err;
+ 
+@@ -760,9 +766,9 @@ skip_lag:
+ 	return err;
+ }
+ 
+-static int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
+-					  const char *name, u32 link_speed_max,
+-					  u64 value, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
++				  const char *name, u32 link_speed_max,
++				  u64 value, struct netlink_ext_ack *extack)
+ {
+ 	if (value > link_speed_max) {
+ 		pr_err("%s rate value %lluMbps exceed link maximum speed %u.\n",
+@@ -808,8 +814,8 @@ int mlx5_esw_qos_modify_vport_rate(struc
+  * second, rewriting last. If converted rate exceed link speed or is not a
+  * fraction of Mbps - returns error.
+  */
+-static int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
+-					u64 *rate, struct netlink_ext_ack *extack)
++int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
++				 u64 *rate, struct netlink_ext_ack *extack)
+ {
+ 	u32 link_speed_max, remainder;
+ 	u64 value;
+@@ -969,29 +975,6 @@ unlock:
+ 	return err;
+ }
+ 
+-int
+-mlx5_esw_get_esw_and_vport(struct devlink *devlink, struct devlink_port *port,
+-			   struct mlx5_eswitch **esw, struct mlx5_vport **vport,
+-			   struct netlink_ext_ack *extack)
+-{
+-	u16 vport_num;
+-
+-	*esw = mlx5_devlink_eswitch_get(devlink);
+-	if (IS_ERR(*esw)) {
+-		NL_SET_ERR_MSG_MOD(extack, "Esw not found");
+-		return PTR_ERR(*esw);
+-	}
+-
+-	vport_num = mlx5_esw_devlink_port_index_to_vport_num(port->index);
+-	*vport = mlx5_eswitch_get_vport(*esw, vport_num);
+-	if (IS_ERR(*vport)) {
+-		NL_SET_ERR_MSG_MOD(extack, "Failed to get vport");
+-		return PTR_ERR(*vport);
+-	}
+-
+-	return 0;
+-}
+-
+ void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
+ 			       struct netlink_ext_ack *extack)
+ {
+@@ -1013,6 +996,59 @@ void mlx5_esw_qos_cleanup(struct mlx5_es
+ 		esw_qos_domain_release(esw);
+ }
+ 
++static int rate_node_del(void *priv, struct netlink_ext_ack *extack)
++{
++	struct mlx5_esw_sched_node *node = priv;
++	struct mlx5_eswitch *esw = node->esw;
++
++	esw_qos_lock(esw);
++	__esw_qos_destroy_node(node, extack);
++	esw_qos_put(esw);
++	esw_qos_unlock(esw);
++	return 0;
++}
++
++#ifndef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++int mlx5_esw_devm_rate_node_del(void *priv, struct netlink_ext_ack *extack)
++{
++	return rate_node_del(priv, extack);
++}
++int mlx5_esw_devm_rate_node_tx_share_set(void *priv, u64 tx_share,
++					 struct netlink_ext_ack *extack)
++{
++	struct mlx5_esw_sched_node *node = priv;
++	struct mlx5_eswitch *esw = node->esw;
++	int err;
++
++	err = esw_qos_devlink_rate_to_mbps(esw->dev, "tx_share", &tx_share, extack);
++	if (err)
++		return err;
++
++	esw_qos_lock(esw);
++	err = esw_qos_set_node_min_rate(node, tx_share, extack);
++	esw_qos_unlock(esw);
++	return err;
++}
++
++int mlx5_esw_devm_rate_node_tx_max_set(void *priv, u64 tx_max,
++				       struct netlink_ext_ack *extack)
++{
++	struct mlx5_esw_sched_node *node = priv;
++	struct mlx5_eswitch *esw = node->esw;
++	int err;
++
++	err = esw_qos_devlink_rate_to_mbps(esw->dev, "tx_max", &tx_max, extack);
++	if (err)
++		return err;
++
++	esw_qos_lock(esw);
++	err = esw_qos_sched_elem_config(node, tx_max, node->bw_share, extack);
++	esw_qos_unlock(esw);
++	return err;
++}
++#endif
++
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ /* Eswitch devlink rate API */
+ 
+ static bool mlx5_esw_qos_is_needed(struct devlink_rate *parent, u64 tx_max,
+@@ -1143,14 +1179,7 @@ unlock:
+ int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
+ 				   struct netlink_ext_ack *extack)
+ {
+-	struct mlx5_esw_sched_node *node = priv;
+-	struct mlx5_eswitch *esw = node->esw;
+-
+-	esw_qos_lock(esw);
+-	__esw_qos_destroy_node(node, extack);
+-	esw_qos_put(esw);
+-	esw_qos_unlock(esw);
+-	return 0;
++	return rate_node_del(priv, extack);
+ }
+ 
+ int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
+@@ -1174,6 +1203,7 @@ int mlx5_esw_devlink_rate_leaf_parent_se
+ 	node = parent_priv;
+ 	return mlx5_esw_qos_vport_update_parent(vport, node, extack);
+ }
++#endif
+ 
+ static int
+ mlx5_esw_qos_node_validate_set_parent(struct mlx5_esw_sched_node *node,
+@@ -1263,6 +1293,7 @@ out:
+ 
+ 	return err;
+ }
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ 
+ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+@@ -1277,6 +1308,7 @@ int mlx5_esw_devlink_rate_node_parent_se
+ 	parent_node = parent_priv;
+ 	return mlx5_esw_qos_node_update_parent(node, parent_node, extack);
+ }
++#endif
+ 
+ int mlx5_esw_qos_vport_update_parent(struct mlx5_vport *vport, struct mlx5_esw_sched_node *parent,
+ 				     struct netlink_ext_ack *extack)

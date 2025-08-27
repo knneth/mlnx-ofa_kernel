@@ -1,0 +1,22 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/definer.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/definer.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/definer.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/definer.c
+@@ -91,10 +91,10 @@
+ 	(!!(HWS_GET_MATCH_PARAM(match_param, hdr)))
+ 
+ #define HWS_IS_FLD_SET_DW_ARR(match_param, hdr, sz_in_bits) ({ \
+-		BUILD_BUG_ON((sz_in_bits) % 32); \
+ 		u32 sz = sz_in_bits; \
+ 		u32 res = 0; \
+ 		u32 dw_off = __mlx5_dw_off(fte_match_param, hdr); \
++		BUILD_BUG_ON((sz_in_bits) % 32); \
+ 		while (!res && sz >= 32) { \
+ 			res = *((match_param) + (dw_off++)); \
+ 			sz -= 32; \

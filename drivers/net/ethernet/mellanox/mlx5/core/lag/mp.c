@@ -196,7 +196,7 @@ static void mlx5_lag_fib_route_event(struct mlx5_lag *ldev, unsigned long event,
 
 	if (!nh_dev1) {
 		if (__mlx5_lag_is_active(ldev)) {
-			ldev_for_each(i, idx, ldev) {
+			mlx5_ldev_for_each(i, 0, ldev) {
 				dev_idx++;
 				if (ldev->pf[i].netdev == nh_dev0)
 					break;
@@ -234,7 +234,7 @@ static void mlx5_lag_fib_nexthop_event(struct mlx5_lag *ldev,
 
 	/* nh added/removed */
 	if (event == FIB_EVENT_NH_DEL) {
-		ldev_for_each(i, 0, ldev) {
+		mlx5_ldev_for_each(i, 0, ldev) {
 			if (ldev->pf[i].netdev == fib_nh->fib_nh_dev)
 				break;
 			dev_idx++;

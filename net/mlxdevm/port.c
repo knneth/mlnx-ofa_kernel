@@ -209,7 +209,7 @@ static int mlxdevm_port_fn_max_io_eqs_fill(struct mlxdevm_port *port,
 	*msg_updated = true;
 	return 0;
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_nl_port_handle_fill(struct sk_buff *msg, struct devlink_port *devlink_port)
 {
@@ -632,7 +632,7 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
 	mlxdevm_nl_obj_desc_port_set(&desc, mlxdevm_port);
 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void devlink_ports_notify(struct devlink *devlink,
 				 enum devlink_command cmd)
@@ -963,7 +963,7 @@ int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
 
 	return 0;
 }
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_nl_port_split_doit(struct sk_buff *skb, struct genl_info *info)
 {
@@ -1112,7 +1112,7 @@ static void mlxdevm_port_type_warn_schedule(struct mlxdevm_port *mlxdevm_port)
 	/* Schedule a work to WARN in case driver does not set port
 	 * type within timeout.
 	 */
-	schedule_delayed_work(&mlxdevm_port->type_warn_dw,
+	mlxdevm_schedule_delayed_work(&mlxdevm_port->type_warn_dw,
 			      MLXDEVM_PORT_TYPE_WARN_TIMEOUT);
 }
 
@@ -1144,7 +1144,7 @@ void mlxdevm_port_init(struct mlxdevm *mlxdevm,
 	mlxdevm_port->initialized = true;
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_init);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  * devlink_port_fini() - Deinitialize devlink port
@@ -1340,10 +1340,6 @@ static void __mlxdevm_port_type_set(struct mlxdevm_port *mlxdevm_port,
 	switch (type) {
 	case MLXDEVM_PORT_TYPE_ETH:
 		mlxdevm_port->type_eth.netdev = netdev;
-		if (netdev) {
-			ASSERT_RTNL();
-			mlxdevm_port->type_eth.netdev = netdev;
-		}
 		break;
 	case MLXDEVM_PORT_TYPE_IB:
 		mlxdevm_port->type_ib.ibdev = type_dev;
@@ -1367,7 +1363,7 @@ void mlxdevm_port_type_eth_set(struct mlxdevm_port *mlxdevm_port, struct net_dev
 	__mlxdevm_port_type_set(mlxdevm_port, MLXDEVM_PORT_TYPE_ETH, netdev);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_type_eth_set);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devlink_port_type_ib_set - Set port type to InfiniBand
@@ -1393,14 +1389,10 @@ EXPORT_SYMBOL_GPL(devlink_port_type_ib_set);
  */
 void mlxdevm_port_type_clear(struct mlxdevm_port *mlxdevm_port)
 {
-	if (mlxdevm_port->type == MLXDEVM_PORT_TYPE_ETH)
-		dev_warn(mlxdevm_port->mlxdevm->dev,
-			 "mlxdevm port type for port %d cleared without a software interface reference, device type not supported by the kernel?\n",
-			 mlxdevm_port->index);
 	__mlxdevm_port_type_set(mlxdevm_port, MLXDEVM_PORT_TYPE_NOTSET, NULL);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_type_clear);
-#if 0
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 int devlink_port_netdevice_event(struct notifier_block *nb,
 				 unsigned long event, void *ptr)
@@ -1494,53 +1486,53 @@ void mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
 	WARN_ON(attrs->splittable && attrs->split);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_set);
-#if 0
 
 /**
- *	devlink_port_attrs_pci_pf_set - Set PCI PF port attributes
+ *	mlxdevm_port_attrs_pci_pf_set - Set PCI PF port attributes
  *
- *	@devlink_port: devlink port
- *	@controller: associated controller number for the devlink port instance
- *	@pf: associated PF for the devlink port instance
+ *	@mlxdevm_port: mlxdevm port
+ *	@controller: associated controller number for the mlxdevm port instance
+ *	@pf: associated PCI function number for the mlxdevm port instance
  *	@external: indicates if the port is for an external controller
  */
-void devlink_port_attrs_pci_pf_set(struct devlink_port *devlink_port, u32 controller,
+void mlxdevm_port_attrs_pci_pf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, bool external)
 {
-	struct devlink_port_attrs *attrs = &devlink_port->attrs;
+	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
 	int ret;
 
-	ASSERT_DEVLINK_PORT_NOT_REGISTERED(devlink_port);
+	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __devlink_port_attrs_set(devlink_port,
-				       DEVLINK_PORT_FLAVOUR_PCI_PF);
+	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
+				       MLXDEVM_PORT_FLAVOUR_PCI_PF);
 	if (ret)
 		return;
 	attrs->pci_pf.controller = controller;
 	attrs->pci_pf.pf = pf;
 	attrs->pci_pf.external = external;
 }
-EXPORT_SYMBOL_GPL(devlink_port_attrs_pci_pf_set);
+EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_pci_pf_set);
 
 /**
- *	devlink_port_attrs_pci_vf_set - Set PCI VF port attributes
+ *	mlxdevm_port_attrs_pci_vf_set - Set PCI VF port attributes
  *
- *	@devlink_port: devlink port
- *	@controller: associated controller number for the devlink port instance
- *	@pf: associated PF for the devlink port instance
- *	@vf: associated VF of a PF for the devlink port instance
+ *	@mlxdevm_port: mlxdevm port
+ *	@controller: associated controller number for the mlxdevm port instance
+ *	@pf: associated PCI function number for the mlxdevm port instance
+ *	@vf: associated PCI VF number of a PF for the mlxdevm port instance;
+ *	     VF number starts from 0 for the first PCI virtual function
  *	@external: indicates if the port is for an external controller
  */
-void devlink_port_attrs_pci_vf_set(struct devlink_port *devlink_port, u32 controller,
+void mlxdevm_port_attrs_pci_vf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, u16 vf, bool external)
 {
-	struct devlink_port_attrs *attrs = &devlink_port->attrs;
+	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
 	int ret;
 
-	ASSERT_DEVLINK_PORT_NOT_REGISTERED(devlink_port);
+	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __devlink_port_attrs_set(devlink_port,
-				       DEVLINK_PORT_FLAVOUR_PCI_VF);
+	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
+				       MLXDEVM_PORT_FLAVOUR_PCI_VF);
 	if (ret)
 		return;
 	attrs->pci_vf.controller = controller;
@@ -1548,27 +1540,27 @@ void devlink_port_attrs_pci_vf_set(struct devlink_port *devlink_port, u32 contro
 	attrs->pci_vf.vf = vf;
 	attrs->pci_vf.external = external;
 }
-EXPORT_SYMBOL_GPL(devlink_port_attrs_pci_vf_set);
+EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_pci_vf_set);
 
 /**
- *	devlink_port_attrs_pci_sf_set - Set PCI SF port attributes
+ *	mlxdevm_port_attrs_pci_sf_set - Set PCI SF port attributes
  *
- *	@devlink_port: devlink port
- *	@controller: associated controller number for the devlink port instance
- *	@pf: associated PF for the devlink port instance
- *	@sf: associated SF of a PF for the devlink port instance
+ *	@mlxdevm_port: mlxdevm port
+ *	@controller: associated controller number for the mlxdevm port instance
+ *	@pf: associated PCI function number for the mlxdevm port instance
+ *	@sf: associated SF number of a PF for the mlxdevm port instance
  *	@external: indicates if the port is for an external controller
  */
-void devlink_port_attrs_pci_sf_set(struct devlink_port *devlink_port, u32 controller,
+void mlxdevm_port_attrs_pci_sf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, u32 sf, bool external)
 {
-	struct devlink_port_attrs *attrs = &devlink_port->attrs;
+	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
 	int ret;
 
-	ASSERT_DEVLINK_PORT_NOT_REGISTERED(devlink_port);
+	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __devlink_port_attrs_set(devlink_port,
-				       DEVLINK_PORT_FLAVOUR_PCI_SF);
+	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
+				       MLXDEVM_PORT_FLAVOUR_PCI_SF);
 	if (ret)
 		return;
 	attrs->pci_sf.controller = controller;
@@ -1576,7 +1568,8 @@ void devlink_port_attrs_pci_sf_set(struct devlink_port *devlink_port, u32 contro
 	attrs->pci_sf.sf = sf;
 	attrs->pci_sf.external = external;
 }
-EXPORT_SYMBOL_GPL(devlink_port_attrs_pci_sf_set);
+EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_pci_sf_set);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 static void devlink_port_rel_notify_cb(struct devlink *devlink, u32 port_index)
 {

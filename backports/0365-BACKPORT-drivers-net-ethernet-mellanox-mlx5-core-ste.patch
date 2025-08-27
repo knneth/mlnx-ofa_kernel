@@ -1,0 +1,19 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/context.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/context.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/context.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/context.c
+@@ -34,7 +34,7 @@ static int hws_context_pools_init(struct
+ 
+ 	/* Create an STC pool per FT type */
+ 	pool_attr.pool_type = MLX5HWS_POOL_TYPE_STC;
+-	max_log_sz = min(MLX5HWS_POOL_STC_LOG_SZ, ctx->caps->stc_alloc_log_max);
++	max_log_sz = min((u8)MLX5HWS_POOL_STC_LOG_SZ, ctx->caps->stc_alloc_log_max);
+ 	pool_attr.alloc_log_sz = max(max_log_sz, ctx->caps->stc_alloc_log_gran);
+ 
+ 	pool_attr.table_type = MLX5HWS_TABLE_TYPE_FDB;

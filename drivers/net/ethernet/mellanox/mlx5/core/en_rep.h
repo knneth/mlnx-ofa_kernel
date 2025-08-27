@@ -136,7 +136,6 @@ struct mlx5e_rep_priv {
 	struct list_head       vport_sqs_list;
 	struct mlx5_rep_uplink_priv uplink_priv; /* valid for uplink rep */
 	struct rtnl_link_stats64 prev_vf_vport_stats;
-	struct xarray vport_rep_map;
 	struct rep_meter rep_meter;
 	struct mlx5_rep_sysfs rep_sysfs;
 	struct mlx5_flow_handle *send_to_vport_meta_rule;
@@ -275,7 +274,7 @@ bool mlx5e_rep_has_offload_stats(const struct net_device *dev, int attr_id);
 int mlx5e_rep_get_offload_stats(int attr_id, const struct net_device *dev,
 				void *sp);
 
-bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv);
+bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv);
 void mlx5e_rep_activate_channels(struct mlx5e_priv *priv);
 void mlx5e_rep_deactivate_channels(struct mlx5e_priv *priv);
 
@@ -290,7 +289,7 @@ static inline bool mlx5e_eswitch_rep(const struct net_device *netdev)
 }
 
 #else /* CONFIG_MLX5_ESWITCH */
-static inline bool mlx5e_is_uplink_rep(const struct mlx5e_priv *priv) { return false; }
+static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
 static inline void mlx5e_rep_activate_channels(struct mlx5e_priv *priv) {}
 static inline void mlx5e_rep_deactivate_channels(struct mlx5e_priv *priv) {}
 static inline int mlx5e_rep_init(void) { return 0; };
@@ -302,7 +301,7 @@ static inline int mlx5e_rep_get_offload_stats(int attr_id,
 					      void *sp) { return -EOPNOTSUPP; }
 #endif
 
-static inline bool mlx5e_is_vport_rep(const struct mlx5e_priv *priv)
+static inline bool mlx5e_is_vport_rep(struct mlx5e_priv *priv)
 {
 	return (MLX5_ESWITCH_MANAGER(priv->mdev) && priv->ppriv);
 }

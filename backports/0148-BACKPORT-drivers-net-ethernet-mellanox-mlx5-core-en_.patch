@@ -1,27 +1,42 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
 
-Change-Id: I5614b2e816ed99db847c058f529a6679dc0d9fbb
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c | 2 ++
- 1 file changed, 2 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en_dcbnl.c    | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
-@@ -40,6 +40,7 @@ fill_static_params(struct mlx5_wqe_tls_s
- 		EXTRACT_INFO_FIELDS;
- 		break;
- 	}
-+#ifdef TLS_CIPHER_AES_GCM_256
- 	case TLS_CIPHER_AES_GCM_256: {
- 		struct tls12_crypto_info_aes_gcm_256 *info =
- 			&crypto_info->crypto_info_256;
-@@ -47,6 +48,7 @@ fill_static_params(struct mlx5_wqe_tls_s
- 		EXTRACT_INFO_FIELDS;
- 		break;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+@@ -61,6 +61,7 @@ enum {
+ 				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
+ 				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
+ 
++#ifdef CONFIG_MLX5_CORE_EN_DCB
+ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
+ static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
+ 
+@@ -1173,11 +1174,14 @@ unlock:
+ 		return err;
+ 
+ 	/* In DSCP trust state, we need 8 send queues per channel */
+-	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP) {
+-		mutex_lock(&priv->state_lock);
+-		mlx5e_setup_tc_mqprio(priv, &mqprio);
+-		mutex_unlock(&priv->state_lock);
+-	} else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP) {
++	if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_DSCP)
++       {
++	       mutex_lock(&priv->state_lock);
++	       mlx5e_setup_tc_mqprio(priv, &mqprio);
++	       mutex_unlock(&priv->state_lock);
++       }
++	else if (priv->dcbx_dp.trust_state == MLX5_QPTS_TRUST_PCP)
++	{
+ 		mutex_lock(&priv->state_lock);
+ 		mqprio.qopt.num_tc = priv->pcp_tc_num;
+ 		mlx5e_setup_tc_mqprio(priv, &mqprio);
+@@ -1288,3 +1292,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+ 
+ 	mlx5e_ets_init(priv);
+ }
 +#endif
- 	default:
- 		WARN_ONCE(1, "Unsupported cipher type %u\n",
- 			  crypto_info->crypto_info.cipher_type);

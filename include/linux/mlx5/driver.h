@@ -163,9 +163,9 @@ enum {
 	MLX5_REG_SBCAM		 = 0xB01F,
 	MLX5_REG_RESOURCE_DUMP   = 0xC000,
 	MLX5_REG_TRUST_LEVEL     = 0xC007,
-	MLX5_REG_NIC_CAP_REG     = 0xC00D,
+	MLX5_REG_NIC_CAP	 = 0xC00D,
 	MLX5_REG_DTOR            = 0xC00E,
-	MLX5_REG_VHCA_ICM_CTRL   = 0xC010,
+	MLX5_REG_VHCA_ICM_CTRL	 = 0xC010,
 };
 
 enum mlx5_qpts_trust_state {
@@ -272,11 +272,6 @@ struct cmd_msg_cache {
 	struct list_head	head;
 	unsigned int		max_inbox_size;
 	unsigned int		num_ent;
-	struct kobject		kobj;
-	unsigned		miss;
-	unsigned		total_commands;
-	unsigned		free;
-	struct mlx5_core_dev	*dev;
 };
 
 enum {
@@ -346,8 +341,6 @@ struct mlx5_cmd {
 	struct dma_pool *pool;
 	struct mlx5_cmd_debug dbg;
 	struct cmd_msg_cache cache[MLX5_NUM_COMMAND_CACHES];
-	struct kobject			*ko;
-	atomic_t			real_miss;
 	int checksum_disabled;
 	struct xarray stats;
 };
@@ -416,6 +409,7 @@ struct mlx5_core_rsc_common {
 	enum mlx5_res_type	res;
 	refcount_t		refcount;
 	struct completion	free;
+	bool			invalid;
 };
 
 struct mlx5_uars_page {
@@ -448,7 +442,6 @@ struct mlx5_sq_bfreg {
 	struct mlx5_uars_page  *up;
 	bool			wc;
 	u32			index;
-	unsigned int		offset;
 };
 
 struct mlx5_fw_crdump;
@@ -678,8 +671,6 @@ struct mlx5_priv {
 	int			sw_vhca_id;
 	struct mlx5_events      *events;
 	struct mlx5_vhca_events *vhca_events;
-	/* Used to save RoCE LAG state during recovery flow */
-       	bool                    lag_enabled;
 
 	struct mlx5_flow_steering *steering;
 	struct mlx5_mpfs        *mpfs;
@@ -698,7 +689,6 @@ struct mlx5_priv {
 
 	struct mlx5_bfreg_data		bfregs;
 	struct mlx5_uars_page	       *uar;
-	bool sw_reset_lag;
 #ifdef CONFIG_MLX5_SF
 	struct mlx5_vhca_state_notifier *vhca_state_notifier;
 	struct mlx5_sf_dev_table *sf_dev_table;
@@ -794,7 +784,8 @@ struct mlx5e_resources {
 		u32                        pdn;
 		struct mlx5_td             td;
 		u32			   mkey;
-		struct mlx5_sq_bfreg       bfreg;
+		u32                        num_bfregs;
+		struct mlx5_sq_bfreg       *bfregs;
 #define MLX5_MAX_NUM_TC 8
 #define MLX5_MIN_NUM_TC 8
 		u32                        tisn[MLX5_MAX_PORTS][MLX5_MAX_NUM_TC];
@@ -835,7 +826,6 @@ struct mlx5_rsvd_gids {
 };
 
 struct mlx5_mst_dump;
-
 struct mlx5_special_contexts {
 	int resd_lkey;
 };
@@ -988,6 +978,14 @@ struct mlx5_db {
 	}			u;
 	dma_addr_t		dma;
 	int			index;
+};
+
+enum {
+	MLX5_DEFAULT_NUM_DOORBELLS = 8,
+};
+
+enum {
+	MLX5_DEFAULT_DOORBELL_IX = 0,
 };
 
 enum {

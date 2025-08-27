@@ -1,0 +1,69 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/inode.c
+
+---
+ fs/fuse/inode.c | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
+
+--- a/fs/fuse/inode.c
++++ b/fs/fuse/inode.c
+@@ -714,8 +714,13 @@ static const struct fs_parameter_spec fu
+ 	fsparam_string	("source",		OPT_SOURCE),
+ 	fsparam_u32	("fd",			OPT_FD),
+ 	fsparam_u32oct	("rootmode",		OPT_ROOTMODE),
++#ifdef HAVE_FSPARAM_UID
+ 	fsparam_uid	("user_id",		OPT_USER_ID),
+ 	fsparam_gid	("group_id",		OPT_GROUP_ID),
++#else
++	fsparam_u32     ("user_id",             OPT_USER_ID),
++	fsparam_u32     ("group_id",            OPT_GROUP_ID),
++#endif
+ 	fsparam_flag	("default_permissions",	OPT_DEFAULT_PERMISSIONS),
+ 	fsparam_flag	("allow_other",		OPT_ALLOW_OTHER),
+ 	fsparam_u32	("max_read",		OPT_MAX_READ),
+@@ -1194,6 +1199,7 @@ static void process_init_reply(struct fu
+ 			 * and FUSE_WRITEBACK_CACHE, current design doesn't handle
+ 			 * them together.
+ 			 */
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 			if (IS_ENABLED(CONFIG_FUSE_PASSTHROUGH) &&
+ 			    (flags & FUSE_PASSTHROUGH) &&
+ 			    arg->max_stack_depth > 0 &&
+@@ -1203,8 +1209,11 @@ static void process_init_reply(struct fu
+ 				fc->max_stack_depth = arg->max_stack_depth;
+ 				fm->sb->s_stack_depth = arg->max_stack_depth;
+ 			}
++#endif
++#ifdef HAVE_FUSE_NO_EXPORT_SUPPORT
+ 			if (flags & FUSE_NO_EXPORT_SUPPORT)
+ 				fm->sb->s_export_op = &fuse_export_fid_operations;
++#endif
+ 		} else {
+ 			ra_pages = fc->max_read / PAGE_SIZE;
+ 			fc->no_lock = 1;
+@@ -1252,7 +1261,13 @@ void fuse_send_init(struct fuse_mount *f
+ 		FUSE_HANDLE_KILLPRIV_V2 | FUSE_SETXATTR_EXT | FUSE_INIT_EXT |
+ 		FUSE_SECURITY_CTX | FUSE_CREATE_SUPP_GROUP |
+ 		FUSE_HAS_EXPIRE_ONLY | FUSE_DIRECT_IO_ALLOW_MMAP |
+-		FUSE_NO_EXPORT_SUPPORT | FUSE_HAS_RESEND;
++#ifdef HAVE_FUSE_NO_EXPORT_SUPPORT
++		FUSE_NO_EXPORT_SUPPORT |
++#endif
++#ifdef HAVE_FUSE_HAS_RESEND
++		FUSE_HAS_RESEND |
++#endif
++		0;
+ #ifdef CONFIG_FUSE_DAX
+ 	if (fm->fc->dax)
+ 		flags |= FUSE_MAP_ALIGNMENT;
+@@ -1261,8 +1276,10 @@ void fuse_send_init(struct fuse_mount *f
+ #endif
+ 	if (fm->fc->auto_submounts)
+ 		flags |= FUSE_SUBMOUNTS;
++#ifdef HAVE_FUSE_PASSTHROUGH
+ 	if (IS_ENABLED(CONFIG_FUSE_PASSTHROUGH))
+ 		flags |= FUSE_PASSTHROUGH;
++#endif
+ 
+ 	ia->in.flags = flags;
+ 	ia->in.flags2 = flags >> 32;

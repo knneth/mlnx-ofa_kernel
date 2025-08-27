@@ -2,7 +2,7 @@ Source: mlnx-ofed-kernel
 Section: net
 Priority: optional
 Maintainer: Vladimir Sokolovsky <vlad@mellanox.com>
-Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dkms,
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dh-dkms | dkms (<< 3.0),
 Standards-Version: 4.2.0
 Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux_sw_drivers
 
@@ -18,9 +18,9 @@ Section: kernel
 Architecture: all
 Depends: dkms, ${misc:Depends}, mlnx-ofed-kernel-utils, libc6-dev, gcc,
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
-Provides: mlnx-rdma-rxe-dkms
-Conflicts: mlnx-rdma-rxe-dkms
-Replaces: mlnx-rdma-rxe-dkms
+Provides: mlnx-rdma-rxe-dkms, fwctl-dkms
+Conflicts: mlnx-rdma-rxe-dkms, fwctl-dkms
+Replaces: mlnx-rdma-rxe-dkms, fwctl-dkms
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for
  automatically building out of tree kernel modules.

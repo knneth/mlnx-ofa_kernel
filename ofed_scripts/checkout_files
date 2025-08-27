@@ -19,6 +19,13 @@ drivers/scsi/scsi_transport_srp.c
 drivers/base/Makefile
 drivers/base/auxiliary.c
 drivers/base/auxiliary_sysfs.c
+include/uapi/fwctl/mlx5.h
+include/uapi/fwctl/fwctl.h
+include/uapi/linux/mlxdevm.h
+include/net/mlxdevm.h
+drivers/fwctl/main.c
+drivers/fwctl/Makefile
+drivers/fwctl/mlx5
 drivers/vfio/pci/mlx5
 net/sunrpc/xprtrdma
 include/linux/mlx5/

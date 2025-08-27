@@ -12,7 +12,6 @@
 #define offset_in_page(p)       ((unsigned long)(p) & ~PAGE_MASK)
 #endif
 
-
 #define sysfs_emit LINUX_BACKPORT(sysfs_emit)
 __printf(2, 3)
 int sysfs_emit(char *buf, const char *fmt, ...);

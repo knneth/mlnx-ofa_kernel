@@ -576,18 +576,6 @@ struct uapi_definition {
 		__VA_ARGS__)
 
 /*
- * An output value that is a bitwise combination of values of _enum_type.
- * This permits the flag value to be passed as either a u32 or u64, it must
- * be set via uverbs_set_flag().
- */
-#define UVERBS_ATTR_FLAGS_OUT(_attr_id, _enum_type, ...)                       \
-  UVERBS_ATTR_PTR_OUT(                                                         \
-      _attr_id,                                                                \
-      UVERBS_ATTR_SIZE(sizeof(u32) + BUILD_BUG_ON_ZERO(!sizeof(_enum_type *)), \
-                       sizeof(u64)),                                           \
-      __VA_ARGS__)
-
-/*
  * This spec is used in order to pass information to the hardware driver in a
  * legacy way. Every verb that could get driver specific data should get this
  * spec.
@@ -869,8 +857,6 @@ ib_uverbs_get_ucontext(const struct uverbs_attr_bundle *attrs)
 #if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
 int uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		       size_t idx, u64 allowed_bits);
-int uverbs_set_flags64(const struct uverbs_attr_bundle *attrs_bundle,
-		       size_t idx, const u64 from);
 int uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		       size_t idx, u64 allowed_bits);
 int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,

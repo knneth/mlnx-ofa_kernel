@@ -47,7 +47,7 @@
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
 # This seems to break only this package and not other kernel packages.
-%if "%{_vendor}" == "mariner" || "%{_vendor}" == "azl" || (0%{?rhel} >= 10)
+%if "%{_vendor}" == "azl" || (0%{?rhel} >= 10)
 %global _hardened_cflags %{nil}
 %endif
 
@@ -55,6 +55,7 @@
 %if (0%{?rhel} >= 10)
 %global _hardening_gcc_ldflags %{nil}
 %global _gcc_lto_cflags %{nil}
+%global _legacy_options -fcommon -fno-exceptions
 %endif
 
 
@@ -65,6 +66,15 @@
 %global _legacy_options -fcommon -fno-exceptions
 %endif
 
+%if %{defined azl3}
+# Yet another method of overriding -fexceptions:
+%global _frame_pointers_cflags	 -fno-exceptions %{?_include_frame_pointers:-fno-omit-frame-pointer}
+%endif
+
+%if "%{_vendor}" == "mariner"
+# Disable hardened_cflags, while sneaking fno-exceptions to the command line
+%global _hardened_cflags	-fno-exceptions
+%endif
 
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
@@ -86,8 +96,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 25.04}
-%{!?_release: %global _release OFED.25.04.0.6.0.1}
+%{!?_version: %global _version 25.07}
+%{!?_release: %global _release OFED.25.07.0.9.7.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -135,7 +145,7 @@ Requires: systemd-sysvcompat
 %description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
 
 
 # build KMP rpms?
@@ -149,7 +159,7 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif
 EOF)
-%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp, kmod-mellanox, kmod-mellanox-ethernet, kmod-mellanox-nvme" >> %{_builddir}/preamble)
+%(echo "Obsoletes: kmod-mlnx-rdma-rxe, mlnx-rdma-rxe-kmp, kmod-mellanox, kmod-mellanox-ethernet, kmod-mellanox-nvme, kmod-fwctl" >> %{_builddir}/preamble)
 %if %KMOD_PREAMBLE
 %kernel_module_package -f %{_builddir}/kmp.files -r %{_kmp_rel} -p %{_builddir}/preamble
 %else
@@ -172,6 +182,7 @@ Obsoletes: mlnx-en-doc
 Obsoletes: mlnx-en-debuginfo
 Obsoletes: mlnx-en-sources
 Obsoletes: mlnx-rdma-rxe
+Obsoletes: fwctl
 Version: %{_version}
 Release: %{_release}.kver.%{krelver}
 Summary: Infiniband Driver and ULPs kernel modules
@@ -179,7 +190,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -210,7 +221,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.04-0.6.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -284,9 +295,6 @@ mkdir obj
 
 %build
 EXTRA_CFLAGS='-DVERSION=\"%version\"'
-%if (0%{?rhel} >= 10)
-EXTRA_CFLAGS+=' -fno-exceptions'
-%endif
 export EXTRA_CFLAGS
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export CONF_OPTIONS="%{configure_options}"

@@ -1,0 +1,24 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tir.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
+@@ -124,7 +124,13 @@ void mlx5e_tir_builder_build_rss(struct
+ 		const size_t len = MLX5_FLD_SZ_BYTES(tirc, rx_hash_toeplitz_key);
+ 		void *rss_key = MLX5_ADDR_OF(tirc, tirc, rx_hash_toeplitz_key);
+ 
+-		MLX5_SET(tirc, tirc, rx_hash_symmetric, rss_hash->symmetric);
++		MLX5_SET(tirc, tirc, rx_hash_symmetric,
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++			rss_hash->symmetric);
++#else
++			1);
++#endif
++
+ 		memcpy(rss_key, rss_hash->toeplitz_hash_key, len);
+ 	}
+ 

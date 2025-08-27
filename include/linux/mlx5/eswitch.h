@@ -81,7 +81,6 @@ mlx5_eswitch_get_encap_mode(const struct mlx5_core_dev *dev);
 
 bool mlx5_eswitch_reg_c1_loopback_enabled(const struct mlx5_eswitch *esw);
 bool mlx5_eswitch_vport_match_metadata_enabled(const struct mlx5_eswitch *esw);
-bool mlx5_eswitch_pet_insert_allowed(const struct mlx5_eswitch *esw);
 
 /* Reg C0 usage:
  * Reg C0 = < ESW_PFNUM_BITS(4) | ESW_VPORT BITS(12) | ESW_REG_C0_OBJ(16) >
@@ -107,8 +106,6 @@ u32 mlx5_eswitch_get_vport_metadata_for_match(struct mlx5_eswitch *esw,
 					      u16 vport_num);
 u32 mlx5_eswitch_get_vport_metadata_for_set(struct mlx5_eswitch *esw,
 					    u16 vport_num);
-u32 mlx5_eswitch_get_vport_prev_metadata_for_match(struct mlx5_eswitch *esw,
-						   u16 vport_num);
 
 /* Reg C1 usage:
  * Reg C1 = < Reserved(1) | ESW_TUN_ID(12) | ESW_TUN_OPTS(11) | ESW_ZONE_ID(8) >
@@ -150,6 +147,8 @@ u32 mlx5_eswitch_get_vport_prev_metadata_for_match(struct mlx5_eswitch *esw,
 
 /* reuse tun_opts for the mapped ipsec obj id when tun_id is 0 (invalid) */
 #define ESW_IPSEC_RX_MAPPED_ID_MASK GENMASK(ESW_TUN_OPTS_BITS - 1, 0)
+#define ESW_IPSEC_RX_MAPPED_ID_MATCH_MASK \
+	GENMASK(31 - ESW_RESERVED_BITS, ESW_ZONE_ID_BITS)
 
 u8 mlx5_eswitch_mode(const struct mlx5_core_dev *dev);
 u16 mlx5_eswitch_get_total_vports(const struct mlx5_core_dev *dev);

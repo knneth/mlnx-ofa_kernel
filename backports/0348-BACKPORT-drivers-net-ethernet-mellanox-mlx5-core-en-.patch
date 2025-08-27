@@ -1,0 +1,30 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.h | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.h
+@@ -49,10 +49,17 @@ void mlx5e_rx_res_xsk_update(struct mlx5
+ /* Configuration API */
+ void mlx5e_rx_res_rss_set_indir_uniform(struct mlx5e_rx_res *res, unsigned int nch);
+ int mlx5e_rx_res_rss_get_rxfh(struct mlx5e_rx_res *res, u32 rss_idx,
+-			      u32 *indir, u8 *key, u8 *hfunc, bool *symmetric);
++			      u32 *indir, u8 *key, u8 *hfunc
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++			      , bool *symmetric
++#endif
++			      );
+ int mlx5e_rx_res_rss_set_rxfh(struct mlx5e_rx_res *res, u32 rss_idx,
+-			      const u32 *indir, const u8 *key, const u8 *hfunc,
+-			      const bool *symmetric);
++			      const u32 *indir, const u8 *key, const u8 *hfunc
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++			      , const bool *symmetric
++#endif
++			      );
+ 
+ int mlx5e_rx_res_rss_get_hash_fields(struct mlx5e_rx_res *res, u32 rss_idx,
+ 				     enum mlx5_traffic_types tt);

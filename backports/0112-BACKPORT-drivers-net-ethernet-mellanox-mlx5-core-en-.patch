@@ -1,21 +1,19 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
 
-Change-Id: I1974c0569e400bb43d355883e4e0696a47c9b24a
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-@@ -1,6 +1,9 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+@@ -4,7 +4,7 @@
+ #ifndef __MLX5_EN_TC_SAMPLE_H__
+ #define __MLX5_EN_TC_SAMPLE_H__
  
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/skbuff.h>
-+#endif
- #include <net/psample.h>
- #include "act.h"
- #include "en/tc_priv.h"
+-#include "eswitch.h"
++#include "../../eswitch.h"
+ 
+ struct mlx5_flow_attr;
+ struct mlx5e_tc_psample;

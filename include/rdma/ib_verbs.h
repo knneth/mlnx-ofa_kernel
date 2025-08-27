@@ -66,9 +66,6 @@ struct ib_nvmf_ns_init_attr;
 struct ib_nvmf_ns_attr;
 struct ib_nvmf_ctrl;
 
-__printf(3, 4) __cold
-void ibdev_printk(const char *level, const struct ib_device *ibdev,
-		  const char *format, ...);
 __printf(2, 3) __cold
 void ibdev_emerg(const struct ib_device *ibdev, const char *format, ...);
 __printf(2, 3) __cold
@@ -535,24 +532,21 @@ enum ib_port_state {
 	IB_PORT_ACTIVE_DEFER	= 5
 };
 
-static inline char *ib_port_state_to_str(enum ib_port_state state)
+static inline const char *__attribute_const__
+ib_port_state_to_str(enum ib_port_state state)
 {
-	switch (state) {
-	case IB_PORT_NOP:
-		return "NOP";
-	case IB_PORT_DOWN:
-		return "DOWN";
-	case IB_PORT_INIT:
-		return "INIT";
-	case IB_PORT_ARMED:
-		return "ARMED";
-	case IB_PORT_ACTIVE:
-		return "ACTIVE";
-	case IB_PORT_ACTIVE_DEFER:
-		return "ACTIVE_DEFER";
-	default:
-		return "UNKNOWN";
-	}
+	const char * const states[] = {
+		[IB_PORT_NOP] = "NOP",
+		[IB_PORT_DOWN] = "DOWN",
+		[IB_PORT_INIT] = "INIT",
+		[IB_PORT_ARMED] = "ARMED",
+		[IB_PORT_ACTIVE] = "ACTIVE",
+		[IB_PORT_ACTIVE_DEFER] = "ACTIVE_DEFER",
+	};
+
+	if (state < ARRAY_SIZE(states))
+		return states[state];
+	return "UNKNOWN";
 }
 
 enum ib_port_phys_state {
@@ -2227,6 +2221,7 @@ struct ib_port_cache {
 	struct ib_gid_table   *gid;
 	u8                     lmc;
 	enum ib_port_state     port_state;
+	enum ib_port_state     last_port_state;
 };
 
 struct ib_port_immutable {
@@ -2306,7 +2301,9 @@ struct rdma_netdev_alloc_params {
 
 struct ib_odp_counters {
 	atomic64_t faults;
+	atomic64_t faults_handled;
 	atomic64_t invalidations;
+	atomic64_t invalidations_handled;
 	atomic64_t prefetch;
 };
 
@@ -2741,6 +2738,19 @@ struct ib_device_ops {
 	 */
 	void (*del_sub_dev)(struct ib_device *sub_dev);
 
+	/**
+	 * ufile_cleanup - Attempt to cleanup ubojects HW resources inside
+	 * the ufile.
+	 */
+	void (*ufile_hw_cleanup)(struct ib_uverbs_file *ufile);
+
+	/**
+	 * report_port_event - Drivers need to implement this if they have
+	 * some private stuff to handle when link status changes.
+	 */
+	void (*report_port_event)(struct ib_device *ibdev,
+				  struct net_device *ndev, unsigned long event);
+
 	struct ib_nvmf_ctrl *   (*create_nvmf_backend_ctrl)(struct ib_srq *srq,
 			struct ib_nvmf_backend_ctrl_init_attr *init_attr);
 	int                     (*destroy_nvmf_backend_ctrl)(struct ib_nvmf_ctrl *ctrl);
@@ -2748,11 +2758,6 @@ struct ib_device_ops {
 			struct ib_nvmf_ns_init_attr *init_attr);
 	int                     (*detach_nvmf_ns)(struct ib_nvmf_ns *ns);
 
-	/**
-	 * ufile_cleanup - Attempt to cleanup ubojects HW resources inside
-	 * the ufile.
-	 */
-	void (*ufile_hw_cleanup)(struct ib_uverbs_file *ufile);
 
 	DECLARE_RDMA_OBJ_SIZE(ib_ah);
 	DECLARE_RDMA_OBJ_SIZE(ib_counters);
@@ -2805,7 +2810,6 @@ struct ib_device {
 	struct ib_port_data *port_data;
 
 	int			      num_comp_vectors;
-	struct kobject		      *mad_sa_cc_kobj;
 
 	union {
 		struct device		dev;
@@ -2879,6 +2883,8 @@ struct ib_device {
 	struct list_head subdev_list;
 
 	enum rdma_nl_name_assign_type name_assign_type;
+
+	struct kobject *mad_sa_cc_kobj;
 };
 
 static inline void *rdma_zalloc_obj(struct ib_device *dev, size_t size,
@@ -3030,6 +3036,14 @@ int rdma_user_mmap_entry_insert_range(struct ib_ucontext *ucontext,
 				      struct rdma_user_mmap_entry *entry,
 				      size_t length, u32 min_pgoff,
 				      u32 max_pgoff);
+
+#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
+void rdma_user_mmap_disassociate(struct ib_device *device);
+#else
+static inline void rdma_user_mmap_disassociate(struct ib_device *device)
+{
+}
+#endif
 
 static inline int
 rdma_user_mmap_entry_insert_exact(struct ib_ucontext *ucontext,
@@ -4555,6 +4569,17 @@ int ib_device_set_netdev(struct ib_device *ib_dev, struct net_device *ndev,
 			 unsigned int port);
 struct net_device *ib_device_get_netdev(struct ib_device *ib_dev,
 					u32 port);
+int ib_query_netdev_port(struct ib_device *ibdev, struct net_device *ndev,
+			 u32 *port);
+
+static inline enum ib_port_state ib_get_curr_port_state(struct net_device *net_dev)
+{
+	return (netif_running(net_dev) && netif_carrier_ok(net_dev)) ?
+		IB_PORT_ACTIVE : IB_PORT_DOWN;
+}
+
+void ib_dispatch_port_state_event(struct ib_device *ibdev,
+				  struct net_device *ndev);
 struct ib_wq *ib_create_wq(struct ib_pd *pd,
 			   struct ib_wq_init_attr *init_attr);
 int ib_destroy_wq_user(struct ib_wq *wq, struct ib_udata *udata);
@@ -4826,22 +4851,20 @@ ib_get_vector_affinity(struct ib_device *device, int comp_vector)
  * @device:         the rdma device
  */
 void rdma_roce_rescan_device(struct ib_device *ibdev);
-
-/**
- * rdma_roce_rescan_port - Rescan all of the network devices in the system
- * and add their gids if relevant to the port of the RoCE device.
- *
- * @ib_dev:         the rdma device
- * @port:	    port number
- */
 void rdma_roce_rescan_port(struct ib_device *ib_dev, u32 port);
-
 void roce_del_all_netdev_gids(struct ib_device *ib_dev,
 			      u32 port, struct net_device *ndev);
 
 struct ib_ucontext *ib_uverbs_get_ucontext_file(struct ib_uverbs_file *ufile);
 
+#if IS_ENABLED(CONFIG_INFINIBAND_USER_ACCESS)
 int uverbs_destroy_def_handler(struct uverbs_attr_bundle *attrs);
+#else
+static inline int uverbs_destroy_def_handler(struct uverbs_attr_bundle *attrs)
+{
+	return 0;
+}
+#endif
 
 struct net_device *rdma_alloc_netdev(struct ib_device *device, u32 port_num,
 				     enum rdma_netdev_t type, const char *name,

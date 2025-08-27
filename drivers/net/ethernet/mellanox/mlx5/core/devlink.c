@@ -13,9 +13,9 @@
 #include "sf/sf.h"
 #include "en/tc_ct.h"
 
-static int mlx5_devlink_flash_update(struct devlink *devlink,
-				     struct devlink_flash_update_params *params,
-				     struct netlink_ext_ack *extack)
+int mlx5_devlink_flash_update(struct devlink *devlink,
+			      struct devlink_flash_update_params *params,
+			      struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
@@ -39,7 +39,7 @@ static u16 mlx5_fw_ver_subminor(u32 version)
 
 #define DEVLINK_FW_STRING_LEN 32
 
-static int
+int
 mlx5_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
 		      struct netlink_ext_ack *extack)
 {
@@ -136,10 +136,10 @@ static int mlx5_devlink_trigger_fw_live_patch(struct devlink *devlink,
 	return mlx5_fw_reset_set_live_patch(dev);
 }
 
-static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
-				    enum devlink_reload_action action,
-				    enum devlink_reload_limit limit,
-				    struct netlink_ext_ack *extack)
+int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
+			     enum devlink_reload_action action,
+			     enum devlink_reload_limit limit,
+			     struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct pci_dev *pdev = dev->pdev;
@@ -168,11 +168,6 @@ static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 		return -EOPNOTSUPP;
 	}
 
-	if (mlx5_eswitch_mode_is_blocked(dev)) {
-		NL_SET_ERR_MSG_MOD(extack, "reload is unsupported if IPSec rules are configured");
-		return -EOPNOTSUPP;
-	}
-
 	if (mlx5_core_is_pf(dev) && pci_num_vf(pdev))
 		NL_SET_ERR_MSG_MOD(extack, "reload while VFs are present is unfavorable");
 
@@ -195,9 +190,9 @@ static int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 	return ret;
 }
 
-static int mlx5_devlink_reload_up(struct devlink *devlink, enum devlink_reload_action action,
-				  enum devlink_reload_limit limit, u32 *actions_performed,
-				  struct netlink_ext_ack *extack)
+int mlx5_devlink_reload_up(struct devlink *devlink, enum devlink_reload_action action,
+			   enum devlink_reload_limit limit, u32 *actions_performed,
+			   struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	int ret = 0;
@@ -241,8 +236,8 @@ static struct mlx5_devlink_trap *mlx5_find_trap_by_id(struct mlx5_core_dev *dev,
 	return NULL;
 }
 
-static int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_trap *trap,
-				  void *trap_ctx)
+int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_trap *trap,
+			   void *trap_ctx)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_devlink_trap *dl_trap;
@@ -265,8 +260,8 @@ static int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_
 	return 0;
 }
 
-static void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink_trap *trap,
-				   void *trap_ctx)
+void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink_trap *trap,
+			    void *trap_ctx)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_devlink_trap *dl_trap;
@@ -280,10 +275,10 @@ static void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink
 	kfree(dl_trap);
 }
 
-static int mlx5_devlink_trap_action_set(struct devlink *devlink,
-					const struct devlink_trap *trap,
-					enum devlink_trap_action action,
-					struct netlink_ext_ack *extack)
+int mlx5_devlink_trap_action_set(struct devlink *devlink,
+				 const struct devlink_trap *trap,
+				 enum devlink_trap_action action,
+				 struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_devlink_trap_event_ctx trap_event_ctx;
@@ -334,7 +329,8 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.rate_node_tx_max_set = mlx5_esw_devlink_rate_node_tx_max_set,
 	.rate_node_new = mlx5_esw_devlink_rate_node_new,
 	.rate_node_del = mlx5_esw_devlink_rate_node_del,
-	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,
+	.rate_leaf_parent_set = mlx5_esw_devlink_rate_leaf_parent_set,
+	.rate_node_parent_set = mlx5_esw_devlink_rate_node_parent_set,
 #endif
 #ifdef CONFIG_MLX5_SF_MANAGER
 	.port_new = mlx5_devlink_sf_port_new,
@@ -410,9 +406,9 @@ void mlx5_devlink_free(struct devlink *devlink)
 	devlink_free(devlink);
 }
 
-static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
-					     union devlink_param_value val,
-					     struct netlink_ext_ack *extack)
+int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
+				      union devlink_param_value val,
+				      struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	bool new_state = val.vbool;
@@ -431,9 +427,9 @@ static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
 }
 
 #ifdef CONFIG_MLX5_ESWITCH
-static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
-						 union devlink_param_value val,
-						 struct netlink_ext_ack *extack)
+int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
+					  union devlink_param_value val,
+					  struct netlink_ext_ack *extack)
 {
 	int group_num = val.vu32;
 
@@ -445,17 +441,16 @@ static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id
 
 	return 0;
 }
-
 #endif
 
-static int mlx5_devlink_eq_depth_validate(struct devlink *devlink, u32 id,
-					  union devlink_param_value val,
-					  struct netlink_ext_ack *extack)
+int mlx5_devlink_eq_depth_validate(struct devlink *devlink, u32 id,
+				   union devlink_param_value val,
+				   struct netlink_ext_ack *extack)
 {
 	return (val.vu32 >= 64 && val.vu32 <= 4096) ? 0 : -EINVAL;
 }
 
-static int
+int
 mlx5_devlink_hairpin_num_queues_validate(struct devlink *devlink, u32 id,
 					 union devlink_param_value val,
 					 struct netlink_ext_ack *extack)
@@ -463,7 +458,7 @@ mlx5_devlink_hairpin_num_queues_validate(struct devlink *devlink, u32 id,
 	return val.vu32 ? 0 : -EINVAL;
 }
 
-static int
+int
 mlx5_devlink_hairpin_queue_size_validate(struct devlink *devlink, u32 id,
 					 union devlink_param_value val,
 					 struct netlink_ext_ack *extack)
@@ -510,9 +505,9 @@ static void mlx5_devlink_hairpin_params_init_values(struct devlink *devlink)
 		devlink, MLX5_DEVLINK_PARAM_ID_HAIRPIN_QUEUE_SIZE, value);
 }
 
-static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
-						   struct devlink_param_gset_ctx *ctx,
-						   struct netlink_ext_ack *extack)
+int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
+					    struct devlink_param_gset_ctx *ctx,
+					    struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
@@ -520,8 +515,8 @@ static int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 
 	return 0;
 }
 
-static int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 id,
-						   struct devlink_param_gset_ctx *ctx)
+int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 id,
+					    struct devlink_param_gset_ctx *ctx)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 
@@ -627,9 +622,9 @@ static void mlx5_devlink_eth_params_unregister(struct devlink *devlink)
 			       ARRAY_SIZE(mlx5_devlink_eth_params));
 }
 
-static int mlx5_devlink_enable_rdma_validate(struct devlink *devlink, u32 id,
-					     union devlink_param_value val,
-					     struct netlink_ext_ack *extack)
+int mlx5_devlink_enable_rdma_validate(struct devlink *devlink, u32 id,
+				      union devlink_param_value val,
+				      struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	bool new_state = val.vbool;
@@ -742,9 +737,9 @@ static void mlx5_devlink_auxdev_params_unregister(struct devlink *devlink)
 	mlx5_devlink_eth_params_unregister(devlink);
 }
 
-static int mlx5_devlink_max_uc_list_validate(struct devlink *devlink, u32 id,
-					     union devlink_param_value val,
-					     struct netlink_ext_ack *extack)
+int mlx5_devlink_max_uc_list_validate(struct devlink *devlink, u32 id,
+				      union devlink_param_value val,
+				      struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 

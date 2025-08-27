@@ -1,0 +1,330 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/file.c
+
+---
+ fs/fuse/file.c | 151 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 151 insertions(+)
+
+--- a/fs/fuse/file.c
++++ b/fs/fuse/file.c
+@@ -867,7 +867,13 @@ static int fuse_do_readpage(struct file
+ 	 * page-cache page, so make sure we read a properly synced
+ 	 * page.
+ 	 */
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	fuse_wait_on_page_writeback(inode, page->__folio_index);
++#else
++	/* Older kernels use index */
+ 	fuse_wait_on_page_writeback(inode, page->index);
++#endif
+ 
+ 	attr_ver = fuse_get_attr_version(fm->fc);
+ 
+@@ -1138,7 +1144,13 @@ static ssize_t fuse_send_write_pages(str
+ 	int err;
+ 
+ 	for (i = 0; i < ap->num_pages; i++)
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++		/* Newer kernels (6.16+) use __folio_index */
++		fuse_wait_on_page_writeback(inode, ap->pages[i]->__folio_index);
++#else
++		/* Older kernels use index */
+ 		fuse_wait_on_page_writeback(inode, ap->pages[i]->index);
++#endif
+ 
+ 	fuse_write_args_fill(ia, ff, pos, count);
+ 	ia->write.in.flags = fuse_write_flags(iocb);
+@@ -1468,7 +1480,9 @@ static int fuse_get_user_pages(struct fu
+ 			       unsigned int max_pages,
+ 			       bool use_p2p_dma)
+ {
++#ifdef HAVE_ITER_ALLOW_P2PDMA
+ 	iov_iter_extraction_t iov_extract_flags = use_p2p_dma ? ITER_ALLOW_P2PDMA : 0;
++#endif
+ 	size_t nbytes = 0;  /* # bytes already packed in req */
+ 	ssize_t ret = 0;
+ 
+@@ -1496,7 +1510,11 @@ static int fuse_get_user_pages(struct fu
+ 		ret = iov_iter_extract_pages(ii, &pt_pages,
+ 					     *nbytesp - nbytes,
+ 					     max_pages - ap->num_pages,
++#ifdef HAVE_ITER_ALLOW_P2PDMA
+ 					     iov_extract_flags,
++#else
++					     0,
++#endif
+ 					     &start);
+ 		if (ret < 0)
+ 			break;
+@@ -2195,7 +2213,13 @@ static bool fuse_writepage_add(struct fu
+ 
+ 		WARN_ON(tmp->inode != new_wpa->inode);
+ 		curr_index = tmp->ia.write.in.offset >> PAGE_SHIFT;
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++		/* Newer kernels (6.16+) use __folio_index */
++		if (curr_index == page->__folio_index) {
++#else
++		/* Older kernels use index */
+ 		if (curr_index == page->index) {
++#endif
+ 			WARN_ON(tmp->ia.ap.num_pages != 1);
+ 			swap(tmp->ia.ap.pages[0], new_ap->pages[0]);
+ 			break;
+@@ -2233,7 +2257,13 @@ static bool fuse_writepage_need_send(str
+ 	 * the pages are faulted with get_user_pages(), and then after the read
+ 	 * completed.
+ 	 */
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	if (fuse_page_is_writeback(data->inode, page->__folio_index))
++#else
++	/* Older kernels use index */
+ 	if (fuse_page_is_writeback(data->inode, page->index))
++#endif
+ 		return true;
+ 
+ 	/* Reached max pages */
+@@ -2245,7 +2275,13 @@ static bool fuse_writepage_need_send(str
+ 		return true;
+ 
+ 	/* Discontinuity */
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	if (data->orig_pages[ap->num_pages - 1]->__folio_index + 1 != page->__folio_index)
++#else
++	/* Older kernels use index */
+ 	if (data->orig_pages[ap->num_pages - 1]->index + 1 != page->index)
++#endif
+ 		return true;
+ 
+ 	/* Need to grow the pages array?  If so, did the expansion fail? */
+@@ -2393,21 +2429,36 @@ out:
+  * but how to implement it without killing performance need more thinking.
+  */
+ static int fuse_write_begin(struct file *file, struct address_space *mapping,
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 		loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
++#else
++		loff_t pos, unsigned len, struct page **pagep, void **fsdata)
++#endif
+ {
+ 	pgoff_t index = pos >> PAGE_SHIFT;
+ 	struct fuse_conn *fc = get_fuse_conn(file_inode(file));
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	struct folio *folio;
++#else
++	struct page *page;
++#endif
+ 	loff_t fsize;
+ 	int err = -ENOMEM;
+ 
+ 	WARN_ON(!fc->writeback_cache);
+ 
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	folio = __filemap_get_folio(mapping, index, FGP_WRITEBEGIN,
+ 			mapping_gfp_mask(mapping));
+ 	if (IS_ERR(folio))
+ 		goto error;
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	fuse_wait_on_page_writeback(mapping->host, (&folio->page)->__folio_index);
++#else
++	/* Older kernels use index */
+ 	fuse_wait_on_page_writeback(mapping->host, folio->index);
++#endif
+ 
+ 	if (folio_test_uptodate(folio) || len >= folio_size(folio))
+ 		goto success;
+@@ -2431,37 +2482,101 @@ success:
+ cleanup:
+ 	folio_unlock(folio);
+ 	folio_put(folio);
++#else
++	page = grab_cache_page_write_begin(mapping, index);
++	if (!page)
++		goto error;
++
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	fuse_wait_on_page_writeback(mapping->host, page->__folio_index);
++#else
++	/* Older kernels use index */
++	fuse_wait_on_page_writeback(mapping->host, page->index);
++#endif
++
++	if (PageUptodate(page) || len == PAGE_SIZE)
++		goto success;
++	/*
++	 * Check if the start this page comes after the end of file, in which
++	 * case the readpage can be optimized away.
++	 */
++	fsize = i_size_read(mapping->host);
++	if (fsize <= (pos & PAGE_MASK)) {
++		size_t off = pos & ~PAGE_MASK;
++		if (off)
++			zero_user_segment(page, 0, off);
++		goto success;
++	}
++	err = fuse_do_readpage(file, page);
++	if (err)
++		goto cleanup;
++success:
++	*pagep = page;
++	return 0;
++
++cleanup:
++	unlock_page(page);
++	put_page(page);
++#endif
+ error:
+ 	return err;
+ }
+ 
+ static int fuse_write_end(struct file *file, struct address_space *mapping,
+ 		loff_t pos, unsigned len, unsigned copied,
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 		struct folio *folio, void *fsdata)
++#else
++		struct page *page, void *fsdata)
++#endif
+ {
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	struct inode *inode = folio->mapping->host;
++#else
++	struct inode *inode = page->mapping->host;
++#endif
+ 
+ 	/* Haven't copied anything?  Skip zeroing, size extending, dirtying. */
+ 	if (!copied)
+ 		goto unlock;
+ 
+ 	pos += copied;
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	if (!folio_test_uptodate(folio)) {
++#else
++	if (!PageUptodate(page)) {
++#endif
++
+ 		/* Zero any unwritten bytes at the end of the page */
+ 		size_t endoff = pos & ~PAGE_MASK;
+ 		if (endoff)
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 			folio_zero_segment(folio, endoff, PAGE_SIZE);
+ 		folio_mark_uptodate(folio);
++#else
++			zero_user_segment(page, endoff, PAGE_SIZE);
++		SetPageUptodate(page);
++#endif
+ 	}
+ 
+ 	if (pos > inode->i_size)
+ 		i_size_write(inode, pos);
+ 
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	folio_mark_dirty(folio);
++#else
++	set_page_dirty(page);
++#endif
+ 
+ unlock:
++#ifdef HAVE_WRITE_BEGIN_FOLIO
+ 	folio_unlock(folio);
+ 	folio_put(folio);
++#else
++	unlock_page(page);
++	put_page(page);
++#endif
+ 
+ 	return copied;
+ }
+@@ -2473,10 +2588,19 @@ static int fuse_launder_folio(struct fol
+ 		struct inode *inode = folio->mapping->host;
+ 
+ 		/* Serialize with pending writeback for the same page */
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++		/* Newer kernels (6.16+) use __folio_index */
++		fuse_wait_on_page_writeback(inode, (&folio->page)->__folio_index);
++		err = fuse_writepage_locked(folio);
++		if (!err)
++			fuse_wait_on_page_writeback(inode, (&folio->page)->__folio_index);
++#else
++		/* Older kernels use index */
+ 		fuse_wait_on_page_writeback(inode, folio->index);
+ 		err = fuse_writepage_locked(folio);
+ 		if (!err)
+ 			fuse_wait_on_page_writeback(inode, folio->index);
++#endif
+ 	}
+ 	return err;
+ }
+@@ -2520,7 +2644,13 @@ static vm_fault_t fuse_page_mkwrite(stru
+ 		return VM_FAULT_NOPAGE;
+ 	}
+ 
++#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
++	/* Newer kernels (6.16+) use __folio_index */
++	fuse_wait_on_page_writeback(inode, page->__folio_index);
++#else
++	/* Older kernels use index */
+ 	fuse_wait_on_page_writeback(inode, page->index);
++#endif
+ 	return VM_FAULT_LOCKED;
+ }
+ 
+@@ -2613,14 +2743,22 @@ static int convert_fuse_file_lock(struct
+ 		 * translate it into the caller's pid namespace.
+ 		 */
+ 		rcu_read_lock();
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 		fl->c.flc_pid = pid_nr_ns(find_pid_ns(ffl->pid, fc->pid_ns), &init_pid_ns);
++#else
++		fl->fl_pid = pid_nr_ns(find_pid_ns(ffl->pid, fc->pid_ns), &init_pid_ns);
++#endif
+ 		rcu_read_unlock();
+ 		break;
+ 
+ 	default:
+ 		return -EIO;
+ 	}
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	fl->c.flc_type = ffl->type;
++#else
++	fl->fl_type = ffl->type;
++#endif
+ 	return 0;
+ }
+ 
+@@ -2634,10 +2772,18 @@ static void fuse_lk_fill(struct fuse_arg
+ 
+ 	memset(inarg, 0, sizeof(*inarg));
+ 	inarg->fh = ff->fh;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	inarg->owner = fuse_lock_owner_id(fc, fl->c.flc_owner);
++#else
++	inarg->owner = fuse_lock_owner_id(fc, fl->fl_owner);
++#endif
+ 	inarg->lk.start = fl->fl_start;
+ 	inarg->lk.end = fl->fl_end;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	inarg->lk.type = fl->c.flc_type;
++#else
++	inarg->lk.type = fl->fl_type;
++#endif
+ 	inarg->lk.pid = pid;
+ 	if (flock)
+ 		inarg->lk_flags |= FUSE_LK_FLOCK;
+@@ -2674,8 +2820,13 @@ static int fuse_setlk(struct file *file,
+ 	struct fuse_mount *fm = get_fuse_mount(inode);
+ 	FUSE_ARGS(args);
+ 	struct fuse_lk_in inarg;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	int opcode = (fl->c.flc_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
+ 	struct pid *pid = fl->c.flc_type != F_UNLCK ? task_tgid(current) : NULL;
++#else
++	int opcode = (fl->fl_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
++	struct pid *pid = fl->fl_type != F_UNLCK ? task_tgid(current) : NULL;
++#endif
+ 	pid_t pid_nr = pid_nr_ns(pid, fm->fc->pid_ns);
+ 	int err;
+ 

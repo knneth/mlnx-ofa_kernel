@@ -50,8 +50,10 @@
 #define __free(_name)	__cleanup(__free_##_name)
 
 #ifdef HAVE_AUTO_TYPE
+#ifndef no_free_ptr
 #define no_free_ptr(p) \
 	({ __auto_type __ptr = (p); (p) = NULL; __ptr; })
+#endif
 #endif
 
 #define return_ptr(p)	return no_free_ptr(p)

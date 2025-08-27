@@ -40,9 +40,9 @@
 #include "eswitch.h"
 #ifdef CONFIG_MLX5_ESWITCH
 #include "esw/vf_meter.h"
-#include "esw/qos.h"
 #endif
 #include "esw/legacy.h"
+#include "esw/qos.h"
 
 struct vf_attributes {
 	struct attribute attr;
@@ -153,16 +153,13 @@ static ssize_t max_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 				       struct vf_group_attributes *oa,
 				       const char *buf, size_t count)
 {
-	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_core_dev *dev = g->esw->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	u32 max_rate;
 	int err;
 
-	err = kstrtou32(buf, 10, &max_rate);
-	if(err)
-		return err;
-
-	if (max_rate && max_rate < g->min_rate)
+	err = sscanf(buf, "%u", &max_rate);
+	if (err != 1)
 		return -EINVAL;
 
 	err = mlx5_esw_qos_set_sysfs_node_max_rate(esw, g, max_rate);
@@ -182,16 +179,13 @@ static ssize_t min_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 				       struct vf_group_attributes *oa,
 				       const char *buf, size_t count)
 {
-	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_core_dev *dev = g->esw->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	u32 min_rate;
 	int err;
 
-	err = kstrtou32(buf, 10, &min_rate);
-	if(err)
-		return err;
-
-	if (g->max_rate && min_rate > g->max_rate)
+	err = sscanf(buf, "%u", &min_rate);
+	if (err != 1)
 		return -EINVAL;
 
 	err = mlx5_esw_qos_set_sysfs_node_min_rate(esw, g, min_rate);
@@ -633,6 +627,12 @@ static ssize_t max_tx_rate_show(struct mlx5_sriov_vf *g,
 		       "usage: write <Rate (Mbit/s)> to set VF max rate\n");
 }
 
+static bool mlx5_esw_qos_is_needed(struct mlx5_esw_sched_node *parent, u64 tx_max,
+				  u64 tx_share)
+{
+	return parent || tx_max || tx_share;
+}
+
 static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 				 struct vf_attributes *oa,
 				 const char *buf, size_t count)
@@ -647,10 +647,22 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 	if (err)
 		return err;
 
+	if (!vport->qos.sched_node) {
+		/* QoS is not enabled, return if setting 0 to avoid enabling
+		 * vport QoS unnecessarily.
+		 */
+		if (!max_tx_rate)
+			return count;
+	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
+					   max_tx_rate,
+					   vport->qos.sched_node->min_rate)) {
+		mlx5_esw_qos_vport_disable(vport);
+		return count;
+	}
+
 	esw_qos_lock(esw);
 	err = mlx5_esw_qos_set_vport_max_rate(vport, max_tx_rate, NULL);
 	esw_qos_unlock(esw);
-
 	return err ? err : count;
 }
 
@@ -711,12 +723,25 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 	if (err)
 		return err;
 
-	esw_qos_lock(esw);
-	err = mlx5_esw_qos_set_vport_max_rate(vport, min_tx_rate, NULL);
-	esw_qos_unlock(esw);
+	if (!vport->qos.sched_node) {
+		/* QoS is not enabled, return if setting 0 to avoid enabling
+		 * vport QoS unnecessarily.
+		 */
+		if (!min_tx_rate)
+			return count;
+	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
+					   vport->qos.sched_node->max_rate,
+					   min_tx_rate)) {
+		mlx5_esw_qos_vport_disable(vport);
+		return count;
+	}
 
+	esw_qos_lock(esw);
+	err = mlx5_esw_qos_set_vport_min_rate(vport, min_tx_rate, NULL);
+	esw_qos_unlock(esw);
 	return err ? err : count;
 }
+
 #define _sprintf(p, buf, format, arg...)				\
 	((PAGE_SIZE - (int)(p - buf)) <= 0 ? 0 :			\
 	scnprintf(p, PAGE_SIZE - (int)(p - buf), format, ## arg))
@@ -798,21 +823,21 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 	p += _sprintf(p, buf, "SpoofCheck : %s\n", ivi->spoofchk ? "ON" : "OFF");
 	p += _sprintf(p, buf, "Trust      : %s\n", ivi->trusted ? "ON" : "OFF");
 	p += _sprintf(p, buf, "LinkState  : %s",   policy_str(ivi->link_state));
-	if (evport->qos.sched_node) {
-		struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(evport);
+        if (evport->qos.sched_node) {
+                struct mlx5_esw_sched_node *parent = mlx5_esw_qos_vport_get_parent(evport);
 
-		p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.sched_node->min_rate);
-		p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.sched_node->max_rate);
-		if (parent)
-			p += _sprintf(p, buf, "RateGroup  : %d\n", parent->node_id);
-		else
-			p += _sprintf(p, buf, "RateGroup  : 0\n");
-	} else {
-		p += _sprintf(p, buf, "MinTxRate  : 0\nMaxTxRate  : 0\nRateGroup  : 0\n");
-	}
-	p += _sprintf(p, buf, "VGT+       : %s\n",
-		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
-				      VLAN_N_VID) ? "ON" : "OFF");
+                p += _sprintf(p, buf, "MinTxRate  : %d\n", evport->qos.sched_node->min_rate);
+                p += _sprintf(p, buf, "MaxTxRate  : %d\n", evport->qos.sched_node->max_rate);
+                if (parent)
+                        p += _sprintf(p, buf, "RateGroup  : %d\n", parent->node_id);
+                else
+                        p += _sprintf(p, buf, "RateGroup  : 0\n");
+        } else {
+                p += _sprintf(p, buf, "MinTxRate  : 0\nMaxTxRate  : 0\nRateGroup  : 0\n");
+        }
+        p += _sprintf(p, buf, "VGT+       : %s\n",
+                      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
+		      VLAN_N_VID) ? "ON" : "OFF");
 	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
@@ -829,7 +854,7 @@ static ssize_t config_group_show(struct mlx5_esw_sched_node *g,
 				 struct vf_group_attributes *oa,
 				 char *buf)
 {
-	struct mlx5_core_dev *dev = g->dev;
+	struct mlx5_core_dev *dev = g->esw->dev;
 	struct mlx5_eswitch *esw = dev->priv.eswitch;
 	char *p = buf;
 
@@ -837,13 +862,12 @@ static ssize_t config_group_show(struct mlx5_esw_sched_node *g,
 	    mlx5_core_is_pf(esw->dev))
 		return -EPERM;
 
-	if (!mutex_trylock(&esw->qos.domain->lock))
-		return -EBUSY;
+	mutex_lock(&esw->state_lock);
 	p += _sprintf(p, buf, "Num VFs    : %d\n", g->num_vports);
 	p += _sprintf(p, buf, "MaxRate    : %d\n", g->max_rate);
 	p += _sprintf(p, buf, "MinRate    : %d\n", g->min_rate);
 	p += _sprintf(p, buf, "BWShare(Indirect cfg)    : %d\n", g->bw_share);
-	mutex_unlock(&esw->qos.domain->lock);
+	mutex_unlock(&esw->state_lock);
 
 	return (ssize_t)(p - buf);
 }
@@ -998,7 +1022,7 @@ static ssize_t page_limit_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa
 	int err;
 
 	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
-		err = mlx5_esw_query_vport_vhca_id(esw, g->vf + 1, &vhca_id);
+		err = mlx5_vport_get_vhca_id(esw->dev, g->vf + 1, &vhca_id);
 		if (err)
 			return err;
 
@@ -1031,7 +1055,7 @@ static ssize_t page_limit_store(struct mlx5_sriov_vf *g, struct vf_attributes *o
 		return -EINVAL;
 
 	if (mlx5_vhca_icm_ctrl_supported(esw->dev)) {
-		err = mlx5_esw_query_vport_vhca_id(esw, g->vf + 1, &vhca_id);
+		err = mlx5_vport_get_vhca_id(esw->dev, g->vf + 1, &vhca_id);
 		if (err)
 			return err;
 
@@ -1074,17 +1098,43 @@ static ssize_t num_pages_store(struct mlx5_sriov_vf *g, struct vf_attributes *oa
 
 #endif /* CONFIG_MLX5_ESWITCH */
 
+static int get_num_vfs(struct device *device)
+{
+	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
+	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+
+	return (sriov->num_vfs);
+}
+
 static ssize_t num_vf_store(struct device *device, struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
 	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
+	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
+	int curr_vfs = get_num_vfs(device);
 	int req_vfs;
 	int err;
 
-	if (kstrtoint(buf, 0, &req_vfs) || req_vfs < 0 ||
-	    req_vfs > pci_sriov_get_totalvfs(pdev))
+	if (kstrtoint(buf, 0, &req_vfs))
 		return -EINVAL;
 
+	if (req_vfs > pci_sriov_get_totalvfs(pdev))
+		return -ERANGE;
+
+	if (curr_vfs == req_vfs)
+		return count;
+
+	if (!req_vfs)
+		goto configure;
+
+	if (curr_vfs) {
+		mlx5_core_warn(dev, "%d VFs already enabled. Disable before enabling %d VFs\n",
+			       curr_vfs, req_vfs);
+		return -EBUSY;
+	}
+
+configure:
 	err = mlx5_core_sriov_configure(pdev, req_vfs);
 	if (err < 0)
 		return err;
@@ -1095,11 +1145,7 @@ static ssize_t num_vf_store(struct device *device, struct device_attribute *attr
 static ssize_t num_vf_show(struct device *device, struct device_attribute *attr,
 			   char *buf)
 {
-	struct pci_dev *pdev = container_of(device, struct pci_dev, dev);
-	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
-	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
-
-	return sprintf(buf, "%d\n", sriov->num_vfs);
+	return sprintf(buf, "%d\n", get_num_vfs(device));
 }
 
 static DEVICE_ATTR(mlx5_num_vfs, 0600, num_vf_show, num_vf_store);
@@ -1292,8 +1338,8 @@ void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev)
 	sriov->config = NULL;
 }
 
-int mlx5_create_vf_node_sysfs(struct mlx5_core_dev *dev,
-			      u32 node_id, struct kobject *group_kobj)
+int mlx5_create_vf_node_sysfs(struct mlx5_core_dev *dev, u32 node_id,
+			      struct kobject *group_kobj)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
 	int err;
@@ -1331,6 +1377,11 @@ void mlx5_destroy_vf_node_sysfs(struct mlx5_esw_sched_node *node)
 {
 #ifdef CONFIG_MLX5_ESWITCH
 	struct mlx5_group_kobj *kobj = kzalloc(sizeof *kobj, GFP_ATOMIC);
+
+	if (!kobj) {
+		mlx5_core_err(node->esw->dev, "failed to allocate mem\n");
+		return;
+	}
 
 	INIT_WORK(&kobj->work, destroy_vf_group_work);
 	kobj->node = node;

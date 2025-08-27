@@ -2,11 +2,6 @@
 /*
  * Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
  */
-
-#ifdef pr_fmt
-#undef pr_fmt
-#endif
-
 #define pr_fmt(fmt) "fwctl: " fmt
 #include <linux/fwctl.h>
 
@@ -110,7 +105,7 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
 		if (!test_and_set_bit(0, &fwctl_tainted)) {
 			dev_warn(
 				&fwctl->dev,
-				"%s(%d): has requested full access to the physical device device",
+				"%s(%d): has requested full access to the physical device",
 				current->comm, task_pid_nr(current));
 			add_taint(TAINT_FWCTL, LOCKDEP_STILL_OK);
 		}
@@ -424,3 +419,4 @@ module_init(fwctl_init);
 module_exit(fwctl_exit);
 MODULE_DESCRIPTION("fwctl device firmware access framework");
 MODULE_LICENSE("GPL");
+MODULE_INFO(supported, "external");

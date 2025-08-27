@@ -349,11 +349,89 @@ static ssize_t cpu_list_show(struct kobject *kobj,
 	return pos + ret;
 }
 
-static struct kobj_attribute virtio_fs_vq_cpu_list_attr = __ATTR_RO(cpu_list);
+static ssize_t cpu_list_store(struct kobject *kobj,
+			      struct kobj_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
+	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
+	int qid = vq_index_to_fsvq_index(fs, fsvq->vq->index);
+	struct cpumask mask;
+	unsigned int cpu;
+	int ret;
+
+	if (qid < VQ_REQUEST) {
+		pr_err("virtio-fs: cannot change hiprio/notify vq cpu_list\n");
+		return -EPERM;
+	}
+
+	cpumask_clear(&mask);
+	ret = cpulist_parse(buf, &mask);
+	if (ret < 0) {
+		pr_err("virtio-fs: failed to parse cpulist %s\n", buf);
+		return -EINVAL;
+	}
+
+	for_each_cpu(cpu, &mask)
+		fs->mq_map[cpu] = qid;
+
+	return count;
+}
+
+static ssize_t irq_affinity_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
+	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
+	const struct cpumask *mask;
+	unsigned q = fsvq->vq->index;
+
+	if (!fsvq->vq->vdev->config->get_vq_affinity) {
+		pr_err("virtio-fs: fsvq has no get_vq_affinity operation\n");
+		return 0;
+	}
+
+	mask = fsvq->vq->vdev->config->get_vq_affinity(fsvq->vq->vdev, q);
+	if (!mask) {
+		pr_err("virtio-fs: get_vq_affinity returned no masks\n");
+		return 0;
+	}
+
+	return cpumap_print_list_to_buf(buf, mask, 0, PAGE_SIZE);
+}
+
+static ssize_t irq_affinity_store(struct kobject *kobj,
+				  struct kobj_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
+	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
+	int qid = vq_index_to_fsvq_index(fs, fsvq->vq->index);
+	struct cpumask mask;
+	int ret;
+
+	if (qid < VQ_REQUEST)
+		return -EINVAL;
+
+	cpumask_clear(&mask);
+	ret = cpulist_parse(buf, &mask);
+	if (ret < 0) {
+		pr_err("virtio-fs: failed to parse cpulist %s\n", buf);
+		return -EINVAL;
+	}
+
+	ret = virtqueue_set_affinity(fsvq->vq, &mask);
+
+	return ret ? ret : count;
+}
+
+static struct kobj_attribute virtio_fs_vq_cpu_list_attr = __ATTR_RW(cpu_list);
+static struct kobj_attribute virtio_fs_vq_irq_affinity_attr = __ATTR_RW(irq_affinity);
 
 static struct attribute *virtio_fs_vq_attrs[] = {
 	&virtio_fs_vq_name_attr.attr,
 	&virtio_fs_vq_cpu_list_attr.attr,
+	&virtio_fs_vq_irq_affinity_attr.attr,
 	NULL
 };
 
@@ -1361,7 +1439,6 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
 {
 	struct virtqueue_info *vqs_info;
 	struct virtqueue **vqs;
-	struct irq_affinity desc = {0};
 	unsigned int info_idx = 0;
 	unsigned int vq_nvqs;
 	unsigned int i;
@@ -1429,12 +1506,7 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
 		info_idx++;
 	}
 
-	/* Specify pre_vectors to ensure that the queues before the
-	 * request queues (e.g. hiprio) don't claim any of the CPUs in
-	 * the multi-queue mapping and interrupt affinities
-	 */
-	desc.pre_vectors = fs->notify_enabled ? VQ_REQUEST : VQ_REQUEST - 1;
-	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, &desc);
+	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, NULL);
 	if (ret < 0)
 		goto out;
 

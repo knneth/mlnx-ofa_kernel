@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"25.04-0.6.0"
+#define DRIVER_VERSION	"25.07-0.9.7"
 
 extern uint mlx5_core_debug_mask;
 
@@ -114,6 +114,26 @@ struct mlx5_cmd_alias_obj_create_attr {
 	u16 vhca_id;
 	u16 obj_type;
 	u8 access_key[ACCESS_KEY_LEN];
+};
+
+struct mlx5_port_eth_proto {
+	u32 cap;
+	u32 admin;
+	u32 oper;
+};
+
+struct mlx5_module_eeprom_query_params {
+	u16 size;
+	u16 offset;
+	u16 i2c_address;
+	u32 page;
+	u32 bank;
+	u32 module_number;
+};
+
+struct mlx5_link_info {
+	u32 speed;
+	u32 lanes;
 };
 
 static inline void mlx5_printk(struct mlx5_core_dev *dev, int level, const char *format, ...)
@@ -229,8 +249,6 @@ struct mlx5_mcion_reg {
 #endif
 #define MLX5_DEV_MAX_WQS	MLX5_NUM_FW_CMD_THREADS
 
-struct mlx5_esw_sched_node;
-
 static inline int mlx5_flexible_inlen(struct mlx5_core_dev *dev, size_t fixed,
 				      size_t item_size, size_t num_items,
 				      const char *func, int line)
@@ -261,6 +279,8 @@ static inline int mlx5_flexible_inlen(struct mlx5_core_dev *dev, size_t fixed,
 #define MLX5_FLEXIBLE_INLEN(dev, fixed, item_size, num_items) \
 	mlx5_flexible_inlen(dev, fixed, item_size, num_items, __func__, __LINE__)
 
+struct mlx5_esw_sched_node;
+
 int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
 int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type,
 			    enum mlx5_cap_mode cap_mode);
@@ -278,7 +298,6 @@ int mlx5_cmd_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_force_teardown_hca(struct mlx5_core_dev *dev);
 int mlx5_cmd_fast_teardown_hca(struct mlx5_core_dev *dev);
 void mlx5_enter_error_state(struct mlx5_core_dev *dev, bool force);
-bool mlx5_sensor_pci_not_working(struct mlx5_core_dev *dev);
 void mlx5_error_sw_reset(struct mlx5_core_dev *dev);
 u32 mlx5_health_check_fatal_sensors(struct mlx5_core_dev *dev);
 int mlx5_health_wait_pci_up(struct mlx5_core_dev *dev);
@@ -342,7 +361,6 @@ int mlx5_adev_init(struct mlx5_core_dev *dev);
 
 int mlx5_attach_device(struct mlx5_core_dev *dev);
 void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend);
-void mlx5_attach_device_by_protocol(struct mlx5_core_dev *dev, int protocol);
 int mlx5_register_device(struct mlx5_core_dev *dev);
 void mlx5_unregister_device(struct mlx5_core_dev *dev);
 void mlx5_dev_set_lightweight(struct mlx5_core_dev *dev);
@@ -356,6 +374,78 @@ int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
 
 struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev);
 void mlx5_dm_cleanup(struct mlx5_core_dev *dev);
+
+void mlx5_toggle_port_link(struct mlx5_core_dev *dev);
+int mlx5_set_port_admin_status(struct mlx5_core_dev *dev,
+			       enum mlx5_port_status status);
+int mlx5_query_port_admin_status(struct mlx5_core_dev *dev,
+				 enum mlx5_port_status *status);
+int mlx5_set_port_beacon(struct mlx5_core_dev *dev, u16 beacon_duration);
+
+int mlx5_set_port_mtu(struct mlx5_core_dev *dev, u16 mtu, u8 port);
+int mlx5_set_port_pause(struct mlx5_core_dev *dev, u32 rx_pause, u32 tx_pause);
+int mlx5_query_port_pause(struct mlx5_core_dev *dev,
+			  u32 *rx_pause, u32 *tx_pause);
+
+int mlx5_set_port_pfc(struct mlx5_core_dev *dev, u8 pfc_en_tx, u8 pfc_en_rx);
+int mlx5_query_port_pfc(struct mlx5_core_dev *dev, u8 *pfc_en_tx,
+			u8 *pfc_en_rx);
+
+int mlx5_set_port_stall_watermark(struct mlx5_core_dev *dev,
+				  u16 stall_critical_watermark,
+				  u16 stall_minor_watermark);
+int mlx5_query_port_stall_watermark(struct mlx5_core_dev *dev,
+				    u16 *stall_critical_watermark,
+				    u16 *stall_minor_watermark);
+
+int mlx5_max_tc(struct mlx5_core_dev *mdev);
+int mlx5_set_port_prio_tc(struct mlx5_core_dev *mdev, u8 *prio_tc);
+int mlx5_query_port_prio_tc(struct mlx5_core_dev *mdev,
+			    u8 prio, u8 *tc);
+int mlx5_set_port_tc_group(struct mlx5_core_dev *mdev, u8 *tc_group);
+int mlx5_query_port_tc_group(struct mlx5_core_dev *mdev,
+			     u8 tc, u8 *tc_group);
+int mlx5_set_port_tc_bw_alloc(struct mlx5_core_dev *mdev, u8 *tc_bw);
+int mlx5_query_port_tc_bw_alloc(struct mlx5_core_dev *mdev,
+				u8 tc, u8 *bw_pct);
+int mlx5_modify_port_ets_rate_limit(struct mlx5_core_dev *mdev,
+				    u8 *max_bw_value,
+				    u8 *max_bw_unit);
+int mlx5_query_port_ets_rate_limit(struct mlx5_core_dev *mdev,
+				   u8 *max_bw_value,
+				   u8 *max_bw_unit);
+int mlx5_set_port_wol(struct mlx5_core_dev *mdev, u8 wol_mode);
+int mlx5_query_port_wol(struct mlx5_core_dev *mdev, u8 *wol_mode);
+
+int mlx5_query_ports_check(struct mlx5_core_dev *mdev, u32 *out, int outlen);
+int mlx5_set_ports_check(struct mlx5_core_dev *mdev, u32 *in, int inlen);
+int mlx5_set_port_fcs(struct mlx5_core_dev *mdev, u8 enable);
+void mlx5_query_port_fcs(struct mlx5_core_dev *mdev, bool *supported,
+			 bool *enabled);
+int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
+			     u16 offset, u16 size, u8 *data);
+int
+mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
+				 struct mlx5_module_eeprom_query_params *params,
+				 u8 *data);
+
+int mlx5_query_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *out);
+int mlx5_set_port_dcbx_param(struct mlx5_core_dev *mdev, u32 *in);
+int mlx5_set_trust_state(struct mlx5_core_dev *mdev, u8 trust_state);
+int mlx5_query_trust_state(struct mlx5_core_dev *mdev, u8 *trust_state);
+int mlx5_set_dscp2prio(struct mlx5_core_dev *mdev, u8 dscp, u8 prio);
+int mlx5_query_dscp2prio(struct mlx5_core_dev *mdev, u8 *dscp2prio);
+
+int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
+			      struct mlx5_port_eth_proto *eproto);
+bool mlx5_ptys_ext_supported(struct mlx5_core_dev *mdev);
+const struct mlx5_link_info *mlx5_port_ptys2info(struct mlx5_core_dev *mdev,
+						 u32 eth_proto_oper,
+						 bool force_legacy);
+u32 mlx5_port_info2linkmodes(struct mlx5_core_dev *mdev,
+			     struct mlx5_link_info *info,
+			     bool force_legacy);
+int mlx5_port_max_linkspeed(struct mlx5_core_dev *mdev, u32 *speed);
 
 #define MLX5_PPS_CAP(mdev) (MLX5_CAP_GEN((mdev), pps) &&		\
 			    MLX5_CAP_GEN((mdev), pps_modify) &&		\

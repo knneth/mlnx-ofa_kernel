@@ -1,0 +1,46 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+
+Change-Id: I0a3bee5b9b5190bcb021c6d212311f3bacadecc0
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+@@ -5,6 +5,7 @@
+ #define __MLX5_LAG_H__
+ 
+ #include <linux/debugfs.h>
++#include <linux/seq_file.h>
+ 
+ #define MLX5_LAG_MAX_HASH_BUCKETS 16
+ #include "mlx5_core.h"
+@@ -136,14 +137,27 @@ static inline bool mlx5_lag_is_supported
+ 	return true;
+ }
+ 
++#ifdef HAVE_STD_GNU_99
+ #define mlx5_ldev_for_each(i, start_index, ldev) \
+ 	for (int tmp = start_index; tmp = mlx5_get_next_ldev_func(ldev, tmp), \
+ 	     i = tmp, tmp < MLX5_MAX_PORTS; tmp++)
++#else
++#define mlx5_ldev_for_each(i, start_index, ldev) \
++	for (tmp = start_index; tmp = mlx5_get_next_ldev_func(ldev, tmp), \
++	     i = tmp, tmp < MLX5_MAX_PORTS; tmp++)
++#endif
+ 
++#ifdef HAVE_STD_GNU_99
+ #define mlx5_ldev_for_each_reverse(i, start_index, end_index, ldev)      \
+ 	for (int tmp = start_index, tmp1 = end_index; \
+ 	     tmp = mlx5_get_pre_ldev_func(ldev, tmp, tmp1), \
+ 	     i = tmp, tmp >= tmp1; tmp--)
++#else
++#define mlx5_ldev_for_each_reverse(i, start_index, end_index, ldev)      \
++	for (tmp = start_index, tmp1 = end_index; \
++	     tmp = mlx5_get_pre_ldev_func(ldev, tmp, tmp1), \
++	     i = tmp, tmp >= tmp1; tmp--)
++#endif
+ 
+ int mlx5_get_pre_ldev_func(struct mlx5_lag *ldev, int start_idx, int end_idx);
+ int mlx5_get_next_ldev_func(struct mlx5_lag *ldev, int start_idx);

@@ -1,0 +1,28 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/linux/mlx5/port.h
+
+Change-Id: Ia6792d665a23a40d0745c05b88ca263d1064367f
+---
+ include/linux/mlx5/port.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/include/linux/mlx5/port.h
++++ b/include/linux/mlx5/port.h
+@@ -33,6 +33,7 @@
+ #ifndef __MLX5_PORT_H__
+ #define __MLX5_PORT_H__
+ 
++#include "../../../compat/config.h"
+ #include <linux/mlx5/driver.h>
+ 
+ enum mlx5_beacon_duration {
+@@ -45,7 +46,9 @@ enum mlx5_module_id {
+ 	MLX5_MODULE_ID_QSFP             = 0xC,
+ 	MLX5_MODULE_ID_QSFP_PLUS        = 0xD,
+ 	MLX5_MODULE_ID_QSFP28           = 0x11,
++#ifdef HAVE_GET_MODULE_EEPROM_BY_PAGE
+ 	MLX5_MODULE_ID_DSFP		= 0x1B,
++#endif
+ };
+ 
+ enum mlx5_an_status {

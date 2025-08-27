@@ -1,0 +1,36 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
+
+Change-Id: If12c25666b7d3a20f58dcf167c4581f086c82978
+---
+ net/mlxdevm/rate.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/net/mlxdevm/rate.c
++++ b/net/mlxdevm/rate.c
+@@ -141,14 +141,17 @@ static void mlxdevm_rate_notify(struct m
+ 				enum mlxdevm_command cmd)
+ {
+ 	struct mlxdevm *mlxdevm = mlxdevm_rate->mlxdevm;
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	struct sk_buff *msg;
+ 	int err;
++#endif
+ 
+ 	WARN_ON(cmd != MLXDEVM_CMD_RATE_NEW && cmd != MLXDEVM_CMD_RATE_DEL);
+ 
+ 	if (!devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+ 		return;
+@@ -160,6 +163,7 @@ static void mlxdevm_rate_notify(struct m
+ 	}
+ 
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ }
+ #ifdef HAVE_BLOCKED_DEVLINK_CODE
+ 

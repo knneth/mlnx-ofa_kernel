@@ -140,7 +140,6 @@ binrpm: rpmcheck $(rpmspec)
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/
 	cp {$(rpmspec),makefile,Makefile,dkms.conf,Module.supported} $(rpmroot)/$(PACKAGE)/
-	cp common.postinst $(rpmroot)/$(PACKAGE)/
 	cp *.c $(rpmroot)/$(PACKAGE)/
 	cp *.h $(rpmroot)/$(PACKAGE)/
 	cp -r debian $(rpmroot)/$(PACKAGE)/

@@ -5,7 +5,15 @@ AC_DEFUN([MLNX_RDMA_SET_GLOBALS],
 	MLNX_RDMA_MODULES_DIR="$PWD/modtest"
 	MLNX_RDMA_TEST_MOD="testmod"
 	MLNX_RDMA_RUN_LOG="$MLNX_RDMA_MODULES_DIR/run.log"
-	ERROR_FLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized -Werror=int-conversion -Werror=discarded-qualifiers"
+	# Generally handle any warning as error (-Werror), except:
+	# -Wno-unused-variable: A common pattern is to initialize a
+	# 		         variable to make sure e.g. a field exists
+	# 			 but not bother using it later.
+	# -Wno-uninitialized: A common pattern in tests is to use
+	# 		      uninitialized values, so we won't have to
+	# 		      worry about their type.
+	# -Wno-missing-braces: Harmless and almost always wrong
+	ERROR_FLAGS="-Werror -Wno-unused-variable -Wno-unused-value -Wno-uninitialized -Wno-missing-braces"
 ])
 
 AC_DEFUN([MLNX_RDMA_TEST_CASE],
@@ -22,21 +30,20 @@ AC_DEFUN([MLNX_RDMA_TEST_CASE],
 #include <linux/kernel.h>
 MODULE_LICENSE("GPL");
 $3
-static int __init test_func (void) {
+static int __maybe_unused test_func (void) {
 $4
 	return 0;
 }
-module_init(test_func);
 EOF
 	dnl FIXME: Silence the dots when autoconf is in quiet mode:
 	cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
 obj-m += $MLNX_RDMA_TEST_MOD.o
 # The rest is for printing a single dot:
 ifeq (,\$(MLNX_RDMA_SILENT))
-$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.o: $MLNX_RDMA_MOD_DIR/echo
-$MLNX_RDMA_MOD_DIR/echo:
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
 	@echo -n .
-.PHONY: $MLNX_RDMA_MOD_DIR/echo
+.PHONY: \$(obj)/echo
 endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
@@ -46,7 +53,7 @@ EOF
 AC_DEFUN([MLNX_RDMA_BUILD_MODULES],
 [
 	AC_MSG_NOTICE([Test-building kernel modules test-builds])
-	make -s -C "$LINUX_OBJ" -k -j${NJOBS:-1} EXTRA_CFLAGS="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST=m modules 2>"$MLNX_RDMA_RUN_LOG"
+	make -s -C "$LINUX_OBJ" -k -j${NJOBS:-1} ccflags-y="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST=m MLNX_RDMA_SILENT=$silent modules 2>"$MLNX_RDMA_RUN_LOG"
 	echo '' # FIXME: Silence in quiet mode
 ])
 
@@ -71,7 +78,7 @@ AC_DEFUN([MLNX_RDMA_CHECK_BUILD_SANITY],
 	MLNX_RDMA_TEST_CASE(KBUILD_WORKS, [building a kernel module works], [
 	],[
 	])
-	make -s -C "$LINUX_OBJ" EXTRA_CFLAGS="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST_KBUILD_WORKS=m modules 2>"$MLNX_RDMA_RUN_LOG"
+	make -s -C "$LINUX_OBJ" ccflags-y="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST_KBUILD_WORKS=m MLNX_RDMA_SILENT=yes modules 2>"$MLNX_RDMA_RUN_LOG"
 	mlnx_ofed_rc=$?
 	if test "$mlnx_ofed_rc" != 0; then
 		echo ''; cat "$MLNX_RDMA_RUN_LOG"
@@ -91,6 +98,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/dpll.h>
 
 		int my_lock_status_get(const struct dpll_device *dpll, void *dpll_priv,
+						enum dpll_lock_status *status,
+						enum dpll_lock_status_error *status_error,
+						struct netlink_ext_ack *extack);
+		int my_lock_status_get(const struct dpll_device *dpll, void *dpll_priv,
 		                               enum dpll_lock_status *status,
                 		               enum dpll_lock_status_error *status_error,
                                		       struct netlink_ext_ack *extack)
@@ -104,6 +115,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 
 		return 0;
 	])
+
+	   MLNX_RDMA_TEST_CASE(HAVE_NET_DIM_POINTER_END_SAMPLE, [net_dim get const pointer end_sample], [
+		      #include <linux/dim.h>
+	],[
+		      struct dim_sample dim_sample = {};
+	              net_dim(NULL, &dim_sample);
+		      return 0;
+	 ])
 
 	MLNX_RDMA_TEST_CASE(HAVE_DPLL_STRUCTS, [have struct dpll_pin_ops], [
 	#include <linux/dpll.h>
@@ -136,6 +155,24 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	#include <linux/netdevice.h>
 	],[
 		netdev_dpll_pin_set(NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_CLOCK_QUALITY_LEVEL_GET, [have function clock_quality_level_get], [
+	#include <linux/dpll.h>
+	static int foo_clock_quality_level_get(const struct dpll_device *dpll,
+						void *priv,
+						unsigned long *qls,
+						struct netlink_ext_ack *extack)
+		{
+			return 0;
+		}
+
+	],[
+		static struct dpll_device_ops ddo = {
+			.clock_quality_level_get = foo_clock_quality_level_get,
+		};
 
 		return 0;
 	])
@@ -246,6 +283,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 		register_netdevice_notifier_dev_net(NULL,NULL,NULL);
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETIF_NAPI_ADD_CONFIG, [netdevice.h has netif_napi_add_config], [
+        #include <linux/netdevice.h>
+	],[
+        	netif_napi_add_config(NULL, NULL, NULL ,0);
+
+	        return 0;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_DEV_XDP_PROG_ID, [dev_xdp_prog_id is defined], [
@@ -411,16 +456,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 
 		dp.rel_index = 2;
 		attr = DEVLINK_PORT_FN_ATTR_DEVLINK;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NET_DEVICE_DEVLINK_PORT, [struct net_device has devlink_port member], [
-		#include <linux/netdevice.h>
-	],[
-		struct net_device nd = {
-			.devlink_port = NULL,
-		};
 
 		return 0;
 	])
@@ -691,7 +726,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		static int param_set(struct devlink *devlink,
 				     u32 id,
 			             struct devlink_param_gset_ctx *ctx,
-			             struct netlink_ext_ack *extack);
+			             struct netlink_ext_ack *extack){ return 0;}
 	],[
 		struct devlink_param dp = {
 			.set = param_set,
@@ -1095,6 +1130,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK, [struct devlink_ops.eswitch_mode_set has extack], [
 		#include <net/devlink.h>
 		int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
+		                                struct netlink_ext_ack *extack);
+		int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 		                                struct netlink_ext_ack *extack) {
 			return 0;
 		}
@@ -1329,6 +1366,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_CAP_RSS_SYM_XOR_SUPPORTED, [cap_rss_sym_xor_supported is defined], [
+		#include <linux/ethtool.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.cap_rss_sym_xor_supported = 0,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY, [rxfh_per_ctx_key is defined], [
 		#include <linux/ethtool.h>
 	],[
@@ -1436,6 +1483,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_TIMER_DELETE, [timer_delete exists], [
+		#include <linux/netdevice.h>
+	],[
+		timer_delete(NULL);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NAPI_RESCHEDULE, [napi_reschedule exists], [
 		#include <linux/netdevice.h>
 	],[
@@ -1451,6 +1506,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 		struct net_device netdev = {
 			.netns_local = 0,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETDEV_NETNS_IMMUTABLE, [struct net_device has netns_local as member], [
+		#include <linux/netdevice.h>
+	],[
+		struct net_device netdev = {
+			.netns_immutable = 0,
 		};
 
 		return 0;
@@ -1559,10 +1624,22 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 
 	MLNX_RDMA_TEST_CASE(HAVE_NL_SET_ERR_MSG_WEAK_MOD, [NL_SET_ERR_MSG_WEAK_MOD exists], [
 		#include <linux/netlink.h>
+
+	],[
+		#ifdef NL_SET_ERR_MSG_WEAK_MOD
+			return 0;
+		#else
+			#return 1
+		#endif
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NL_SET_ERR_MSG_FMT_MOD, [include/linux/netlink.h provides NL_SET_ERR_MSG_FMT_MOD], [
+		#include <linux/netlink.h>
 	],[
 		struct netlink_ext_ack extack = {};
 
-		NL_SET_ERR_MSG_WEAK_MOD(&extack, "test");
+		NL_SET_ERR_MSG_FMT_MOD(&extack, "test");
 		return 0;
 	])
 
@@ -1788,6 +1865,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_FLOW_DISSECTOR_USED_KEYS_ULL, [struct flow_dissector has unsigned long long used_keys], [
+		#include <net/flow_dissector.h>
+	],[
+		struct flow_dissector *fd;
+		_Static_assert(__builtin_types_compatible_p(typeof(fd->used_keys), unsigned long long),
+               "");
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SWITCHDEV_ATTR_ID_BRIDGE_VLAN_PROTOCOL, [enum switchdev_attr_id has SWITCHDEV_ATTR_ID_BRIDGE_VLAN_PROTOCOL], [
 		#include <net/switchdev.h>
 	],[
@@ -1799,8 +1885,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_SWITCHDEV_OPS, [HAVE_SWITCHDEV_OPS is defined], [
 		#include <net/switchdev.h>
 		#include <linux/netdevice.h>
+
+		/* Declare here to avoid dandling pointer error */
+		static struct switchdev_ops x;
 	],[
-		struct switchdev_ops x;
 		struct net_device *ndev;
 
 		ndev->switchdev_ops = &x;
@@ -1939,7 +2027,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/if_vlan.h>
 	],[
 		struct vlan_ethhdr vhdr = {
-			.addrs = {0},
+			.addrs = {(0)},
 		};
 
 		return 0;
@@ -1948,6 +2036,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK, [ndo_select_queue has 3 params with no fallback], [
 		#include <linux/netdevice.h>
 
+		static u16 select_queue(struct net_device *dev, struct sk_buff *skb,
+				        struct net_device *sb_dev);
 		static u16 select_queue(struct net_device *dev, struct sk_buff *skb,
 				        struct net_device *sb_dev)
 		{
@@ -1964,6 +2054,9 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_SELECT_QUEUE_NET_DEVICE, [ndo_select_queue has a second net_device parameter], [
 		#include <linux/netdevice.h>
 
+		static u16 select_queue(struct net_device *dev, struct sk_buff *skb,
+		                        struct net_device *sb_dev,
+		                        select_queue_fallback_t fallback);
 		static u16 select_queue(struct net_device *dev, struct sk_buff *skb,
 		                        struct net_device *sb_dev,
 		                        select_queue_fallback_t fallback)
@@ -2066,6 +2159,12 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_FLOW_OFFLOAD_ACTION_LAST_ENTRY, [function flow_action_is_last_entry exists], [
+		#include <net/flow_offload.h>
+	],[
+		flow_action_is_last_entry(NULL, NULL);
+		return 0;
+	])
 	MLNX_RDMA_TEST_CASE(HAVE_FLOW_RULE_MATCH_CT, [flow_rule_match_ct exists], [
 		#include <net/flow_offload.h>
 	],[
@@ -2204,6 +2303,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/netdevice.h>
 
 		int get_port_parent_id(struct net_device *dev,
+				       struct netdev_phys_item_id *ppid);
+		int get_port_parent_id(struct net_device *dev,
 				       struct netdev_phys_item_id *ppid)
 		{
 			return 0;
@@ -2280,6 +2381,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_NDO_GET_COALESCE_GET_4_PARAMS, [ndo_get_coalesce get 4 parameters], [
 		#include <linux/ethtool.h>
 
+		static int ipoib_get_coalesce(struct net_device *dev,
+			struct ethtool_coalesce *coal,
+			struct kernel_ethtool_coalesce *kernel_coal,
+			struct netlink_ext_ack *extack);
 		static int ipoib_get_coalesce(struct net_device *dev,
 			struct ethtool_coalesce *coal,
 			struct kernel_ethtool_coalesce *kernel_coal,
@@ -2470,6 +2575,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/netdevice.h>
 
 		#if IS_ENABLED(CONFIG_VXLAN)
+		void add_vxlan_port(struct net_device *dev, struct udp_tunnel_info *ti);
 		void add_vxlan_port(struct net_device *dev, struct udp_tunnel_info *ti)
 		{
 			return;
@@ -2610,8 +2716,28 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_GET_U8_DEFAULT, [nla_get_u8_default exist], [
+		#include <net/netlink.h>
+	],[
+		nla_get_u8_default(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_STRICT_START_TYPE, [struct nla_policy has strict_start_type], [
+		#include <net/netlink.h>
+	],[
+		struct nla_policy x;
+
+		x.strict_start_type = 0;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_NOTIFICATIONS_FILTERING, [kernel provides devlink notifications filtering], [
 		#include <net/genetlink.h>
+		#
+		void spi(void *priv);
 		void spi(void *priv)
 		{
 		}
@@ -2640,6 +2766,26 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct genl_ops x;
 
 		x.validate = 0;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_POLICY, [struct genl_ops has member policy], [
+		#include <net/genetlink.h>
+	],[
+		struct genl_ops x;
+
+		x.policy = NULL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_MAXATTR, [struct genl_ops has member maxattr], [
+		#include <net/genetlink.h>
+	],[
+		struct genl_ops x;
+
+		x.maxattr = 0;
 
 		return 0;
 	])
@@ -2723,7 +2869,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_SYSFS_EMIT, [sysfs_emit is defined], [
 		#include <linux/sysfs.h>
 	],[
-		sysfs_emit(NULL, "");
+		char *buf;
+		const char *output;
+
+		sysfs_emit(buf, "%s", output);
 
 		return 0;
 	])
@@ -2846,6 +2995,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FIB6_INFO_NH_DEV, [function fib6_info_nh_dev exists], [
 		#include <net/nexthop.h>
 	],[
+		#pragma GCC diagnostic ignored "-Warray-bounds"
 		fib6_info_nh_dev(NULL);
                 return 0;
 	])
@@ -2939,6 +3089,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_INET_ADDR_IS_ANY_SOCKADDR_STORAGE, [inet_addr_is_any takes sockaddr_storage], [
+              #include <linux/inet.h>
+       ],[
+              struct sockaddr_storage addr;
+              inet_addr_is_any(&addr);
+              return 0;
+       ])
+
 	LB_CHECK_SYMBOL_EXPORT([cancel_work],
 		[kernel/workqueue.c],
 		[AC_DEFINE(HAVE_CANCEL_WORK_EXPORTED, 1,
@@ -3008,6 +3166,12 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 			[dev_pm_qos_update_user_latency_tolerance is exported by the kernel])],
 	[])
 
+	LB_CHECK_SYMBOL_EXPORT([get_net_ns_by_id],
+		[net/net_namespace.h],
+		[AC_DEFINE(HAVE_GET_NET_NS_BY_ID_EXPORTED, 1,
+			[get_net_ns_by_id is exported by the kernel])],
+	[])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NDO_BRIDGE_SETLINK, [ndo_bridge_setlink is defined], [
 		#include <linux/netdevice.h>
 
@@ -3027,6 +3191,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/netdevice.h>
 
 		int bridge_setlink(struct net_device *dev, struct nlmsghdr *nlh,
+				   u16 flags, struct netlink_ext_ack *extack);
+		int bridge_setlink(struct net_device *dev, struct nlmsghdr *nlh,
 				   u16 flags, struct netlink_ext_ack *extack)
 		{
 			return 0;
@@ -3042,6 +3208,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/netdevice.h>
 		#include <linux/if_link.h>
 
+		int get_vf_guid(struct net_device *dev, int vf, struct ifla_vf_guid *node_guid,
+                                                   struct ifla_vf_guid *port_guid);
 		int get_vf_guid(struct net_device *dev, int vf, struct ifla_vf_guid *node_guid,
                                                    struct ifla_vf_guid *port_guid)
 
@@ -3171,7 +3339,8 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_STRSCPY_PAD, [strscpy_pad is defined], [
 		#include <linux/string.h>
 	],[
-		strscpy_pad(NULL, NULL, 0);
+		char buf[[10]];
+		strscpy_pad(buf, "str", 8);
 
 		return 0;
 	])
@@ -3252,6 +3421,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_RTNL_NEWLINK_PARAMS,  [struct rtnl_newlink_params exists], [
+		#include <net/rtnetlink.h>
+
+	],[
+		struct rtnl_newlink_params x = {};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND, [struct rtnl_link_ops has netns_refund], [
 		#include <net/rtnetlink.h>
 
@@ -3277,6 +3455,20 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 
 		struct hop_jumbo_hdr jumbo;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE, [struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter], [
+		#include <linux/netdevice.h>
+
+		static void my_xdo_dev_state_delete(struct net_device *dev, struct xfrm_state *x)
+		{
+		}
+	],[
+		struct xfrmdev_ops x = {
+			.xdo_dev_state_delete = my_xdo_dev_state_delete,
+		};
 
 		return 0;
 	])
@@ -3620,6 +3812,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_SCSI_HOST_BUSY_ITER_FN_2_ARGS, [scsi_host.h scsi_host_busy_iter fn has 2 args], [
 		#include <scsi/scsi_host.h>
 
+		bool fn(struct scsi_cmnd *scmnd, void *ctx);
 		bool fn(struct scsi_cmnd *scmnd, void *ctx)
 		{
 			return false;
@@ -3671,8 +3864,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 
 	MLNX_RDMA_TEST_CASE(HAVE_SCSI_DEVICE_BUDGET_MAP, [scsi_device.h struct scsi_device has member budget_map], [
 		#include <scsi/scsi_device.h>
+
+		/* If it is stack, we get error that frame is too large: */
+		static struct scsi_device sdev;
 	],[
-		struct scsi_device sdev;
 		sbitmap_init_node(&sdev.budget_map, 0, 0, 0, 0, false, false);
 
 		return 0;
@@ -3911,6 +4106,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_HW_STATS_CHECK, [flow_action_hw_stats_check exists], [
 		#include <net/flow_offload.h>
 	],[
+		#pragma GCC diagnostic ignored "-Warray-bounds"
 		flow_action_hw_stats_check(NULL, NULL, 0);
 		return 0;
 	])
@@ -4051,6 +4247,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS, [ndo_tx_timeout get 2 params], [
 		#include <linux/netdevice.h>
 
+		void mlx5e_tx_timeout(struct net_device *dev, unsigned int txqueue);
 		void mlx5e_tx_timeout(struct net_device *dev, unsigned int txqueue)
 		{
 			return;
@@ -4084,15 +4281,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct tcf_pedit_parms x = {
 			.tcfp_keys_ex = NULL,
 		};
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_ISCSI_EH_CMD_TIMED_OUT, [iscsi_eh_cmd_timed_out is defined], [
-		#include <linux/blkdev.h>
-		#include <scsi/libiscsi.h>
-	],[
-		iscsi_eh_cmd_timed_out(NULL);
-
 		return 0;
 	])
 
@@ -4142,15 +4330,27 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_3_UNDERSCORE_ADDRESSABLE, [__auto_type exists], [
+	MLNX_RDMA_TEST_CASE(HAVE_3_UNDERSCORE_ADDRESSABLE, [___ADDRESSABLE exists], [
 		#include <linux/compiler.h>
 
 	],[
 		#ifdef ___ADDRESSABLE
 			return 0;
 		#else
-			#return 1;
-		#endif	
+			#return 1
+		#endif
+
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_RXH_XFRM_SYM_OR_XOR, [RXH_XFRM_SYM_OR_XOR exists], [
+		#include <uapi/linux/ethtool.h>
+
+	],[
+		#ifdef RXH_XFRM_SYM_OR_XOR
+			return 0;
+		#else
+			#return 1
+		#endif
 
 		return 0;
 	])
@@ -4158,12 +4358,12 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_AUTO_TYPE, [__auto_type exists], [
 		#include <linux/compiler.h>
 
-		#define no_free_ptr(p) \
+		#define auto_test_no_free_ptr(p) \
 		        ({ __auto_type __ptr = (p); (p) = NULL; __ptr; })
 	],[
 		int * a;
 
-		no_free_ptr(a);
+		auto_test_no_free_ptr(a);
 
 		return 0;
 	])
@@ -4175,6 +4375,17 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		__read_once_size(&tmp, NULL, 0);
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___COUNTED_BY, [compiler_types.h, compiler_attributes.h provide __counted_by macro], [
+		#include <linux/compiler_types.h>
+		#include <linux/compiler_attributes.h>
+	],[
+		#ifdef __counted_by
+			return 0;
+		#else
+			#return 1
+		#endif
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_REGISTER_LSM_NOTIFIER, [linux/security.h has register_lsm_notifier], [
@@ -4313,6 +4524,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		int ret;
+
 		ret = device_add_disk(NULL, NULL, NULL);
 
 		return 0;
@@ -4333,7 +4545,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS, [__sg_alloc_table_from_pages has 9 params], [
-                #include <linux/scatterlist.h>;
+                #include <linux/scatterlist.h>
 	],[
 		struct scatterlist *sg;
 
@@ -4719,10 +4931,44 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_KFREE_RCU_MIGHTSLEEP, [function kfree_rcu_mightsleep is defined], [
+	MLNX_RDMA_TEST_CASE(HAVE_KFREE_RCU_MIGHTSLEEP_MACRO, [function kfree_rcu_mightsleep is defined], [
 		#include <linux/rcupdate.h>
 	],[
 		kfree_rcu_mightsleep(NULL);
+
+		return 0;
+	])
+
+	# Test for new kvfree_call_rcu signature with void pointer (commit 04a522b7da3dbc083f8ae0aa1a6184b959a8f81c)
+	MLNX_RDMA_TEST_CASE(HAVE_KVFREE_CALL_RCU_VOID_PTR, [kvfree_call_rcu has void ptr parameter], [
+		#include <linux/rcupdate.h>
+	],[
+		void (*func_ptr)(struct rcu_head *, void *) = kvfree_call_rcu;
+		(void)func_ptr; /* Suppress unused warning */
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___IS_KVFREE_RCU_OFFSET, [linux/rcupdate.h defines __is_kvfree_rcu_offset], [
+		#include <linux/rcupdate.h>
+	],[
+		#ifdef __is_kvfree_rcu_offset
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FROM_TIMER, [from_timer macro is defined], [
+		#include <linux/timer.h>
+	],[
+		#ifdef from_timer
+			return 0;
+		#else
+			#return 1;
+		#endif
 
 		return 0;
 	])
@@ -5071,6 +5317,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_PAGE_FOLIO_INDEX_FIELD, [struct page has __folio_index field], [
+		#include <linux/mm_types.h>
+	],[
+		struct page p;
+		p.__folio_index = 0;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_T10_PI_PREPARE, [t10_pi_prepare is defined], [
 		#include <linux/t10-pi.h>
 	],[
@@ -5275,6 +5530,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_RPCSVC_MAXPAGES, [RPCSVC_MAXPAGES macro is defined], [
+		#include <linux/sunrpc/svc.h>
+	],[
+			int pages = RPCSVC_MAXPAGES;
+
+			return 0;
+	])
+
 	LB_CHECK_SYMBOL_EXPORT([svc_pool_wake_idle_thread],
 		[net/sunrpc/svc.c],
 		[AC_DEFINE(HAVE_SVC_POOL_WAKE_IDLE_THREAD, 1,
@@ -5284,6 +5547,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_XPRT_OPS_SEND_REQUEST_RQST_ARG, [*send_request has 'struct rpc_rqst *req' as a param], [
 		#include <linux/sunrpc/xprt.h>
 
+		int send_request(struct rpc_rqst *req);
 		int send_request(struct rpc_rqst *req)
 		{
 			return 0;
@@ -5385,9 +5649,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 
 	MLNX_RDMA_TEST_CASE(HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG, [xprt_wait_for_buffer_space has xprt as a parameter], [
 		#include <linux/sunrpc/xprt.h>
-	],[
-		struct rpc_xprt xprt = {0};
 
+		/* If it is stack, we get error that frame is too large: */
+		static struct rpc_xprt xprt;
+	],[
 		xprt_wait_for_buffer_space(&xprt);
 
 		return 0;
@@ -5664,15 +5929,17 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/device/class.h>
 	],[
 	        const struct class *c = NULL;
+		int ret;
 
-		class_register(c);
+		ret = class_register(c);
 
-		return 0;
+		return ret;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE___NETDEV_TX_SENT_QUEUE, [netdevice.h has __netdev_tx_sent_queue], [
 		#include <linux/netdevice.h>
 	],[
+		#pragma GCC diagnostic ignored "-Warray-bounds"
 		__netdev_tx_sent_queue(NULL, 0, 0);
 
 		return 0;
@@ -6138,6 +6405,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/blkdev.h>
 	],[
 		blk_execute_rq_nowait(NULL, NULL, NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_EXECUTE_RQ_NOWAIT_4_PARAM, [blk_execute_rq_nowait has 4 params], [
+		#include <linux/blk-mq.h>
+		#include <linux/blkdev.h>
+	],[
+		blk_execute_rq_nowait(NULL, NULL, 0, NULL);
 
 		return 0;
 	])
@@ -6872,6 +7148,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NO_LLSEEK, [include/linux/fs.h declares function no_llseek], [
+		#include <linux/fs.h>
+	],[
+		struct file_operations fo = {
+			.llseek  = no_llseek,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_PR_STATUS, [enum pr_status is defined], [
 		#include <linux/fs.h>
 		#include <linux/pr.h>
@@ -6924,6 +7210,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_KSTRTOX_H, [kstrtox.h exist], [
 		#include <linux/kstrtox.h>
 	],[
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DIM_CQ_PERIOD_MODE, [include/linux/dim.h defines enum dim_cq_period_mode], [
+		#include <linux/dim.h>
+	],[
+		enum dim_cq_period_mode dcpm = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
 		return 0;
 	])
 
@@ -7099,6 +7392,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/dma-mapping.h>
 	],[
 		dma_max_mapping_size(NULL);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_ATTR_WRITE_BARRIER, [linux/dma-mapping.h defines macro DMA_ATTR_WRITE_BARRIER], [
+		#include <linux/dma-mapping.h>
+	],[
+		#ifdef DMA_ATTR_WRITE_BARRIER
+			return 0;
+		#else
+			#return 1
+		#endif
+
 		return 0;
 	])
 
@@ -7578,6 +7883,25 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN, [if grab_cache_page_write_begin() exists], [
+		#include <linux/fs.h>
+	],[
+		grab_cache_page_write_begin(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_MKDIR_RET_INT, [if struct inode_operations->mkdir returns an int], [
+		#include <linux/fs.h>
+
+		static int my_mkdir(struct mnt_idmap *idmap, struct inode *dir, struct dentry *entry, umode_t mode)
+		{return 0;}
+	],[
+		struct inode_operations ops = {.mkdir = my_mkdir};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_D_REVALIDATE_2_PARAMS, [if dentry_operations->d_revalidate takes 2 params], [
 		#include <linux/dcache.h>
 	],[
@@ -7610,7 +7934,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NO_EXPORT_SUPPORT, [if FUSE_NO_EXPORT_SUPPORT is defined], [
 		#include <uapi/linux/fuse.h>
 	],[
-		int a = FUSE_NO_EXPORT_SUPPORT;
+		long long unsigned int a = FUSE_NO_EXPORT_SUPPORT;
 
 		return 0;
 	])
@@ -7636,7 +7960,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FUSE_HAS_RESEND, [if FUSE_HAS_RESEND is defined], [
 		#include <uapi/linux/fuse.h>
 	],[
-		int a = FUSE_HAS_RESEND;
+		long long unsigned int a = FUSE_HAS_RESEND;
 
 		return 0;
 	])
@@ -7644,7 +7968,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FUSE_NOTIFY_RESEND, [if FUSE_NOTIFY_RESEND is defined], [
 		#include <uapi/linux/fuse.h>
 	],[
-		int a = FUSE_NOTIFY_RESEND;
+		long long unsigned int a = FUSE_NOTIFY_RESEND;
 
 		return 0;
 	])
@@ -7652,7 +7976,19 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	MLNX_RDMA_TEST_CASE(HAVE_FUSE_PASSTHROUGH, [if FUSE_PASSTHROUGH is defined], [
 		#include <uapi/linux/fuse.h>
 	],[
-		int a = FUSE_PASSTHROUGH;
+		long long unsigned int a = FUSE_PASSTHROUGH;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_TLS_CIPHER_AES_GCM_256, [include/uapi/linux/tls.h defines TLS_CIPHER_AES_GCM_256], [
+		#include <uapi/linux/tls.h>
+	],[
+		#ifdef TLS_CIPHER_AES_GCM_256
+			return 0;
+		#else
+			#return 1
+		#endif
 
 		return 0;
 	])
@@ -7689,6 +8025,243 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/uio.h>
 	],[
 		iov_iter_extraction_t f = ITER_ALLOW_P2PDMA;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_U64_STATS_T, [type u64_stats_t exists], [
+		#include <linux/u64_stats_sync.h>
+	],[
+		u64_stats_t x;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BIO_INTEGRITY_PAYLOAD_APP_TAG, [struct bio_integrity_payload has member app_tag], [
+		#include <linux/bio-integrity.h>
+	],[
+		struct bio_integrity_payload s = {.app_tag = 0};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SECS_TO_JIFFIES, [jiffies.h has secs_to_jiffies], [
+		#include <linux/jiffies.h>
+	],[
+		unsigned long x = secs_to_jiffies(1);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_RQ_MAP_SG_2_PARAMS, [blk-mq.h has blk_rq_map_sg with 2 params], [
+		 #include <linux/blk-mq.h>
+	],[
+		blk_rq_map_sg(NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_RQ_MAP_KERN_4_PARAMS, [blk_rq_map_kern has 4 params without queue], [
+		#include <linux/blk-mq.h>
+	],[
+		blk_rq_map_kern(NULL, NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_DEV_IS_DISCONNECTED, [pci.h has pci_dev_is_disconnect], [
+		#include <linux/pci.h>
+	],[
+		bool x = pci_dev_is_disconnected(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_STR_PLURAL, [string_choices.h has str_plural], [
+		#include <linux/string_choices.h>
+	],[
+		const char *s = str_plural(42);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BDEV_NONROT, [blkdev.h has bdev_nonrot], [
+		#include <linux/blkdev.h>
+	],[
+		bool x = bdev_nonrot(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_REQUEST_QUEUE_IA_RANGES, [blkdev.h struct request_queue has ia_ranges], [
+		#include <linux/blkdev.h>
+	],[
+		struct request_queue rq = {.ia_ranges = NULL};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GENDISK_IA_RANGES, [blkdev.h struct gendisk has ia_ranges], [
+		#include <linux/blkdev.h>
+	],[
+		struct gendisk gd = {.ia_ranges = NULL};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BDEV_BD_STATS, [struct block_device has bd_stats], [
+		#include <linux/blk_types.h>
+	],[
+		struct block_device bdev = {.bd_stats = NULL};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PERCPU_REF_RESURRECT, [percpu-refcount.h has percpu_ref_resurrect], [
+		#include <linux/percpu-refcount.h>
+	],[
+		percpu_ref_resurrect(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PERCPU_REF_ALLOW_REINIT, [percpu-refcount.h has PERCPU_REF_ALLOW_REINIT], [
+		#include <linux/percpu-refcount.h>
+	],[
+		int x = PERCPU_REF_ALLOW_REINIT;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_TIMER_DELETE_SYNC, [timer.h has timer_delete_sync], [
+		#include <linux/timer.h>
+	],[
+		timer_delete_sync(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_ALLOC_NONCONTIGUOUS, [dma_alloc_noncontiguous is defined], [
+		#include <linux/dma-mapping.h>
+	],[
+		dma_alloc_noncontiguous(NULL, 0, 0, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_MEMREMAP_COMPAT_ALIGN, [memremap_compat_align is defined], [
+		#include <linux/memremap.h>
+	],[
+		unsigned long x = memremap_compat_align();
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SYSFS_GROUP_INVISIBLE, [SYSFS_GROUP_INVISIBLE is defined], [
+		#include <linux/sysfs.h>
+	],[
+
+		int x = SYSFS_GROUP_INVISIBLE;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_CMD_TO_PDU, [io_uring_cmd_to_pdu is defined], [
+		#include <linux/io_uring/cmd.h>
+	],[
+		#ifndef io_uring_cmd_to_pdu
+		#error undefined
+		#endif
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS, [io_uring_cmd_import_fixed has 6 params], [
+		#include <linux/io_uring/cmd.h>
+	],[
+		int r = io_uring_cmd_import_fixed(0, 0, 0, NULL, NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GD_ADDED, [GD_ADDED is defined], [
+		#include <linux/blkdev.h>
+	],[
+		int x = GD_ADDED;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_TCP_MIN_C2HTERM_PLEN, [NVME_TCP_MIN_C2HTERM_PLEN is defined], [
+		#include <linux/nvme-tcp.h>
+	],[
+		int x = NVME_TCP_MIN_C2HTERM_PLEN;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SK_NET_REFCNT_UPGRADE, [sk_net_refcnt_upgrade is defined], [
+		#include <net/sock.h>
+	],[
+		sk_net_refcnt_upgrade(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_FEAT_ATOMIC_WRITES, [BLK_FEAT_ATOMIC_WRITES is defined], [
+		#include <linux/blkdev.h>
+	],[
+		unsigned long x = (unsigned long)BLK_FEAT_ATOMIC_WRITES;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_PSK, [nvme_auth_generate_psk is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		u8 *b;
+		int x = nvme_auth_generate_psk(0, NULL, 0, NULL, NULL, 0, &b, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_FEAT_ROTATIONAL, [BLK_FEAT_ROTATIONAL is defined], [
+		#include <linux/blkdev.h>
+	],[
+		int x = BLK_FEAT_ROTATIONAL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST, [nvme_auth_generate_digest is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		u8 *b;
+		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_DERIVE_TLS_PSK, [nvme_auth_derive_tls_psk is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		u8 *b;
+		int x = nvme_auth_derive_tls_psk(0, NULL, 0, NULL, &b);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_APPLE_RTKIT_OPS_CRASHED_3_PARAMS, [apple_rtkit_ops.crashed takes 3 params], [
+		#include <linux/soc/apple/rtkit.h>
+		void foo(void *cookie, const void *crashlog, size_t crashlog_size);
+	],[
+		struct apple_rtkit_ops ops = {.crashed = foo};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_EPC_FEATURES_INTX_CAPABLE, [desc], [
+		#include <linux/pci-epc.h>
+	],[
+		struct pci_epc_features s = {.intx_capable = 1};
 
 		return 0;
 	])

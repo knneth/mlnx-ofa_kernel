@@ -1,0 +1,108 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/apple.c
+
+Change-Id: I5a3bc93f0c171834ed262a6335d895b436bb6bd3
+---
+ drivers/nvme/host/apple.c | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+--- a/drivers/nvme/host/apple.c
++++ b/drivers/nvme/host/apple.c
+@@ -221,7 +221,11 @@ static unsigned int apple_nvme_queue_dep
+ 	return APPLE_ANS_MAX_QUEUE_DEPTH;
+ }
+ 
++#ifdef HAVE_APPLE_RTKIT_OPS_CRASHED_3_PARAMS
+ static void apple_nvme_rtkit_crashed(void *cookie, const void *crashlog, size_t crashlog_size)
++#else
++static void apple_nvme_rtkit_crashed(void *cookie)
++#endif
+ {
+ 	struct apple_nvme *anv = cookie;
+ 
+@@ -525,7 +529,11 @@ static blk_status_t apple_nvme_map_data(
+ 	if (!iod->sg)
+ 		return BLK_STS_RESOURCE;
+ 	sg_init_table(iod->sg, blk_rq_nr_phys_segments(req));
++#ifdef HAVE_BLK_RQ_MAP_SG_2_PARAMS
+ 	iod->nents = blk_rq_map_sg(req, iod->sg);
++#else
++	iod->nents = blk_rq_map_sg(req->q, req, iod->sg);
++#endif
+ 	if (!iod->nents)
+ 		goto out_free_sg;
+ 
+@@ -650,7 +658,11 @@ static bool apple_nvme_handle_cq(struct
+ 
+ 	found = apple_nvme_poll_cq(q, &iob);
+ 
++#ifdef HAVE_STRUCT_RQ_LIST
+ 	if (!rq_list_empty(&iob.req_list))
++#else
++	if (!rq_list_empty(iob.req_list))
++#endif
+ 		apple_nvme_complete_batch(&iob);
+ 
+ 	return found;
+@@ -875,7 +887,12 @@ static void apple_nvme_disable(struct ap
+ 	}
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_TIMEOUT_1_PARAM
+ static enum blk_eh_timer_return apple_nvme_timeout(struct request *req)
++#else
++static enum blk_eh_timer_return apple_nvme_timeout(struct request *req,
++						   bool reserved)
++#endif
+ {
+ 	struct apple_nvme_iod *iod = blk_mq_rq_to_pdu(req);
+ 	struct apple_nvme_queue *q = iod->q;
+@@ -1547,7 +1564,11 @@ static int apple_nvme_probe(struct platf
+ 	if (ret)
+ 		goto out_put_ctrl;
+ 
++#ifdef HAVE_BLK_MQ_ALLOC_QUEUE
+ 	anv->ctrl.admin_q = blk_mq_alloc_queue(&anv->admin_tagset, NULL, NULL);
++#else
++	anv->ctrl.admin_q = blk_mq_init_queue(&anv->admin_tagset);
++#endif
+ 	if (IS_ERR(anv->ctrl.admin_q)) {
+ 		ret = -ENOMEM;
+ 		anv->ctrl.admin_q = NULL;
+@@ -1567,7 +1588,12 @@ out_put_ctrl:
+ 	return ret;
+ }
+ 
++#if defined(HAVE_PLATFORM_DEVICE_REMOVE_NEW) || \
++	defined(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET)
+ static void apple_nvme_remove(struct platform_device *pdev)
++#else
++static int apple_nvme_remove(struct platform_device *pdev)
++#endif
+ {
+ 	struct apple_nvme *anv = platform_get_drvdata(pdev);
+ 
+@@ -1585,6 +1611,11 @@ static void apple_nvme_remove(struct pla
+ 	}
+ 
+ 	apple_nvme_detach_genpd(anv);
++
++#if !defined(HAVE_PLATFORM_DEVICE_REMOVE_NEW) && \
++	!defined(HAVE_PLATFORM_DEVICE_REMOVE_NO_RET)
++	return 0;
++#endif
+ }
+ 
+ static void apple_nvme_shutdown(struct platform_device *pdev)
+@@ -1638,7 +1669,11 @@ static struct platform_driver apple_nvme
+ 		.pm = pm_sleep_ptr(&apple_nvme_pm_ops),
+ 	},
+ 	.probe = apple_nvme_probe,
++#ifdef HAVE_PLATFORM_DEVICE_REMOVE_NEW
++	.remove_new = apple_nvme_remove,
++#else
+ 	.remove = apple_nvme_remove,
++#endif
+ 	.shutdown = apple_nvme_shutdown,
+ };
+ module_platform_driver(apple_nvme_driver);

@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/wc.c
+
+Change-Id: Ie951f7d90106ca9ee86d50abd14aa9581ae3c420
+---
+ drivers/net/ethernet/mellanox/mlx5/core/wc.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/wc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/wc.c
+@@ -256,6 +256,9 @@ static void mlx5_wc_destroy_sq(struct ml
+ }
+ 
+ #ifdef __aarch64__
++#ifndef dgh
++#define dgh() asm volatile("hint #6" : : : "memory")
++#endif
+ static inline void custom_iowrite64_copy(void *out_ptr, void* in_ptr)
+ {
+ 	asm volatile(

@@ -1,0 +1,16 @@
+From: Amir Tzin <amirtz@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
+
+Change-Id: Ida3c0cf12e9f20be9f2623d6d5f7aa8976cc9ed0
+---
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
+@@ -121,4 +121,4 @@ static void mlx5_devm_port_cleanup(struc
+ {
+ }
+ #endif
+-#endif
++#endif /* MLX5_DEVM_H */

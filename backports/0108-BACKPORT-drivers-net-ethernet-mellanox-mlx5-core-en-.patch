@@ -1,64 +1,91 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 
-Change-Id: I5ab9dc6fa67fdc300ecbb180eadb566a2c0d5f06
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c   | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
-@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5
- 			     int act_index,
- 			     struct mlx5_flow_attr *attr)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+@@ -3,9 +3,15 @@
+ 
+ #include <linux/math64.h>
+ #include "lib/aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
+ #include "meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ 
+ #define MLX5_START_COLOR_SHIFT 28
+ #define MLX5_METER_MODE_SHIFT 24
+@@ -370,8 +376,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(dev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -415,9 +423,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
+ 		return ERR_PTR(-EOPNOTSUPP);
++#endif
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -489,12 +499,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
  {
-+#ifdef HAVE_FLOW_ACTION_MPLS
- 	struct netlink_ext_ack *extack = parse_state->extack;
- 	struct mlx5e_priv *priv = parse_state->flow->priv;
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
++#endif
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	int err;
  
-@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -510,8 +524,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+ 	struct mlx5e_flow_meter_handle *meter;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -557,11 +573,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
+ 		return ERR_PTR(-EOPNOTSUPP);
  	}
- 
- 	return true;
-+#else
-+	return false;
-+#endif
- }
- 
- static void
- copy_mpls_info(struct mlx5e_mpls_info *mpls_info,
- 	       const struct flow_action_entry *act)
- {
-+#ifdef HAVE_FLOW_ACTION_MPLS
- 	mpls_info->label = act->mpls_push.label;
- 	mpls_info->tc = act->mpls_push.tc;
- 	mpls_info->bos = act->mpls_push.bos;
- 	mpls_info->ttl = act->mpls_push.ttl;
-+#endif
- }
- 
- static int
-@@ -67,10 +73,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e
- 		return false;
- 	}
- 
-+#ifdef HAVE_NETIF_IS_BAREDUDP
- 	if (!netif_is_bareudp(filter_dev)) {
- 		NL_SET_ERR_MSG_MOD(extack, "mpls pop supported only on bareudp devices");
- 		return false;
- 	}
 +#endif
  
- 	return true;
- }
-@@ -81,7 +89,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_ac
- 		      struct mlx5e_priv *priv,
- 		      struct mlx5_flow_attr *attr)
- {
-+#ifdef HAVE_FLOW_ACTION_MPLS
- 	attr->esw_attr->eth.h_proto = act->mpls_pop.proto;
-+#endif
- 	attr->action |= MLX5_FLOW_CONTEXT_ACTION_PACKET_REFORMAT;
- 	flow_flag_set(parse_state->flow, L3_TO_L2_DECAP);
- 
+ 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
+ 	if (!flow_meters)

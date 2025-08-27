@@ -29,14 +29,6 @@ static inline int list_is_first(const struct list_head *list, const struct list_
 }
 #endif
 
-#define compat_hlist_for_each_entry_safe(pos, n, head, member)	\
-	hlist_for_each_entry_safe(pos, n, head, member)
-
-#define compat_hlist_for_each_entry(pos, head, member)		\
-	hlist_for_each_entry(pos, head, member)
-
-#define COMPAT_HL_NODE
-
 #ifndef list_entry_is_head
 #define list_entry_is_head(pos, head, member)				\
 		(&pos->member == (head))

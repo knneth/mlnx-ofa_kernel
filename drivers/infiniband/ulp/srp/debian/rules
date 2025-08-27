@@ -77,11 +77,10 @@ ifeq ($(WITH_DKMS),1)
 	cp Kconfig debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp Kbuild debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp dkms.conf debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp common.postinst debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp *.c debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp *.h debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -r scsi debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(pversion)"/' <dkms.conf >debian/dkms.conf
 
 	# Force DKMS to install our modules.
 	# This is mostly needed for modules that do not have a version number info, as DKMS

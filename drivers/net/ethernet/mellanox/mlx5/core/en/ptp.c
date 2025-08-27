@@ -319,6 +319,7 @@ static int mlx5e_ptp_alloc_txqsq(struct mlx5e_ptp *c, int txq_ix,
 				 struct mlx5e_txqsq *sq, int tc,
 				 struct mlx5e_ptpsq *ptpsq)
 {
+	struct mlx5_sq_bfreg *bfregs = c->mdev->mlx5e_res.hw_objs.bfregs;
 	void *sqc_wq               = MLX5_ADDR_OF(sqc, param->sqc, wq);
 	struct mlx5_core_dev *mdev = c->mdev;
 	struct mlx5_wq_cyc *wq = &sq->wq;
@@ -333,7 +334,7 @@ static int mlx5e_ptp_alloc_txqsq(struct mlx5e_ptp *c, int txq_ix,
 	sq->mdev      = mdev;
 	sq->ch_ix     = MLX5E_PTP_CHANNEL_IX;
 	sq->txq_ix    = txq_ix;
-	sq->uar_map   = mdev->mlx5e_res.hw_objs.bfreg.map;
+	sq->uar_map   = bfregs[param->db_ix].map;
 	sq->min_inline_mode = params->tx_min_inline_mode;
 	sq->hw_mtu    = MLX5E_SW2HW_MTU(params, params->sw_mtu);
 	sq->stats     = &c->priv->ptp_stats.sq[tc];
@@ -564,6 +565,7 @@ static int mlx5e_ptp_open_tx_cqs(struct mlx5e_ptp *c,
 	ccp.ch_stats = c->stats;
 	ccp.napi     = &c->napi;
 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
+	ccp.db_ix    = MLX5_DEFAULT_DOORBELL_IX;
 
 	cq_param = &cparams->txq_sq_param.cqp;
 
@@ -599,38 +601,13 @@ out_err_txqsq_cq:
 	return err;
 }
 
-static int mlx5e_init_ptp_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-			     struct mlx5e_rq *rq)
+static int mlx5e_ptp_open_rx_cq(struct mlx5e_ptp *c,
+				struct mlx5e_ptp_params *cparams)
 {
-	struct mlx5_core_dev *mdev = c->mdev;
-	struct mlx5e_priv *priv = c->priv;
-	int err;
-
-	rq->wq_type      = params->rq_wq_type;
-	rq->pdev         = c->pdev;
-	rq->netdev       = priv->netdev;
-	rq->priv         = priv;
-	rq->clock        = mdev->clock;
-	rq->tstamp       = &priv->tstamp;
-	rq->mdev         = mdev;
-	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
-	rq->stats        = &c->priv->ptp_stats.rq;
-	rq->ix           = MLX5E_PTP_CHANNEL_IX;
-	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
-	err = mlx5e_rq_set_handlers(rq, params, false);
-	if (err)
-		return err;
-
-	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
-}
-
-static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-			     struct mlx5e_rq_param *rq_param)
-{
-	int node = dev_to_node(c->mdev->device);
 	struct mlx5e_create_cq_param ccp = {};
-	int err, sd_ix;
-	u16 q_counter;
+	struct dim_cq_moder ptp_moder = {};
+	struct mlx5e_cq_param *cq_param;
+	struct mlx5e_cq *cq = &c->rq.cq;
 
 	ccp.netdev   = c->netdev;
 	ccp.wq       = c->priv->wq;
@@ -638,14 +615,11 @@ static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
 	ccp.ch_stats = c->stats;
 	ccp.napi     = &c->napi;
 	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
+	ccp.db_ix    = MLX5_DEFAULT_DOORBELL_IX;
 
-	err = mlx5e_init_ptp_rq(c, params, &c->rq);
-	if (err)
-		return err;
+	cq_param = &cparams->rq_param.cqp;
 
-	sd_ix = mlx5_sd_ch_ix_get_dev_ix(c->mdev, MLX5E_PTP_CHANNEL_IX);
-	q_counter = c->priv->q_counter[sd_ix];
-	return mlx5e_open_rq(params, rq_param, NULL, node, q_counter, &c->rq, &ccp);
+	return mlx5e_open_cq(c->mdev, ptp_moder, cq_param, &ccp, cq);
 }
 
 static void mlx5e_ptp_close_tx_cqs(struct mlx5e_ptp *c)
@@ -666,7 +640,7 @@ static void mlx5e_ptp_build_sq_param(struct mlx5_core_dev *mdev,
 	void *sqc = param->sqc;
 	void *wq;
 
-	mlx5e_build_sq_param_common(mdev, param);
+	mlx5e_build_sq_param_common(mdev, MLX5_DEFAULT_DOORBELL_IX, param);
 
 	wq = MLX5_ADDR_OF(sqc, sqc, wq);
 	MLX5_SET(wq, wq, log_wq_sz, params->log_sq_size);
@@ -714,6 +688,47 @@ static void mlx5e_ptp_build_params(struct mlx5e_ptp *c,
 	}
 }
 
+static int mlx5e_init_ptp_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
+			     struct mlx5e_rq *rq)
+{
+	struct mlx5_core_dev *mdev = c->mdev;
+	struct mlx5e_priv *priv = c->priv;
+	int err;
+
+	rq->wq_type      = params->rq_wq_type;
+	rq->pdev         = c->pdev;
+	rq->netdev       = priv->netdev;
+	rq->priv         = priv;
+	rq->clock        = mdev->clock;
+	rq->tstamp       = &priv->tstamp;
+	rq->mdev         = mdev;
+	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+	rq->stats        = &c->priv->ptp_stats.rq;
+	rq->ix           = MLX5E_PTP_CHANNEL_IX;
+	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
+	err = mlx5e_rq_set_handlers(rq, params, false);
+	if (err)
+		return err;
+
+	return xdp_rxq_info_reg(&rq->xdp_rxq, rq->netdev, rq->ix, 0);
+}
+
+static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
+			     struct mlx5e_rq_param *rq_param)
+{
+	int node = dev_to_node(c->mdev->device);
+	int err, sd_ix;
+	u16 q_counter;
+
+	err = mlx5e_init_ptp_rq(c, params, &c->rq);
+	if (err)
+		return err;
+
+	sd_ix = mlx5_sd_ch_ix_get_dev_ix(c->mdev, MLX5E_PTP_CHANNEL_IX);
+	q_counter = c->priv->q_counter[sd_ix];
+	return mlx5e_open_rq(params, rq_param, NULL, node, q_counter, &c->rq);
+}
+
 static int mlx5e_ptp_open_queues(struct mlx5e_ptp *c,
 				 struct mlx5e_ptp_params *cparams)
 {
@@ -729,12 +744,19 @@ static int mlx5e_ptp_open_queues(struct mlx5e_ptp *c,
 			goto close_tx_cqs;
 	}
 	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
-		err = mlx5e_ptp_open_rq(c, &cparams->params, &cparams->rq_param);
+		err = mlx5e_ptp_open_rx_cq(c, cparams);
 		if (err)
 			goto close_txqsq;
+
+		err = mlx5e_ptp_open_rq(c, &cparams->params, &cparams->rq_param);
+		if (err)
+			goto close_rx_cq;
 	}
 	return 0;
 
+close_rx_cq:
+	if (test_bit(MLX5E_PTP_STATE_RX, c->state))
+		mlx5e_close_cq(&c->rq.cq);
 close_txqsq:
 	if (test_bit(MLX5E_PTP_STATE_TX, c->state))
 		mlx5e_ptp_close_txqsqs(c);
@@ -747,9 +769,10 @@ close_tx_cqs:
 
 static void mlx5e_ptp_close_queues(struct mlx5e_ptp *c)
 {
-	if (test_bit(MLX5E_PTP_STATE_RX, c->state))
-		mlx5e_close_rq(c->priv, &c->rq);
-
+	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
+		mlx5e_close_rq(&c->rq);
+		mlx5e_close_cq(&c->rq.cq);
+	}
 	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
 		mlx5e_ptp_close_txqsqs(c);
 		mlx5e_ptp_close_tx_cqs(c);

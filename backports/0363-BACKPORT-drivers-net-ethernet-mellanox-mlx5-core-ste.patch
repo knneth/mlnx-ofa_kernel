@@ -1,0 +1,29 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
+
+Change-Id: Ifc4dee9ea4cdb018c7ccd309900089f3c2c2cdb0
+---
+ .../ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c   | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
+@@ -256,7 +256,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_c
+ 	struct mlx5_flow_root_namespace *root_ns;
+ 	struct mlx5_fs_hws_mh_bulk *mh_bulk;
+ 	struct mlx5hws_context *ctx;
+-	int bulk_len;
++	int bulk_len, i;
+ 
+ 	if (!pool_ctx)
+ 		return NULL;
+@@ -278,7 +278,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_c
+ 	if (mlx5_fs_bulk_init(dev, &mh_bulk->fs_bulk, bulk_len))
+ 		goto free_mh_bulk;
+ 
+-	for (int i = 0; i < bulk_len; i++) {
++	for (i = 0; i < bulk_len; i++) {
+ 		mh_bulk->mhs_data[i].bulk = mh_bulk;
+ 		mh_bulk->mhs_data[i].offset = i;
+ 	}

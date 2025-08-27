@@ -1,29 +1,47 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
 
-Change-Id: I26629325b6dad4223065c8da0c7f3094a8ac17bb
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
-@@ -10,6 +10,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
- 		   struct mlx5e_priv *priv,
- 		   struct mlx5_flow_attr *attr)
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+ 
+ void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
  {
-+#ifdef HAVE_FLOW_ACTION_PTYPE
- 	struct netlink_ext_ack *extack = parse_state->extack;
++#if defined(HAVE_STRUCT_PSAMPLE_METADATA)
+ 	u32 trunc_size = mapped_obj->sample.trunc_size;
+ 	struct psample_group psample_group = {};
+ 	struct psample_metadata md = {};
+@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
+ 	skb_push(skb, skb->mac_len);
  
- 	if (act->ptype != PACKET_HOST) {
-@@ -19,6 +20,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
- 
- 	parse_state->ptype_host = true;
- 	return 0;
+ 	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
 +#else
-+	return -EOPNOTSUPP;
++	u32 trunc_size = mapped_obj->sample.trunc_size;
++	struct psample_group psample_group = {};
++	int iif = skb->dev->ifindex;
++	u32 size;
++
++	size = trunc_size ? min(trunc_size, skb->len) : skb->len;
++	psample_group.group_num = mapped_obj->sample.group_id;
++	psample_group.net = &init_net;
++	skb_push(skb, skb->mac_len);
++
++	psample_sample_packet(&psample_group, skb, size, iif, 0, mapped_obj->sample.rate);
 +#endif
  }
  
- struct mlx5e_tc_act mlx5e_tc_act_ptype = {
+ static int
+@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+ 	struct mlx5e_sample_attr *sample_attr;
+ 	struct mlx5_flow_attr *pre_attr;
+ 	struct mlx5_eswitch *esw;
+-	u32 default_tbl_id;
++	u32 default_tbl_id = 0;
+ 	u32 obj_id;
+ 	int err;
+ 

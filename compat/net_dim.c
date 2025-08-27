@@ -3,6 +3,7 @@
  * Copyright (c) 2018, Mellanox Technologies inc.  All rights reserved.
  */
 
+#ifndef HAVE_DIM_CQ_PERIOD_MODE
 #include <linux/dim.h>
 
 /*
@@ -245,3 +246,4 @@ void net_dim(struct dim *dim, struct dim_sample end_sample)
 	}
 }
 EXPORT_SYMBOL(net_dim);
+#endif

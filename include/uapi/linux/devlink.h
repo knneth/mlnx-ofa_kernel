@@ -11,6 +11,7 @@ enum devlink_eswitch_ipsec_mode {
 enum devlink_eswitch_steering_mode {
 	DEVLINK_ESWITCH_STEERING_MODE_DMFS,
 	DEVLINK_ESWITCH_STEERING_MODE_SMFS,
+	DEVLINK_ESWITCH_STEERING_MODE_HMFS,
 };
 
 enum devlink_eswitch_vport_match_mode {

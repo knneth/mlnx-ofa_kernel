@@ -1,0 +1,83 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucaps.c
+
+---
+ drivers/infiniband/core/ucaps.c | 21 ++++++++++++++++-----
+ 1 file changed, 16 insertions(+), 5 deletions(-)
+
+--- a/drivers/infiniband/core/ucaps.c
++++ b/drivers/infiniband/core/ucaps.c
+@@ -3,6 +3,9 @@
+  * Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/slab.h>
++#endif
+ #include <linux/kref.h>
+ #include <linux/cdev.h>
+ #include <linux/mutex.h>
+@@ -28,7 +31,11 @@ static const char *ucap_names[RDMA_UCAP_
+ 	[RDMA_UCAP_MLX5_CTRL_OTHER_VHCA] = "mlx5_perm_ctrl_other_vhca"
+ };
+ 
++#ifdef HAVE_DEVNODE_GET_CONST_DEVICE
+ static char *ucaps_devnode(const struct device *dev, umode_t *mode)
++#else
++static char *ucaps_devnode(struct device *dev, umode_t *mode)
++#endif
+ {
+ 	if (mode)
+ 		*mode = 0600;
+@@ -36,7 +43,7 @@ static char *ucaps_devnode(const struct
+ 	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
+ }
+ 
+-static const struct class ucaps_class = {
++static struct class ucaps_class = {
+ 	.name = "infiniband_ucaps",
+ 	.devnode = ucaps_devnode,
+ };
+@@ -53,13 +60,15 @@ static const struct file_operations ucap
+  */
+ void ib_cleanup_ucaps(void)
+ {
++	int i;
++
+ 	mutex_lock(&ucaps_mutex);
+ 	if (!ucaps_class_is_registered) {
+ 		mutex_unlock(&ucaps_mutex);
+ 		return;
+ 	}
+ 
+-	for (int i = RDMA_UCAP_FIRST; i < RDMA_UCAP_MAX; i++)
++	for (i = RDMA_UCAP_FIRST; i < RDMA_UCAP_MAX; i++)
+ 		WARN_ON(ucaps_list[i]);
+ 
+ 	class_unregister(&ucaps_class);
+@@ -70,7 +79,9 @@ void ib_cleanup_ucaps(void)
+ 
+ static int get_ucap_from_devt(dev_t devt, u64 *idx_mask)
+ {
+-	for (int type = RDMA_UCAP_FIRST; type < RDMA_UCAP_MAX; type++) {
++	int type;
++
++	for (type = RDMA_UCAP_FIRST; type < RDMA_UCAP_MAX; type++) {
+ 		if (ucaps_list[type] && ucaps_list[type]->dev.devt == devt) {
+ 			*idx_mask |= 1 << type;
+ 			return 0;
+@@ -246,12 +257,12 @@ EXPORT_SYMBOL(ib_remove_ucap);
+  */
+ int ib_get_ucaps(int *fds, int fd_count, uint64_t *idx_mask)
+ {
+-	int ret = 0;
++	int ret = 0, i;
+ 	dev_t dev;
+ 
+ 	*idx_mask = 0;
+ 	mutex_lock(&ucaps_mutex);
+-	for (int i = 0; i < fd_count; i++) {
++	for (i = 0; i < fd_count; i++) {
+ 		ret = get_devt_from_fd(fds[i], &dev);
+ 		if (ret)
+ 			goto end;

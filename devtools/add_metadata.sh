@@ -30,7 +30,11 @@
 #
 #########################################################################
 
-WDIR=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd | sed -e 's/devtools//')
+WDIR=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd | sed --expression 's/devtools//')
+
+# Tracking issue constants for revert commits
+readonly NA_TRACKING_ISSUE_ID="4468530"
+readonly IGNORE_TRACKING_ISSUE_ID="4468524"
 
 base=
 num=
@@ -42,6 +46,8 @@ changeid_map=
 def_feature=
 def_ustatus=
 def_uissue=
+revert_track_issue=
+revert_track_used=
 
 usage()
 {
@@ -50,22 +56,34 @@ Usage:
 	${0##*/} [options]
 
 Options:
-    -a, --after <BASE>       Add metadata for new commits after given base (commit ID)
-    -n, --num <N>            Add metadata for the last N commits in the current branch
+    -a, --after <BASE>              Add metadata for new commits after given base (commit ID)
+
+    -n, --num <N>                   Add metadata for the last N commits in the current branch
 
     -f, --feature <NAME>            Feature name to assign to new commits.
                                     Must exist in: 'metadata/features_metadata_db.csv'
+
     -s, --upstream-status <STATUS>  Upstream status to assign to new commits.
                                     Valid values: [NA, ignore, in_progress, accepted]
-    -i, --upstream-issue  <ISSUE>  Upstream issue to assign to new commits.
-    -g, --general <TAG>	     add current upsream delta tag to general(f.e v5.6-rc2).
 
-    --dry-run                Just print, don't really change anything.
+    -i, --upstream-issue  <ISSUE>   Upstream issue to assign to new commits.
+
+    -g, --general <TAG>	            Add current upsream delta tag to general(f.e v5.6-rc2).
+
+    -t, --revert-track <ISSUE>      Avoid interactive choice window while adding revert patches metadata.
+                                    Valid values: [4468524, 4468530] (for upstream_status=ignore and upstream_status=NA, respectively).
+
+    --dry-run                       Just print, don't really change anything.
 
 Description for upstream status:
-    "NA" -----------> Patch is not applicable for upstream (scripts, Exp. API, etc..).
-    "ignore" -------> Patch that should be automatically dropped at next rebase (scripts changes).
+    "NA" -----------> Patch is not applicable for upstream.
+                      Examples: OFED-only patches, Reverts of accepted upstream patches...
+
+    "ignore" -------> Patch that should be automatically dropped at next rebase.
+                      Examples: Scripts changes, Makefiles, backports, Reverts of upstream patches that'll be safe to include in the next rebese...
+
     "in_progress" --> Being prepared for Upstream submission.
+
     "accepted" -----> Accepted upstream, should be automatically dropped at next rebase.
 EOF
 }
@@ -112,6 +130,11 @@ do
 		;;
 		-i | --upstream-issue)
 		def_uissue="$2"
+		shift
+		;;
+		-t | --revert-track)
+		revert_track_issue="$2"
+		revert_track_used=1
 		shift
 		;;
 		-h | *help | *usage)
@@ -182,6 +205,218 @@ is_scripts_change_only()
 	else
 		return 1
 	fi
+}
+
+# Helper function to set tracking issue and upstream status
+# Returns 0 if valid, 1 if invalid
+set_revert_tracking() {
+    local choice="$1"
+    if [[ "$choice" == "1" || "$choice" == "NA" ]]; then
+        commit_msg_tracking_issue="Issue: $NA_TRACKING_ISSUE_ID"
+        upstream="NA"
+    elif [[ "$choice" == "2" || "$choice" == "ignore" ]]; then
+        commit_msg_tracking_issue="Issue: $IGNORE_TRACKING_ISSUE_ID"
+        upstream="ignore"
+    fi
+}
+
+# Validates if revert-track configuration is correct
+# Returns 0 if valid, 1 if invalid
+is_valid_revert_track_config() {
+    [[ ("$revert_track_issue" == "$NA_TRACKING_ISSUE_ID" && "$def_ustatus" == "NA") ||
+       ("$revert_track_issue" == "$IGNORE_TRACKING_ISSUE_ID" && "$def_ustatus" == "ignore") ]]
+}
+
+# Determines how to handle a revert commit based on --revert-track usage or user input
+determine_revert_commit_handling() {
+
+    echo ""
+    echo "Revert commit detected: $revert_title"
+
+    # Handle --revert-track usage
+    if [ "$revert_track_used" ]; then
+        if is_valid_revert_track_config; then
+            set_revert_tracking "$def_ustatus"
+            return 0
+        else
+            echo "-E- Invalid --revert-track or -t configuration detected!"
+        fi
+    fi
+
+    cat <<EOF
+Please choose how to handle the Revert commit in the next rebase:
+  [1] Include this Revert in the next rebase.
+              * Choosing this will set upstream_status=NA and will track this Revert under issue $NA_TRACKING_ISSUE_ID.
+              * This is the right choice if we must keep the Revert in case the reverted patch is accepted upstream.
+              * For example: This commit reverts an upstream patch that breaks an OFED-only patch/feature.
+  [2] Don't include this Revert in the next rebase.
+              * Choosing this will set upstream_status=ignore and will track this Revert under issue $IGNORE_TRACKING_ISSUE_ID.
+              * This is the right choice if in the next rebase it will be safe to take the upstream implementation of the reverted patch.
+              * For example: This commit reverts a problematic in_progress upstream patch that will be fixed upstream and will be
+                              safe to include in the next rebase.
+
+EOF
+
+    while true; do
+        read -p "Enter your choice [1/2]: " user_choice
+        case $user_choice in
+            1|2)
+                set_revert_tracking "$user_choice"
+                return 0
+                ;;
+            *)
+                echo "-E- Invalid choice. Please enter 1 or 2."
+                ;;
+        esac
+    done
+}
+
+# Updates commit message by inserting tracking issue before Change-Id and applies the commit
+update_revert_commit_msg_with_tracking_issue() {
+
+    # Check if the Issue line already exists in the commit message
+    if grep --quiet "^$commit_msg_tracking_issue$" "$commit_msg_tmp_file"; then
+        return 0
+    fi
+
+    # Insert tracking issue before Change-Id line using sed
+    sed "/^Change-Id:/i\\$commit_msg_tracking_issue" "$commit_msg_tmp_file" > "${commit_msg_tmp_file}.new"
+
+    # Apply the updated commit message
+    git commit --amend --file="${commit_msg_tmp_file}.new" --date="$(git show --no-patch --format=%cD "$commit_id")" > /dev/null
+
+    # Clean up only the .new file
+    rm -f "${commit_msg_tmp_file}.new"
+    echo "Commit message for $commit_id updated with: '$commit_msg_tracking_issue'"
+}
+
+# Extracts reverted commit hash and Change-Id from commit message with error handling
+# Sets global variables reverted_hash and reverted_change_id directly
+extract_reverted_commit_info() {
+
+    # Extract reverted commit hash - look for long hex sequence after "This reverts commit"
+    reverted_hash=$(grep --ignore-case 'This reverts commit' "$commit_msg_tmp_file" | sed 's/.*This reverts commit \([a-fA-F0-9]\{7,40\}\).*/\1/I')
+
+    if [ -z "$reverted_hash" ]; then
+        echo "-E- Could not extract reverted commit hash from commit message."
+        while [ -z "$reverted_hash" ]; do
+            read -rp "Please enter the reverted commit hash manually: " input_hash
+            if git cat-file --exists "$input_hash"^{commit} 2>/dev/null; then
+                reverted_hash="$input_hash"
+            else
+                echo "-E- '$input_hash' is not a valid commit hash."
+            fi
+        done
+    fi
+
+    # Extract Change-Id from the reverted commit
+    reverted_change_id=$(git show "$reverted_hash" 2>/dev/null | grep "Change-Id:" | sed 's/.*Change-Id: *\(I[a-zA-Z0-9]\+\).*/\1/')
+
+    if [ -z "$reverted_change_id" ]; then
+        echo "-E- Could not find Change-Id for reverted commit $reverted_hash."
+        while [ -z "$reverted_change_id" ]; do
+            read -rp "Please enter the Change-Id manually (must start with 'I'): " input_change_id
+            if [[ "$input_change_id" =~ ^I[a-fA-F0-9]{6,}$ ]]; then
+                reverted_change_id="$input_change_id"
+            else
+                echo "-E- Invalid Change-Id format. Expected format: I followed by hex digits (e.g. I123abc...)."
+            fi
+        done
+    fi
+}
+
+# Ensures metadata entry for reverted commit exists (restores if deleted by revert)
+ensure_reverted_metadata_entry_exists() {
+
+    # Check if Change-Id existed in previous commit but not in current commit
+    local found_in_prev=$(git grep "Change-Id=$reverted_change_id;" HEAD~1 -- metadata/*.csv 2>/dev/null || true)
+    local found_in_current=$(git grep "Change-Id=$reverted_change_id;" HEAD -- metadata/*.csv 2>/dev/null || true)
+
+    # If found in previous but not in current, it was deleted by the revert
+    if [[ -n "$found_in_prev" && -z "$found_in_current" ]]; then
+        # Extract the file path and entry from the previous commit
+        local prev_file=$(echo "$found_in_prev" | cut --delimiter=: --fields=2)
+        local deleted_entry=$(echo "$found_in_prev" | cut --delimiter=: --fields=3-)
+
+        # Restore entry to the same file (status will be set to ignore later)
+        local metadata_file="${WDIR}/$prev_file"
+        echo "Metadata entry was deleted in Revert commit. Restoring it."
+        echo "$deleted_entry" >> "$metadata_file"
+        echo "Re-added line to $metadata_file"
+
+        # Add file to the list if not already present
+        local filename=$(basename "$metadata_file")
+        if ! echo "$reverted_metadata_files" | grep --quiet "$filename" && [ "$filename" != "$revert_metadata_filename" ]; then
+            reverted_metadata_files+=" $metadata_file"$'\n'
+        fi
+    fi
+}
+
+# Updates all metadata entries for reverted commit to have upstream_status=ignore
+# Processes all CSV files in metadata/ directory
+set_reverted_metadata_status_ignore() {
+
+    for metadata_file in "${WDIR}"/metadata/*.csv; do
+        # Check if file exists (in case no .csv files found)
+        [ -f "$metadata_file" ] || continue
+
+        # Check if this file contains the Change-Id
+        if grep --quiet "Change-Id=$reverted_change_id;" "$metadata_file"; then
+            echo "Metadata entry of the reverted commit in $metadata_file was updated with upstream_status=ignore."
+
+            # Update upstream_status to ignore using sed in-place
+            sed --in-place "s/upstream_status=[^;]*/upstream_status=ignore/g" "$metadata_file"
+
+            # Add file to the list if not already present
+            local filename=$(basename "$metadata_file")
+            if ! echo "$reverted_metadata_files" | grep --quiet "$filename" && [ "$filename" != "$revert_metadata_filename" ]; then
+                reverted_metadata_files+=" $metadata_file"$'\n'
+            fi
+        fi
+    done
+}
+
+# Checks if a commit is a revert commit by examining its subject line
+# Returns 0 if it's a revert commit, 1 if not
+is_revert_commit() {
+	local commit_id=$1
+	local subject=$(git log -1 --format="%s" "$commit_id")
+
+	if echo "$subject" | grep --quiet '^Revert "'; then
+		return 0
+	fi
+	return 1
+}
+
+handle_revert_commit() {
+    local commit_id=$1
+    local revert_metadata_csvfile="$2"
+    revert_title=$(git log -1 --oneline "$commit_id")
+    revert_metadata_filename=$(basename "$revert_metadata_csvfile")
+    commit_msg_tmp_file=$(mktemp)
+    commit_msg_tracking_issue=""
+    reverted_hash=""
+    reverted_change_id=""
+    reverted_metadata_files=""
+
+    # Ensure valid usage of --revert-track/-t if it's used, and ask the user for a valid upstream_status value (NA or ignore) if not.
+    determine_revert_commit_handling
+
+    # Extract reverted commit hash and Change-Id (do this BEFORE modifying commit message)
+    git show --no-patch --format=%B "$commit_id" > "$commit_msg_tmp_file"
+    extract_reverted_commit_info
+
+    # Update the Revert commit message with tracking issue (NA tracking issue or ignore tracking issue).
+    update_revert_commit_msg_with_tracking_issue
+
+    # Ensure reverted commit metadata entry exists (restore if deleted by revert)
+    ensure_reverted_metadata_entry_exists
+
+    # Ensure the reverted commit metadata entry has ignore status
+    set_reverted_metadata_status_ignore
+
+    # Clean up temporary file
+    rm -f "$commit_msg_tmp_file"
 }
 
 # get value of given tag if available in the commit message
@@ -431,6 +666,14 @@ do
 	then
 		general=$(get_by_tag $cid "general")
 	fi
+
+	# If the commit is a revert commit, present the two possible scenarios
+	# and allow the user to choose the appropriate one.
+	if is_revert_commit "$cid" && [[ "$no_verify" == 0 && "$no_edit" == 0 ]]; then
+		csvfile="${WDIR}/metadata/${author}.csv"
+		handle_revert_commit "$cid" "$csvfile"
+	fi
+
 	# auto-detect commits that changes only backports, ofed-scripts
 	if is_backports_change_only $cid ;then
 		feature="backports"
@@ -499,6 +742,9 @@ if [ $dry_run -eq 0 ]; then
 		echo ----------------------------------------------------
 		echo "Done, please amend these files to your last commit:"
 		echo "$csvfiles"
+		if [ -n "$reverted_metadata_files" ]; then
+			echo "$reverted_metadata_files"
+		fi
 		echo ----------------------------------------------------
 		echo
 		if [ $no_verify -eq 0 ]; then

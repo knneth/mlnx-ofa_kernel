@@ -3,6 +3,7 @@
  * Copyright (c) 2019, Mellanox Technologies inc.  All rights reserved.
  */
 
+#ifndef HAVE_DIM_CQ_PERIOD_MODE
 #include <linux/dim.h>
 
 bool dim_on_top(struct dim *dim)
@@ -82,3 +83,4 @@ bool dim_calc_stats(struct dim_sample *start, struct dim_sample *end,
 	return true;
 }
 EXPORT_SYMBOL(dim_calc_stats);
+#endif

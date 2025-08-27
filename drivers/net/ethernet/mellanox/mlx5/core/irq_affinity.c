@@ -200,9 +200,9 @@ unlock:
 	return least_loaded_irq;
 }
 
-void mlx5_irq_affinity_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *irq,
-				   struct mlx5_irq_pool *pool)
+void mlx5_irq_affinity_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *irq)
 {
+	struct mlx5_irq_pool *pool = mlx5_irq_get_pool(irq);
 	int cpu;
 
 	cpu = cpumask_first(mlx5_irq_get_affinity_mask(irq));

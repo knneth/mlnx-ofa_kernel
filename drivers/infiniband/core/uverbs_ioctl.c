@@ -682,13 +682,6 @@ int uverbs_get_flags64(u64 *to, const struct uverbs_attr_bundle *attrs_bundle,
 }
 EXPORT_SYMBOL(uverbs_get_flags64);
 
-int uverbs_set_flags64(const struct uverbs_attr_bundle *attrs_bundle,
-		       size_t idx, const u64 flags)
-{
-	return uverbs_copy_to(attrs_bundle, idx, &flags, sizeof(u64));
-}
-EXPORT_SYMBOL(uverbs_set_flags64);
-
 int uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
 		       size_t idx, u64 allowed_bits)
 {

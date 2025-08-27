@@ -171,8 +171,7 @@ binrpm: rpmcheck $(rpmspec)
 		(exit 1); exit 1; \
 		fi
 
-dist_files = $(rpmspec) makefile Makefile dkms.conf Module.supported \
-	common.postinst
+dist_files = $(rpmspec) makefile Makefile dkms.conf Module.supported
 dist_dirs = common debian host lpfc target tools
 dist:
 	mkdir -p $(rpmroot)/$(PACKAGE)/

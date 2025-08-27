@@ -70,6 +70,18 @@ static inline int ib_init_umem_odp(struct ib_umem_odp *umem_odp,
 		if (unlikely(end < page_size))
 			return -EOVERFLOW;
 
+		/*
+		 * The mmu notifier can be called within reclaim contexts and takes the
+		 * umem_mutex. This is rare to trigger in testing, teach lockdep about
+		 * it.
+		 */
+		if (IS_ENABLED(CONFIG_LOCKDEP)) {
+			fs_reclaim_acquire(GFP_KERNEL);
+			mutex_lock(&umem_odp->umem_mutex);
+			mutex_unlock(&umem_odp->umem_mutex);
+			fs_reclaim_release(GFP_KERNEL);
+		}
+
 		ndmas = (end - start) >> umem_odp->page_shift;
 		if (!ndmas)
 			return -EINVAL;

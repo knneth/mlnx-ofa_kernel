@@ -248,6 +248,10 @@ static int mlx5_netdev_event(struct notifier_block *this,
 	case NETDEV_DOWN: {
 		struct net_device *upper = NULL;
 
+		if (!netif_is_lag_master(ndev) && !netif_is_lag_port(ndev) &&
+		    !mlx5_core_mp_enabled(mdev))
+			return NOTIFY_DONE;
+
 		if (mlx5_lag_is_roce(mdev) || mlx5_lag_is_sriov(mdev)) {
 			struct net_device *lag_ndev;
 
@@ -486,6 +490,10 @@ static int translate_eth_ext_proto_oper(u32 eth_proto_oper, u16 *active_speed,
 		*active_width = IB_WIDTH_2X;
 		*active_speed = IB_SPEED_NDR;
 		break;
+	case MLX5E_PROT_MASK(MLX5E_200GAUI_1_200GBASE_CR1_KR1):
+		*active_width = IB_WIDTH_1X;
+		*active_speed = IB_SPEED_XDR;
+		break;
 	case MLX5E_PROT_MASK(MLX5E_400GAUI_8_400GBASE_CR8):
 		*active_width = IB_WIDTH_8X;
 		*active_speed = IB_SPEED_HDR;
@@ -494,9 +502,17 @@ static int translate_eth_ext_proto_oper(u32 eth_proto_oper, u16 *active_speed,
 		*active_width = IB_WIDTH_4X;
 		*active_speed = IB_SPEED_NDR;
 		break;
+	case MLX5E_PROT_MASK(MLX5E_400GAUI_2_400GBASE_CR2_KR2):
+		*active_width = IB_WIDTH_2X;
+		*active_speed = IB_SPEED_XDR;
+		break;
 	case MLX5E_PROT_MASK(MLX5E_800GAUI_8_800GBASE_CR8_KR8):
 		*active_width = IB_WIDTH_8X;
 		*active_speed = IB_SPEED_NDR;
+		break;
+	case MLX5E_PROT_MASK(MLX5E_800GAUI_4_800GBASE_CR4_KR4):
+		*active_width = IB_WIDTH_4X;
+		*active_speed = IB_SPEED_XDR;
 		break;
 	default:
 		return -EINVAL;
@@ -1795,6 +1811,33 @@ static void deallocate_uars(struct mlx5_ib_dev *dev,
 		    bfregi->sys_pages[i] != MLX5_IB_INVALID_UAR_INDEX)
 			mlx5_cmd_uar_dealloc(dev->mdev, bfregi->sys_pages[i],
 					     context->devx_uid);
+}
+
+static int mlx5_ib_enable_lb_mp(struct mlx5_core_dev *master,
+				struct mlx5_core_dev *slave)
+{
+	int err;
+
+	err = mlx5_nic_vport_update_local_lb(master, true);
+	if (err)
+		return err;
+
+	err = mlx5_nic_vport_update_local_lb(slave, true);
+	if (err)
+		goto out;
+
+	return 0;
+
+out:
+	mlx5_nic_vport_update_local_lb(master, false);
+	return err;
+}
+
+static void mlx5_ib_disable_lb_mp(struct mlx5_core_dev *master,
+				  struct mlx5_core_dev *slave)
+{
+	mlx5_nic_vport_update_local_lb(slave, false);
+	mlx5_nic_vport_update_local_lb(master, false);
 }
 
 int mlx5_ib_enable_lb(struct mlx5_ib_dev *dev, bool td, bool qp)
@@ -3096,6 +3139,7 @@ mlx5_ib_create_data_direct_resources(struct mlx5_ib_dev *dev)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_mkey_in);
 	struct mlx5_core_dev *mdev = dev->mdev;
+	bool ro_supp = false;
 	void *mkc;
 	u32 mkey;
 	u32 pdn;
@@ -3124,14 +3168,37 @@ mlx5_ib_create_data_direct_resources(struct mlx5_ib_dev *dev)
 	MLX5_SET(mkc, mkc, length64, 1);
 	MLX5_SET(mkc, mkc, qpn, 0xffffff);
 	err = mlx5_core_create_mkey(mdev, &mkey, in, inlen);
-	kvfree(in);
 	if (err)
-		goto err;
+		goto err_mkey;
 
 	dev->ddr.mkey = mkey;
 	dev->ddr.pdn = pdn;
+
+	/* create another mkey with RO support */
+	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_write)) {
+		MLX5_SET(mkc, mkc, relaxed_ordering_write, 1);
+		ro_supp = true;
+	}
+
+	if (MLX5_CAP_GEN(dev->mdev, relaxed_ordering_read)) {
+		MLX5_SET(mkc, mkc, relaxed_ordering_read, 1);
+		ro_supp = true;
+	}
+
+	if (ro_supp) {
+		err = mlx5_core_create_mkey(mdev, &mkey, in, inlen);
+		/* RO is defined as best effort */
+		if (!err) {
+			dev->ddr.mkey_ro = mkey;
+			dev->ddr.mkey_ro_valid = true;
+		}
+	}
+
+	kvfree(in);
 	return 0;
 
+err_mkey:
+	kvfree(in);
 err:
 	mlx5_core_dealloc_pd(mdev, pdn);
 	return err;
@@ -3140,6 +3207,10 @@ err:
 static void
 mlx5_ib_free_data_direct_resources(struct mlx5_ib_dev *dev)
 {
+
+	if (dev->ddr.mkey_ro_valid)
+		mlx5_core_destroy_mkey(dev->mdev, dev->ddr.mkey_ro);
+
 	mlx5_core_destroy_mkey(dev->mdev, dev->ddr.mkey);
 	mlx5_core_dealloc_pd(dev->mdev, dev->ddr.pdn);
 }
@@ -3281,7 +3352,6 @@ static int lag_event(struct notifier_block *nb, unsigned long event, void *data)
 				roce_del_all_netdev_gids(ibdev, portnum + 1,
 							 old_ndev);
 			rdma_roce_rescan_port(ibdev, portnum + 1);
-			ret = NOTIFY_OK;
 		}
 		break;
 	default:
@@ -3290,7 +3360,7 @@ static int lag_event(struct notifier_block *nb, unsigned long event, void *data)
 
 out:
 	dev_put(old_ndev);
-	return ret;
+	return notifier_from_errno(ret);
 }
 
 static void mlx5e_lag_event_register(struct mlx5_ib_dev *dev)
@@ -3502,6 +3572,8 @@ static void mlx5_ib_unbind_slave_port(struct mlx5_ib_dev *ibdev,
 
 	lockdep_assert_held(&mlx5_ib_multiport_mutex);
 
+	mlx5_ib_disable_lb_mp(ibdev->mdev, mpi->mdev);
+
 	mlx5_core_mp_event_replay(ibdev->mdev,
 				  MLX5_DRIVER_EVENT_AFFILIATION_REMOVED,
 				  NULL);
@@ -3596,6 +3668,10 @@ static bool mlx5_ib_bind_slave_port(struct mlx5_ib_dev *ibdev,
 	mlx5_core_mp_event_replay(ibdev->mdev,
 				  MLX5_DRIVER_EVENT_AFFILIATION_DONE,
 				  &key);
+
+	err = mlx5_ib_enable_lb_mp(ibdev->mdev, mpi->mdev);
+	if (err)
+		goto unbind;
 
 	return true;
 
@@ -4462,17 +4538,6 @@ static void mlx5_ib_stage_cong_debugfs_cleanup(struct mlx5_ib_dev *dev)
 				     mlx5_core_native_port_num(dev->mdev) - 1);
 }
 
-static int mlx5_ib_stage_uar_init(struct mlx5_ib_dev *dev)
-{
-	dev->mdev->priv.uar = mlx5_get_uars_page(dev->mdev);
-	return PTR_ERR_OR_ZERO(dev->mdev->priv.uar);
-}
-
-static void mlx5_ib_stage_uar_cleanup(struct mlx5_ib_dev *dev)
-{
-	mlx5_put_uars_page(dev->mdev, dev->mdev->priv.uar);
-}
-
 static int mlx5_ib_stage_bfrag_init(struct mlx5_ib_dev *dev)
 {
 	int err;
@@ -4736,9 +4801,6 @@ static const struct mlx5_ib_profile pf_profile = {
 	STAGE_CREATE(MLX5_IB_STAGE_CONG_DEBUGFS,
 		     mlx5_ib_stage_cong_debugfs_init,
 		     mlx5_ib_stage_cong_debugfs_cleanup),
-	STAGE_CREATE(MLX5_IB_STAGE_UAR,
-		     mlx5_ib_stage_uar_init,
-		     mlx5_ib_stage_uar_cleanup),
 	STAGE_CREATE(MLX5_IB_STAGE_BFREG,
 		     mlx5_ib_stage_bfrag_init,
 		     mlx5_ib_stage_bfrag_cleanup),
@@ -4802,9 +4864,6 @@ const struct mlx5_ib_profile raw_eth_profile = {
 	STAGE_CREATE(MLX5_IB_STAGE_CONG_DEBUGFS,
 		     mlx5_ib_stage_cong_debugfs_init,
 		     mlx5_ib_stage_cong_debugfs_cleanup),
-	STAGE_CREATE(MLX5_IB_STAGE_UAR,
-		     mlx5_ib_stage_uar_init,
-		     mlx5_ib_stage_uar_cleanup),
 	STAGE_CREATE(MLX5_IB_STAGE_BFREG,
 		     mlx5_ib_stage_bfrag_init,
 		     mlx5_ib_stage_bfrag_cleanup),

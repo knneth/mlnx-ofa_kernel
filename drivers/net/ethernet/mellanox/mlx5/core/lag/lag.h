@@ -112,7 +112,7 @@ int mlx5_lag_dev_get_netdev_idx(struct mlx5_lag *ldev,
 
 enum mlx5_lag_user_pref mlx5_lag_get_user_mode(struct mlx5_core_dev *dev);
 void mlx5_lag_set_user_mode(struct mlx5_core_dev *dev,
-	       		    enum mlx5_lag_user_pref mode);
+			    enum mlx5_lag_user_pref mode);
 char *mlx5_get_str_port_sel_mode(enum mlx5_lag_mode mode, unsigned long flags);
 void mlx5_infer_tx_enabled(struct lag_tracker *tracker, struct mlx5_lag *ldev,
 			   u8 *ports, int *num_enabled);
@@ -136,17 +136,17 @@ static inline bool mlx5_lag_is_supported(struct mlx5_core_dev *dev)
 	return true;
 }
 
-#define ldev_for_each(i, start_index, ldev) \
-	for (int tmp = start_index; tmp = get_next_ldev_func(ldev, tmp), \
+#define mlx5_ldev_for_each(i, start_index, ldev) \
+	for (int tmp = start_index; tmp = mlx5_get_next_ldev_func(ldev, tmp), \
 	     i = tmp, tmp < MLX5_MAX_PORTS; tmp++)
 
-#define ldev_for_each_reverse(i, start_index, end_index, ldev)      \
+#define mlx5_ldev_for_each_reverse(i, start_index, end_index, ldev)      \
 	for (int tmp = start_index, tmp1 = end_index; \
-	     tmp = get_pre_ldev_func(ldev, tmp, tmp1), \
+	     tmp = mlx5_get_pre_ldev_func(ldev, tmp, tmp1), \
 	     i = tmp, tmp >= tmp1; tmp--)
 
-int get_pre_ldev_func(struct mlx5_lag *ldev, int start_idx, int end_idx);
-int get_next_ldev_func(struct mlx5_lag *ldev, int start_idx);
+int mlx5_get_pre_ldev_func(struct mlx5_lag *ldev, int start_idx, int end_idx);
+int mlx5_get_next_ldev_func(struct mlx5_lag *ldev, int start_idx);
 int mlx5_lag_get_dev_index_by_seq(struct mlx5_lag *ldev, int seq);
 int mlx5_lag_num_devs(struct mlx5_lag *ldev);
 int mlx5_lag_num_netdevs(struct mlx5_lag *ldev);

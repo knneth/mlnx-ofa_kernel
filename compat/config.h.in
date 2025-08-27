@@ -1,6 +1,6 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* __auto_type exists */
+/* ___ADDRESSABLE exists */
 #undef HAVE_3_UNDERSCORE_ADDRESSABLE
 
 /* access_ok has 3 parameters */
@@ -14,6 +14,9 @@
 
 /* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
 #undef HAVE_ALLOC_BULK_PAGES_API_RENAME
+
+/* apple_rtkit_ops.crashed takes 3 params */
+#undef HAVE_APPLE_RTKIT_OPS_CRASHED_3_PARAMS
 
 /* mm.h has assert_fault_locked */
 #undef HAVE_ASSERT_FAULT_LOCKED
@@ -33,6 +36,9 @@
 /* auxiliary device IRQs sysfs exists */
 #undef HAVE_AUX_DEV_IRQS_SYSFS
 
+/* struct block_device has bd_stats */
+#undef HAVE_BDEV_BD_STATS
+
 /* linux/blkdev.h has bdev_discard_granularity */
 #undef HAVE_BDEV_DISCARD_GRANULARITY
 
@@ -44,6 +50,9 @@
 
 /* blkdev.h has bdev_max_zone_append_sectors */
 #undef HAVE_BDEV_MAX_ZONE_APPEND_SECTORS
+
+/* blkdev.h has bdev_nonrot */
+#undef HAVE_BDEV_NONROT
 
 /* bdev_nr_bytes exist */
 #undef HAVE_BDEV_NR_BYTES
@@ -101,6 +110,9 @@
 
 /* bio.h has bio_integrity_map_user */
 #undef HAVE_BIO_INTEGRITY_MAP_USER_BIO_H
+
+/* struct bio_integrity_payload has member app_tag */
+#undef HAVE_BIO_INTEGRITY_PAYLOAD_APP_TAG
 
 /* if bio.h has bio_max_segs */
 #undef HAVE_BIO_MAX_SEGS
@@ -177,8 +189,17 @@
 /* blk_execute_rq_nowait has 3 params */
 #undef HAVE_BLK_EXECUTE_RQ_NOWAIT_3_PARAM
 
+/* blk_execute_rq_nowait has 4 params */
+#undef HAVE_BLK_EXECUTE_RQ_NOWAIT_4_PARAM
+
 /* blk_execute_rq_nowait has 5 params */
 #undef HAVE_BLK_EXECUTE_RQ_NOWAIT_5_PARAM
+
+/* BLK_FEAT_ATOMIC_WRITES is defined */
+#undef HAVE_BLK_FEAT_ATOMIC_WRITES
+
+/* BLK_FEAT_ROTATIONAL is defined */
+#undef HAVE_BLK_FEAT_ROTATIONAL
 
 /* BLK_FEAT_ZONED is defined */
 #undef HAVE_BLK_FEAT_ZONED
@@ -331,6 +352,12 @@
 /* blk_rq_map_integrity_sg get 2 params */
 #undef HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS
 
+/* blk_rq_map_kern has 4 params without queue */
+#undef HAVE_BLK_RQ_MAP_KERN_4_PARAMS
+
+/* blk-mq.h has blk_rq_map_sg with 2 params */
+#undef HAVE_BLK_RQ_MAP_SG_2_PARAMS
+
 /* blk_rq_map_user_iv is defined */
 #undef HAVE_BLK_RQ_MAP_USER_IO
 
@@ -382,6 +409,9 @@
 /* __free anotation for kvfree could be used */
 #undef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER
 
+/* cap_rss_sym_xor_supported is defined */
+#undef HAVE_CAP_RSS_SYM_XOR_SUPPORTED
+
 /* __cgroup_bpf_run_filter_sysctl have 7 parameters */
 #undef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
 
@@ -405,6 +435,9 @@
 
 /* include/linux/cleanup.h exists */
 #undef HAVE_CLEANUP_H
+
+/* have function clock_quality_level_get */
+#undef HAVE_CLOCK_QUALITY_LEVEL_GET
 
 /* compat_ptr_ioctl is exported by the kernel */
 #undef HAVE_COMPAT_PTR_IOCTL_EXPORTED
@@ -730,6 +763,9 @@
 /* dev_xdp_prog_id is defined */
 #undef HAVE_DEV_XDP_PROG_ID
 
+/* include/linux/dim.h defines enum dim_cq_period_mode */
+#undef HAVE_DIM_CQ_PERIOD_MODE
+
 /* disk_set_zoned is defined */
 #undef HAVE_DISK_SET_ZONED
 
@@ -738,6 +774,12 @@
 
 /* disk_update_readahead exists */
 #undef HAVE_DISK_UPDATE_READAHEAD
+
+/* dma_alloc_noncontiguous is defined */
+#undef HAVE_DMA_ALLOC_NONCONTIGUOUS
+
+/* linux/dma-mapping.h defines macro DMA_ATTR_WRITE_BARRIER */
+#undef HAVE_DMA_ATTR_WRITE_BARRIER
 
 /* struct dma_buf_attach_ops has allow_peer2peer */
 #undef HAVE_DMA_BUF_ATTACH_OPS_ALLOW_PEER2PEER
@@ -964,6 +1006,9 @@
 /* flow_dissector.h has struct flow_dissector_mpls_lse */
 #undef HAVE_FLOW_DISSECTOR_MPLS_LSE
 
+/* struct flow_dissector has unsigned long long used_keys */
+#undef HAVE_FLOW_DISSECTOR_USED_KEYS_ULL
+
 /* flow_indr_block_bind_cb_t has 4 parameters */
 #undef HAVE_FLOW_INDR_BLOCK_BIND_CB_T_4_PARAMS
 
@@ -984,6 +1029,9 @@
 
 /* HAVE_FLOW_OFFLOAD_ACTION exists */
 #undef HAVE_FLOW_OFFLOAD_ACTION
+
+/* function flow_action_is_last_entry exists */
+#undef HAVE_FLOW_OFFLOAD_ACTION_LAST_ENTRY
 
 /* flow_offload_has_one_action exists */
 #undef HAVE_FLOW_OFFLOAD_HAS_ONE_ACTION
@@ -1015,6 +1063,9 @@
 /* for_ifa defined */
 #undef HAVE_FOR_IFA
 
+/* from_timer macro is defined */
+#undef HAVE_FROM_TIMER
+
 /* if fsparam_uid is defined */
 #undef HAVE_FSPARAM_UID
 
@@ -1042,11 +1093,17 @@
 /* if FUSE_PASSTHROUGH is defined */
 #undef HAVE_FUSE_PASSTHROUGH
 
+/* GD_ADDED is defined */
+#undef HAVE_GD_ADDED
+
 /* GD_SUPPRESS_PART_SCAN is defined */
 #undef HAVE_GD_SUPPRESS_PART_SCAN
 
 /* struct gendisk has conv_zones_bitmap */
 #undef HAVE_GENDISK_CONV_ZONES_BITMAP
+
+/* blkdev.h struct gendisk has ia_ranges */
+#undef HAVE_GENDISK_IA_RANGES
 
 /* struct gendisk has open_mode */
 #undef HAVE_GENDISK_OPEN_MODE
@@ -1069,6 +1126,12 @@
 /* function genl_info_dump is defined */
 #undef HAVE_GENL_INFO_DUMP
 
+/* struct genl_ops has member maxattr */
+#undef HAVE_GENL_OPS_MAXATTR
+
+/* struct genl_ops has member policy */
+#undef HAVE_GENL_OPS_POLICY
+
 /* struct genl_ops has member validate */
 #undef HAVE_GENL_OPS_VALIDATE
 
@@ -1083,6 +1146,9 @@
 
 /* ethtool_ops has get_module_eeprom_by_page */
 #undef HAVE_GET_MODULE_EEPROM_BY_PAGE
+
+/* get_net_ns_by_id is exported by the kernel */
+#undef HAVE_GET_NET_NS_BY_ID_EXPORTED
 
 /* get_pause_stats is defined */
 #undef HAVE_GET_PAUSE_STATS
@@ -1127,6 +1193,9 @@
 /* get_user_pages_remote is defined with 8 parameters with locked */
 #undef HAVE_GET_USER_PAGES_REMOTE_8_PARAMS_W_LOCKED
 
+/* if grab_cache_page_write_begin() exists */
+#undef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
+
 /* GRO_LEGACY_MAX_SIZE defined */
 #undef HAVE_GRO_LEGACY_MAX_SIZE
 
@@ -1169,6 +1238,9 @@
 /* idr_for_each_entry_continue_ul is defined */
 #undef HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL
 
+/* inet_addr_is_any takes sockaddr_storage */
+#undef HAVE_INET_ADDR_IS_ANY_SOCKADDR_STORAGE
+
 /* inet_confirm_addr is exported by the kernel */
 #undef HAVE_INET_CONFIRM_ADDR_EXPORTED
 
@@ -1193,8 +1265,14 @@
 /* linux/io_uring/cmd.h exists */
 #undef HAVE_IO_URING_CMD_H
 
+/* io_uring_cmd_import_fixed has 6 params */
+#undef HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS
+
 /* linux/io_uring/cmd.h has io_uring_cmd_iopoll_done */
 #undef HAVE_IO_URING_CMD_IOPOLL_DONE
+
+/* io_uring_cmd_to_pdu is defined */
+#undef HAVE_IO_URING_CMD_TO_PDU
 
 /* ip6_dst_hoplimit is exported by the kernel */
 #undef HAVE_IP6_DST_HOPLIMIT
@@ -1259,9 +1337,6 @@
 /* iscsi_conn_unbind is defined */
 #undef HAVE_ISCSI_CONN_UNBIND
 
-/* iscsi_eh_cmd_timed_out is defined */
-#undef HAVE_ISCSI_EH_CMD_TIMED_OUT
-
 /* libiscsi.h iscsi_host_remove has 2 parameters */
 #undef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
 
@@ -1290,7 +1365,7 @@
 #undef HAVE_KERNEL_RINGPARAM_TCP_DATA_SPLIT
 
 /* function kfree_rcu_mightsleep is defined */
-#undef HAVE_KFREE_RCU_MIGHTSLEEP
+#undef HAVE_KFREE_RCU_MIGHTSLEEP_MACRO
 
 /* linux/kobject.h kobj_type has default_groups member */
 #undef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
@@ -1303,6 +1378,9 @@
 
 /* function kvfree_call_rcu is defined */
 #undef HAVE_KVFREE_CALL_RCU
+
+/* kvfree_call_rcu has void ptr parameter */
+#undef HAVE_KVFREE_CALL_RCU_VOID_PTR
 
 /* kvfree prototype is in slab.h */
 #undef HAVE_KVFREE_IN_SLAB_H
@@ -1339,6 +1417,12 @@
 
 /* net/macsec.h exists */
 #undef HAVE_MACSEC_H
+
+/* memremap_compat_align is defined */
+#undef HAVE_MEMREMAP_COMPAT_ALIGN
+
+/* if struct inode_operations->mkdir returns an int */
+#undef HAVE_MKDIR_RET_INT
 
 /* map_lock has mmap_read_lock */
 #undef HAVE_MMAP_READ_LOCK
@@ -1452,6 +1536,9 @@
 #undef HAVE_NETDEV_NESTED_PRIV_STRUCT
 
 /* struct net_device has netns_local as member */
+#undef HAVE_NETDEV_NETNS_IMMUTABLE
+
+/* struct net_device has netns_local as member */
 #undef HAVE_NETDEV_NETNS_LOCAL
 
 /* struct netdev_net_notifier is defined */
@@ -1490,6 +1577,9 @@
 /* netif_is_vxlan is defined */
 #undef HAVE_NETIF_IS_VXLAN
 
+/* netdevice.h has netif_napi_add_config */
+#undef HAVE_NETIF_NAPI_ADD_CONFIG
+
 /* netif_napi_add get 3 params */
 #undef HAVE_NETIF_NAPI_ADD_GET_3_PARAMS
 
@@ -1508,14 +1598,14 @@
 /* net/bareudp.h is exists */
 #undef HAVE_NET_BAREUDP_H
 
-/* struct net_device has devlink_port member */
-#undef HAVE_NET_DEVICE_DEVLINK_PORT
-
 /* struct net_device has devlink_port */
 #undef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
 
 /* struct net_device has lower_level */
 #undef HAVE_NET_DEVICE_LOWER_LEVEL
+
+/* net_dim get const pointer end_sample */
+#undef HAVE_NET_DIM_POINTER_END_SAMPLE
 
 /* net/gro.h is defined */
 #undef HAVE_NET_GRO_H
@@ -1550,6 +1640,9 @@
 /* nft_chain_offload_support is defined */
 #undef HAVE_NFT_CHAIN_OFFLOAD_SUPPORT
 
+/* nla_get_u8_default exist */
+#undef HAVE_NLA_GET_U8_DEFAULT
+
 /* nla_nest_start_noflag exist */
 #undef HAVE_NLA_NEST_START_NOFLAG
 
@@ -1564,6 +1657,9 @@
 
 /* NLA_POLICY_NESTED defined */
 #undef HAVE_NLA_POLICY_NESTED
+
+/* struct nla_policy has strict_start_type */
+#undef HAVE_NLA_POLICY_STRICT_START_TYPE
 
 /* nla_put_bitfield32 exist */
 #undef HAVE_NLA_PUT_BITFIELD32
@@ -1580,6 +1676,9 @@
 /* NL_ASSERT_CTX_FITS exists */
 #undef HAVE_NL_ASSERT_CTX_FITS
 
+/* include/linux/netlink.h provides NL_SET_ERR_MSG_FMT_MOD */
+#undef HAVE_NL_SET_ERR_MSG_FMT_MOD
+
 /* NL_SET_ERR_MSG_WEAK_MOD exists */
 #undef HAVE_NL_SET_ERR_MSG_WEAK_MOD
 
@@ -1587,17 +1686,35 @@
    APIs' */
 #undef HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE
 
+/* include/linux/fs.h declares function no_llseek */
+#undef HAVE_NO_LLSEEK
+
+/* nvme_auth_derive_tls_psk is defined */
+#undef HAVE_NVME_AUTH_DERIVE_TLS_PSK
+
+/* nvme_auth_generate_digest is defined */
+#undef HAVE_NVME_AUTH_GENERATE_DIGEST
+
+/* nvme_auth_generate_psk is defined */
+#undef HAVE_NVME_AUTH_GENERATE_PSK
+
 /* nvme_auth_transform_key returns struct nvme_dhchap_key * */
 #undef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
 
 /* NVME_IOCTL_IO64_CMD_VEC is defined */
 #undef HAVE_NVME_IOCTL_IO64_CMD_VEC
 
+/* NVME_TCP_MIN_C2HTERM_PLEN is defined */
+#undef HAVE_NVME_TCP_MIN_C2HTERM_PLEN
+
 /* struct page has dma_addr */
 #undef HAVE_PAGE_DMA_ADDR
 
 /* struct page has dma_addr array member */
 #undef HAVE_PAGE_DMA_ADDR_ARRAY
+
+/* struct page has __folio_index field */
+#undef HAVE_PAGE_FOLIO_INDEX_FIELD
 
 /* linux/gfp.h has page_frag_cache_drain */
 #undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H
@@ -1656,6 +1773,9 @@
 /* pci.h has pcie_capability_clear_and_set_word_locked */
 #undef HAVE_PCIE_CAPABILITY_CLEAR_AND_SET_WORD_LOCKED
 
+/* pci.h has pci_dev_is_disconnect */
+#undef HAVE_PCI_DEV_IS_DISCONNECTED
+
 /* pci_dev has link_active_reporting */
 #undef HAVE_PCI_DEV_LINK_ACTIVE_REPORTING
 
@@ -1670,6 +1790,9 @@
 
 /* include/linux/pci.h has pci_enable_ptm */
 #undef HAVE_PCI_ENABLE_PTM
+
+/* desc */
+#undef HAVE_PCI_EPC_FEATURES_INTX_CAPABLE
 
 /* pci_iov_get_pf_drvdata is defined */
 #undef HAVE_PCI_IOV_GET_PF_DRVDATA
@@ -1706,6 +1829,12 @@
 
 /* function peernet2id_alloc get 3 params */
 #undef HAVE_PEERNET2ID_ALLOC_GET_3_PARAMS
+
+/* percpu-refcount.h has PERCPU_REF_ALLOW_REINIT */
+#undef HAVE_PERCPU_REF_ALLOW_REINIT
+
+/* percpu-refcount.h has percpu_ref_resurrect */
+#undef HAVE_PERCPU_REF_RESURRECT
 
 /* kernel supports v6.9 per queue netdev-genl stats */
 #undef HAVE_PER_QUEUE_NETDEV_GENL_STATS
@@ -1833,6 +1962,9 @@
 /* if linux/blkdev.h struct request_queue has member disk */
 #undef HAVE_REQUEST_QUEUE_DISK
 
+/* blkdev.h struct request_queue has ia_ranges */
+#undef HAVE_REQUEST_QUEUE_IA_RANGES
+
 /* linux/blk-mq.h has request_to_qc_t */
 #undef HAVE_REQUEST_TO_QC_T
 
@@ -1844,6 +1976,9 @@
 
 /* rpcrdma_rn_register has defined */
 #undef HAVE_RPCRDMA_RN_REGISTER
+
+/* RPCSVC_MAXPAGES macro is defined */
+#undef HAVE_RPCSVC_MAXPAGES
 
 /* rpc_task_gfp_mask is exported by the kernel */
 #undef HAVE_RPC_TASK_GPF_MASK_EXPORTED
@@ -1882,11 +2017,17 @@
    context' */
 #undef HAVE_RSS_KEY_PER_CONTEXT
 
+/* struct rtnl_newlink_params exists */
+#undef HAVE_RTNL_NEWLINK_PARAMS
+
 /* rt_gw_family is defined */
 #undef HAVE_RT_GW_FAMILY
 
 /* rt_uses_gateway is defined */
 #undef HAVE_RT_USES_GATEWAY
+
+/* RXH_XFRM_SYM_OR_XOR exists */
+#undef HAVE_RXH_XFRM_SYM_OR_XOR
 
 /* macsec_ops has boolean field rx_uses_md_dst */
 #undef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
@@ -1944,6 +2085,9 @@
 
 /* if secpath_set returns struct sec_path * */
 #undef HAVE_SECPATH_SET_RETURN_POINTER
+
+/* jiffies.h has secs_to_jiffies */
+#undef HAVE_SECS_TO_JIFFIES
 
 /* if security_dentry_init_security() takes 6 params */
 #undef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
@@ -2007,6 +2151,9 @@
 
 /* xmit_more is defined */
 #undef HAVE_SK_BUFF_XMIT_MORE
+
+/* sk_net_refcnt_upgrade is defined */
+#undef HAVE_SK_NET_REFCNT_UPGRADE
 
 /* struct sock has sk_use_task_frag */
 #undef HAVE_SK_USE_TASK_FRAG
@@ -2078,6 +2225,9 @@
 /* struct switchdev_obj_port_vlan has vid */
 #undef HAVE_STRUCT_SWITCHDEV_OBJ_PORT_VLAN_VID
 
+/* string_choices.h has str_plural */
+#undef HAVE_STR_PLURAL
+
 /* submit_bio_noacct exist */
 #undef HAVE_SUBMIT_BIO_NOACCT
 
@@ -2143,6 +2293,9 @@
 
 /* sysfs_emit is defined */
 #undef HAVE_SYSFS_EMIT
+
+/* SYSFS_GROUP_INVISIBLE is defined */
+#undef HAVE_SYSFS_GROUP_INVISIBLE
 
 /* t10_pi_prepare is defined */
 #undef HAVE_T10_PI_PREPARE
@@ -2240,8 +2393,17 @@
 /* tc_skb_ext_alloc is defined */
 #undef HAVE_TC_SKB_EXT_ALLOC
 
+/* timer_delete exists */
+#undef HAVE_TIMER_DELETE
+
+/* timer.h has timer_delete_sync */
+#undef HAVE_TIMER_DELETE_SYNC
+
 /* struct tlsdev_ops has tls_dev_resync */
 #undef HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC
+
+/* include/uapi/linux/tls.h defines TLS_CIPHER_AES_GCM_256 */
+#undef HAVE_TLS_CIPHER_AES_GCM_256
 
 /* net/tls.h has tls_driver_ctx */
 #undef HAVE_TLS_DRIVER_CTX
@@ -2275,6 +2437,9 @@
 
 /* linux/atomic/atomic-instrumented.h has try_cmpxchg */
 #undef HAVE_TRY_CMPXCHG
+
+/* type u64_stats_t exists */
+#undef HAVE_U64_STATS_T
 
 /* uapi/linux/nvme_ioctl.h has NVME_URING_CMD_ADMIN */
 #undef HAVE_UAPI_LINUX_NVME_NVME_URING_CMD_ADMIN
@@ -2365,6 +2530,9 @@
 
 /* struct xfrmdev_ops has member xdo_dev_policy_add get extack */
 #undef HAVE_XDO_DEV_POLICY_ADD_GET_EXTACK
+
+/* struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter */
+#undef HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE
 
 /* struct xfrmdev_ops has member xdo_dev_state_update_curlft */
 #undef HAVE_XDO_DEV_STATE_UPDATE_CURLFT
@@ -2556,6 +2724,9 @@
 /* __blkdev_issue_discard has 5 params */
 #undef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
 
+/* compiler_types.h, compiler_attributes.h provide __counted_by macro */
+#undef HAVE___COUNTED_BY
+
 /* linux/export.h defines __EXPORT_SYMBOL_NS */
 #undef HAVE___EXPORT_SYMBOL_NS
 
@@ -2567,6 +2738,9 @@
 
 /* HAVE___IP_DEV_FIND is exported by the kernel */
 #undef HAVE___IP_DEV_FIND
+
+/* linux/rcupdate.h defines __is_kvfree_rcu_offset */
+#undef HAVE___IS_KVFREE_RCU_OFFSET
 
 /* netdevice.h has __netdev_tx_sent_queue */
 #undef HAVE___NETDEV_TX_SENT_QUEUE

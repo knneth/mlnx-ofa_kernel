@@ -1,0 +1,19 @@
+From: Lama Kayal <lkayal@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/matcher.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/matcher.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/matcher.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/matcher.c
+@@ -15,7 +15,7 @@ static u8 hws_matcher_rules_to_tbl_depth
+ 		return MLX5HWS_MATCHER_ASSURED_MAIN_TBL_DEPTH;
+ 
+ 	/* For small rule tables we use a single deep table to assure insertion */
+-	return min(log_num_of_rules, MLX5HWS_MATCHER_ASSURED_COL_TBL_DEPTH);
++	return min(log_num_of_rules, (u8)MLX5HWS_MATCHER_ASSURED_COL_TBL_DEPTH);
+ }
+ 
+ static void hws_matcher_destroy_end_ft(struct mlx5hws_matcher *matcher)
