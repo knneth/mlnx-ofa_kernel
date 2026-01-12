@@ -1354,7 +1354,7 @@ static bool mlx5_vport_use_vhca_id_as_func_id(struct mlx5_core_dev *dev,
 		return false;
 
 	vport = mlx5_eswitch_get_vport(dev->priv.eswitch, vport_num);
-	if (!vport)
+	if (IS_ERR(vport))
 		return false;
 
 	if (mlx5_esw_is_sf_vport(dev->priv.eswitch, vport_num))

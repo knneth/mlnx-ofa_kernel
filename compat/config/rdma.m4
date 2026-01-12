@@ -791,13 +791,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
                 return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_ESWITCH_STATE, [enum devlink_eswitch_state exists], [
-                #include <uapi/linux/devlink.h>
-        ],[
-                enum devlink_eswitch_state state;
-                return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_FN_OPSTATE, [enum devlink_port_fn_opstate exist], [
                 #include <uapi/linux/devlink.h>
         ],[
@@ -1135,6 +1128,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 			.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
 		};
 		dlops.eswitch_mode_set(NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE, [DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE exists], [
+		#include <uapi/linux/devlink.h>
+	],[
+		enum devlink_eswitch_mode mode;
+		mode = DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE;
 
 		return 0;
 	])
@@ -4525,6 +4527,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <scsi/libiscsi.h>
 	],[
 		struct iscsi_cmd c;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ISCSI_HOST_ALLOC_GET_CONST, [iscsi_host_alloc get const], [
+		#include <scsi/libiscsi.h>
+	],[
+		const struct scsi_host_template *sht = NULL;
+		iscsi_host_alloc(sht, 0, 0);
 
 		return 0;
 	])
@@ -8654,6 +8665,7 @@ AC_DEFUN([COMPAT_CONFIG_HEADERS],[
 AC_DEFUN([MLNX_PROG_LINUX],
 [
 LB_LINUX_PATH
+LB_IS_LLVM
 LB_LINUX_SYMVERFILE
 
 LINUX_CONFIG_COMPAT

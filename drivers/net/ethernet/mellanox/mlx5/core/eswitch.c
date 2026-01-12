@@ -1829,11 +1829,6 @@ void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
 			mlx5_eswitch_clear_ec_vf_vports_info(esw);
 	}
 
-	if (esw->mode == MLX5_ESWITCH_OFFLOADS) {
-		struct devlink *devlink = priv_to_devlink(esw->dev);
-
-		devl_rate_nodes_destroy(devlink);
-	}
 	/* Destroy legacy fdb when disabling sriov in legacy mode. */
 	if (esw->mode == MLX5_ESWITCH_LEGACY)
 		mlx5_eswitch_disable_locked(esw);
@@ -2222,9 +2217,6 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	refcount_set(&esw->qos.refcnt, 0);
 
 	esw->enabled_vports = 0;
-#ifdef HAVE_DEVLINK_ESWITCH_STATE
-	esw->state = DEVLINK_ESWITCH_STATE_ACTIVE;
-#endif
 	esw->offloads.inline_mode = MLX5_INLINE_MODE_NONE;
 	if (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, reformat) &&
 	    MLX5_CAP_ESW_FLOWTABLE_FDB(dev, decap))

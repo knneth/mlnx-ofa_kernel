@@ -8,7 +8,7 @@ Subject: [PATCH] BACKPORT:
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch_devlink_compat.c
-@@ -36,10 +36,12 @@ static char *steering_mode_to_str[] = {
+@@ -37,10 +37,12 @@ static char *steering_mode_to_str[] = {
  	[DEVLINK_ESWITCH_STEERING_MODE_HMFS] = "hmfs",
  };
  
@@ -21,7 +21,7 @@ Subject: [PATCH] BACKPORT:
  
  static char *vport_match_to_str[] = {
  	[DEVLINK_ESWITCH_VPORT_MATCH_MODE_METADATA] = "metadata",
-@@ -101,22 +103,36 @@ struct devlink_compat_op {
+@@ -102,22 +104,36 @@ struct devlink_compat_op {
  	char *compat_name;
  };
  
@@ -61,7 +61,7 @@ Subject: [PATCH] BACKPORT:
  		.map = mode_to_str,
  		.map_size = ARRAY_SIZE(mode_to_str),
  		.compat_name = "mode",
-@@ -148,6 +164,7 @@ static struct devlink_compat_op devlink_
+@@ -149,6 +165,7 @@ static struct devlink_compat_op devlink_
  		.compat_name = "steering_mode",
  	},
  /* only for kernel linux-5.4.0-1020.21.g8ebdd1f-bluefield*/
@@ -69,7 +69,7 @@ Subject: [PATCH] BACKPORT:
  	{
  		.read_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_get,
  		.write_enum_ipsec = mlx5_devlink_eswitch_ipsec_mode_set,
-@@ -155,6 +172,7 @@ static struct devlink_compat_op devlink_
+@@ -156,6 +173,7 @@ static struct devlink_compat_op devlink_
  		.map_size = ARRAY_SIZE(ipsec_to_str),
  		.compat_name = "ipsec_mode",
  	},

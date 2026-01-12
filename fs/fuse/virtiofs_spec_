@@ -253,7 +253,6 @@ fi # 1 : closed
 %endif
 
 %post dkms
-/usr/src/mlnx-ofa_kernel-%{version}/ofed_scripts/dkms_ofed_move_back
 /usr/sbin/dkms install %{name}/%{version} || :
 
 %preun dkms

@@ -148,6 +148,7 @@ dist:
 	@sed -i 's/@VERSION@/$(VERSION)/g' $(rpmroot)/$(PACKAGE)/debian/changelog
 	@sed -i 's/@RELEASE@/$(RELEASE)/g' $(rpmroot)/$(PACKAGE)/debian/changelog
 	@sed -i 's/@VERSION@/$(VERSION)/g' $(rpmroot)/$(PACKAGE)/ofed_scripts/generate_dkms_conf.sh
+	@sed -i 's/@VERSION@/$(VERSION)/g' $(rpmroot)/$(PACKAGE)/dkms.conf
 	@echo $(RELEASE) > $(rpmroot)/$(PACKAGE)/compat_version
 	@echo $(RELEASE) > $(rpmroot)/$(PACKAGE)/compat_base_tree_version
 	@echo $(RELEASE) > $(rpmroot)/$(PACKAGE)/compat_base_tree

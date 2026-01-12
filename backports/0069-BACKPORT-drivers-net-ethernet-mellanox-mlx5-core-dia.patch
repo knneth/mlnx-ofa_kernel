@@ -21,7 +21,7 @@ Subject: [PATCH] BACKPORT:
  	struct mutex state_lock; /* Synchronize update work with reload flows */
  	unsigned long state;
  };
-@@ -197,9 +201,10 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
+@@ -198,9 +202,10 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_cr
  int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer);
  void mlx5_fw_tracer_cleanup(struct mlx5_fw_tracer *tracer);
  void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer);

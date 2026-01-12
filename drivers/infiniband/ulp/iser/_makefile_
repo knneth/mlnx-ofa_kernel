@@ -1,7 +1,7 @@
 KVER ?= $(shell uname -r)
 SRC_DIR ?= $(shell pwd)
 MLNX_ARCH = $(shell uname -m)
-OFA_DIR ?= /usr/src/ofa_kernel/$(MLNX_ARCH)
+OFA_DIR ?= $(shell test -d /usr/src/ofa_kernel-dkms/$(MLNX_ARCH) && echo /usr/src/ofa_kernel-dkms/$(MLNX_ARCH) || echo /usr/src/ofa_kernel/$(MLNX_ARCH))
 OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
 
 export KERNELRELEASE=$(KVER)

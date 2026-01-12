@@ -166,6 +166,8 @@ int mlx5_mpfs_add_mac(struct mlx5_core_dev *dev, u8 *mac)
 		err = set_l2table_entry_cmd(dev, index, mac);
 		if (err)
 			goto free_l2table_index;
+		mlx5_core_dbg(dev, "MPFS entry %pM, set @index (%d)\n",
+			      l2addr->node.addr, index);
 	}
 
 	l2addr->index = index;
@@ -208,6 +210,8 @@ int mlx5_mpfs_del_mac(struct mlx5_core_dev *dev, u8 *mac)
 	if (index >= 0) {
 		del_l2table_entry_cmd(dev, index);
 		free_l2table_index(mpfs, index);
+		mlx5_core_dbg(dev, "MPFS entry %pM, deleted @index (%d)\n",
+			      mac, index);
 	}
 	l2addr_hash_del(l2addr);
 	mlx5_core_dbg(dev, "MPFS mac deleted %pM, index (%d)\n", mac, index);
@@ -217,16 +221,12 @@ unlock:
 }
 EXPORT_SYMBOL(mlx5_mpfs_del_mac);
 
-#define mlx5_mpfs_foreach(hs, tmp, mpfs, j) \
-	for (j = 0; j < MLX5_L2_ADDR_HASH_SIZE; j++) \
-		hlist_for_each_entry_safe(hs, tmp, &mpfs->hash[j], node.hlist)
-
 int mlx5_mpfs_enable(struct mlx5_core_dev *dev)
 {
 	struct mlx5_mpfs *mpfs = dev->priv.mpfs;
 	struct l2table_node *l2addr;
 	struct hlist_node *n;
-	int i, err = 0;
+	int err = 0, i;
 
 	if (!mpfs)
 		return -ENODEV;

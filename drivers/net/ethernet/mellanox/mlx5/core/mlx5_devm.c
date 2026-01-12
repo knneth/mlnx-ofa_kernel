@@ -482,13 +482,21 @@ static int mlx5_devm_port_fn_ipsec_packet_set(struct mlxdevm_port *port, bool en
 static int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_rate *rate_leaf, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_leaf_tx_max_set(NULL, priv, tx_max, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_rate *rate_leaf, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_leaf_tx_share_set(NULL, priv, tx_share, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_rate_leaf_parent_set(struct mlxdevm_rate *mlxdevm_rate,
@@ -496,13 +504,10 @@ static int mlx5_devm_rate_leaf_parent_set(struct mlxdevm_rate *mlxdevm_rate,
 					  void *priv, void *parent_priv,
 					  struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_sched_node *node;
+	struct mlx5_esw_sched_node *node = parent ? parent_priv : NULL;
 	struct mlx5_vport *vport = priv;
 
-	if (!parent)
-		return mlx5_esw_qos_vport_update_parent(vport, NULL, extack);
-	node = parent_priv;
-	return mlx5_esw_qos_vport_update_parent(vport, node, extack);
+	return mlx5_esw_common_rate_leaf_parent_set(node, vport, extack);
 }
 
 static int mlx5_devm_rate_node_parent_set(struct mlxdevm_rate *mlxdevm_rate,
@@ -522,13 +527,21 @@ static int mlx5_devm_rate_node_parent_set(struct mlxdevm_rate *mlxdevm_rate,
 static int mlx5_devm_rate_node_tx_share_set(struct mlxdevm_rate *rate_node, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_tx_share_set(NULL, priv, tx_share, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm_rate *rate_node, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_tx_max_set(NULL, priv, tx_max, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
@@ -536,7 +549,11 @@ static int mlx5_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
 					 u32 *tc_bw,
 					 struct netlink_ext_ack *extack)
 {
-	return mlx5_esw_devm_rate_leaf_tc_bw_set(rate_leaf, priv, tc_bw, extack);
+#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+	return mlx5_esw_devlink_rate_leaf_tc_bw_set(NULL, priv, tc_bw, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm_rate *rate_node,
@@ -554,10 +571,8 @@ static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm_rate *rate_node,
 static int mlx5_devm_rate_node_new(struct mlxdevm_rate *rate_node, void **priv,
 				   struct netlink_ext_ack *extack)
 {
-	struct mlx5_esw_sched_node *node;
 	struct mlx5_eswitch *esw;
 	struct devlink *devlink;
-	int err = 0;
 
 	devlink = mlxdevm_to_devlink(rate_node->mlxdevm);
 
@@ -565,30 +580,17 @@ static int mlx5_devm_rate_node_new(struct mlxdevm_rate *rate_node, void **priv,
 	if (IS_ERR(esw))
 		return PTR_ERR(esw);
 
-	esw_qos_lock(esw);
-	if (esw->mode != MLX5_ESWITCH_OFFLOADS) {
-		NL_SET_ERR_MSG_MOD(extack,
-				   "Rate node creation supported only in switchdev mode");
-		err = -EOPNOTSUPP;
-		goto unlock;
-	}
-
-	node = esw_qos_create_vports_sched_node(esw, MLX5_ESW_QOS_NON_SYSFS_GROUP, extack);
-	if (IS_ERR(node)) {
-		err = PTR_ERR(node);
-		goto unlock;
-	}
-	
-	*priv = node;
-unlock:
-	esw_qos_unlock(esw);
-	return err;
+	return mlx5_esw_common_rate_node_new(esw, priv, extack);
 }
 
 static int mlx5_devm_rate_node_del(struct mlxdevm_rate *rate_node, void *priv,
 				   struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_del(NULL, priv, extack);
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 static int mlx5_devm_info_get(struct mlxdevm *mlxdevm, struct mlxdevm_info_req *req,
@@ -855,7 +857,6 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 {
 	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
 	u16 *arr = val.vu16arr.data;
-	int max_eqs_sf;
 	int i;
 
 	if (!mlx5_have_dedicated_irqs(dev)) {
@@ -873,9 +874,8 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 			return -EINVAL;
 		}
 	}
-	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
-			   mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev)));
-	if (i > max_eqs_sf) {
+			   ;
+	if (val.vu16arr.array_len > mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev))) {
 		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
 		return -EINVAL;
 	}

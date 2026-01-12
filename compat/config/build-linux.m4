@@ -118,6 +118,31 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 
 ]) # end of LB_LINUX_PATH
 
+# Copy over the same logic that DKMS uses to set LLVM=1 if kernel was
+# built with LLVM, because this code is run in a pre-script of dkms.conf
+# and therefore will not get the extra LLVM=1 dkms sets in the make command.
+AC_DEFUN([LB_IS_LLVM],
+	[AC_MSG_CHECKING([kernel built with clang])
+	_lb_is_clang=no
+	if test -f "$LINUX_OBJ/include/generated/autoconf.h"; then
+		if grep -q 2>/dev/null "define CONFIG_CLANG_VERSION 1"  "$LINUX_OBJ/include/generated/autoconf.h"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/.config"; then
+		if grep -q 2>/dev/null CONFIG_CC_IS_CLANG=y "$LINUX_OBJ/.config"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/vmlinux"; then
+		if readelf -p .comment "$LINUX_OBJ/vmlinux" 2>&1 | grep -q clang; then
+			_lb_is_clang="yes"
+		fi
+	fi
+	if test "$_lb_is_clang" = "yes"; then
+		export LLVM=1
+	fi
+	AC_MSG_RESULT($_lb_is_clang)
+])
+
 # LB_LINUX_SYMVERFILE
 # SLES 9 uses a different name for this file - unsure about vanilla kernels
 # around this version, but it matters for servers only.

@@ -2774,6 +2774,28 @@ else $as_nop
 fi
 
 
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking kernel built with clang" >&5
+printf %s "checking kernel built with clang... " >&6; }
+	_lb_is_clang=no
+	if test -f "$LINUX_OBJ/include/generated/autoconf.h"; then
+		if grep -q 2>/dev/null "define CONFIG_CLANG_VERSION 1"  "$LINUX_OBJ/include/generated/autoconf.h"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/.config"; then
+		if grep -q 2>/dev/null CONFIG_CC_IS_CLANG=y "$LINUX_OBJ/.config"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/vmlinux"; then
+		if readelf -p .comment "$LINUX_OBJ/vmlinux" 2>&1 | grep -q clang; then
+			_lb_is_clang="yes"
+		fi
+	fi
+	if test "$_lb_is_clang" = "yes"; then
+		export LLVM=1
+	fi
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $_lb_is_clang" >&5
+printf "%s\n" "$_lb_is_clang" >&6; }
+
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking name of module symbol version file" >&5
 printf %s "checking name of module symbol version file... " >&6; }
 	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
@@ -6208,45 +6230,6 @@ EOF
 
 	if false; then
 
-printf "%s\n" "#define HAVE_DEVLINK_ESWITCH_STATE -1" >>confdefs.h
-
-	fi
-	MLNX_RDMA_MOD_NAME=HAVE_DEVLINK_ESWITCH_STATE
-	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
-	rm -rf "$MLNX_RDMA_MOD_DIR"
-	mkdir -p "$MLNX_RDMA_MOD_DIR"
-	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
-#include <linux/module.h>
-#include <linux/kernel.h>
-MODULE_LICENSE("GPL");
-
-                #include <uapi/linux/devlink.h>
-
-static int __maybe_unused test_func (void) {
-
-                enum devlink_eswitch_state state;
-                return 0;
-
-	return 0;
-}
-EOF
-		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
-obj-m += $MLNX_RDMA_TEST_MOD.o
-# The rest is for printing a single dot:
-ifeq (,\$(MLNX_RDMA_SILENT))
-\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
-\$(obj)/echo:
-	@echo -n .
-.PHONY: \$(obj)/echo
-endif
-EOF
-	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
-	echo "enum devlink_eswitch_state exists" > "$MLNX_RDMA_MODULES_DIR/desc"
-
-
-
-	if false; then
-
 printf "%s\n" "#define HAVE_DEVLINK_PORT_FN_OPSTATE -1" >>confdefs.h
 
 	fi
@@ -7543,6 +7526,47 @@ endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "struct devlink_ops.eswitch_mode_set has extack" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+
+	if false; then
+
+printf "%s\n" "#define HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <uapi/linux/devlink.h>
+
+static int __maybe_unused test_func (void) {
+
+		enum devlink_eswitch_mode mode;
+		mode = DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE;
+
+		return 0;
+
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE exists" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
 
@@ -22437,6 +22461,47 @@ endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "libiscsi.h has struct iscsi_cmd" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+
+	if false; then
+
+printf "%s\n" "#define HAVE_ISCSI_HOST_ALLOC_GET_CONST -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_ISCSI_HOST_ALLOC_GET_CONST
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <scsi/libiscsi.h>
+
+static int __maybe_unused test_func (void) {
+
+		const struct scsi_host_template *sht = NULL;
+		iscsi_host_alloc(sht, 0, 0);
+
+		return 0;
+
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "iscsi_host_alloc get const" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
 

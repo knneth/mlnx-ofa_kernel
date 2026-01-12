@@ -871,6 +871,31 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 
 ]) # end of LB_LINUX_PATH
 
+# Copy over the same logic that DKMS uses to set LLVM=1 if kernel was
+# built with LLVM, because this code is run in a pre-script of dkms.conf
+# and therefore will not get the extra LLVM=1 dkms sets in the make command.
+AC_DEFUN([LB_IS_LLVM],
+	[AC_MSG_CHECKING([kernel built with clang])
+	_lb_is_clang=no
+	if test -f "$LINUX_OBJ/include/generated/autoconf.h"; then
+		if grep -q 2>/dev/null "define CONFIG_CLANG_VERSION 1"  "$LINUX_OBJ/include/generated/autoconf.h"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/.config"; then
+		if grep -q 2>/dev/null CONFIG_CC_IS_CLANG=y "$LINUX_OBJ/.config"; then
+			_lb_is_clang="yes"
+		fi
+	elif test -f "$LINUX_OBJ/vmlinux"; then
+		if readelf -p .comment "$LINUX_OBJ/vmlinux" 2>&1 | grep -q clang; then
+			_lb_is_clang="yes"
+		fi
+	fi
+	if test "$_lb_is_clang" = "yes"; then
+		export LLVM=1
+	fi
+	AC_MSG_RESULT($_lb_is_clang)
+])
+
 # LB_LINUX_SYMVERFILE
 # SLES 9 uses a different name for this file - unsure about vanilla kernels
 # around this version, but it matters for servers only.
@@ -1715,13 +1740,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
                 return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_ESWITCH_STATE, [enum devlink_eswitch_state exists], [
-                #include <uapi/linux/devlink.h>
-        ],[
-                enum devlink_eswitch_state state;
-                return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_FN_OPSTATE, [enum devlink_port_fn_opstate exist], [
                 #include <uapi/linux/devlink.h>
         ],[
@@ -2059,6 +2077,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 			.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
 		};
 		dlops.eswitch_mode_set(NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE, [DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE exists], [
+		#include <uapi/linux/devlink.h>
+	],[
+		enum devlink_eswitch_mode mode;
+		mode = DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE;
 
 		return 0;
 	])
@@ -5449,6 +5476,15 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <scsi/libiscsi.h>
 	],[
 		struct iscsi_cmd c;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ISCSI_HOST_ALLOC_GET_CONST, [iscsi_host_alloc get const], [
+		#include <scsi/libiscsi.h>
+	],[
+		const struct scsi_host_template *sht = NULL;
+		iscsi_host_alloc(sht, 0, 0);
 
 		return 0;
 	])
@@ -9578,6 +9614,7 @@ AC_DEFUN([COMPAT_CONFIG_HEADERS],[
 AC_DEFUN([MLNX_PROG_LINUX],
 [
 LB_LINUX_PATH
+LB_IS_LLVM
 LB_LINUX_SYMVERFILE
 
 LINUX_CONFIG_COMPAT

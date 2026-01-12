@@ -16,6 +16,7 @@
 static char *mode_to_str[] = {
 	[DEVLINK_ESWITCH_MODE_LEGACY] = "legacy",
 	[DEVLINK_ESWITCH_MODE_SWITCHDEV] = "switchdev",
+	[DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE] = "switchdev-inactive"
 };
 
 static char *inline_to_str[] = {

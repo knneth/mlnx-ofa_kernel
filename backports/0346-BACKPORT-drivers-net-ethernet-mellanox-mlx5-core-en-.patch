@@ -18,21 +18,21 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
  	rss->hash.hfunc = ETH_RSS_HASH_TOP;
  	netdev_rss_key_fill(rss->hash.toeplitz_hash_key,
  			    sizeof(rss->hash.toeplitz_hash_key));
-@@ -566,8 +567,11 @@ inner_tir:
- 	mlx5e_tir_builder_free(builder);
+@@ -567,8 +568,11 @@ inner_tir:
  	return final_err;
  }
--
--int mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc, bool *symmetric)
-+int mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc
+ 
+-void mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc,
+-			bool *symmetric)
++void mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc
 +#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
-+			 ,bool *symmetric
++			, bool *symmetric
 +#endif
-+		      )
++			)
  {
  	if (indir)
  		memcpy(indir, rss->indir.table,
-@@ -580,14 +584,19 @@ int mlx5e_rss_get_rxfh(struct mlx5e_rss
+@@ -581,12 +585,17 @@ void mlx5e_rss_get_rxfh(struct mlx5e_rss
  	if (hfunc)
  		*hfunc = rss->hash.hfunc;
  
@@ -40,8 +40,6 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
  	if (symmetric)
  		*symmetric = rss->hash.symmetric;
 +#endif
- 
- 	return 0;
  }
  
  int mlx5e_rss_set_rxfh(struct mlx5e_rss *rss, const u32 *indir,
@@ -53,7 +51,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
  		       u32 *rqns, u32 *vhca_ids, unsigned int num_rqns)
  {
  	bool changed_indir = false;
-@@ -627,10 +636,12 @@ int mlx5e_rss_set_rxfh(struct mlx5e_rss
+@@ -626,10 +635,12 @@ int mlx5e_rss_set_rxfh(struct mlx5e_rss
  		       rss->indir.actual_table_size * sizeof(*rss->indir.table));
  	}
  

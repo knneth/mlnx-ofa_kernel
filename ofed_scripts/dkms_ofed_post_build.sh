@@ -30,7 +30,7 @@ set -e
 if [[ "$1" ]]; then
 	ofa_build_src="$1"
 fi
-ofa_build_src=${ofa_build_src:-/usr/src/ofa_kernel/default/}
+ofa_build_src=${ofa_build_src:-/usr/src/ofa_kernel-dkms/default/}
 build_dir=${build_dir:-$PWD/../build}
 running_kernel=$(uname -r)
 symlink="/usr/src/ofa_kernel/default"
@@ -40,8 +40,8 @@ if [ "X${ofa_build_src}" == "X" ]; then
 	exit 1
 fi
 
-if !(echo "${ofa_build_src}" | grep -q "^/usr/src/ofa_kernel/"); then
-	echo "ofa_build_src must start with '/usr/src/ofa_kernel/', you provided '${ofa_build_src}'" >&2
+if !(echo "${ofa_build_src}" | grep -qE "^/usr/src/ofa_kernel(-dkms)?/"); then
+	echo "ofa_build_src must start with '/usr/src/ofa_kernel/' or '/usr/src/ofa_kernel-dkms/', you provided '${ofa_build_src}'" >&2
 	exit 1
 fi
 
@@ -61,9 +61,15 @@ mkdir -p $ofa_build_src
 /bin/cp -ar ofed_scripts		$ofa_build_src
 /bin/cp -ar Module*.symvers		$ofa_build_src
 
-if ! update-alternatives --list 2>/dev/null | grep -q "^$ofa_build_src\$"; then
+alt_path=$(echo "$ofa_build_src" | sed 's|/ofa_kernel-dkms/|/ofa_kernel/|')
+if [ "$alt_path" != "$ofa_build_src" ]; then
+	mkdir -p "$(dirname "$alt_path")"
+	ln -sfn "$ofa_build_src" "$alt_path"
+fi
+
+if ! update-alternatives --display ofa_kernel_headers 2>/dev/null | grep -qF "$alt_path"; then
 	if [ -L "$symlink" ] && \
-		! update-alternatives --list ofa_kernel_headers >/dev/null 2>&1;
+		! update-alternatives --display ofa_kernel_headers >/dev/null 2>&1;
 	then
 		rm -f "$symlink"
 	fi
@@ -71,5 +77,5 @@ if ! update-alternatives --list 2>/dev/null | grep -q "^$ofa_build_src\$"; then
 	# 17 is a value not to be typically selected by anybody manually
 	# adding their own alternatives. See prerm.
 	update-alternatives --install "$symlink" ofa_kernel_headers \
-		$ofa_build_src 17
+		"${alt_path}" 17
 fi

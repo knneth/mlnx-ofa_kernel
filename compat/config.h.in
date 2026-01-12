@@ -514,9 +514,6 @@
 /* struct devlink_ops.eswitch_mode_set has extack */
 #undef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 
-/* enum devlink_eswitch_state exists */
-#undef HAVE_DEVLINK_ESWITCH_STATE
-
 /* devlink_flash_update_end_notify */
 #undef HAVE_DEVLINK_FLASH_UPDATE_END_NOTIFY
 
@@ -720,6 +717,9 @@
 
 /* devlink.h has devlink_set_features */
 #undef HAVE_DEVLINK_SET_FEATURES
+
+/* DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE exists */
+#undef HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE
 
 /* devlink.h has devlink_to_dev */
 #undef HAVE_DEVLINK_TO_DEV
@@ -1387,6 +1387,9 @@
 
 /* iscsi_conn has member login_sockaddr */
 #undef HAVE_ISCSI_CONN_LOGIN_SOCKADDR
+
+/* iscsi_host_alloc get const */
+#undef HAVE_ISCSI_HOST_ALLOC_GET_CONST
 
 /* libiscsi.h iscsi_host_remove has 2 parameters */
 #undef HAVE_ISCSI_HOST_REMOVE_2_PARAMS

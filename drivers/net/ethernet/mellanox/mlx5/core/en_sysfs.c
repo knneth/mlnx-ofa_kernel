@@ -285,24 +285,21 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
 	u8 hfunc;
-	int err, len = 0;
+	int len = 0;
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
-	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc, NULL);
+	mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc, NULL);
 	mutex_unlock(&priv->state_lock);
-	if (err)
-		goto out;
 
 	len += sprintf(buf + len, "Operational hfunc: %s\n",
 		       hfunc == MLX5E_HFUNC_XOR ?
 		       "xor" : "toeplitz");
 	len += sprintf(buf + len, "Supported hfuncs: xor toeplitz\n");
 
-out:
 	rtnl_unlock();
 
-	return err ? err : len;
+	return len;
 }
 
 static ssize_t mlx5e_store_hfunc(struct device *device,
@@ -361,16 +358,14 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
 			       char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	int err, len = 0;
-	bool symmetric;
+	bool symmetric = false;
+	int len = 0;
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
-	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
+	mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
 	mutex_unlock(&priv->state_lock);
 	rtnl_unlock();
-	if (err)
-		return err;
 
 	len += sprintf(buf + len, "Operational xfrm: %s\n",
 		       symmetric == true ?  "symmetric-or-xor" : "none");

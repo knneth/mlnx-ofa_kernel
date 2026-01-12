@@ -2,12 +2,12 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 
 ---
- drivers/infiniband/ulp/iser/iscsi_iser.c | 53 +++++++++++++++++++++++-
- 1 file changed, 51 insertions(+), 2 deletions(-)
+ drivers/infiniband/ulp/iser/iscsi_iser.c | 65 ++++++++++++++++++++++--
+ 1 file changed, 61 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
-@@ -76,6 +76,9 @@
+@@ -76,9 +76,16 @@
  
  MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
  MODULE_LICENSE("Dual BSD/GPL");
@@ -16,8 +16,16 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 +#endif
  MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
  
- static const struct scsi_host_template iscsi_iser_sht;
-@@ -239,6 +242,7 @@ static int iscsi_iser_task_init(struct i
+-static const struct scsi_host_template iscsi_iser_sht;
++static
++#ifdef HAVE_ISCSI_HOST_ALLOC_GET_CONST
++const
++#endif
++struct scsi_host_template iscsi_iser_sht;
+ static struct iscsi_transport iscsi_iser_transport;
+ static struct scsi_transport_template *iscsi_iser_scsi_transport;
+ static struct workqueue_struct *release_wq;
+@@ -239,6 +246,7 @@ static int iscsi_iser_task_init(struct i
  	if (ret) {
  		iser_err("Failed to init task %p, err = %d\n",
  			 iser_task, ret);
@@ -25,7 +33,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  		return ret;
  	}
  
-@@ -493,7 +497,9 @@ static int iscsi_iser_conn_bind(struct i
+@@ -493,7 +501,9 @@ static int iscsi_iser_conn_bind(struct i
  	iser_conn->iscsi_conn = conn;
  
  out:
@@ -35,7 +43,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	mutex_unlock(&iser_conn->state_mutex);
  	return error;
  }
-@@ -568,7 +574,11 @@ static void iscsi_iser_session_destroy(s
+@@ -568,7 +578,11 @@ static void iscsi_iser_session_destroy(s
  	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
  
  	iscsi_session_teardown(cls_session);
@@ -47,7 +55,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	iscsi_host_free(shost);
  }
  
-@@ -649,10 +659,10 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -649,10 +663,10 @@ iscsi_iser_session_create(struct iscsi_e
  			scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP |
  						   SHOST_DIX_GUARD_CRC);
  		}
@@ -60,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
  			mutex_unlock(&iser_conn->state_mutex);
  			goto free_host;
-@@ -685,7 +695,11 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -685,7 +699,11 @@ iscsi_iser_session_create(struct iscsi_e
  	return cls_session;
  
  remove_host:
@@ -72,10 +80,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  free_host:
  	iscsi_host_free(shost);
  	return NULL;
-@@ -956,6 +970,31 @@ static umode_t iser_attr_is_visible(int
+@@ -956,7 +974,36 @@ static umode_t iser_attr_is_visible(int
  	return 0;
  }
  
+-static const struct scsi_host_template iscsi_iser_sht = {
 +#ifndef HAVE_SCSI_HOST_VIRT_BOUNDARY_MASK
 +static int iscsi_iser_slave_alloc(struct scsi_device *sdev)
 +{
@@ -101,10 +110,15 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
 +}
 +#endif
 +
- static const struct scsi_host_template iscsi_iser_sht = {
++static
++#ifdef HAVE_ISCSI_HOST_ALLOC_GET_CONST
++const
++#endif
++struct scsi_host_template iscsi_iser_sht = {
  	.module                 = THIS_MODULE,
  	.name                   = "iSCSI Initiator over iSER",
-@@ -968,10 +1007,18 @@ static const struct scsi_host_template i
+ 	.queuecommand           = iscsi_queuecommand,
+@@ -968,10 +1015,18 @@ static const struct scsi_host_template i
  	.eh_device_reset_handler= iscsi_eh_device_reset,
  	.eh_target_reset_handler = iscsi_eh_recover_target,
  	.target_alloc		= iscsi_target_alloc,
@@ -123,7 +137,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -984,7 +1031,9 @@ static struct iscsi_transport iscsi_iser
+@@ -984,7 +1039,9 @@ static struct iscsi_transport iscsi_iser
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,

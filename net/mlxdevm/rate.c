@@ -836,13 +836,15 @@ void devm_rate_nodes_destroy(struct mlxdevm *mlxdevm) //TODO: check where to add
 		if (!mlxdevm_rate->parent)
 			continue;
 
-		refcount_dec(&mlxdevm_rate->parent->refcnt);
 		if (mlxdevm_rate_is_leaf(mlxdevm_rate))
 			ops->rate_leaf_parent_set(mlxdevm_rate, NULL, mlxdevm_rate->priv,
 						  NULL, NULL);
 		else if (mlxdevm_rate_is_node(mlxdevm_rate))
 			ops->rate_node_parent_set(mlxdevm_rate, NULL, mlxdevm_rate->priv,
 						  NULL, NULL);
+
+		refcount_dec(&mlxdevm_rate->parent->refcnt);
+		mlxdevm_rate->parent = NULL;
 	}
 	list_for_each_entry_safe(mlxdevm_rate, tmp, &mlxdevm->rate_list, list) {
 		if (mlxdevm_rate_is_node(mlxdevm_rate)) {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 
 Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
 ---
- .../net/ethernet/mellanox/mlx5/core/esw/qos.h | 27 ++++++++++++++-----
- 1 file changed, 21 insertions(+), 6 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.h | 58 ++++++++++++++-----
+ 1 file changed, 45 insertions(+), 13 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
@@ -20,10 +20,11 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
  void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
  int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
  				    struct netlink_ext_ack *extack);
-@@ -115,6 +110,14 @@ int mlx5_esw_qos_set_sysfs_node_min_rate
+@@ -115,18 +110,48 @@ int mlx5_esw_qos_set_sysfs_node_min_rate
  void sysfs_esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
  				struct netlink_ext_ack *extack);
  
+-int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
 +int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
 +				  const char *name, u32 link_speed_max,
 +				  u64 value, struct netlink_ext_ack *extack);
@@ -31,34 +32,73 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
 +				    bool hold_rtnl_lock, struct netlink_ext_ack *extack);
 +int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
 +				 u64 *rate, struct netlink_ext_ack *extack);
++int mlx5_esw_devlink_rate_leaf_tx_share_set(
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
- int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
++					    struct devlink_rate *rate_leaf,
++#endif
++					    void *priv,
  					    u64 tx_share, struct netlink_ext_ack *extack);
- int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *priv,
-@@ -139,7 +142,19 @@ int mlx5_esw_devlink_rate_node_parent_se
+-int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *priv,
++int mlx5_esw_devlink_rate_leaf_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_leaf,
++#endif
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_share_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					    struct devlink_rate *rate_node,
++#endif
++					    void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_node,
++#endif
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack);
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
+ 				   struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
++#endif
++int mlx5_esw_devlink_rate_node_del(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++				   struct devlink_rate *rate_node,
++#endif
++				   void *priv,
+ 				   struct netlink_ext_ack *extack);
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+ 					  void *priv, void *parent_priv,
+@@ -135,11 +160,18 @@ int mlx5_esw_devlink_rate_node_parent_se
  					  struct devlink_rate *parent,
  					  void *priv, void *parent_priv,
  					  struct netlink_ext_ack *extack);
-+#else
-+int mlx5_esw_devm_rate_node_del(void *priv, struct netlink_ext_ack *extack);
-+int mlx5_esw_devm_rate_node_tx_max_set(void *priv, u64 tx_max,
-+				       struct netlink_ext_ack *extack);
-+int mlx5_esw_devm_rate_node_tx_share_set(void *priv, u64 tx_share,
-+					 struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
 +#endif
-+
++int mlx5_esw_devlink_rate_node_tc_bw_set(
 +#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
- int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
-+#else
-+int mlx5_esw_devm_rate_node_tc_bw_set(
++					 struct devlink_rate *rate_node,
 +#endif
  					 void *priv,
  					 u32 *tc_bw,
  					 struct netlink_ext_ack *extack);
-@@ -147,6 +162,6 @@ int mlx5_esw_devm_rate_leaf_tc_bw_set(st
- 				      void *priv,
- 				      u32 *tc_bw,
- 				      struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_leaf_tc_bw_set(struct devlink_rate *rate_node,
++int mlx5_esw_devlink_rate_leaf_tc_bw_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
++					 struct devlink_rate *rate_node,
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack);
+@@ -149,6 +181,6 @@ int mlx5_esw_common_rate_leaf_parent_set
+ 					 struct netlink_ext_ack *extack);
+ int mlx5_esw_common_rate_node_new(struct mlx5_eswitch *esw, void **priv,
+ 				  struct netlink_ext_ack *extack);
 -#endif
  
 +#endif /* CONFIG_MLX5_ESWITCH */

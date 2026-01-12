@@ -22,7 +22,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  #define MLX5_MAX_UC_PER_VPORT(dev) \
  	(1 << MLX5_CAP_GEN(dev, log_max_current_uc_list))
  
-@@ -498,6 +499,10 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -495,6 +496,10 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  int mlx5_esw_vport_alloc(struct mlx5_eswitch *esw, int index, u16 vport_num);
  void mlx5_esw_vport_free(struct mlx5_eswitch *esw, struct mlx5_vport *vport);
  
@@ -33,7 +33,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  #define MLX5_ESWITCH_IGNORE_NUM_VFS (-1)
  int mlx5_eswitch_enable_locked(struct mlx5_eswitch *esw, int num_vfs);
  int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs);
-@@ -658,11 +663,17 @@ struct mlx5_esw_flow_attr {
+@@ -655,11 +660,17 @@ struct mlx5_esw_flow_attr {
  	struct mlx5_pkt_reformat *decap_pkt_reformat;
  };
  
@@ -55,7 +55,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  int mlx5_devlink_eswitch_inline_mode_get(struct devlink *devlink, u8 *mode);
  
  int mlx5_eswitch_vport_modify_other_hca_cap_roce(struct mlx5_eswitch *esw,
-@@ -671,10 +682,22 @@ int mlx5_eswitch_vport_get_other_hca_cap
+@@ -668,14 +679,36 @@ int mlx5_eswitch_vport_get_other_hca_cap
  					      struct mlx5_vport *vport, bool *value);
  
  int mlx5_devlink_eswitch_encap_mode_set(struct devlink *devlink,
@@ -72,20 +72,13 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
 +					);
  int mlx5_devlink_eswitch_encap_mode_get(struct devlink *devlink,
 -					enum devlink_eswitch_encap_mode *encap);
+-int mlx5_devlink_port_fn_hw_addr_get(struct devlink_port *port,
 +#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM
 +					enum devlink_eswitch_encap_mode *encap
 +#else
 +					u8 *encap
 +#endif
 +					);
- /* Added for compilation on 6.15 base kernel */
- #ifdef HAVE_DEVLINK_ESWITCH_STATE
- int mlx5_devlink_eswitch_state_get(struct devlink *devlink,
-@@ -685,10 +708,20 @@ int mlx5_devlink_eswitch_state_set(struc
- 				   enum devlink_eswitch_state state,
- 				   struct netlink_ext_ack *extack);
- #endif
--int mlx5_devlink_port_fn_hw_addr_get(struct devlink_port *port,
 +#if defined(HAVE_PORT_FUNCTION_HW_ADDR_GET_GET_4_PARAM) || defined(HAVE_DEVLINK_PORT_OPS)
 +int mlx5_devlink_port_fn_hw_addr_get(
 +#else
@@ -104,7 +97,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  				     const u8 *hw_addr, int hw_addr_len,
  				     struct netlink_ext_ack *extack);
  int mlx5_devlink_port_fn_roce_get(struct devlink_port *port, bool *is_enabled,
-@@ -700,14 +733,18 @@ int mlx5_devlink_port_fn_migratable_get(
+@@ -687,14 +720,18 @@ int mlx5_devlink_port_fn_migratable_get(
  int mlx5_devlink_port_fn_migratable_set(struct devlink_port *port, bool enable,
  					struct netlink_ext_ack *extack);
  #ifdef CONFIG_XFRM_OFFLOAD
@@ -123,7 +116,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  #endif /* CONFIG_XFRM_OFFLOAD */
  int mlx5_devlink_port_fn_max_io_eqs_get(struct devlink_port *port,
  					u32 *max_io_eqs,
-@@ -721,8 +758,11 @@ int mlx5_devlink_port_fn_max_io_eqs_set_
+@@ -708,8 +745,11 @@ int mlx5_devlink_port_fn_max_io_eqs_set_
  void *mlx5_eswitch_get_uplink_priv(struct mlx5_eswitch *esw, u8 rep_type);
  
  int mlx5_devlink_eswitch_ipsec_mode_set(struct devlink *devlink,
@@ -137,7 +130,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  int mlx5_devlink_eswitch_ipsec_mode_get(struct devlink *devlink,
  					enum devlink_eswitch_ipsec_mode *ipsec);
  
-@@ -1015,7 +1055,12 @@ struct mlx5_esw_event_info {
+@@ -1002,7 +1042,12 @@ struct mlx5_esw_event_info {
  
  int mlx5_esw_event_notifier_register(struct mlx5_eswitch *esw, struct notifier_block *n);
  void mlx5_esw_event_notifier_unregister(struct mlx5_eswitch *esw, struct notifier_block *n);
@@ -151,7 +144,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  bool mlx5_esw_hold(struct mlx5_core_dev *dev);
  void mlx5_esw_release(struct mlx5_core_dev *dev);
  void mlx5_esw_get(struct mlx5_core_dev *dev);
-@@ -1149,6 +1194,12 @@ static inline void mlx5_eswitch_unblock_
+@@ -1136,6 +1181,12 @@ static inline void mlx5_eswitch_unblock_
  {
  }
  
@@ -164,7 +157,7 @@ Change-Id: I5d1a635bb3d8aa24578b2538542186149c62c423
  static inline int mlx5_eswitch_block_mode(struct mlx5_core_dev *dev) { return 0; }
  static inline void mlx5_eswitch_unblock_mode(struct mlx5_core_dev *dev) {}
  static inline bool mlx5_eswitch_block_ipsec(struct mlx5_core_dev *dev)
-@@ -1158,6 +1209,11 @@ static inline bool mlx5_eswitch_block_ip
+@@ -1145,6 +1196,11 @@ static inline bool mlx5_eswitch_block_ip
  
  static inline void mlx5_eswitch_unblock_ipsec(struct mlx5_core_dev *dev) {}
  

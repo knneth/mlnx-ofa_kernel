@@ -25,6 +25,10 @@ enum devlink_eswitch_lag_port_select_mode {
 	DEVLINK_ESWITCH_LAG_PORT_SELECT_MODE_MULTIPORT_ESW,
 };
 
+#ifndef HAVE_DEVLINK_SWITCHDEV_INACTIVE_MODE
+#define DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE 2
+#endif
+
 #include_next <uapi/linux/devlink.h>
 
 #ifndef HAVE_DEVLINK_PORT_FLAVOUR_VIRTUAL
