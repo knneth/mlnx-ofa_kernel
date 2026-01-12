@@ -153,6 +153,7 @@ static void mlx5_fc_stats_query_all_counters(struct mlx5_core_dev *dev)
 static void mlx5_fc_free(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 {
 	mlx5_cmd_fc_free(dev, counter->id);
+	kfree(counter->bulk);
 	kfree(counter);
 }
 
@@ -163,7 +164,7 @@ static void mlx5_fc_release(struct mlx5_core_dev *dev, struct mlx5_fc *counter)
 	if (WARN_ON(counter->type == MLX5_FC_TYPE_LOCAL))
 		return;
 
-	if (counter->bulk)
+	if (counter->aging)
 		mlx5_fc_pool_release_counter(&fc_stats->fc_pool, counter);
 	else
 		mlx5_fc_free(dev, counter);
@@ -222,20 +223,39 @@ static void mlx5_fc_stats_work(struct work_struct *work)
 
 static struct mlx5_fc *mlx5_fc_single_alloc(struct mlx5_core_dev *dev)
 {
+	struct mlx5_fc_bulk *single_bulk;
 	struct mlx5_fc *counter;
 	int err;
 
 	counter = kzalloc(sizeof(*counter), GFP_KERNEL);
-	if (!counter)
-		return ERR_PTR(-ENOMEM);
-
-	err = mlx5_cmd_fc_alloc(dev, &counter->id);
-	if (err) {
-		kfree(counter);
-		return ERR_PTR(err);
+	if (!counter) {
+		err = -ENOMEM;
+		goto err_out;
 	}
 
+	single_bulk = kzalloc(sizeof(*single_bulk), GFP_KERNEL);
+	if (!single_bulk) {
+		err = -ENOMEM;
+		goto err_single_bulk;
+	}
+
+	err = mlx5_cmd_fc_alloc(dev, &counter->id);
+	if (err)
+		goto err_fc_alloc;
+
+	/* Initialize minimal bulk structure */
+	single_bulk->base_id = counter->id;
+	refcount_set(&single_bulk->hws_data.hws_action_refcount, 0);
+	mutex_init(&single_bulk->hws_data.lock);
+	counter->bulk = single_bulk;
+
 	return counter;
+err_fc_alloc:
+	kfree(single_bulk);
+err_single_bulk:
+	kfree(counter);
+err_out:
+	return ERR_PTR(err);
 }
 
 static struct mlx5_fc *mlx5_fc_acquire(struct mlx5_core_dev *dev, bool aging)
@@ -568,17 +588,36 @@ mlx5_fc_local_create(u32 counter_id, u32 offset, u32 bulk_size)
 	counter->id = counter_id;
 	fc_bulk->base_id = counter_id - offset;
 	fc_bulk->fs_bulk.bulk_len = bulk_size;
+	refcount_set(&fc_bulk->hws_data.hws_action_refcount, 0);
+	mutex_init(&fc_bulk->hws_data.lock);
 	counter->bulk = fc_bulk;
+	refcount_set(&counter->fc_local_refcount, 1);
 	return counter;
 }
 EXPORT_SYMBOL(mlx5_fc_local_create);
 
 void mlx5_fc_local_destroy(struct mlx5_fc *counter)
 {
-	if (!counter || counter->type != MLX5_FC_TYPE_LOCAL)
-		return;
-
 	kfree(counter->bulk);
 	kfree(counter);
 }
 EXPORT_SYMBOL(mlx5_fc_local_destroy);
+
+void mlx5_fc_local_get(struct mlx5_fc *counter)
+{
+	if (!counter || counter->type != MLX5_FC_TYPE_LOCAL)
+		return;
+
+	refcount_inc(&counter->fc_local_refcount);
+}
+
+void mlx5_fc_local_put(struct mlx5_fc *counter)
+{
+	if (!counter || counter->type != MLX5_FC_TYPE_LOCAL)
+		return;
+
+	if (!refcount_dec_and_test(&counter->fc_local_refcount))
+		return;
+
+	mlx5_fc_local_destroy(counter);
+}

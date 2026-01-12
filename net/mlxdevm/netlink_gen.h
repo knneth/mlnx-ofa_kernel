@@ -10,10 +10,13 @@
 #include <net/genetlink.h>
 
 #include <uapi/linux/mlxdevm.h>
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Common nested types */
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 extern const struct nla_policy devlink_dl_port_function_nl_policy[DEVLINK_PORT_FN_ATTR_CAPS + 1];
+#endif
+extern const struct nla_policy mlxdevm_dl_rate_tc_bws_nl_policy[MLXDEVM_RATE_TC_ATTR_BW + 1];
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 extern const struct nla_policy devlink_dl_selftest_id_nl_policy[DEVLINK_ATTR_SELFTEST_ID_FLASH + 1];
 #endif
 

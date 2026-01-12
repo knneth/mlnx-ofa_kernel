@@ -8,7 +8,7 @@ Change-Id: Icdc68bf0a02fc643fb1a00c29d8420f15e8c1064
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -7,6 +7,10 @@
+@@ -9,6 +9,10 @@ GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
  subdir-ccflags-y += -I$(src)
  subdir-ccflags-y += -I$(CWD)/net/mlxdevm
  

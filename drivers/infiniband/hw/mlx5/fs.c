@@ -1011,14 +1011,14 @@ static int get_per_qp_prio(struct mlx5_ib_dev *dev,
 	return 0;
 }
 
-static struct mlx5_per_qp_opfc *
-get_per_qp_opfc(struct mlx5_rdma_counter *mcounter, u32 qp_num, bool *new)
+static struct mlx5_per_qp_opfc *get_per_qp_opfc(struct xarray *qpn_opfc_xa,
+						u32 qp_num, bool *new)
 {
 	struct mlx5_per_qp_opfc *per_qp_opfc;
 
 	*new = false;
 
-	per_qp_opfc = xa_load(&mcounter->qpn_opfc_xa, qp_num);
+	per_qp_opfc = xa_load(qpn_opfc_xa, qp_num);
 	if (per_qp_opfc)
 		return per_qp_opfc;
 	per_qp_opfc = kzalloc(sizeof(*per_qp_opfc), GFP_KERNEL);
@@ -1031,7 +1031,8 @@ get_per_qp_opfc(struct mlx5_rdma_counter *mcounter, u32 qp_num, bool *new)
 }
 
 static int add_op_fc_rules(struct mlx5_ib_dev *dev,
-			   struct mlx5_rdma_counter *mcounter,
+			   struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX],
+			   struct xarray *qpn_opfc_xa,
 			   struct mlx5_per_qp_opfc *per_qp_opfc,
 			   struct mlx5_ib_flow_prio *prio,
 			   enum mlx5_ib_optional_counter_type type,
@@ -1054,7 +1055,7 @@ static int add_op_fc_rules(struct mlx5_ib_dev *dev,
 		return 0;
 	}
 
-	opfc->fc = mcounter->fc[type];
+	opfc->fc = fc_arr[type];
 
 	spec = kcalloc(MAX_OPFC_RULES, sizeof(*spec), GFP_KERNEL);
 	if (!spec) {
@@ -1147,8 +1148,7 @@ static int add_op_fc_rules(struct mlx5_ib_dev *dev,
 	}
 	prio->refcount += spec_num;
 
-	err = xa_err(xa_store(&mcounter->qpn_opfc_xa, qp_num, per_qp_opfc,
-			      GFP_KERNEL));
+	err = xa_err(xa_store(qpn_opfc_xa, qp_num, per_qp_opfc, GFP_KERNEL));
 	if (err)
 		goto del_rules;
 
@@ -1167,8 +1167,9 @@ null_fc:
 	return err;
 }
 
-static bool is_fc_shared_and_in_use(struct mlx5_rdma_counter *mcounter,
-				    u32 type, struct mlx5_fc **fc)
+static bool
+is_fc_shared_and_in_use(struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX], u32 type,
+			struct mlx5_fc **fc)
 {
 	u32 shared_fc_type;
 
@@ -1189,7 +1190,7 @@ static bool is_fc_shared_and_in_use(struct mlx5_rdma_counter *mcounter,
 		return false;
 	}
 
-	*fc = mcounter->fc[shared_fc_type];
+	*fc = fc_arr[shared_fc_type];
 	if (!(*fc))
 		return false;
 
@@ -1197,24 +1198,23 @@ static bool is_fc_shared_and_in_use(struct mlx5_rdma_counter *mcounter,
 }
 
 void mlx5r_fs_destroy_fcs(struct mlx5_ib_dev *dev,
-			  struct rdma_counter *counter)
+			  struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX])
 {
-	struct mlx5_rdma_counter *mcounter = to_mcounter(counter);
 	struct mlx5_fc *in_use_fc;
 	int i;
 
 	for (i = MLX5_IB_OPCOUNTER_CC_RX_CE_PKTS_PER_QP;
 	     i <= MLX5_IB_OPCOUNTER_RDMA_RX_BYTES_PER_QP; i++) {
-		if (!mcounter->fc[i])
+		if (!fc_arr[i])
 			continue;
 
-		if (is_fc_shared_and_in_use(mcounter, i, &in_use_fc)) {
-			mcounter->fc[i] = NULL;
+		if (is_fc_shared_and_in_use(fc_arr, i, &in_use_fc)) {
+			fc_arr[i] = NULL;
 			continue;
 		}
 
-		mlx5_fc_destroy(dev->mdev, mcounter->fc[i]);
-		mcounter->fc[i] = NULL;
+		mlx5_fc_destroy(dev->mdev, fc_arr[i]);
+		fc_arr[i] = NULL;
 	}
 }
 
@@ -1361,16 +1361,15 @@ void mlx5_ib_fs_remove_op_fc(struct mlx5_ib_dev *dev,
 	put_per_qp_prio(dev, type);
 }
 
-void mlx5r_fs_unbind_op_fc(struct ib_qp *qp, struct rdma_counter *counter)
+void mlx5r_fs_unbind_op_fc(struct ib_qp *qp, struct xarray *qpn_opfc_xa)
 {
-	struct mlx5_rdma_counter *mcounter = to_mcounter(counter);
-	struct mlx5_ib_dev *dev = to_mdev(counter->device);
+	struct mlx5_ib_dev *dev = to_mdev(qp->device);
 	struct mlx5_per_qp_opfc *per_qp_opfc;
 	struct mlx5_ib_op_fc *in_use_opfc;
 	struct mlx5_ib_flow_prio *prio;
 	int i, j;
 
-	per_qp_opfc = xa_load(&mcounter->qpn_opfc_xa, qp->qp_num);
+	per_qp_opfc = xa_load(qpn_opfc_xa, qp->qp_num);
 	if (!per_qp_opfc)
 		return;
 
@@ -1396,13 +1395,13 @@ void mlx5r_fs_unbind_op_fc(struct ib_qp *qp, struct rdma_counter *counter)
 	}
 
 	kfree(per_qp_opfc);
-	xa_erase(&mcounter->qpn_opfc_xa, qp->qp_num);
+	xa_erase(qpn_opfc_xa, qp->qp_num);
 }
 
-int mlx5r_fs_bind_op_fc(struct ib_qp *qp, struct rdma_counter *counter,
-			u32 port)
+int mlx5r_fs_bind_op_fc(struct ib_qp *qp,
+			struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX],
+			struct xarray *qpn_opfc_xa, u32 port)
 {
-	struct mlx5_rdma_counter *mcounter = to_mcounter(counter);
 	struct mlx5_ib_dev *dev = to_mdev(qp->device);
 	struct mlx5_per_qp_opfc *per_qp_opfc;
 	struct mlx5_ib_flow_prio *prio;
@@ -1411,9 +1410,6 @@ int mlx5r_fs_bind_op_fc(struct ib_qp *qp, struct rdma_counter *counter,
 	struct mlx5_fc *in_use_fc;
 	int i, err, per_qp_type;
 	bool new;
-
-	if (!counter->mode.bind_opcnt)
-		return 0;
 
 	cnts = &dev->port[port - 1].cnts;
 
@@ -1426,23 +1422,22 @@ int mlx5r_fs_bind_op_fc(struct ib_qp *qp, struct rdma_counter *counter,
 		prio = get_opfc_prio(dev, per_qp_type);
 		WARN_ON(!prio->flow_table);
 
-		if (is_fc_shared_and_in_use(mcounter, per_qp_type, &in_use_fc))
-			mcounter->fc[per_qp_type] = in_use_fc;
+		if (is_fc_shared_and_in_use(fc_arr, per_qp_type, &in_use_fc))
+			fc_arr[per_qp_type] = in_use_fc;
 
-		if (!mcounter->fc[per_qp_type]) {
-			mcounter->fc[per_qp_type] = mlx5_fc_create(dev->mdev,
-								   false);
-			if (IS_ERR(mcounter->fc[per_qp_type]))
-				return PTR_ERR(mcounter->fc[per_qp_type]);
+		if (!fc_arr[per_qp_type]) {
+			fc_arr[per_qp_type] = mlx5_fc_create(dev->mdev, false);
+			if (IS_ERR(fc_arr[per_qp_type]))
+				return PTR_ERR(fc_arr[per_qp_type]);
 		}
 
-		per_qp_opfc = get_per_qp_opfc(mcounter, qp->qp_num, &new);
+		per_qp_opfc = get_per_qp_opfc(qpn_opfc_xa, qp->qp_num, &new);
 		if (!per_qp_opfc) {
 			err = -ENOMEM;
 			goto free_fc;
 		}
-		err = add_op_fc_rules(dev, mcounter, per_qp_opfc, prio,
-				      per_qp_type, qp->qp_num, port);
+		err = add_op_fc_rules(dev, fc_arr, qpn_opfc_xa, per_qp_opfc,
+				      prio, per_qp_type, qp->qp_num, port);
 		if (err)
 			goto del_rules;
 	}
@@ -1450,12 +1445,12 @@ int mlx5r_fs_bind_op_fc(struct ib_qp *qp, struct rdma_counter *counter,
 	return 0;
 
 del_rules:
-	mlx5r_fs_unbind_op_fc(qp, counter);
+	mlx5r_fs_unbind_op_fc(qp, qpn_opfc_xa);
 	if (new)
 		kfree(per_qp_opfc);
 free_fc:
-	if (xa_empty(&mcounter->qpn_opfc_xa))
-		mlx5r_fs_destroy_fcs(dev, counter);
+	if (xa_empty(qpn_opfc_xa))
+		mlx5r_fs_destroy_fcs(dev, fc_arr);
 	return err;
 }
 
@@ -2490,7 +2485,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_CREATE_FLOW)(
 	struct mlx5_ib_dev *dev;
 	u32 flags;
 
-	if (!capable(CAP_NET_RAW))
+	if (!rdma_uattrs_has_raw_cap(attrs))
 		return -EPERM;
 
 	fs_matcher = uverbs_attr_get_obj(attrs,
@@ -3021,7 +3016,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_STEERING_ANCHOR_CREATE)(
 	u32 ft_id;
 	int err;
 
-	if (!capable(CAP_NET_RAW))
+	if (!rdma_dev_has_raw_cap(&dev->ib_dev))
 		return -EPERM;
 
 	err = uverbs_get_const(&ib_uapi_ft_type, attrs,

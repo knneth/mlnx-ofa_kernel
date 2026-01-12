@@ -2,53 +2,109 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: fs/fuse/file.c
 
 ---
- fs/fuse/file.c | 151 +++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 151 insertions(+)
+ fs/fuse/file.c | 198 +++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 192 insertions(+), 6 deletions(-)
 
 --- a/fs/fuse/file.c
 +++ b/fs/fuse/file.c
-@@ -867,7 +867,13 @@ static int fuse_do_readpage(struct file
- 	 * page-cache page, so make sure we read a properly synced
- 	 * page.
- 	 */
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+	/* Newer kernels (6.16+) use __folio_index */
-+	fuse_wait_on_page_writeback(inode, page->__folio_index);
-+#else
-+	/* Older kernels use index */
- 	fuse_wait_on_page_writeback(inode, page->index);
+@@ -21,6 +21,9 @@
+ #include <linux/filelock.h>
+ #include <linux/splice.h>
+ #include <linux/task_io_accounting_ops.h>
++#ifndef HAVE_FOLIO_COPY_EXPORTED
++#include <linux/migrate.h>
 +#endif
  
+ static int fuse_send_open(struct fuse_mount *fm, u64 nodeid,
+ 			  unsigned int open_flags, int opcode,
+@@ -485,7 +488,11 @@ static inline bool fuse_folio_is_writeba
+ 					   struct folio *folio)
+ {
+ 	pgoff_t last = folio_next_index(folio) - 1;
++#ifdef HAVE_FOLIO_INDEX
+ 	return fuse_range_is_writeback(inode, folio_index(folio), last);
++#else
++	return fuse_range_is_writeback(inode, folio->index, last);
++#endif
+ }
+ 
+ static void fuse_wait_on_folio_writeback(struct inode *inode,
+@@ -658,14 +665,38 @@ void fuse_read_args_fill(struct fuse_io_
+ 	args->out_args[0].size = count;
+ }
+ 
++#ifndef HAVE_UNPIN_FOLIO
++static void unpin_folio(struct folio *folio)
++{
++	int refs = 1;
++
++	if (is_zero_folio(folio))
++		return;
++	node_stat_mod_folio(folio, NR_FOLL_PIN_RELEASED, refs);
++	if (folio_test_large(folio))
++		atomic_sub(refs, &folio->_pincount);
++	else
++		refs *= GUP_PIN_COUNTING_BIAS;
++
++        folio_put_refs(folio, refs);
++}
++#endif
++
+ static void fuse_release_user_pages(struct fuse_args_pages *ap, ssize_t nres,
+ 				    bool should_dirty)
+ {
+ 	unsigned int i;
+ 
+ 	for (i = 0; i < ap->num_folios; i++) {
+-		if (should_dirty)
++		if (should_dirty) {
++#ifdef HAVE_FOLIO_MARK_DIRTY_LOCK
+ 			folio_mark_dirty_lock(ap->folios[i]);
++#else
++			folio_lock(ap->folios[i]);
++			folio_mark_dirty(ap->folios[i]);
++			folio_unlock(ap->folios[i]);
++#endif
++		}
+ 		if (ap->args.is_pinned)
+ 			unpin_folio(ap->folios[i]);
+ 	}
+@@ -890,7 +921,6 @@ static int fuse_do_readfolio(struct file
+ 	 * make sure we read a properly synced folio.
+ 	 */
+ 	fuse_wait_on_folio_writeback(inode, folio);
+-
  	attr_ver = fuse_get_attr_version(fm->fc);
  
-@@ -1138,7 +1144,13 @@ static ssize_t fuse_send_write_pages(str
- 	int err;
+ 	/* Don't overflow end offset */
+@@ -954,7 +984,13 @@ static void fuse_readpages_end(struct fu
+ 	}
  
- 	for (i = 0; i < ap->num_pages; i++)
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+		/* Newer kernels (6.16+) use __folio_index */
-+		fuse_wait_on_page_writeback(inode, ap->pages[i]->__folio_index);
+ 	for (i = 0; i < ap->num_folios; i++) {
++#ifdef HAVE_FOLIO_END_READ
+ 		folio_end_read(ap->folios[i], !err);
 +#else
-+		/* Older kernels use index */
- 		fuse_wait_on_page_writeback(inode, ap->pages[i]->index);
++		if (likely(!err))
++			folio_mark_uptodate(ap->folios[i]);
++		folio_unlock(ap->folios[i]);
 +#endif
- 
- 	fuse_write_args_fill(ia, ff, pos, count);
- 	ia->write.in.flags = fuse_write_flags(iocb);
-@@ -1468,7 +1480,9 @@ static int fuse_get_user_pages(struct fu
- 			       unsigned int max_pages,
+ 		folio_put(ap->folios[i]);
+ 	}
+ 	if (ia->ff)
+@@ -1511,7 +1547,9 @@ static int fuse_get_user_pages(struct fu
+ 			       bool use_pages_for_kvec_io,
  			       bool use_p2p_dma)
  {
 +#ifdef HAVE_ITER_ALLOW_P2PDMA
  	iov_iter_extraction_t iov_extract_flags = use_p2p_dma ? ITER_ALLOW_P2PDMA : 0;
 +#endif
+ 	bool flush_or_invalidate = false;
+ 	unsigned int nr_pages = 0;
  	size_t nbytes = 0;  /* # bytes already packed in req */
- 	ssize_t ret = 0;
- 
-@@ -1496,7 +1510,11 @@ static int fuse_get_user_pages(struct fu
- 		ret = iov_iter_extract_pages(ii, &pt_pages,
+@@ -1563,7 +1601,11 @@ static int fuse_get_user_pages(struct fu
+ 		ret = iov_iter_extract_pages(ii, &pages,
  					     *nbytesp - nbytes,
- 					     max_pages - ap->num_pages,
+ 					     max_pages - nr_pages,
 +#ifdef HAVE_ITER_ALLOW_P2PDMA
  					     iov_extract_flags,
 +#else
@@ -57,64 +113,99 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  					     &start);
  		if (ret < 0)
  			break;
-@@ -2195,7 +2213,13 @@ static bool fuse_writepage_add(struct fu
+@@ -1856,7 +1898,10 @@ static void fuse_writepage_finish_stat(s
+ 	struct backing_dev_info *bdi = inode_to_bdi(inode);
  
- 		WARN_ON(tmp->inode != new_wpa->inode);
- 		curr_index = tmp->ia.write.in.offset >> PAGE_SHIFT;
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+		/* Newer kernels (6.16+) use __folio_index */
-+		if (curr_index == page->__folio_index) {
-+#else
-+		/* Older kernels use index */
- 		if (curr_index == page->index) {
+ 	dec_wb_stat(&bdi->wb, WB_WRITEBACK);
++#ifdef HAVE_NR_WRITEBACK_TEMP
++	/* Older kernels: NR_WRITEBACK_TEMP counter exists */
+ 	node_stat_sub_folio(folio, NR_WRITEBACK_TEMP);
 +#endif
- 			WARN_ON(tmp->ia.ap.num_pages != 1);
- 			swap(tmp->ia.ap.pages[0], new_ap->pages[0]);
- 			break;
-@@ -2233,7 +2257,13 @@ static bool fuse_writepage_need_send(str
- 	 * the pages are faulted with get_user_pages(), and then after the read
- 	 * completed.
+ 	wb_writeout_inc(&bdi->wb);
+ }
+ 
+@@ -2080,6 +2125,7 @@ int fuse_write_inode(struct inode *inode
+ 	struct fuse_file *ff;
+ 	int err;
+ 
++#ifdef HAVE_WRITEBACK_CONTROL_FOR_RECLAIM
+ 	/*
+ 	 * Inode is always written before the last reference is dropped and
+ 	 * hence this should not be reached from reclaim.
+@@ -2089,7 +2135,9 @@ int fuse_write_inode(struct inode *inode
+ 	 * reclaim while serving a request can't be prevented, because it can
+ 	 * involve any number of unrelated userspace processes.
  	 */
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+	/* Newer kernels (6.16+) use __folio_index */
-+	if (fuse_page_is_writeback(data->inode, page->__folio_index))
-+#else
-+	/* Older kernels use index */
- 	if (fuse_page_is_writeback(data->inode, page->index))
++	/* Older kernels: for_reclaim field exists in writeback_control */
+ 	WARN_ON(wbc->for_reclaim);
 +#endif
- 		return true;
  
- 	/* Reached max pages */
-@@ -2245,7 +2275,13 @@ static bool fuse_writepage_need_send(str
+ 	ff = __fuse_write_file_get(fi);
+ 	err = fuse_flush_times(inode, ff);
+@@ -2138,14 +2186,21 @@ static void fuse_writepage_args_page_fil
+ 	struct inode *inode = folio->mapping->host;
+ 	struct fuse_args_pages *ap = &wpa->ia.ap;
+ 
++#ifdef HAVE_FOLIO_COPY_EXPORTED
+ 	folio_copy(tmp_folio, folio);
++#else
++	folio_migrate_copy(tmp_folio, folio);
++#endif
+ 
+ 	ap->folios[folio_index] = tmp_folio;
+ 	ap->descs[folio_index].offset = 0;
+ 	ap->descs[folio_index].length = PAGE_SIZE;
+ 
+ 	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
++#ifdef HAVE_NR_WRITEBACK_TEMP
++	/* Older kernels: NR_WRITEBACK_TEMP counter exists */
+ 	node_stat_add_folio(tmp_folio, NR_WRITEBACK_TEMP);
++#endif
+ }
+ 
+ static struct fuse_writepage_args *fuse_writepage_args_setup(struct folio *folio,
+@@ -2351,7 +2406,11 @@ static bool fuse_writepage_need_send(str
  		return true;
  
  	/* Discontinuity */
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+	/* Newer kernels (6.16+) use __folio_index */
-+	if (data->orig_pages[ap->num_pages - 1]->__folio_index + 1 != page->__folio_index)
++#ifdef HAVE_FOLIO_INDEX
+ 	if (data->orig_folios[ap->num_folios - 1]->index + 1 != folio_index(folio))
 +#else
-+	/* Older kernels use index */
- 	if (data->orig_pages[ap->num_pages - 1]->index + 1 != page->index)
++	if (data->orig_folios[ap->num_folios - 1]->index + 1 != folio->index)
 +#endif
  		return true;
  
  	/* Need to grow the pages array?  If so, did the expansion fail? */
-@@ -2393,21 +2429,36 @@ out:
+@@ -2483,17 +2542,37 @@ out:
+  * It's worthy to make sure that space is reserved on disk for the write,
   * but how to implement it without killing performance need more thinking.
   */
- static int fuse_write_begin(struct file *file, struct address_space *mapping,
-+#ifdef HAVE_WRITE_BEGIN_FOLIO
- 		loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
+-static int fuse_write_begin(struct file *file, struct address_space *mapping,
+-		loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
++static int fuse_write_begin(
++#ifdef HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB
++			    const struct kiocb *iocb,
 +#else
-+		loff_t pos, unsigned len, struct page **pagep, void **fsdata)
++			    struct file *file,
++#endif
++			    struct address_space *mapping,
++#ifdef HAVE_WRITE_BEGIN_FOLIO
++	loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
++#else
++	loff_t pos, unsigned len, struct page **pagep, void **fsdata)
 +#endif
  {
  	pgoff_t index = pos >> PAGE_SHIFT;
++#ifdef HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB
++	/* Newer kernels (v6.17-rc1+): extract file from kiocb */
++	struct file *file = iocb->ki_filp;
++#endif
  	struct fuse_conn *fc = get_fuse_conn(file_inode(file));
 +#ifdef HAVE_WRITE_BEGIN_FOLIO
  	struct folio *folio;
 +#else
 +	struct page *page;
++	struct folio *dummy_folio;
 +#endif
  	loff_t fsize;
  	int err = -ENOMEM;
@@ -125,18 +216,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	folio = __filemap_get_folio(mapping, index, FGP_WRITEBEGIN,
  			mapping_gfp_mask(mapping));
  	if (IS_ERR(folio))
- 		goto error;
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+	/* Newer kernels (6.16+) use __folio_index */
-+	fuse_wait_on_page_writeback(mapping->host, (&folio->page)->__folio_index);
-+#else
-+	/* Older kernels use index */
- 	fuse_wait_on_page_writeback(mapping->host, folio->index);
-+#endif
- 
- 	if (folio_test_uptodate(folio) || len >= folio_size(folio))
- 		goto success;
-@@ -2431,37 +2482,101 @@ success:
+@@ -2524,37 +2603,109 @@ success:
  cleanup:
  	folio_unlock(folio);
  	folio_put(folio);
@@ -166,7 +246,9 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
 +			zero_user_segment(page, 0, off);
 +		goto success;
 +	}
-+	err = fuse_do_readpage(file, page);
++
++	dummy_folio = page_folio(page);
++	err = fuse_do_readfolio(file, dummy_folio);
 +	if (err)
 +		goto cleanup;
 +success:
@@ -181,8 +263,16 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	return err;
  }
  
- static int fuse_write_end(struct file *file, struct address_space *mapping,
- 		loff_t pos, unsigned len, unsigned copied,
+-static int fuse_write_end(struct file *file, struct address_space *mapping,
+-		loff_t pos, unsigned len, unsigned copied,
++static int fuse_write_end(
++#ifdef HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB
++		          const struct kiocb *iocb,
++#else
++		          struct file *file,
++#endif
++		          struct address_space *mapping,
++		          loff_t pos, unsigned len, unsigned copied,
 +#ifdef HAVE_WRITE_BEGIN_FOLIO
  		struct folio *folio, void *fsdata)
 +#else
@@ -238,7 +328,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  	return copied;
  }
-@@ -2473,10 +2588,19 @@ static int fuse_launder_folio(struct fol
+@@ -2566,10 +2717,19 @@ static int fuse_launder_folio(struct fol
  		struct inode *inode = folio->mapping->host;
  
  		/* Serialize with pending writeback for the same page */
@@ -258,21 +348,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	}
  	return err;
  }
-@@ -2520,7 +2644,13 @@ static vm_fault_t fuse_page_mkwrite(stru
- 		return VM_FAULT_NOPAGE;
- 	}
- 
-+#ifdef HAVE_PAGE_FOLIO_INDEX_FIELD
-+	/* Newer kernels (6.16+) use __folio_index */
-+	fuse_wait_on_page_writeback(inode, page->__folio_index);
-+#else
-+	/* Older kernels use index */
- 	fuse_wait_on_page_writeback(inode, page->index);
-+#endif
- 	return VM_FAULT_LOCKED;
- }
- 
-@@ -2613,14 +2743,22 @@ static int convert_fuse_file_lock(struct
+@@ -2706,14 +2866,22 @@ static int convert_fuse_file_lock(struct
  		 * translate it into the caller's pid namespace.
  		 */
  		rcu_read_lock();
@@ -295,7 +371,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	return 0;
  }
  
-@@ -2634,10 +2772,18 @@ static void fuse_lk_fill(struct fuse_arg
+@@ -2727,10 +2895,18 @@ static void fuse_lk_fill(struct fuse_arg
  
  	memset(inarg, 0, sizeof(*inarg));
  	inarg->fh = ff->fh;
@@ -314,7 +390,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	inarg->lk.pid = pid;
  	if (flock)
  		inarg->lk_flags |= FUSE_LK_FLOCK;
-@@ -2674,8 +2820,13 @@ static int fuse_setlk(struct file *file,
+@@ -2767,8 +2943,13 @@ static int fuse_setlk(struct file *file,
  	struct fuse_mount *fm = get_fuse_mount(inode);
  	FUSE_ARGS(args);
  	struct fuse_lk_in inarg;
@@ -327,4 +403,18 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
 +#endif
  	pid_t pid_nr = pid_nr_ns(pid, fm->fc->pid_ns);
  	int err;
+ 
+@@ -3388,8 +3569,13 @@ static ssize_t fuse_copy_file_range(stru
+ 				     len, flags);
+ 
+ 	if (ret == -EOPNOTSUPP || ret == -EXDEV)
++#ifdef HAVE_SPLICE_COPY_FILE_RANGE
+ 		ret = splice_copy_file_range(src_file, src_off, dst_file,
+ 					     dst_off, len);
++#else
++		ret = generic_copy_file_range(src_file, src_off, dst_file,
++					      dst_off, len, flags);
++#endif
+ 	return ret;
+ }
  

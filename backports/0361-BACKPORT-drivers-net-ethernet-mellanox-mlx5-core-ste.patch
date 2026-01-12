@@ -15,12 +15,12 @@ Subject: [PATCH] BACKPORT:
 +#ifdef HAVE_GET_RANDOM_U8
  	return get_random_u8() % mlx5hws_bwc_queues(ctx);
 +#else
-+	return (u8)(get_random_u32() && 0xffU) % mlx5hws_bwc_queues(ctx);
++	return (u8)(get_random_u32() & 0xffU) % mlx5hws_bwc_queues(ctx);
 +#endif
  }
  
  static u16
-@@ -380,7 +384,11 @@ int mlx5hws_bwc_queue_poll(struct mlx5hw
+@@ -409,7 +413,11 @@ int mlx5hws_bwc_queue_poll(struct mlx5hw
  			   bool drain)
  {
  	unsigned long timeout = jiffies +

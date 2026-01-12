@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 
 ---
- .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 78 ++++++++++++++++++-
- 1 file changed, 77 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 84 ++++++++++++++++++-
+ 1 file changed, 83 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
@@ -189,7 +189,21 @@ Subject: [PATCH] BACKPORT:
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  priv_tx->crypto_info.crypto_info.cipher_type);
-@@ -837,7 +892,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -744,7 +799,13 @@ tx_post_resync_dump(struct mlx5e_txqsq *
+ 	dseg->addr       = cpu_to_be64(dma_addr);
+ 	dseg->lkey       = sq->mkey_be;
+ 	dseg->byte_count = cpu_to_be32(fsz);
++#ifdef HAVE_NETMEM_DMA_UNMAP_ADDR_SET
++	/* Newer kernels (v6.16+): use netmem-aware DMA push */
+ 	mlx5e_dma_push_netmem(sq, skb_frag_netmem(frag), dma_addr, fsz);
++#else
++	/* Older kernels: use unified DMA push function */
++	mlx5e_dma_push(sq, dma_addr, fsz, MLX5E_DMA_MAP_PAGE);
++#endif
+ 
+ 	tx_fill_wi(sq, pi, MLX5E_KTLS_DUMP_WQEBBS, fsz, skb_frag_page(frag));
+ 	sq->pc += MLX5E_KTLS_DUMP_WQEBBS;
+@@ -837,7 +898,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
  	int datalen;
  	u32 seq;
  
@@ -201,7 +215,7 @@ Subject: [PATCH] BACKPORT:
  	if (!datalen)
  		return true;
  
-@@ -854,7 +913,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -854,7 +919,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
  
  	priv_tx = mlx5e_get_ktls_tx_priv_ctx(tls_ctx);
  
@@ -213,7 +227,7 @@ Subject: [PATCH] BACKPORT:
  		mlx5e_ktls_tx_post_param_wqes(sq, priv_tx, false, false);
  
  	seq = ntohl(tcp_hdr(skb)->seq);
-@@ -908,13 +971,16 @@ static void mlx5e_tls_tx_debugfs_init(st
+@@ -908,13 +977,16 @@ static void mlx5e_tls_tx_debugfs_init(st
  
  int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  {
@@ -230,7 +244,7 @@ Subject: [PATCH] BACKPORT:
  	/* DEK pool could be used by either or both of TX and RX. But we have to
  	 * put the creation here to avoid syndrome when doing devlink reload.
  	 */
-@@ -922,6 +988,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -922,6 +994,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
  	if (IS_ERR(dek_pool))
  		return PTR_ERR(dek_pool);
  	tls->dek_pool = dek_pool;
@@ -238,7 +252,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (!mlx5e_is_ktls_tx(priv->mdev))
  		return 0;
-@@ -937,14 +1004,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -937,14 +1010,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
  	return 0;
  
  err_tx_pool_init:
@@ -259,7 +273,7 @@ Subject: [PATCH] BACKPORT:
  
  	debugfs_remove_recursive(priv->tls->debugfs.dfs_tx);
  	priv->tls->debugfs.dfs_tx = NULL;
-@@ -952,7 +1025,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
+@@ -952,7 +1031,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
  	mlx5e_tls_tx_pool_cleanup(priv->tls->tx_pool);
  	priv->tls->tx_pool = NULL;
  

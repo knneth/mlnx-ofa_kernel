@@ -78,6 +78,10 @@ ifeq ($(WITH_DKMS),1)
 	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp *.c *.h debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(pversion)"/' <dkms.conf >debian/dkms.conf
+	# BUILD_EXCLUSIVE_KERNEL_MIN supported since dkms 3.0.11.
+	# Not in debian 11, ubuntu 22.04
+	sed -i -e '/^BUILD_EXCLUSIVE_KERNEL_MIN/s/.*/BUILD_EXCLUSIVE_KERNEL="^6.[6-9]|^6.[12][0-9]|^[7-9]"/' \
+		debian/dkms.conf
 
 	# Force DKMS to install our modules.
 	# This is mostly needed for modules that do not have a version number info, as DKMS
@@ -98,7 +102,7 @@ ifneq ($(MLNX_KO_NO_STRIP),1)
 ifneq ($(WITH_DKMS),1)
 override_dh_strip:
 	dh_strip
-	find debian -name '*.ko' | xargs strip -g
+	find debian -name '*.ko' | xargs -r strip -g
 ifeq ($(WITH_MOD_SIGN),1)
 	tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(K_BUILD)
 endif

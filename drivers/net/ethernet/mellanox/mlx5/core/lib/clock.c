@@ -1362,16 +1362,24 @@ static int mlx5_clock_alloc(struct mlx5_core_dev *mdev, bool shared)
 	return 0;
 }
 
-static void mlx5_shared_clock_register(struct mlx5_core_dev *mdev, u64 key)
+static void mlx5_shared_clock_register(struct mlx5_core_dev *mdev,
+				       u8 identity[MLX5_RT_CLOCK_IDENTITY_SIZE])
 {
 	struct mlx5_core_dev *peer_dev, *next = NULL;
+	struct mlx5_devcom_match_attr attr = {};
+	struct mlx5_devcom_comp_dev *compd;
 	struct mlx5_devcom_comp_dev *pos;
 
-	mdev->clock_state->compdev = mlx5_devcom_register_component(mdev->priv.devc,
-								    MLX5_DEVCOM_SHARED_CLOCK,
-								    key, NULL, mdev);
-	if (IS_ERR(mdev->clock_state->compdev))
+	BUILD_BUG_ON(MLX5_RT_CLOCK_IDENTITY_SIZE > MLX5_DEVCOM_MATCH_KEY_MAX);
+	memcpy(attr.key.buf, identity, MLX5_RT_CLOCK_IDENTITY_SIZE);
+
+	compd = mlx5_devcom_register_component(mdev->priv.devc,
+					       MLX5_DEVCOM_SHARED_CLOCK,
+					       &attr, NULL, mdev);
+	if (IS_ERR(compd))
 		return;
+
+	mdev->clock_state->compdev = compd;
 
 	mlx5_devcom_comp_lock(mdev->clock_state->compdev);
 	mlx5_devcom_for_each_peer_entry(mdev->clock_state->compdev, peer_dev, pos) {
@@ -1391,8 +1399,7 @@ static void mlx5_shared_clock_register(struct mlx5_core_dev *mdev, u64 key)
 	mlx5_devcom_comp_unlock(mdev->clock_state->compdev);
 
 	if (!mdev->clock) {
-		mlx5_devcom_unregister_component(mdev->clock_state->compdev);
-		mdev->clock_state->compdev = NULL;
+		mlx5_devcom_unregister_component(&mdev->clock_state->compdev);
 	}
 }
 
@@ -1425,7 +1432,7 @@ static void mlx5_shared_clock_unregister(struct mlx5_core_dev *mdev)
 	mdev->clock_info = NULL;
 	mlx5_devcom_comp_unlock(mdev->clock_state->compdev);
 
-	mlx5_devcom_unregister_component(mdev->clock_state->compdev);
+	mlx5_devcom_unregister_component(&mdev->clock_state->compdev);
 }
 
 static void mlx5_clock_arm_pps_in_event(struct mlx5_clock *clock,
@@ -1521,7 +1528,6 @@ int mlx5_init_clock(struct mlx5_core_dev *mdev)
 {
 	u8 identity[MLX5_RT_CLOCK_IDENTITY_SIZE];
 	struct mlx5_clock_dev_state *clock_state;
-	u64 key;
 	int err;
 
 	if (!MLX5_CAP_GEN(mdev, device_frequency_khz)) {
@@ -1537,12 +1543,10 @@ int mlx5_init_clock(struct mlx5_core_dev *mdev)
 	mdev->clock_state = clock_state;
 
 	if (MLX5_CAP_MCAM_REG3(mdev, mrtcq) && mlx5_real_time_mode(mdev)) {
-		if (mlx5_clock_identity_get(mdev, identity)) {
+		if (mlx5_clock_identity_get(mdev, identity))
 			mlx5_core_warn(mdev, "failed to get rt clock identity, create ptp dev per function\n");
-		} else {
-			memcpy(&key, &identity, sizeof(key));
-			mlx5_shared_clock_register(mdev, key);
-		}
+		else
+			mlx5_shared_clock_register(mdev, identity);
 	}
 
 	if (!mdev->clock) {

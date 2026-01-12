@@ -7,7 +7,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
-@@ -374,7 +374,13 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -375,7 +375,13 @@ static int mlx5ctl_probe(struct auxiliar
  	ret = fwctl_register(&mcdev->fwctl);
  	if (ret)
  		return ret;

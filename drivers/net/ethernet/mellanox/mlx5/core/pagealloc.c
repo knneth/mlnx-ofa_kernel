@@ -596,9 +596,12 @@ static int reclaim_pages_cmd(struct mlx5_core_dev *dev,
 	u32 func_id;
 	u32 npages;
 	u32 i = 0;
+	int err;
 
-	if (!mlx5_cmd_is_down(dev))
-		return mlx5_cmd_do(dev, in, in_size, out, out_size);
+	err = mlx5_cmd_do(dev, in, in_size, out, out_size);
+	/* If FW is gone (-ENXIO), proceed to forceful reclaim */
+	if (err != -ENXIO)
+		return err;
 
 	/* No hard feelings, we want our pages back! */
 	npages = MLX5_GET(manage_pages_in, in, input_num_entries);
@@ -846,7 +849,6 @@ int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev)
 	struct rb_root *root;
 	unsigned long id;
 	void *entry;
-	int i;
 
 	xa_for_each(&dev->priv.page_root_xa, id, entry) {
 		root = entry;
@@ -856,13 +858,6 @@ int mlx5_reclaim_startup_pages(struct mlx5_core_dev *dev)
 	}
 
 	WARN_ON(!xa_empty(&dev->priv.page_root_xa));
-
-	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR) {
-		for (i = 0; i < MLX5_FUNC_TYPE_NUM; i++)
-			dev->priv.page_counters[i] = 0;
-
-		dev->priv.fw_pages = 0;
-	}
 
 	WARN(dev->priv.fw_pages,
 	     "FW pages counter is %d after reclaiming all pages\n",

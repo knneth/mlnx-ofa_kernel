@@ -225,6 +225,11 @@ enum mlxdevm_port_flavour {
 				      */
 };
 
+/* IEEE 802.1Qaz standard supported values. */
+
+#define MLXDEVM_RATE_TCS_MAX 8
+#define MLXDEVM_RATE_TC_INDEX_MAX (MLXDEVM_RATE_TCS_MAX - 1)
+
 enum mlxdevm_rate_type {
 	MLXDEVM_RATE_TYPE_LEAF,
 	MLXDEVM_RATE_TYPE_NODE,
@@ -624,6 +629,8 @@ enum mlxdevm_attr {
 
 	MLXDEVM_ATTR_REGION_DIRECT,		/* flag */
 
+	MLXDEVM_ATTR_RATE_TC_BWS,		/* nested */
+
 	/* Add new attributes above here, update the spec in
 	 * Documentation/netlink/specs/devlink.yaml and re-generate
 	 * net/devlink/netlink_gen.c.
@@ -633,6 +640,15 @@ enum mlxdevm_attr {
 
 	__MLXDEVM_ATTR_MAX,
 	MLXDEVM_ATTR_MAX = __MLXDEVM_ATTR_MAX - 1
+};
+
+enum mlxdevm_rate_tc_attr {
+	MLXDEVM_RATE_TC_ATTR_UNSPEC,
+	MLXDEVM_RATE_TC_ATTR_INDEX,		/* u8 */
+	MLXDEVM_RATE_TC_ATTR_BW,		/* u32 */
+
+	__MLXDEVM_RATE_TC_ATTR_MAX,
+	MLXDEVM_RATE_TC_ATTR_MAX = __MLXDEVM_RATE_TC_ATTR_MAX - 1
 };
 
 /* Mapping between internal resource described by the field and system

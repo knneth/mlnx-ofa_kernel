@@ -910,13 +910,14 @@ void mlx5_ib_fs_remove_op_fc(struct mlx5_ib_dev *dev,
 			     struct mlx5_ib_op_fc *opfc,
 			     enum mlx5_ib_optional_counter_type type);
 
-int mlx5r_fs_bind_op_fc(struct ib_qp *qp, struct rdma_counter *counter,
-			u32 port);
+int mlx5r_fs_bind_op_fc(struct ib_qp *qp,
+			struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX],
+			struct xarray *qpn_opfc_xa, u32 port);
 
-void mlx5r_fs_unbind_op_fc(struct ib_qp *qp, struct rdma_counter *counter);
+void mlx5r_fs_unbind_op_fc(struct ib_qp *qp, struct xarray *qpn_opfc_xa);
 
 void mlx5r_fs_destroy_fcs(struct mlx5_ib_dev *dev,
-			  struct rdma_counter *counter);
+			  struct mlx5_fc *fc_arr[MLX5_IB_OPCOUNTER_MAX]);
 
 struct mlx5_ib_multiport_info;
 
@@ -1122,6 +1123,7 @@ struct mlx5_ib_lb_state {
 	u32			user_td;
 	int			qps;
 	bool			enabled;
+	bool			force_enable;
 };
 
 struct mlx5_ib_pf_eq {
@@ -1387,6 +1389,8 @@ int mlx5_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 		      struct uverbs_attr_bundle *attrs);
 int mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata);
 int mlx5_ib_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc);
+int mlx5_ib_pre_destroy_cq(struct ib_cq *cq);
+int mlx5_ib_post_destroy_cq(struct ib_cq *cq);
 int mlx5_ib_arm_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags flags);
 int mlx5_ib_modify_cq(struct ib_cq *cq, u16 cq_count, u16 cq_period);
 int mlx5_ib_resize_cq(struct ib_cq *ibcq, int entries, struct ib_udata *udata);
@@ -1814,14 +1818,21 @@ mlx5_umem_mkc_find_best_pgsz(struct mlx5_ib_dev *dev, struct ib_umem *umem,
 
 	bitmap = GENMASK_ULL(max_log_entity_size_cap, min_log_entity_size_cap);
 
+	/* In KSM mode HW requires IOVA and mkey's page size to be aligned */
+	if (access_mode == MLX5_MKC_ACCESS_MODE_KSM && iova)
+		bitmap &= GENMASK_ULL(__ffs64(iova), 0);
+
 	return ib_umem_find_best_pgsz(umem, bitmap, iova);
 }
 
 static inline unsigned long
-mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf)
+mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf,
+				int access_mode)
 {
-	return ib_umem_find_best_pgsz(&umem_dmabuf->umem, PAGE_SIZE,
-				      umem_dmabuf->umem.iova);
+	return mlx5_umem_mkc_find_best_pgsz(to_mdev(umem_dmabuf->umem.ibdev),
+					    &umem_dmabuf->umem,
+					    umem_dmabuf->umem.iova,
+					    access_mode);
 }
 
 #endif /* MLX5_IB_H */

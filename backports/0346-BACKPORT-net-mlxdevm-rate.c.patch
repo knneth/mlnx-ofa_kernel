@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
 
 Change-Id: If12c25666b7d3a20f58dcf167c4581f086c82978
 ---
- net/mlxdevm/rate.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ net/mlxdevm/rate.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
 --- a/net/mlxdevm/rate.c
 +++ b/net/mlxdevm/rate.c
-@@ -141,14 +141,17 @@ static void mlxdevm_rate_notify(struct m
+@@ -167,14 +167,17 @@ static void mlxdevm_rate_notify(struct m
  				enum mlxdevm_command cmd)
  {
  	struct mlxdevm *mlxdevm = mlxdevm_rate->mlxdevm;
@@ -26,7 +26,7 @@ Change-Id: If12c25666b7d3a20f58dcf167c4581f086c82978
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -160,6 +163,7 @@ static void mlxdevm_rate_notify(struct m
+@@ -186,6 +189,7 @@ static void mlxdevm_rate_notify(struct m
  	}
  
  	mlxdevm_nl_notify_send(mlxdevm, msg);
@@ -34,3 +34,54 @@ Change-Id: If12c25666b7d3a20f58dcf167c4581f086c82978
  }
  #ifdef HAVE_BLOCKED_DEVLINK_CODE
  
+@@ -358,23 +362,35 @@ static int mlxdevm_nl_rate_tc_bw_parse(s
+ 		return err;
+ 
+ 	if (!tb[MLXDEVM_RATE_TC_ATTR_INDEX]) {
++#ifdef HAVE_NL_SET_ERR_ATTR_MISS
+ 		NL_SET_ERR_ATTR_MISS(extack, parent_nest,
+ 				     MLXDEVM_RATE_TC_ATTR_INDEX);
++#else
++		NL_SET_ERR_MSG(extack, "TC value is missing");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+ 	tc_index = nla_get_u8(tb[MLXDEVM_RATE_TC_ATTR_INDEX]);
+ 
+ 	if (!tb[MLXDEVM_RATE_TC_ATTR_BW]) {
++#ifdef HAVE_NL_SET_ERR_ATTR_MISS
+ 		NL_SET_ERR_ATTR_MISS(extack, parent_nest,
+ 				     MLXDEVM_RATE_TC_ATTR_BW);
++#else
++		NL_SET_ERR_MSG(extack, "Bandwidth value is missing");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+ 	if (test_and_set_bit(tc_index, bitmap)) {
++#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT(extack,
+ 				   "Duplicate traffic class index specified (%u)",
+ 				   tc_index);
++#else
++		NL_SET_ERR_MSG(extack, "Duplicate traffic class index specified");
++#endif
+ 		return -EINVAL;
+ 	}
+ 
+@@ -403,9 +419,14 @@ static int mlxdevm_nl_rate_tc_bw_set(str
+ 
+ 	for (i = 0; i < MLXDEVM_RATE_TCS_MAX; i++) {
+ 		if (!test_bit(i, bitmap)) {
++#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
+ 			NL_SET_ERR_MSG_FMT(info->extack,
+ 					   "Bandwidth values must be specified for all %u traffic classes",
+ 					   MLXDEVM_RATE_TCS_MAX);
++#else
++			NL_SET_ERR_MSG(info->extack,
++				       "Bandwidth values must be specified for all traffic classes");
++#endif
+ 			return -EINVAL;
+ 		}
+ 	}

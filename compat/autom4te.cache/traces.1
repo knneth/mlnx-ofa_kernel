@@ -150,9 +150,10 @@ m4trace:configure.ac:2: -1- AC_SUBST([target_alias])
 m4trace:configure.ac:2: -1- AC_SUBST_TRACE([target_alias])
 m4trace:configure.ac:2: -1- m4_pattern_allow([^target_alias$])
 m4trace:configure.ac:4: -1- AC_CONFIG_AUX_DIR([config])
+m4trace:configure.ac:5: -1- AC_CONFIG_MACRO_DIR_TRACE([config])
 m4trace:configure.ac:7: -1- AM_INIT_AUTOMAKE([foreign])
 m4trace:configure.ac:7: -1- m4_pattern_allow([^AM_[A-Z]+FLAGS$])
-m4trace:configure.ac:7: -1- AM_AUTOMAKE_VERSION([1.15])
+m4trace:configure.ac:7: -1- AM_AUTOMAKE_VERSION([1.16.5])
 m4trace:configure.ac:7: -1- AC_REQUIRE_AUX_FILE([install-sh])
 m4trace:configure.ac:7: -1- AC_SUBST([INSTALL_PROGRAM])
 m4trace:configure.ac:7: -1- AC_SUBST_TRACE([INSTALL_PROGRAM])
@@ -234,6 +235,15 @@ m4trace:configure.ac:7: -1- m4_pattern_allow([^am__tar$])
 m4trace:configure.ac:7: -1- AC_SUBST([am__untar])
 m4trace:configure.ac:7: -1- AC_SUBST_TRACE([am__untar])
 m4trace:configure.ac:7: -1- m4_pattern_allow([^am__untar$])
+m4trace:configure.ac:7: -1- AC_SUBST([CTAGS])
+m4trace:configure.ac:7: -1- AC_SUBST_TRACE([CTAGS])
+m4trace:configure.ac:7: -1- m4_pattern_allow([^CTAGS$])
+m4trace:configure.ac:7: -1- AC_SUBST([ETAGS])
+m4trace:configure.ac:7: -1- AC_SUBST_TRACE([ETAGS])
+m4trace:configure.ac:7: -1- m4_pattern_allow([^ETAGS$])
+m4trace:configure.ac:7: -1- AC_SUBST([CSCOPE])
+m4trace:configure.ac:7: -1- AC_SUBST_TRACE([CSCOPE])
+m4trace:configure.ac:7: -1- m4_pattern_allow([^CSCOPE$])
 m4trace:configure.ac:7: -1- AM_SILENT_RULES
 m4trace:configure.ac:7: -1- AC_SUBST([AM_V])
 m4trace:configure.ac:7: -1- AC_SUBST_TRACE([AM_V])
@@ -295,14 +305,14 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CLOCK_QUALITY_LEVEL_G
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CLOCK_QUALITY_LEVEL_GET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CLOCK_QUALITY_LEVEL_GET], [/* have function clock_quality_level_get */
 @%:@undef HAVE_CLOCK_QUALITY_LEVEL_GET])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER], [/* __free anotation for kvfree could be used */
-@%:@undef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_KVFREE_IN_SLAB_H])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_KVFREE_IN_SLAB_H$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_KVFREE_IN_SLAB_H], [/* kvfree prototype is in slab.h */
 @%:@undef HAVE_KVFREE_IN_SLAB_H])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SLAB_NO_OBJ_EXT])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SLAB_NO_OBJ_EXT$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SLAB_NO_OBJ_EXT], [/* SLAB_NO_OBJ_EXT is defined */
+@%:@undef HAVE_SLAB_NO_OBJ_EXT])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_HMM_PFN_TO_PAGE])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_HMM_PFN_TO_PAGE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_HMM_PFN_TO_PAGE], [/* have hmm_pfn_to_page */
@@ -323,14 +333,6 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_HMM_RANGE_FAULT_HAS_O
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_HMM_RANGE_FAULT_HAS_ONE_PARAM$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_HMM_RANGE_FAULT_HAS_ONE_PARAM], [/* hmm_range_fault has one param */
 @%:@undef HAVE_HMM_RANGE_FAULT_HAS_ONE_PARAM])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_IB_UMEM_DMABUF_GET_PINNED])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IB_UMEM_DMABUF_GET_PINNED$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_IB_UMEM_DMABUF_GET_PINNED], [/* rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined */
-@%:@undef HAVE_IB_UMEM_DMABUF_GET_PINNED])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_IS_TCF_POLICE])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IS_TCF_POLICE$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_IS_TCF_POLICE], [/* is_tcf_police is defined */
-@%:@undef HAVE_IS_TCF_POLICE])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN], [/* udp_tunnel.h has enum UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN */
@@ -608,6 +610,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_PORT_FN_STATE
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PORT_FN_STATE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_PORT_FN_STATE], [/* enum devlink_port_fn_state exist */
 @%:@undef HAVE_DEVLINK_PORT_FN_STATE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_ESWITCH_STATE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_ESWITCH_STATE$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_ESWITCH_STATE], [/* enum devlink_eswitch_state exists */
+@%:@undef HAVE_DEVLINK_ESWITCH_STATE])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_PORT_FN_OPSTATE])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PORT_FN_OPSTATE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_PORT_FN_OPSTATE], [/* enum devlink_port_fn_opstate exist */
@@ -740,6 +746,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_HAS_RATE_FUNC
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HAS_RATE_FUNCTIONS$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_HAS_RATE_FUNCTIONS], [/* rate functions are defined */
 @%:@undef HAVE_DEVLINK_HAS_RATE_FUNCTIONS])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_HAS_RATE_TC_BW_SET])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HAS_RATE_TC_BW_SET$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_HAS_RATE_TC_BW_SET], [/* rate tc_bw_set functions are defined */
+@%:@undef HAVE_DEVLINK_HAS_RATE_TC_BW_SET])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM], [/* eswitch_encap_mode_set/get is defined with enum */
@@ -824,6 +834,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ETHTOOL_OPS_HAS_PER_C
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY], [/* rxfh_per_ctx_key is defined */
 @%:@undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS], [/* rxfh_per_ctx_fields is defined */
+@%:@undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SUPPORTED_COALESCE_PARAM])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SUPPORTED_COALESCE_PARAM$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SUPPORTED_COALESCE_PARAM], [/* supported_coalesce_params is defined */
@@ -852,6 +866,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SKB_FRAG_FILL_PAGE_DE
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SKB_FRAG_FILL_PAGE_DESC$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SKB_FRAG_FILL_PAGE_DESC], [/* linux/skbuff.h skb_frag_fill_page_desc is defined */
 @%:@undef HAVE_SKB_FRAG_FILL_PAGE_DESC])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER], [/* skb_copy_and_crc32c_datagram_iter exist */
+@%:@undef HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NAPI_BUILD_SKB])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NAPI_BUILD_SKB$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NAPI_BUILD_SKB], [/* linux/skbuff.h napi_build_skb is defined */
@@ -868,6 +886,70 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SKB_FRAG_OFF_SET])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SKB_FRAG_OFF_SET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SKB_FRAG_OFF_SET], [/* linux/skbuff.h skb_frag_off_set is defined */
 @%:@undef HAVE_SKB_FRAG_OFF_SET])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NET_NETDEV_LOCK_H])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NET_NETDEV_LOCK_H$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NET_NETDEV_LOCK_H], [/* net/netdev_lock.h header exists */
+@%:@undef HAVE_NET_NETDEV_LOCK_H])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NETDEVICE_NETDEV_LOCK])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NETDEVICE_NETDEV_LOCK$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NETDEVICE_NETDEV_LOCK], [/* netdev_lock exists */
+@%:@undef HAVE_NETDEVICE_NETDEV_LOCK])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SET_DEFAULT_D_OP])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SET_DEFAULT_D_OP$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SET_DEFAULT_D_OP], [/* set_default_d_op function exists */
+@%:@undef HAVE_SET_DEFAULT_D_OP])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_STRUCT_FILE_KATTR])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_STRUCT_FILE_KATTR$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_STRUCT_FILE_KATTR], [/* struct file_kattr exists */
+@%:@undef HAVE_STRUCT_FILE_KATTR])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LINUX_PFN_T_H])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_LINUX_PFN_T_H$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_LINUX_PFN_T_H], [/* linux/pfn_t.h header exists */
+@%:@undef HAVE_LINUX_PFN_T_H])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_GROUP_CPUS_EVENLY_NUMMASKS])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_GROUP_CPUS_EVENLY_NUMMASKS$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_GROUP_CPUS_EVENLY_NUMMASKS], [/* group_cpus_evenly takes nummasks parameter */
+@%:@undef HAVE_GROUP_CPUS_EVENLY_NUMMASKS])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB], [/* write_begin takes const struct kiocb * */
+@%:@undef HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NET_DEVICE_LOCK_FIELD])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NET_DEVICE_LOCK_FIELD$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NET_DEVICE_LOCK_FIELD], [/* net_device has lock field */
+@%:@undef HAVE_NET_DEVICE_LOCK_FIELD])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NR_WRITEBACK_TEMP])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NR_WRITEBACK_TEMP$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NR_WRITEBACK_TEMP], [/* NR_WRITEBACK_TEMP enum exists */
+@%:@undef HAVE_NR_WRITEBACK_TEMP])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_WRITEBACK_CONTROL_FOR_RECLAIM])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_WRITEBACK_CONTROL_FOR_RECLAIM$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_WRITEBACK_CONTROL_FOR_RECLAIM], [/* writeback_control has for_reclaim field */
+@%:@undef HAVE_WRITEBACK_CONTROL_FOR_RECLAIM])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP], [/* UDP_TUNNEL_NIC_INFO_MAY_SLEEP flag exists */
+@%:@undef HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED], [/* ethtool_ops has cap_rss_ctx_supported field */
+@%:@undef HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ETHTOOL_GET_RXFH_FIELDS])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ETHTOOL_GET_RXFH_FIELDS$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ETHTOOL_GET_RXFH_FIELDS], [/* ethtool_ops has get_rxfh_fields callback */
+@%:@undef HAVE_ETHTOOL_GET_RXFH_FIELDS])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CYCLECOUNTER_READ_NON_CONST])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CYCLECOUNTER_READ_NON_CONST$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CYCLECOUNTER_READ_NON_CONST], [/* cyclecounter read callback takes non-const parameter */
+@%:@undef HAVE_CYCLECOUNTER_READ_NON_CONST])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_INTEGRITY_METADATA_SIZE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_METADATA_SIZE$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_BLK_INTEGRITY_METADATA_SIZE], [/* blk_integrity has metadata_size field */
+@%:@undef HAVE_BLK_INTEGRITY_METADATA_SIZE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NETIF_GET_PORT_PARENT_ID_FUNC])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NETIF_GET_PORT_PARENT_ID_FUNC$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NETIF_GET_PORT_PARENT_ID_FUNC], [/* netif_get_port_parent_id function exists */
+@%:@undef HAVE_NETIF_GET_PORT_PARENT_ID_FUNC])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TIMER_DELETE])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TIMER_DELETE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_TIMER_DELETE], [/* timer_delete exists */
@@ -928,6 +1010,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NL_ASSERT_CTX_FITS])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NL_ASSERT_CTX_FITS$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NL_ASSERT_CTX_FITS], [/* NL_ASSERT_CTX_FITS exists */
 @%:@undef HAVE_NL_ASSERT_CTX_FITS])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NETMEM_DMA_UNMAP_ADDR_SET])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NETMEM_DMA_UNMAP_ADDR_SET$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NETMEM_DMA_UNMAP_ADDR_SET], [/* HAVE_NETMEM_DMA_UNMAP_ADDR_SET exists */
+@%:@undef HAVE_NETMEM_DMA_UNMAP_ADDR_SET])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NL_SET_ERR_MSG_WEAK_MOD])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NL_SET_ERR_MSG_WEAK_MOD$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NL_SET_ERR_MSG_WEAK_MOD], [/* NL_SET_ERR_MSG_WEAK_MOD exists */
@@ -1244,10 +1330,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NETDEV_NESTED_PRIV_ST
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NETDEV_NESTED_PRIV_STRUCT$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NETDEV_NESTED_PRIV_STRUCT], [/* netdevice.h has struct netdev_nested_priv */
 @%:@undef HAVE_NETDEV_NESTED_PRIV_STRUCT])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEV_GET_PORT_PARENT_ID])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEV_GET_PORT_PARENT_ID$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEV_GET_PORT_PARENT_ID], [/* function dev_get_port_parent_id exists */
-@%:@undef HAVE_DEV_GET_PORT_PARENT_ID])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEV_GET_PORT_PARENT_ID_FUNC])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEV_GET_PORT_PARENT_ID_FUNC$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEV_GET_PORT_PARENT_ID_FUNC], [/* function dev_get_port_parent_id exists */
+@%:@undef HAVE_DEV_GET_PORT_PARENT_ID_FUNC])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEV_ADDR_MOD])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEV_ADDR_MOD$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEV_ADDR_MOD], [/* function dev_addr_mod exists */
@@ -1453,6 +1539,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NETLINK_CALLBACK_EXTA
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NETLINK_CALLBACK_EXTACK$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NETLINK_CALLBACK_EXTACK], [/* struct netlink_callback has member extack */
 @%:@undef HAVE_NETLINK_CALLBACK_EXTACK])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NL_SET_ERR_ATTR_MISS])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NL_SET_ERR_ATTR_MISS$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NL_SET_ERR_ATTR_MISS], [/* macro NL_SET_ERR_ATTR_MISS is defined */
+@%:@undef HAVE_NL_SET_ERR_ATTR_MISS])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SYSFS_EMIT])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SYSFS_EMIT$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SYSFS_EMIT], [/* sysfs_emit is defined */
@@ -1757,6 +1847,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_STRUCT_LINK_OPS_IPOIB
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND], [/* struct rtnl_link_ops has netns_refund */
 @%:@undef HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NLMSG_FOR_EACH_ATTR_TYPE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NLMSG_FOR_EACH_ATTR_TYPE$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NLMSG_FOR_EACH_ATTR_TYPE], [/* macro nlmsg_for_each_attr_type is defined */
+@%:@undef HAVE_NLMSG_FOR_EACH_ATTR_TYPE])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_EVENTFD_SIGNAL_GET_1_PARAM])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_EVENTFD_SIGNAL_GET_1_PARAM$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_EVENTFD_SIGNAL_GET_1_PARAM], [/* linux/eventfd.h has eventfd_signal with 1 param */
@@ -2157,10 +2251,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TCF_PEDIT_PARMS_TCFP_
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX], [/* struct tcf_pedit_parms has member tcfp_keys_ex */
 @%:@undef HAVE_TCF_PEDIT_PARMS_TCFP_KEYS_EX])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ISCSI_CONN_UNBIND])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ISCSI_CONN_UNBIND$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ISCSI_CONN_UNBIND], [/* iscsi_conn_unbind is defined */
-@%:@undef HAVE_ISCSI_CONN_UNBIND])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ISCSI_TRANSPORT_UNBIND_CONN])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ISCSI_TRANSPORT_UNBIND_CONN$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ISCSI_TRANSPORT_UNBIND_CONN], [/* struct iscsi_transport has member unbind_conn */
+@%:@undef HAVE_ISCSI_TRANSPORT_UNBIND_CONN])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ISCSI_HOST_REMOVE_2_PARAMS])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ISCSI_HOST_REMOVE_2_PARAMS$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ISCSI_HOST_REMOVE_2_PARAMS], [/* libiscsi.h iscsi_host_remove has 2 parameters */
@@ -3126,6 +3220,14 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BD_SET_NR_SECTORS])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BD_SET_NR_SECTORS$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_BD_SET_NR_SECTORS], [/* genhd.h has bd_set_nr_sectors */
 @%:@undef HAVE_BD_SET_NR_SECTORS])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ALLOC_WORKQUEUE_NOPROF])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ALLOC_WORKQUEUE_NOPROF$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ALLOC_WORKQUEUE_NOPROF], [/* alloc_workqueue_noprof exists */
+@%:@undef HAVE_ALLOC_WORKQUEUE_NOPROF])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ALLOC_WORKQUEUE_MACRO])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ALLOC_WORKQUEUE_MACRO$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_ALLOC_WORKQUEUE_MACRO], [/* alloc_workqueue is a macro */
+@%:@undef HAVE_ALLOC_WORKQUEUE_MACRO])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_QUEUE_FLAG_STABLE_WRITES])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_QUEUE_FLAG_STABLE_WRITES$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_QUEUE_FLAG_STABLE_WRITES], [/* QUEUE_FLAG_STABLE_WRITES is defined */
@@ -3873,10 +3975,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_GRAB_CACHE_PAGE_WRITE
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN], [/* if grab_cache_page_write_begin() exists */
 @%:@undef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_MKDIR_RET_INT])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_MKDIR_RET_INT$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_MKDIR_RET_INT], [/* if struct inode_operations->mkdir returns an int */
-@%:@undef HAVE_MKDIR_RET_INT])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_MKDIR_RET_DENTRY])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_MKDIR_RET_DENTRY$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_MKDIR_RET_DENTRY], [/* if struct inode_operations->mkdir returns a dentry */
+@%:@undef HAVE_MKDIR_RET_DENTRY])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_D_REVALIDATE_2_PARAMS])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_D_REVALIDATE_2_PARAMS$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_D_REVALIDATE_2_PARAMS], [/* if dentry_operations->d_revalidate takes 2 params */
@@ -3917,10 +4019,6 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_CIPHER_AES_GCM_25
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TLS_CIPHER_AES_GCM_256$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_TLS_CIPHER_AES_GCM_256], [/* include/uapi/linux/tls.h defines TLS_CIPHER_AES_GCM_256 */
 @%:@undef HAVE_TLS_CIPHER_AES_GCM_256])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FSPARAM_UID])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FSPARAM_UID$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FSPARAM_UID], [/* if fsparam_uid is defined */
-@%:@undef HAVE_FSPARAM_UID])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BIO_ADD_PC_PAGE])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BIO_ADD_PC_PAGE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_BIO_ADD_PC_PAGE], [/* if bio_add_pc_page is defined */
@@ -4049,6 +4147,74 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCI_EPC_FEATURES_INTX
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCI_EPC_FEATURES_INTX_CAPABLE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCI_EPC_FEATURES_INTX_CAPABLE], [/* desc */
 @%:@undef HAVE_PCI_EPC_FEATURES_INTX_CAPABLE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_VIRTIO_DEVICE_RESET_PREPARE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_VIRTIO_DEVICE_RESET_PREPARE$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_VIRTIO_DEVICE_RESET_PREPARE], [/* virtio_device_reset_prepare is defined */
+@%:@undef HAVE_VIRTIO_DEVICE_RESET_PREPARE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FOLIO_INDEX])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_INDEX$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FOLIO_INDEX], [/* folio_index() is defined */
+@%:@undef HAVE_FOLIO_INDEX])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_INVALID_MNT_IDMAP])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INVALID_MNT_IDMAP$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_INVALID_MNT_IDMAP], [/* invalid_mnt_idmap is defined */
+@%:@undef HAVE_INVALID_MNT_IDMAP])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SB_I_NOIDMAP])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SB_I_NOIDMAP$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SB_I_NOIDMAP], [/* SB_I_NOIDMAP is defined */
+@%:@undef HAVE_SB_I_NOIDMAP])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_STRUCT_LSMCONTEXT])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_STRUCT_LSMCONTEXT$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_STRUCT_LSMCONTEXT], [/* struct lsmcontext is defined */
+@%:@undef HAVE_STRUCT_LSMCONTEXT])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_GET_LINK_RAW])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PAGE_GET_LINK_RAW$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PAGE_GET_LINK_RAW], [/* page_get_link_raw is defined */
+@%:@undef HAVE_PAGE_GET_LINK_RAW])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FOLIO_MARK_DIRTY_LOCK])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_MARK_DIRTY_LOCK$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FOLIO_MARK_DIRTY_LOCK], [/* folio_mark_dirty_lock is defined */
+@%:@undef HAVE_FOLIO_MARK_DIRTY_LOCK])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_COPY_FOLIO_FROM_ITER])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_COPY_FOLIO_FROM_ITER$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_COPY_FOLIO_FROM_ITER], [/* copy_folio_from_iter is defined */
+@%:@undef HAVE_COPY_FOLIO_FROM_ITER])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_UNPIN_FOLIO])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UNPIN_FOLIO$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_UNPIN_FOLIO], [/* unpin_folio is defined */
+@%:@undef HAVE_UNPIN_FOLIO])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_INODE_GET_MTIME])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INODE_GET_MTIME$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_INODE_GET_MTIME], [/* inode_get_mtime is defined */
+@%:@undef HAVE_INODE_GET_MTIME])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FILEID_INO64])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FILEID_INO64$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FILEID_INO64], [/* FILEID_INO64_GEN is defined */
+@%:@undef HAVE_FILEID_INO64])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FOLIO_END_READ])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_END_READ$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FOLIO_END_READ], [/* folio_end_read is defined */
+@%:@undef HAVE_FOLIO_END_READ])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SPLICE_COPY_FILE_RANGE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SPLICE_COPY_FILE_RANGE$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SPLICE_COPY_FILE_RANGE], [/* splice_copy_file_range is defined */
+@%:@undef HAVE_SPLICE_COPY_FILE_RANGE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CONST_XATTR_HANDLER])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CONST_XATTR_HANDLER$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CONST_XATTR_HANDLER], [/* sb->s_xattr point is double-const */
+@%:@undef HAVE_CONST_XATTR_HANDLER])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FOLIO_COPY_EXPORTED])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_COPY_EXPORTED$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FOLIO_COPY_EXPORTED], [/* folio_copy is exported by the kernel */
+@%:@undef HAVE_FOLIO_COPY_EXPORTED])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FOLIO_COPY_EXPORTED])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_COPY_EXPORTED$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_FOLIO_COPY_EXPORTED], [/* folio_copy is exported by the kernel */
+@%:@undef HAVE_FOLIO_COPY_EXPORTED])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DEV_NET_RCU])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEV_NET_RCU$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DEV_NET_RCU], [/* function dev_net_rcu is defined */
+@%:@undef HAVE_DEV_NET_RCU])
 m4trace:configure.ac:23: -1- AC_CONFIG_HEADERS([config.h])
 m4trace:configure.ac:23: -1- AC_SUBST([EXTRA_KCFLAGS])
 m4trace:configure.ac:23: -1- AC_SUBST_TRACE([EXTRA_KCFLAGS])

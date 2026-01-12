@@ -36,6 +36,45 @@ WDIR=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd | sed --expression 's/devtools//'
 readonly NA_TRACKING_ISSUE_ID="4468530"
 readonly IGNORE_TRACKING_ISSUE_ID="4468524"
 
+# Branch filtering: only process commits from maintained branches
+# Maintained branches: mlnx_ofed_5_8 and newer (5.8, 23.xx, 24.xx, 25.xx, etc.)
+is_commit_on_maintained_branch() {
+	local commit_id=$1
+
+	# Get all branches containing this commit
+	local branches=$(git branch -r --contains "$commit_id" 2>/dev/null)
+
+	if [ -z "$branches" ]; then
+		return 1  # Commit not found in any remote branch
+	fi
+
+	# Check if any branch matches maintained patterns
+	echo "$branches" | grep -qE "mlnx_ofed_(5_[89]|[2-9][0-9]_[0-9][0-9])($|[[:space:]])" && return 0
+
+	return 1  # Not found on any maintained branch
+}
+
+# Check if author has commits only on old deprecated branches
+should_skip_author_for_old_branches() {
+	local author=$1
+
+	# Get all commits by this author across all branches
+	local author_commits=$(git log --all --format="%h" --author="$author" 2>/dev/null)
+
+	if [ -z "$author_commits" ]; then
+		return 1  # No commits found, don't skip
+	fi
+
+	# Check if ANY of the author's commits are on maintained branches
+	for commit in $author_commits; do
+		if is_commit_on_maintained_branch "$commit"; then
+			return 1  # Author has commits on maintained branches, don't skip
+		fi
+	done
+
+	return 0  # All author's commits are only on old branches, skip this author
+}
+
 base=
 num=
 dry_run=0
@@ -274,8 +313,8 @@ EOF
 # Updates commit message by inserting tracking issue before Change-Id and applies the commit
 update_revert_commit_msg_with_tracking_issue() {
 
-    # Check if the Issue line already exists in the commit message
-    if grep --quiet "^$commit_msg_tracking_issue$" "$commit_msg_tmp_file"; then
+    # Check if the Issue line already exists in the commit message (case-insensitive)
+    if grep --quiet --ignore-case "^$commit_msg_tracking_issue$" "$commit_msg_tmp_file"; then
         return 0
     fi
 
@@ -301,7 +340,7 @@ extract_reverted_commit_info() {
         echo "-E- Could not extract reverted commit hash from commit message."
         while [ -z "$reverted_hash" ]; do
             read -rp "Please enter the reverted commit hash manually: " input_hash
-            if git cat-file --exists "$input_hash"^{commit} 2>/dev/null; then
+            if git cat-file -e "${input_hash}" 2>/dev/null; then
                 reverted_hash="$input_hash"
             else
                 echo "-E- '$input_hash' is not a valid commit hash."
@@ -310,16 +349,16 @@ extract_reverted_commit_info() {
     fi
 
     # Extract Change-Id from the reverted commit
-    reverted_change_id=$(git show "$reverted_hash" 2>/dev/null | grep "Change-Id:" | sed 's/.*Change-Id: *\(I[a-zA-Z0-9]\+\).*/\1/')
+    reverted_change_id=$(git show "$reverted_hash" 2>/dev/null | grep "Change-Id:" | sed 's/.*Change-Id: *\(I[a-fA-F0-9]\{7,40\}\).*/\1/')
 
     if [ -z "$reverted_change_id" ]; then
         echo "-E- Could not find Change-Id for reverted commit $reverted_hash."
         while [ -z "$reverted_change_id" ]; do
             read -rp "Please enter the Change-Id manually (must start with 'I'): " input_change_id
-            if [[ "$input_change_id" =~ ^I[a-fA-F0-9]{6,}$ ]]; then
+            if [[ "$input_change_id" =~ ^I[a-fA-F0-9]{7,40}$ ]]; then
                 reverted_change_id="$input_change_id"
             else
-                echo "-E- Invalid Change-Id format. Expected format: I followed by hex digits (e.g. I123abc...)."
+                echo "-E- Invalid Change-Id format. Expected format: I followed by 7 to 40 hex digits (e.g. I1234abcd...)."
             fi
         done
     fi
@@ -364,8 +403,8 @@ set_reverted_metadata_status_ignore() {
         if grep --quiet "Change-Id=$reverted_change_id;" "$metadata_file"; then
             echo "Metadata entry of the reverted commit in $metadata_file was updated with upstream_status=ignore."
 
-            # Update upstream_status to ignore using sed in-place
-            sed --in-place "s/upstream_status=[^;]*/upstream_status=ignore/g" "$metadata_file"
+            # Update upstream_status to ignore using sed in-place - only for the specific Change-Id line
+            sed --in-place "/Change-Id=$reverted_change_id;/s/upstream_status=[^;]*/upstream_status=ignore/" "$metadata_file"
 
             # Add file to the list if not already present
             local filename=$(basename "$metadata_file")
@@ -634,6 +673,13 @@ do
 		continue
 	fi
 	author=$(git log --format="%aN" $cid| head -1 | sed -e 's/ /_/g')
+
+	# Skip authors who only have commits on old deprecated branches
+	if should_skip_author_for_old_branches "$author"; then
+		echo "-I- Skipping author '$author' (only has commits on deprecated branches older than mlnx_ofed_5_8)"
+		continue
+	fi
+
 	changeID=
 	subject=
 	feature=
@@ -700,6 +746,9 @@ do
 		fi
 		if [ "X$upstream" == "X" ]; then
 			upstream=$(get_upstream_status_from_ref "$uniqID" "$ref_db" "$subject")
+		fi
+		if [ "X$upstream_iss" == "X" ]; then
+			upstream_iss=$(get_upstream_issue_from_ref "$uniqID" "$ref_db" "$subject")
 		fi
 		general=$(get_general_from_ref "$uniqID" "$ref_db" "$subject")
 	fi

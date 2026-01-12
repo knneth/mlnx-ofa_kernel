@@ -657,6 +657,7 @@ EXPORT_SYMBOL(mlx5_is_roce_on);
 static int handle_hca_cap_2(struct mlx5_core_dev *dev, void *set_ctx)
 {
 	void *set_hca_cap;
+	bool do_set = false;
 	int err;
 
 	if (!MLX5_CAP_GEN_MAX(dev, hca_cap_2))
@@ -666,17 +667,23 @@ static int handle_hca_cap_2(struct mlx5_core_dev *dev, void *set_ctx)
 	if (err)
 		return err;
 
-	if (!MLX5_CAP_GEN_2_MAX(dev, sw_vhca_id_valid) ||
-	    !(dev->priv.sw_vhca_id > 0))
-		return 0;
-
 	set_hca_cap = MLX5_ADDR_OF(set_hca_cap_in, set_ctx,
 				   capability);
 	memcpy(set_hca_cap, dev->caps.hca[MLX5_CAP_GENERAL_2]->cur,
 	       MLX5_ST_SZ_BYTES(cmd_hca_cap_2));
-	MLX5_SET(cmd_hca_cap_2, set_hca_cap, sw_vhca_id_valid, 1);
 
-	return set_caps(dev, set_ctx, MLX5_CAP_GENERAL_2);
+	if (MLX5_CAP_GEN_2_MAX(dev, sw_vhca_id_valid) &&
+	    dev->priv.sw_vhca_id > 0) {
+		MLX5_SET(cmd_hca_cap_2, set_hca_cap, sw_vhca_id_valid, 1);
+		do_set = true;
+	}
+
+	if (MLX5_CAP_GEN_2_MAX(dev, lag_per_mp_group)) {
+		MLX5_SET(cmd_hca_cap_2, set_hca_cap, lag_per_mp_group, 1);
+		do_set = true;
+	}
+
+	return do_set ? set_caps(dev, set_ctx, MLX5_CAP_GENERAL_2) : 0;
 }
 
 static int handle_hca_cap(struct mlx5_core_dev *dev, void *set_ctx)
@@ -1136,27 +1143,6 @@ static void mlx5_pci_close(struct mlx5_core_dev *dev)
 	device_remove_file(&dev->pdev->dev, mlx5_roce_enable_dev_attrs);
 }
 
-static void mlx5_register_hca_devcom_comp(struct mlx5_core_dev *dev)
-{
-	/* This component is use to sync adding core_dev to lag_dev and to sync
-	 * changes of mlx5_adev_devices between LAG layer and other layers.
-	 */
-	if (!mlx5_lag_is_supported(dev))
-		return;
-
-	dev->priv.hca_devcom_comp =
-		mlx5_devcom_register_component(dev->priv.devc, MLX5_DEVCOM_HCA_PORTS,
-					       mlx5_query_nic_system_image_guid(dev),
-					       NULL, dev);
-	if (IS_ERR(dev->priv.hca_devcom_comp))
-		mlx5_core_err(dev, "Failed to register devcom HCA component\n");
-}
-
-static void mlx5_unregister_hca_devcom_comp(struct mlx5_core_dev *dev)
-{
-	mlx5_devcom_unregister_component(dev->priv.hca_devcom_comp);
-}
-
 static int mlx5_init_once(struct mlx5_core_dev *dev)
 {
 	int err;
@@ -1166,7 +1152,6 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 	if (IS_ERR(dev->priv.devc))
 		mlx5_core_warn(dev, "failed to register devcom device %ld\n",
 			       PTR_ERR(dev->priv.devc));
-	mlx5_register_hca_devcom_comp(dev);
 
 	err = mlx5_query_board_id(dev);
 	if (err) {
@@ -1331,7 +1316,6 @@ err_eq_cleanup:
 err_irq_cleanup:
 	mlx5_irq_table_cleanup(dev);
 err_devcom:
-	mlx5_unregister_hca_devcom_comp(dev);
 	mlx5_devcom_unregister_device(dev->priv.devc);
 
 	return err;
@@ -1366,7 +1350,6 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_events_cleanup(dev);
 	mlx5_eq_table_cleanup(dev);
 	mlx5_irq_table_cleanup(dev);
-	mlx5_unregister_hca_devcom_comp(dev);
 	mlx5_devcom_unregister_device(dev->priv.devc);
 }
 
@@ -2519,6 +2502,7 @@ static const struct pci_device_id mlx5_core_pci_table[] = {
 	{ PCI_VDEVICE(MELLANOX, 0x1021) },			/* ConnectX-7 */
 	{ PCI_VDEVICE(MELLANOX, 0x1023) },			/* ConnectX-8 */
 	{ PCI_VDEVICE(MELLANOX, 0x1025) },			/* ConnectX-9 */
+	{ PCI_VDEVICE(MELLANOX, 0x1027) },			/* ConnectX-10 */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d2) },			/* BlueField integrated ConnectX-5 network controller */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d3), MLX5_PCI_DEV_IS_VF},	/* BlueField integrated ConnectX-5 network controller VF */
 	{ PCI_VDEVICE(MELLANOX, 0xa2d6) },			/* BlueField-2 integrated ConnectX-6 Dx network controller */

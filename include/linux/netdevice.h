@@ -184,4 +184,26 @@ static inline void mlx5_compat_dev_put(struct net_device *netdev)
 
 #endif /* HAVE_NETDEV_PUT_AND_HOLD */
 
+#ifndef HAVE_DEV_NET_RCU
+static inline struct net *dev_net_rcu(struct net_device *dev)
+{
+#ifdef HAVE_READ_PNET_RCU
+	return read_pnet_rcu(&dev->nd_net);
+#else
+
+#ifdef CONFIG_NET_NS
+	return rcu_dereference(dev->nd_net.net);
+#else
+	return &init_net;
+#endif	/* CONFIG_NET_NS */
+
+#endif	/* HAVE_READ_PNET_RCU */
+}
+#endif	/* HAVE_DEV_NET_RCU */
+
+#undef for_each_netdev_in_bond_rcu
+#define for_each_netdev_in_bond_rcu(bond, slave)        \
+	for_each_netdev_rcu(dev_net_rcu(bond), slave)   \
+		if (netdev_master_upper_dev_get_rcu(slave) == (bond))
+
 #endif	/* _COMPAT_LINUX_NETDEVICE_H */

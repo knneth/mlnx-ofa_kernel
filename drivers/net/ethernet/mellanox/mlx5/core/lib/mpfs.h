@@ -82,11 +82,16 @@ struct l2addr_node {
 })
 
 #ifdef CONFIG_MLX5_MPFS
+struct mlx5_core_dev;
 int  mlx5_mpfs_init(struct mlx5_core_dev *dev);
 void mlx5_mpfs_cleanup(struct mlx5_core_dev *dev);
+int mlx5_mpfs_enable(struct mlx5_core_dev *dev);
+void mlx5_mpfs_disable(struct mlx5_core_dev *dev);
 #else /* #ifndef CONFIG_MLX5_MPFS */
 static inline int  mlx5_mpfs_init(struct mlx5_core_dev *dev) { return 0; }
 static inline void mlx5_mpfs_cleanup(struct mlx5_core_dev *dev) {}
+int mlx5_mpfs_enable(struct mlx5_core_dev *dev) { return 0; }
+void mlx5_mpfs_disable(struct mlx5_core_dev *dev) {}
 #endif
 
 #endif

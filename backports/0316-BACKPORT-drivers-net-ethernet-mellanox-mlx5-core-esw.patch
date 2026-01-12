@@ -24,7 +24,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  out_free:
  	kfree(query_ctx);
  	return err;
-@@ -996,7 +998,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
+@@ -993,7 +995,7 @@ int mlx5_esw_vport_enable(struct mlx5_es
  			  enum mlx5_eswitch_vport_event enabled_events)
  {
  	u16 vport_num = vport->vport;
@@ -33,7 +33,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  	mutex_lock(&esw->state_lock);
  	if (vport->enabled)
-@@ -1534,7 +1536,11 @@ static void mlx5_eswitch_get_devlink_par
+@@ -1525,7 +1527,11 @@ static void mlx5_eswitch_get_devlink_par
  	union devlink_param_value val;
  	int err;
  
@@ -45,7 +45,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  					      MLX5_DEVLINK_PARAM_ID_ESW_LARGE_GROUP_NUM,
  					      &val);
  	if (!err) {
-@@ -1704,7 +1710,9 @@ int mlx5_eswitch_enable_locked(struct ml
+@@ -1695,7 +1701,9 @@ int mlx5_eswitch_enable_locked(struct ml
  {
  	int err;
  
@@ -55,7 +55,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(esw->dev, ft_support)) {
  		esw_warn(esw->dev, "FDB is not supported, aborting ...\n");
-@@ -1770,19 +1778,38 @@ err_esw_init:
+@@ -1761,19 +1769,38 @@ err_esw_init:
   */
  int mlx5_eswitch_enable(struct mlx5_eswitch *esw, int num_vfs)
  {
@@ -94,7 +94,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	if (!mlx5_esw_is_fdb_created(esw)) {
  		ret = mlx5_eswitch_enable_locked(esw, num_vfs);
  	} else {
-@@ -1805,6 +1832,13 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+@@ -1796,6 +1823,13 @@ int mlx5_eswitch_enable(struct mlx5_eswi
  		}
  	}
  
@@ -108,7 +108,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	if (toggle_lag)
  		mlx5_lag_enable_change(esw->dev);
  
-@@ -1814,15 +1848,37 @@ int mlx5_eswitch_enable(struct mlx5_eswi
+@@ -1805,15 +1839,37 @@ int mlx5_eswitch_enable(struct mlx5_eswi
  /* When disabling sriov, free driver level resources. */
  void mlx5_eswitch_disable_sriov(struct mlx5_eswitch *esw, bool clear_vf)
  {
@@ -147,7 +147,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  	esw_info(esw->dev, "Unload vfs: mode(%s), nvfs(%d), necvfs(%d), active vports(%d)\n",
  		 esw->mode == MLX5_ESWITCH_LEGACY ? "LEGACY" : "OFFLOADS",
-@@ -1839,9 +1895,17 @@ void mlx5_eswitch_disable_sriov(struct m
+@@ -1830,9 +1886,17 @@ void mlx5_eswitch_disable_sriov(struct m
  	}
  
  	if (esw->mode == MLX5_ESWITCH_OFFLOADS) {
@@ -165,7 +165,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	}
  	/* Destroy legacy fdb when disabling sriov in legacy mode. */
  	if (esw->mode == MLX5_ESWITCH_LEGACY)
-@@ -1851,6 +1915,13 @@ void mlx5_eswitch_disable_sriov(struct m
+@@ -1842,6 +1906,13 @@ void mlx5_eswitch_disable_sriov(struct m
  		esw->esw_funcs.num_vfs = 0;
  	else
  		esw->esw_funcs.num_ec_vfs = 0;
@@ -179,7 +179,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  }
  
  /* Free resources for corresponding eswitch mode. It is called by devlink
-@@ -1858,7 +1929,9 @@ void mlx5_eswitch_disable_sriov(struct m
+@@ -1849,7 +1920,9 @@ void mlx5_eswitch_disable_sriov(struct m
   */
  void mlx5_eswitch_disable_locked(struct mlx5_eswitch *esw)
  {
@@ -189,7 +189,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  	/* Notify eswitch users that it is exiting from current mode.
  	 * So that it can do necessary cleanup before the eswitch is disabled.
-@@ -1886,19 +1959,51 @@ void mlx5_eswitch_disable_locked(struct
+@@ -1877,19 +1950,51 @@ void mlx5_eswitch_disable_locked(struct
  		mlx5_devm_rate_nodes_destroy(esw->dev);
  #endif
  
@@ -241,7 +241,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	mlx5_lag_enable_change(esw->dev);
  }
  
-@@ -2082,9 +2187,14 @@ bool mlx5_esw_host_functions_enabled(con
+@@ -2073,9 +2178,14 @@ bool mlx5_esw_host_functions_enabled(con
  	return !dev->priv.eswitch->esw_funcs.host_funcs_disabled;
  }
  
@@ -256,7 +256,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  
-@@ -2114,6 +2224,22 @@ static const struct devlink_param mlx5_e
+@@ -2105,6 +2215,22 @@ static const struct devlink_param mlx5_e
  			     mlx5_devlink_esw_multiport_get,
  			     mlx5_devlink_esw_multiport_set, NULL),
  };
@@ -279,7 +279,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  static int mlx5_devm_esw_multiport_set(struct mlxdevm *mlxdevm, u32 id,
  				       struct mlxdevm_param_gset_ctx *ctx,
-@@ -2184,13 +2310,21 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2175,13 +2301,21 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	esw->first_host_vport = mlx5_eswitch_first_host_vport_num(dev);
  	dev->priv.eswitch = esw;
  
@@ -301,7 +301,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	if (err)
  		goto err_mlxdevm_params;
  
-@@ -2252,12 +2386,20 @@ abort:
+@@ -2246,12 +2380,20 @@ abort:
  	if (esw->work_queue)
  		destroy_workqueue(esw->work_queue);
  	debugfs_remove_recursive(esw->debugfs_root);
@@ -322,7 +322,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	dev->priv.eswitch = NULL;
  	kfree(esw);
  	return err;
-@@ -2329,10 +2471,18 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2323,10 +2465,18 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  	esw->dev->priv.eswitch = NULL;
  	mlx5_esw_vports_cleanup(esw);
  	debugfs_remove_recursive(esw->debugfs_root);

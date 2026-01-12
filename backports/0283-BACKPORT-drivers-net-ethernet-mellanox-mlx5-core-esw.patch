@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 
 Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
 ---
- .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 110 +++++++++++-------
- 1 file changed, 71 insertions(+), 39 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 124 +++++++++++-------
+ 1 file changed, 80 insertions(+), 44 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
@@ -18,7 +18,23 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  /* Minimum supported BW share value by the HW is 1 Mbit/sec */
  #define MLX5_MIN_BW_SHARE 1
-@@ -382,7 +385,10 @@ static void __esw_qos_free_node(struct m
+@@ -93,7 +96,6 @@ esw_qos_node_set_parent(struct mlx5_esw_
+ 	esw_qos_node_attach_to_parent(node);
+ }
+ 
+-#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+ static void esw_qos_nodes_set_parent(struct list_head *nodes,
+ 				     struct mlx5_esw_sched_node *parent)
+ {
+@@ -114,7 +116,6 @@ static void esw_qos_nodes_set_parent(str
+ 		}
+ 	}
+ }
+-#endif
+ 
+ void mlx5_esw_qos_vport_qos_free(struct mlx5_vport *vport)
+ {
+@@ -514,7 +515,10 @@ static void __esw_qos_free_node(struct m
  	kfree(node);
  }
  
@@ -30,7 +46,23 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	esw_qos_node_destroy_sched_element(node, extack);
  	__esw_qos_free_node(node);
-@@ -733,8 +739,8 @@ out:
+@@ -1296,7 +1300,6 @@ static int esw_qos_vport_update_parent(s
+ 	return esw_qos_vport_update(vport, type, parent, true, extack);
+ }
+ 
+-#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+ static void
+ esw_qos_switch_vport_tcs_to_vport(struct mlx5_esw_sched_node *tc_arbiter_node,
+ 				  struct mlx5_esw_sched_node *node,
+@@ -1486,7 +1489,6 @@ out:
+ 	__esw_qos_free_node(curr_node);
+ 	return err;
+ }
+-#endif
+ 
+ static u32 mlx5_esw_qos_lag_link_speed_get_locked(struct mlx5_core_dev *mdev)
+ {
+@@ -1511,8 +1513,8 @@ out:
  	return speed;
  }
  
@@ -41,7 +73,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	int err;
  
-@@ -760,9 +766,9 @@ skip_lag:
+@@ -1538,9 +1540,9 @@ skip_lag:
  	return err;
  }
  
@@ -54,7 +86,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	if (value > link_speed_max) {
  		pr_err("%s rate value %lluMbps exceed link maximum speed %u.\n",
-@@ -808,8 +814,8 @@ int mlx5_esw_qos_modify_vport_rate(struc
+@@ -1586,8 +1588,8 @@ int mlx5_esw_qos_modify_vport_rate(struc
   * second, rewriting last. If converted rate exceed link speed or is not a
   * fraction of Mbps - returns error.
   */
@@ -65,7 +97,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	u32 link_speed_max, remainder;
  	u64 value;
-@@ -969,29 +975,6 @@ unlock:
+@@ -1747,29 +1749,6 @@ unlock:
  	return err;
  }
  
@@ -95,7 +127,23 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
  			       struct netlink_ext_ack *extack)
  {
-@@ -1013,6 +996,59 @@ void mlx5_esw_qos_cleanup(struct mlx5_es
+@@ -1834,6 +1813,7 @@ static bool mlx5_devm_esw_vport_qos_chec
+ 	return true;
+ }
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ static bool esw_vport_qos_check_and_disable(struct mlx5_vport *vport,
+ 					    struct devlink_rate *parent,
+ #ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+@@ -1858,6 +1838,7 @@ static bool esw_vport_qos_check_and_disa
+ 
+ 	return true;
+ }
++#endif
+ 
+ int mlx5_esw_qos_init(struct mlx5_eswitch *esw)
+ {
+@@ -1873,6 +1854,59 @@ void mlx5_esw_qos_cleanup(struct mlx5_es
  		esw_qos_domain_release(esw);
  }
  
@@ -154,8 +202,40 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
 +#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
  /* Eswitch devlink rate API */
  
- static bool mlx5_esw_qos_is_needed(struct devlink_rate *parent, u64 tx_max,
-@@ -1143,14 +1179,7 @@ unlock:
+ int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
+@@ -1934,6 +1968,7 @@ int mlx5_esw_devlink_rate_leaf_tx_max_se
+ 	esw_qos_unlock(esw);
+ 	return err;
+ }
++#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
+ 
+ int mlx5_esw_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
+ 				      void *priv,
+@@ -2051,8 +2086,13 @@ unlock:
+ 	esw_qos_unlock(esw);
+ 	return err;
+ }
++#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+ int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
++#else
++int mlx5_esw_devm_rate_node_tc_bw_set(
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack)
+@@ -2082,8 +2122,8 @@ unlock:
+ 	esw_qos_unlock(esw);
+ 	return err;
+ }
+-#endif
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack)
+ {
+@@ -2152,14 +2192,7 @@ unlock:
  int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
  				   struct netlink_ext_ack *extack)
  {
@@ -171,15 +251,15 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  }
  
  int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
-@@ -1174,6 +1203,7 @@ int mlx5_esw_devlink_rate_leaf_parent_se
+@@ -2185,6 +2218,7 @@ int mlx5_esw_devlink_rate_leaf_parent_se
  	node = parent_priv;
  	return mlx5_esw_qos_vport_update_parent(vport, node, extack);
  }
-+#endif
++#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
  
- static int
- mlx5_esw_qos_node_validate_set_parent(struct mlx5_esw_sched_node *node,
-@@ -1263,6 +1293,7 @@ out:
+ static bool esw_qos_is_node_empty(struct mlx5_esw_sched_node *node)
+ {
+@@ -2333,6 +2367,7 @@ out:
  
  	return err;
  }
@@ -187,7 +267,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
  					  struct devlink_rate *parent,
-@@ -1277,6 +1308,7 @@ int mlx5_esw_devlink_rate_node_parent_se
+@@ -2347,6 +2382,7 @@ int mlx5_esw_devlink_rate_node_parent_se
  	parent_node = parent_priv;
  	return mlx5_esw_qos_node_update_parent(node, parent_node, extack);
  }

@@ -18,7 +18,7 @@ Change-Id: I7ee3bb447d661bad1c256dcf650cc5fd7d4e4e51
  
  #ifdef HAVE_BLOCKED_DEVLINK_CODE
  struct devlink;
-@@ -524,6 +527,17 @@ struct mlxdevm_param_item {
+@@ -526,6 +529,17 @@ struct mlxdevm_param_item {
  	bool driverinit_value_new_valid;
  };
  
@@ -36,7 +36,7 @@ Change-Id: I7ee3bb447d661bad1c256dcf650cc5fd7d4e4e51
  enum mlxdevm_param_generic_id {
  	MLXDEVM_PARAM_GENERIC_ID_INT_ERR_RESET,
  	MLXDEVM_PARAM_GENERIC_ID_MAX_MACS,
-@@ -673,6 +687,9 @@ struct mlxdevm_flash_update_params {
+@@ -675,6 +689,9 @@ struct mlxdevm_flash_update_params {
  	const struct firmware *fw;
  	const char *component;
  	u32 overwrite_mask;
@@ -46,7 +46,7 @@ Change-Id: I7ee3bb447d661bad1c256dcf650cc5fd7d4e4e51
  };
  
  #define MLXDEVM_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK	BIT(0)
-@@ -1786,6 +1803,7 @@ void devlink_port_type_ib_set(struct dev
+@@ -1794,6 +1811,7 @@ void devlink_port_type_ib_set(struct dev
  void mlxdevm_port_type_clear(struct mlxdevm_port *mlxdevm_port);
  void mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
  			    struct mlxdevm_port_attrs *mlxdevm_port_attrs);

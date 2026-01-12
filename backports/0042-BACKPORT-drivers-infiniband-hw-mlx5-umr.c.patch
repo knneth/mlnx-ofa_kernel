@@ -7,7 +7,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
 
 --- a/drivers/infiniband/hw/mlx5/umr.c
 +++ b/drivers/infiniband/hw/mlx5/umr.c
-@@ -694,8 +694,8 @@ _mlx5r_umr_update_mr_pas(struct mlx5_ib_
+@@ -695,8 +695,8 @@ _mlx5r_umr_update_mr_pas(struct mlx5_ib_
  	size_t processed_blocks = 0;
  	struct ib_block_iter biter;
  	size_t cur_block_idx = 0;

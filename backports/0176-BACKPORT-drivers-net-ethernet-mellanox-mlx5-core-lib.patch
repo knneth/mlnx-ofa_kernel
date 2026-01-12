@@ -8,8 +8,8 @@ Subject: [PATCH] BACKPORT:
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
-@@ -120,8 +120,10 @@ mlx5_devcom_comp_alloc(u64 id, u64 key,
- 	comp->key = key;
+@@ -131,8 +131,10 @@ mlx5_devcom_comp_alloc(u64 id, const str
+ 		write_pnet(&comp->key.net, attr->net);
  	comp->handler = handler;
  	init_rwsem(&comp->sem);
 +#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
@@ -19,7 +19,7 @@ Subject: [PATCH] BACKPORT:
  	kref_init(&comp->ref);
  	INIT_LIST_HEAD(&comp->comp_dev_list_head);
  
-@@ -136,7 +138,9 @@ mlx5_devcom_comp_release(struct kref *re
+@@ -147,7 +149,9 @@ mlx5_devcom_comp_release(struct kref *re
  	mutex_lock(&comp_list_lock);
  	list_del(&comp->comp_list);
  	mutex_unlock(&comp_list_lock);

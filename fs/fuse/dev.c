@@ -6,7 +6,9 @@
   See the file COPYING.
 */
 
+#include "dev_uring_i.h"
 #include "fuse_i.h"
+#include "fuse_dev_i.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -22,10 +24,6 @@
 #include <linux/splice.h>
 #include <linux/sched.h>
 
-/* Ordinary requests have even IDs, while interrupts IDs are odd */
-#define FUSE_INT_REQ_BIT (1ULL << 0)
-#define FUSE_REQ_ID_STEP (1ULL << 1)
-
 void fuse_set_initialized(struct fuse_conn *fc)
 {
 	/* Make sure stores before this are seen on another CPU */
@@ -40,8 +38,14 @@ void fuse_creds(struct fuse_req *req)
 {
 	struct fuse_conn *fc = req->fm->fc;
 
-	req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
-	req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
+	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+		req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
+		req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
+	} else {
+		req->in.h.uid = FUSE_INVALID_UIDGID;
+		req->in.h.gid = FUSE_INVALID_UIDGID;
+	}
+
 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
 }
 
@@ -108,8 +112,14 @@ void fuse_force_creds(struct fuse_req *req)
 {
 	struct fuse_conn *fc = req->fm->fc;
 
-	req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
-	req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
+	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+		req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
+		req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
+	} else {
+		req->in.h.uid = FUSE_INVALID_UIDGID;
+		req->in.h.gid = FUSE_INVALID_UIDGID;
+	}
+
 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
 }
 
@@ -124,7 +134,9 @@ void fuse_args_to_req(struct fuse_req *req, struct fuse_args *args)
 		__set_bit(FR_ASYNC, &req->flags);
 }
 
-ssize_t fuse_simple_request(struct fuse_mount *fm, struct fuse_args *args)
+ssize_t __fuse_simple_request(struct mnt_idmap *idmap,
+			      struct fuse_mount *fm,
+			      struct fuse_args *args)
 {
 	if (fm->simple_request)
 		return fm->simple_request(fm, args);
@@ -132,18 +144,34 @@ ssize_t fuse_simple_request(struct fuse_mount *fm, struct fuse_args *args)
 	return -EINVAL;
 }
 
+#ifdef CONFIG_FUSE_IO_URING
+static bool fuse_request_queue_background_uring(struct fuse_conn *fc,
+					       struct fuse_req *req)
+{
+	struct fuse_iqueue *fiq = &fc->iq;
+
+	req->in.h.unique = fuse_get_unique(fiq);
+	req->in.h.len = sizeof(struct fuse_in_header) +
+		fuse_len_args(req->args->in_numargs,
+			      (struct fuse_arg *) req->args->in_args);
+
+	return fuse_uring_queue_bq_req(req);
+}
+#endif
+
 int fuse_simple_background(struct fuse_mount *fm, struct fuse_args *args,
 			    gfp_t gfp_flags)
 {
 	if (fm->simple_background)
 		return fm->simple_background(fm, args, gfp_flags);
 
-	return -EINVAL;
+	return 0;
 }
 
 static int fuse_simple_notify_reply(struct fuse_mount *fm,
 				    struct fuse_args *args, u64 unique)
 {
+
 	if (fm->simple_notify_reply)
 		return fm->simple_notify_reply(fm, args, unique);
 
@@ -188,7 +216,7 @@ static int unlock_request(struct fuse_req *req)
 }
 
 void fuse_copy_init(struct fuse_copy_state *cs, int write,
-			   struct iov_iter *iter)
+		    struct iov_iter *iter)
 {
 	memset(cs, 0, sizeof(*cs));
 	cs->write = write;
@@ -308,6 +336,9 @@ static int fuse_copy_do(struct fuse_copy_state *cs, void **val, unsigned *size)
 	*size -= ncpy;
 	cs->len -= ncpy;
 	cs->offset += ncpy;
+	if (cs->is_uring)
+		cs->ring.copied_sz += ncpy;
+
 	return ncpy;
 }
 
@@ -330,6 +361,12 @@ static int fuse_check_folio(struct folio *folio)
 	return 0;
 }
 
+/*
+ * Attempt to steal a page from the splice() pipe and move it into the
+ * pagecache. If successful, the pointer in @pagep will be updated. The
+ * folio that was originally in @pagep will lose a reference and the new
+ * folio returned in @pagep will carry a reference.
+ */
 static int fuse_try_move_page(struct fuse_copy_state *cs, struct page **pagep)
 {
 	int err;
@@ -717,24 +754,25 @@ static int fuse_notify_store(struct fuse_conn *fc, unsigned int size,
 
 	num = outarg.size;
 	while (num) {
+		struct folio *folio;
 		struct page *page;
 		unsigned int this_num;
 
-		err = -ENOMEM;
-		page = find_or_create_page(mapping, index,
-					   mapping_gfp_mask(mapping));
-		if (!page)
+		folio = filemap_grab_folio(mapping, index);
+		err = PTR_ERR(folio);
+		if (IS_ERR(folio))
 			goto out_iput;
 
-		this_num = min_t(unsigned, num, PAGE_SIZE - offset);
+		page = &folio->page;
+		this_num = min_t(unsigned, num, folio_size(folio) - offset);
 		err = fuse_copy_page(cs, &page, offset, this_num, 0);
-		if (!PageUptodate(page) && !err && offset == 0 &&
-		    (this_num == PAGE_SIZE || file_size == end)) {
-			zero_user_segment(page, this_num, PAGE_SIZE);
-			SetPageUptodate(page);
+		if (!folio_test_uptodate(folio) && !err && offset == 0 &&
+		    (this_num == folio_size(folio) || file_size == end)) {
+			folio_zero_segment(folio, this_num, folio_size(folio));
+			folio_mark_uptodate(folio);
 		}
-		unlock_page(page);
-		put_page(page);
+		folio_unlock(folio);
+		folio_put(folio);
 
 		if (err)
 			goto out_iput;
@@ -766,7 +804,7 @@ static void fuse_retrieve_end(struct fuse_mount *fm, struct fuse_args *args,
 	struct fuse_retrieve_args *ra =
 		container_of(args, typeof(*ra), ap.args);
 
-	release_pages(ra->ap.pages, ra->ap.num_pages);
+	release_pages(ra->ap.folios, ra->ap.num_folios);
 	kfree(ra);
 }
 
@@ -780,7 +818,7 @@ static int fuse_retrieve(struct fuse_mount *fm, struct inode *inode,
 	unsigned int num;
 	unsigned int offset;
 	size_t total_len = 0;
-	unsigned int num_pages;
+	unsigned int num_pages, cur_pages = 0;
 	struct fuse_conn *fc = fm->fc;
 	struct fuse_retrieve_args *ra;
 	size_t args_size = sizeof(*ra);
@@ -799,38 +837,39 @@ static int fuse_retrieve(struct fuse_mount *fm, struct inode *inode,
 	num_pages = (num + offset + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	num_pages = min(num_pages, fc->max_pages);
 
-	args_size += num_pages * (sizeof(ap->pages[0]) + sizeof(ap->descs[0]));
+	args_size += num_pages * (sizeof(ap->folios[0]) + sizeof(ap->descs[0]));
 
 	ra = kzalloc(args_size, GFP_KERNEL);
 	if (!ra)
 		return -ENOMEM;
 
 	ap = &ra->ap;
-	ap->pages = (void *) (ra + 1);
-	ap->descs = (void *) (ap->pages + num_pages);
+	ap->folios = (void *) (ra + 1);
+	ap->descs = (void *) (ap->folios + num_pages);
 
 	args = &ap->args;
 	args->nodeid = outarg->nodeid;
 	args->opcode = FUSE_NOTIFY_REPLY;
-	args->in_numargs = 2;
+	args->in_numargs = 3;
 	args->in_pages = true;
 	args->end = fuse_retrieve_end;
 
 	index = outarg->offset >> PAGE_SHIFT;
 
-	while (num && ap->num_pages < num_pages) {
-		struct page *page;
+	while (num && cur_pages < num_pages) {
+		struct folio *folio;
 		unsigned int this_num;
 
-		page = find_get_page(mapping, index);
-		if (!page)
+		folio = filemap_get_folio(mapping, index);
+		if (IS_ERR(folio))
 			break;
 
 		this_num = min_t(unsigned, num, PAGE_SIZE - offset);
-		ap->pages[ap->num_pages] = page;
-		ap->descs[ap->num_pages].offset = offset;
-		ap->descs[ap->num_pages].length = this_num;
-		ap->num_pages++;
+		ap->folios[ap->num_folios] = folio;
+		ap->descs[ap->num_folios].offset = offset;
+		ap->descs[ap->num_folios].length = this_num;
+		ap->num_folios++;
+		cur_pages++;
 
 		offset = 0;
 		num -= this_num;
@@ -839,9 +878,10 @@ static int fuse_retrieve(struct fuse_mount *fm, struct inode *inode,
 	}
 	ra->inarg.offset = outarg->offset;
 	ra->inarg.size = total_len;
-	args->in_args[0].size = sizeof(ra->inarg);
-	args->in_args[0].value = &ra->inarg;
-	args->in_args[1].size = total_len;
+	fuse_set_zero_arg0(args);
+	args->in_args[1].size = sizeof(ra->inarg);
+	args->in_args[1].value = &ra->inarg;
+	args->in_args[2].size = total_len;
 
 	err = fuse_simple_notify_reply(fm, args, outarg->notify_unique);
 	if (err)

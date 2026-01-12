@@ -127,7 +127,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,
-+#ifdef HAVE_ISCSI_CONN_UNBIND
++#ifdef HAVE_ISCSI_TRANSPORT_UNBIND_CONN
  	.unbind_conn		= iscsi_conn_unbind,
 +#endif
  	.destroy_conn           = iscsi_conn_teardown,

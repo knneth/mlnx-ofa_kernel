@@ -73,7 +73,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  		in_dev_put(in_dev);
  		if (ret_addr)
  			return true;
-@@ -353,9 +368,17 @@ struct ipoib_walk_data {
+@@ -354,9 +369,17 @@ struct ipoib_walk_data {
  };
  
  static int ipoib_upper_walk(struct net_device *upper,
@@ -92,7 +92,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	int ret = 0;
  
  	if (ipoib_is_dev_match_addr_rcu(data->addr, upper)) {
-@@ -380,12 +403,16 @@ static int ipoib_upper_walk(struct net_d
+@@ -381,12 +404,16 @@ static int ipoib_upper_walk(struct net_d
  static struct net_device *ipoib_get_net_dev_match_addr(
  		const struct sockaddr *addr, struct net_device *dev)
  {
@@ -109,7 +109,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	rcu_read_lock();
  	if (ipoib_is_dev_match_addr_rcu(addr, dev)) {
  		dev_hold(dev);
-@@ -393,7 +420,13 @@ static struct net_device *ipoib_get_net_
+@@ -394,7 +421,13 @@ static struct net_device *ipoib_get_net_
  		goto out;
  	}
  
@@ -124,7 +124,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  out:
  	rcu_read_unlock();
  	return data.result;
-@@ -707,7 +740,11 @@ static void push_pseudo_header(struct sk
+@@ -708,7 +741,11 @@ static void push_pseudo_header(struct sk
  {
  	struct ipoib_pseudo_header *phdr;
  
@@ -137,7 +137,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	memcpy(phdr->hwaddr, daddr, INFINIBAND_ALEN);
  }
  
-@@ -1264,15 +1301,21 @@ unref:
+@@ -1265,15 +1302,21 @@ unref:
  	return NETDEV_TX_OK;
  }
  
@@ -160,7 +160,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	ipoib_warn(priv, "transmit timeout: latency %d msecs\n",
  		   jiffies_to_msecs(jiffies - dev_trans_start(dev)));
  	ipoib_warn(priv,
-@@ -1319,7 +1362,19 @@ static int ipoib_hard_header(struct sk_b
+@@ -1320,7 +1363,19 @@ static int ipoib_hard_header(struct sk_b
  {
  	struct ipoib_header *header;
  
@@ -181,7 +181,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	header->proto = htons(type);
  	header->reserved = 0;
-@@ -1474,7 +1529,7 @@ static void ipoib_reap_neigh(struct work
+@@ -1475,7 +1530,7 @@ static void ipoib_reap_neigh(struct work
  	gc_time = arp_tbl.gc_interval;
  	gc_time = min(gc_time, IPOIB_MAX_NEIGH_TIME);
  	gc_time = max(gc_time, IPOIB_MIN_NEIGH_TIME);
@@ -190,7 +190,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	__ipoib_reap_neigh(priv);
  
  	queue_delayed_work(priv->wq, &priv->neigh_reap_task,
-@@ -1777,11 +1832,15 @@ static void ipoib_neigh_hash_uninit(stru
+@@ -1778,11 +1833,15 @@ static void ipoib_neigh_hash_uninit(stru
  static void ipoib_napi_add(struct net_device *dev)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
@@ -207,7 +207,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  }
  
  static void ipoib_napi_del(struct net_device *dev)
-@@ -1812,7 +1871,9 @@ static void ipoib_dev_uninit_default(str
+@@ -1813,7 +1872,9 @@ static void ipoib_dev_uninit_default(str
  static int ipoib_dev_init_default(struct net_device *dev)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
@@ -217,7 +217,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	ipoib_napi_add(dev);
  
-@@ -1840,10 +1901,16 @@ static int ipoib_dev_init_default(struct
+@@ -1841,10 +1902,16 @@ static int ipoib_dev_init_default(struct
  	}
  
  	/* after qp created set dev address */
@@ -234,7 +234,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	return 0;
  
-@@ -1863,10 +1930,17 @@ static int ipoib_ioctl(struct net_device
+@@ -1864,10 +1931,17 @@ static int ipoib_ioctl(struct net_device
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  
@@ -252,7 +252,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  }
  
  static int ipoib_dev_init(struct net_device *dev)
-@@ -1950,7 +2024,11 @@ static void ipoib_parent_unregister_pre(
+@@ -1951,7 +2025,11 @@ static void ipoib_parent_unregister_pre(
  	 * running ensures the it will not add more work.
  	 */
  	rtnl_lock();
@@ -264,7 +264,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	rtnl_unlock();
  
  	/* ipoib_event() cannot be running once this returns */
-@@ -2005,13 +2083,19 @@ static int ipoib_parent_init(struct net_
+@@ -2006,13 +2084,19 @@ static int ipoib_parent_init(struct net_
  			priv->ca->name, priv->port, result);
  		return result;
  	}
@@ -284,7 +284,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	return 0;
  }
  
-@@ -2026,8 +2110,13 @@ static void ipoib_child_init(struct net_
+@@ -2027,8 +2111,13 @@ static void ipoib_child_init(struct net_
  		memcpy(&priv->local_gid, priv->dev->dev_addr + 4,
  		       sizeof(priv->local_gid));
  	else {
@@ -298,7 +298,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  		memcpy(&priv->local_gid, &ppriv->local_gid,
  		       sizeof(priv->local_gid));
  	}
-@@ -2051,7 +2140,7 @@ static int ipoib_ndo_init(struct net_dev
+@@ -2052,7 +2141,7 @@ static int ipoib_ndo_init(struct net_dev
  	ndev->mtu = IPOIB_UD_MTU(priv->max_ib_mtu);
  	priv->mcast_mtu = priv->admin_mtu = ndev->mtu;
  	rn->mtu = priv->mcast_mtu;
@@ -307,7 +307,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	ndev->neigh_priv_len = sizeof(struct ipoib_neigh);
  
-@@ -2155,6 +2244,7 @@ static int ipoib_set_vf_guid(struct net_
+@@ -2156,6 +2245,7 @@ static int ipoib_set_vf_guid(struct net_
  	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
  }
  
@@ -315,7 +315,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  static int ipoib_get_vf_guid(struct net_device *dev, int vf,
  			     struct ifla_vf_guid *node_guid,
  			     struct ifla_vf_guid *port_guid)
-@@ -2163,6 +2253,7 @@ static int ipoib_get_vf_guid(struct net_
+@@ -2164,6 +2254,7 @@ static int ipoib_get_vf_guid(struct net_
  
  	return ib_get_vf_guid(priv->ca, vf, priv->port, node_guid, port_guid);
  }
@@ -323,7 +323,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  static int ipoib_get_vf_stats(struct net_device *dev, int vf,
  			      struct ifla_vf_stats *vf_stats)
-@@ -2196,20 +2287,28 @@ static const struct net_device_ops ipoib
+@@ -2197,20 +2288,28 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
@@ -362,7 +362,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  };
  
  static const struct net_device_ops ipoib_netdev_ops_vf = {
-@@ -2225,7 +2324,13 @@ static const struct net_device_ops ipoib
+@@ -2226,7 +2325,13 @@ static const struct net_device_ops ipoib
  	.ndo_get_iflink		 = ipoib_get_iflink,
  	.ndo_set_mac_address	 = ipoib_set_vf_local_mac,
  	.ndo_get_stats64	 = ipoib_get_stats,
@@ -377,7 +377,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  };
  
  static const struct net_device_ops ipoib_netdev_default_pf = {
-@@ -2359,7 +2464,6 @@ int ipoib_intf_init(struct ib_device *hc
+@@ -2360,7 +2465,6 @@ int ipoib_intf_init(struct ib_device *hc
  	 */
  	priv->next_priv_destructor = dev->priv_destructor;
  	dev->priv_destructor = NULL;
@@ -385,7 +385,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	ipoib_build_priv(dev);
  
  	return 0;
-@@ -2397,7 +2501,6 @@ void ipoib_intf_free(struct net_device *
+@@ -2398,7 +2502,6 @@ void ipoib_intf_free(struct net_device *
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct rdma_netdev *rn = netdev_priv(dev);
@@ -393,7 +393,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	dev->priv_destructor = priv->next_priv_destructor;
  	if (dev->priv_destructor)
  		dev->priv_destructor(dev);
-@@ -2407,7 +2510,6 @@ void ipoib_intf_free(struct net_device *
+@@ -2408,7 +2511,6 @@ void ipoib_intf_free(struct net_device *
  	 * attempt to call priv_destructor twice, prevent that from happening.
  	 */
  	dev->priv_destructor = NULL;
@@ -401,7 +401,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	/* unregister/destroy is very complicated. Make bugs more obvious. */
  	rn->clnt_priv = NULL;
  
-@@ -2472,7 +2574,11 @@ static void set_base_guid(struct ipoib_d
+@@ -2473,7 +2575,11 @@ static void set_base_guid(struct ipoib_d
  	memcpy(&priv->local_gid.global.interface_id,
  	       &gid->global.interface_id,
  	       sizeof(gid->global.interface_id));
@@ -413,7 +413,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	clear_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
  
  	netif_addr_unlock_bh(netdev);
-@@ -2510,7 +2616,7 @@ static int ipoib_set_mac(struct net_devi
+@@ -2511,7 +2617,7 @@ static int ipoib_set_mac(struct net_devi
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct sockaddr_storage *ss = addr;
@@ -422,7 +422,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
  		return -EBUSY;
-@@ -2673,6 +2779,7 @@ static struct net_device *ipoib_add_port
+@@ -2676,6 +2782,7 @@ static struct net_device *ipoib_add_port
  		if (!rc && ops->priv_size < params.sizeof_priv)
  			ops->priv_size = params.sizeof_priv;
  	}
@@ -430,7 +430,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	/*
  	 * We cannot set priv_destructor before register_netdev because we
  	 * need priv to be always valid during the error flow to execute
-@@ -2680,7 +2787,6 @@ static struct net_device *ipoib_add_port
+@@ -2683,7 +2790,6 @@ static struct net_device *ipoib_add_port
  	 * enter priv_destructor mode once we are completely registered.
  	 */
  	ndev->priv_destructor = ipoib_intf_free;
@@ -438,7 +438,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	if (ipoib_intercept_dev_id_attr(ndev))
  		goto sysfs_failed;
  	if (ipoib_cm_add_mode_attr(ndev))
-@@ -2751,10 +2857,9 @@ static void ipoib_remove_one(struct ib_d
+@@ -2754,10 +2860,9 @@ static void ipoib_remove_one(struct ib_d
  
  		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
  					 list)

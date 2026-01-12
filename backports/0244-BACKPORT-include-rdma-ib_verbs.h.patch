@@ -54,7 +54,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_verbs.h
  	struct hlist_node ndev_hash_link;
  	struct rdma_port_counter port_counter;
  	struct ib_port *sysfs;
-@@ -2560,6 +2572,10 @@ struct ib_device_ops {
+@@ -2569,6 +2581,10 @@ struct ib_device_ops {
  			       struct ib_mr_status *mr_status);
  	int (*alloc_mw)(struct ib_mw *mw, struct ib_udata *udata);
  	int (*dealloc_mw)(struct ib_mw *mw);
@@ -65,7 +65,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_verbs.h
  	int (*attach_mcast)(struct ib_qp *qp, union ib_gid *gid, u16 lid);
  	int (*detach_mcast)(struct ib_qp *qp, union ib_gid *gid, u16 lid);
  	int (*alloc_xrcd)(struct ib_xrcd *xrcd, struct ib_udata *udata);
-@@ -4147,7 +4163,11 @@ static inline bool ib_dma_pci_p2p_dma_su
+@@ -4163,7 +4179,11 @@ static inline bool ib_dma_pci_p2p_dma_su
  	if (ib_uses_virt_dma(dev))
  		return false;
  
@@ -77,7 +77,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_verbs.h
  }
  
  /**
-@@ -4293,6 +4313,7 @@ static inline void ib_dma_unmap_sg_attrs
+@@ -4309,6 +4329,7 @@ static inline void ib_dma_unmap_sg_attrs
   * @direction: The direction of the DMA
   * @attrs: Optional DMA attributes for the map operation
   */
@@ -85,7 +85,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_verbs.h
  static inline int ib_dma_map_sgtable_attrs(struct ib_device *dev,
  					   struct sg_table *sgt,
  					   enum dma_data_direction direction,
-@@ -4318,6 +4339,7 @@ static inline void ib_dma_unmap_sgtable_
+@@ -4334,6 +4355,7 @@ static inline void ib_dma_unmap_sgtable_
  	if (!ib_uses_virt_dma(dev))
  		dma_unmap_sgtable(dev->dma_device, sgt, direction, dma_attrs);
  }

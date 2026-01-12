@@ -8,11 +8,7 @@
 void
 mlx5_esw_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
 {
-	u64 parent_id;
-
-	parent_id = mlx5_query_nic_system_image_guid(dev);
-	ppid->id_len = sizeof(parent_id);
-	memcpy(ppid->id, &parent_id, sizeof(parent_id));
+	mlx5_query_nic_sw_system_image_guid(dev, ppid->id, &ppid->id_len);
 }
 
 bool mlx5_esw_devlink_port_supported(struct mlx5_eswitch *esw, u16 vport_num)
@@ -205,8 +201,7 @@ void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_vport *vport)
 		return;
 	dl_port = vport->dl_port;
 
-	if (!test_bit(MLX5_BREAK_FW_WAIT, &vport->dev->intf_state))
-		mlx5_esw_qos_vport_update_parent(vport, NULL, NULL);
+	mlx5_esw_qos_vport_update_parent(vport, NULL, NULL);
 	devl_rate_leaf_destroy(&dl_port->dl_port);
 
 	devl_port_unregister(&dl_port->dl_port);

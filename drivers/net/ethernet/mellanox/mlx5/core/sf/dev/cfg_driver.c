@@ -175,6 +175,7 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 	devm = &sf_cfg_dev->device;
 	devm->dev = &sf_dev->adev.dev;
 	sf_cfg_dev->sf_dev = sf_dev;
+	mutex_init(&devm->lock);
 
 	err = mlxdevm_register(devm);
 	if (err)
@@ -191,6 +192,7 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 params_reg_err:
 	mlxdevm_unregister(devm);
 err:
+	mutex_destroy(&devm->lock);
 	kfree(sf_cfg_dev);
 	return err;
 }
@@ -206,6 +208,7 @@ static void mlx5_sf_cfg_dev_remove(struct auxiliary_device *adev)
 	mlxdevm_params_unregister(devm, mlx5_sf_cfg_devm_params,
 				  ARRAY_SIZE(mlx5_sf_cfg_devm_params));
 	mlxdevm_unregister(devm);
+	mutex_destroy(&devm->lock);
 	kfree(sf_cfg_dev);
 }
 

@@ -5,7 +5,7 @@
  */
 
 #ifndef _COMPAT_LINUX_BITFIELD_H
-#define _COMAPAT_LINUX_BITFIELD_H
+#define _COMPAT_LINUX_BITFIELD_H
 
 #include "../../compat/config.h"
 

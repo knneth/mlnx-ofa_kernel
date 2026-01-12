@@ -1,0 +1,52 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/ioctl.c
+
+Change-Id: I15d38440adc5392f5c5668e5ecdc9585d93f3322
+---
+ fs/fuse/ioctl.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/fs/fuse/ioctl.c
++++ b/fs/fuse/ioctl.c
+@@ -327,7 +327,11 @@ long fuse_do_ioctl(struct file *file, un
+ 		err = -EFAULT;
+ 		iov_iter_init(&ii, ITER_SOURCE, in_iov, in_iovs, in_size);
+ 		for (i = 0; iov_iter_count(&ii) && !WARN_ON(i >= ap.num_folios); i++) {
++#ifdef HAVE_COPY_FOLIO_FROM_ITER
+ 			c = copy_folio_from_iter(ap.folios[i], 0, PAGE_SIZE, &ii);
++#else
++			c = copy_page_from_iter(&ap.folios[i]->page, 0, PAGE_SIZE, &ii);
++#endif
+ 			if (c != PAGE_SIZE && iov_iter_count(&ii))
+ 				goto out;
+ 		}
+@@ -501,7 +505,13 @@ static void fuse_priv_ioctl_cleanup(stru
+ 	fuse_file_release(inode, ff, O_RDONLY, NULL, S_ISDIR(inode->i_mode));
+ }
+ 
++#ifdef HAVE_STRUCT_FILE_KATTR
++/* Newer kernels (v6.17-rc1+): struct fileattr renamed to struct file_kattr */
++int fuse_fileattr_get(struct dentry *dentry, struct file_kattr *fa)
++#else
++/* Older kernels: use original struct fileattr */
+ int fuse_fileattr_get(struct dentry *dentry, struct fileattr *fa)
++#endif
+ {
+ 	struct inode *inode = d_inode(dentry);
+ 	struct fuse_file *ff;
+@@ -538,8 +548,15 @@ cleanup:
+ 	return err;
+ }
+ 
++#ifdef HAVE_STRUCT_FILE_KATTR
++/* Newer kernels (v6.17-rc1+): struct fileattr renamed to struct file_kattr */
++int fuse_fileattr_set(struct mnt_idmap *idmap,
++		      struct dentry *dentry, struct file_kattr *fa)
++#else
++/* Older kernels: use original struct fileattr */
+ int fuse_fileattr_set(struct mnt_idmap *idmap,
+ 		      struct dentry *dentry, struct fileattr *fa)
++#endif
+ {
+ 	struct inode *inode = d_inode(dentry);
+ 	struct fuse_file *ff;

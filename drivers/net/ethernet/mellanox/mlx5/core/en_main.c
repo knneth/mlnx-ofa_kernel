@@ -279,9 +279,13 @@ static int mlx5e_devcom_event_mpv(int event, void *my_data, void *event_data)
 
 static int mlx5e_devcom_init_mpv(struct mlx5e_priv *priv, u64 *data)
 {
+	struct mlx5_devcom_match_attr attr = {
+		.key.val = *data,
+	};
+
 	priv->devcom = mlx5_devcom_register_component(priv->mdev->priv.devc,
 						      MLX5_DEVCOM_MPV,
-						      *data,
+						      &attr,
 						      mlx5e_devcom_event_mpv,
 						      priv);
 	if (IS_ERR(priv->devcom))
@@ -307,7 +311,7 @@ static void mlx5e_devcom_cleanup_mpv(struct mlx5e_priv *priv)
 		mlx5e_ipsec_send_event(priv, MPV_DEVCOM_IPSEC_MASTER_DOWN);
 	}
 
-	mlx5_devcom_unregister_component(priv->devcom);
+	mlx5_devcom_unregister_component(&priv->devcom);
 }
 
 static int blocking_event(struct notifier_block *nb, unsigned long event, void *data)
@@ -757,6 +761,34 @@ static void mlx5e_rq_err_cqe_work(struct work_struct *recover_work)
 	mlx5e_reporter_rq_cqe_err(rq);
 }
 
+static void mlx5e_rq_timeout_work(struct work_struct *timeout_work)
+{
+	struct mlx5e_rq *rq = container_of(timeout_work,
+					   struct mlx5e_rq,
+					   rx_timeout_work);
+
+	/* Acquire netdev instance lock to synchronize with channel close and
+	 * reopen flows. Either successfully obtain the lock, or detect that
+	 * channels are closing for another reason, making this work no longer
+	 * necessary.
+	 */
+
+	//Forwardport reopen in backports
+	/* while (!netdev_trylock(rq->netdev)) {
+		if (!test_bit(MLX5E_STATE_CHANNELS_ACTIVE, &rq->priv->state))
+			return;
+		msleep(20);
+	}*/
+	while (!rtnl_trylock()) {
+		if (!test_bit(MLX5E_STATE_CHANNELS_ACTIVE, &rq->priv->state))
+			return;
+		msleep(20);
+	}
+
+	mlx5e_reporter_rx_timeout(rq);
+	rtnl_unlock();
+}
+
 static int mlx5e_alloc_mpwqe_rq_drop_page(struct mlx5e_rq *rq)
 {
 	rq->wqe_overflow.page = alloc_page(GFP_KERNEL);
@@ -880,6 +912,7 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 
 	rqp->wq.db_numa_node = node;
 	INIT_WORK(&rq->recover_work, mlx5e_rq_err_cqe_work);
+	INIT_WORK(&rq->rx_timeout_work, mlx5e_rq_timeout_work);
 
 	if (params->xdp_prog)
 		bpf_prog_inc(params->xdp_prog);
@@ -969,6 +1002,8 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 	} else {
 		/* Create a page_pool and register it with rxq */
 		struct page_pool_params pp_params = { 0 };
+
+		pool_size = min_t(u32, pool_size, 16384);
 
 		pp_params.order     = 0;
 		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV;
@@ -1279,7 +1314,8 @@ int mlx5e_wait_for_min_rx_wqes(struct mlx5e_rq *rq, int wait_time)
 	netdev_warn(rq->netdev, "Failed to get min RX wqes on Channel[%d] RQN[0x%x] wq cur_sz(%d) min_rx_wqes(%d)\n",
 		    rq->ix, rq->rqn, mlx5e_rqwq_get_cur_sz(rq), min_wqes);
 
-	mlx5e_reporter_rx_timeout(rq);
+	queue_work(rq->priv->wq, &rq->rx_timeout_work);
+
 	return -ETIMEDOUT;
 }
 
@@ -1455,6 +1491,7 @@ void mlx5e_close_rq(struct mlx5e_rq *rq)
 	if (rq->dim)
 		cancel_work_sync(&rq->dim->work);
 	cancel_work_sync(&rq->recover_work);
+	cancel_work_sync(&rq->rx_timeout_work);
 	mlx5e_destroy_rq(rq);
 	mlx5e_free_rx_descs(rq);
 	mlx5e_free_rq(rq);

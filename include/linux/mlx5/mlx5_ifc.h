@@ -2019,7 +2019,9 @@ struct mlx5_ifc_cmd_hca_cap_bits {
 	u8         log_max_rqt[0x5];
 	u8         reserved_at_390[0x3];
 	u8         log_max_rqt_size[0x5];
-	u8         reserved_at_398[0x3];
+	u8         reserved_at_398[0x1];
+	u8	   vnic_env_cnt_bar_uar_access[0x1];
+	u8	   vnic_env_cnt_odp_page_fault[0x1];
 	u8         log_max_tis_per_sq[0x5];
 
 	u8         ext_stride_num_range[0x1];
@@ -2297,12 +2299,16 @@ struct mlx5_ifc_cmd_hca_cap_2_bits {
 	u8	   reserved_at_440[0x8];
 	u8	   max_num_eqs_24b[0x18];
 
-	u8         reserved_at_460[0x160];
+	u8         reserved_at_460[0x144];
+	u8         load_balance_id[0x4];
+	u8         reserved_at_5a8[0x18];
 
 	u8         query_adjacent_functions_id[0x1];
 	u8         ingress_egress_esw_vport_connect[0x1];
 	u8         function_id_type_vhca_id[0x1];
-	u8         reserved_at_5c3[0xd];
+	u8         reserved_at_5c3[0x1];
+	u8         lag_per_mp_group[0x1];
+	u8         reserved_at_5c5[0xb];
 	u8         delegate_vhca_management_profiles[0x10];
 
 	u8         delegated_vhca_max[0x10];
@@ -4091,7 +4097,13 @@ struct mlx5_ifc_vnic_diagnostic_statistics_bits {
 
 	u8         handled_pkt_steering_fail[0x40];
 
-	u8         reserved_at_360[0xc80];
+	u8         bar_uar_access[0x20];
+
+	u8         odp_local_triggered_page_fault[0x20];
+
+	u8         odp_remote_triggered_page_fault[0x20];
+
+	u8         reserved_at_3c0[0xc20];
 };
 
 struct mlx5_ifc_traffic_counter_bits {

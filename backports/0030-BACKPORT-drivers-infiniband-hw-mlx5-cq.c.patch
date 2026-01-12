@@ -52,7 +52,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
  	u32 *cqb = NULL;
  	void *cqc;
  	int cqe_size;
-@@ -1182,9 +1198,15 @@ static int resize_user(struct mlx5_ib_de
+@@ -1194,9 +1210,15 @@ static int resize_user(struct mlx5_ib_de
  	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
  		return -EINVAL;
  
@@ -68,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
  	if (IS_ERR(umem)) {
  		err = PTR_ERR(umem);
  		return err;
-@@ -1285,7 +1307,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
+@@ -1297,7 +1319,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
  	unsigned int page_offset_quantized = 0;
  	unsigned int page_shift;
  	int inlen;

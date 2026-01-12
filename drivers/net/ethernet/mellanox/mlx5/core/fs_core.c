@@ -675,7 +675,7 @@ static void del_sw_hw_rule(struct fs_node *node)
 			BIT(MLX5_SET_FTE_MODIFY_ENABLE_MASK_ACTION) |
 			BIT(MLX5_SET_FTE_MODIFY_ENABLE_MASK_FLOW_COUNTERS);
 		fte->act_dests.action.action &= ~MLX5_FLOW_CONTEXT_ACTION_COUNT;
-		mlx5_fc_local_destroy(rule->dest_attr.counter);
+		mlx5_fc_local_put(rule->dest_attr.counter);
 		goto out;
 	}
 
@@ -3267,6 +3267,7 @@ init_rdma_transport_rx_root_ns_one(struct mlx5_flow_steering *steering,
 {
 	struct mlx5_flow_root_namespace *root_ns;
 	struct fs_prio *prio;
+	int ret;
 	int i;
 
 	steering->rdma_transport_rx_root_ns[vport_idx] =
@@ -3278,11 +3279,17 @@ init_rdma_transport_rx_root_ns_one(struct mlx5_flow_steering *steering,
 
 	for (i = 0; i < MLX5_RDMA_TRANSPORT_BYPASS_PRIO; i++) {
 		prio = fs_create_prio(&root_ns->ns, i, 1);
-		if (IS_ERR(prio))
-			return PTR_ERR(prio);
+		if (IS_ERR(prio)) {
+			ret = PTR_ERR(prio);
+			goto err;
+		}
 	}
 	set_prio_attrs(root_ns);
 	return 0;
+
+err:
+	cleanup_root_ns(root_ns);
+	return ret;
 }
 
 static int
@@ -3291,6 +3298,7 @@ init_rdma_transport_tx_root_ns_one(struct mlx5_flow_steering *steering,
 {
 	struct mlx5_flow_root_namespace *root_ns;
 	struct fs_prio *prio;
+	int ret;
 	int i;
 
 	steering->rdma_transport_tx_root_ns[vport_idx] =
@@ -3302,11 +3310,17 @@ init_rdma_transport_tx_root_ns_one(struct mlx5_flow_steering *steering,
 
 	for (i = 0; i < MLX5_RDMA_TRANSPORT_BYPASS_PRIO; i++) {
 		prio = fs_create_prio(&root_ns->ns, i, 1);
-		if (IS_ERR(prio))
-			return PTR_ERR(prio);
+		if (IS_ERR(prio)) {
+			ret = PTR_ERR(prio);
+			goto err;
+		}
 	}
 	set_prio_attrs(root_ns);
 	return 0;
+
+err:
+	cleanup_root_ns(root_ns);
+	return ret;
 }
 
 static bool mlx5_fs_ns_is_empty(struct mlx5_flow_namespace *ns)
@@ -3575,6 +3589,11 @@ static int init_fdb_root_ns(struct mlx5_flow_steering *steering)
 	if (!steering->fdb_root_ns)
 		return -ENOMEM;
 
+	maj_prio = fs_create_prio(&steering->fdb_root_ns->ns, FDB_DROP_ROOT, 1);
+	err = PTR_ERR_OR_ZERO(maj_prio);
+	if (err)
+		goto out_err;
+
 	err = create_fdb_bypass(steering);
 	if (err)
 		goto out_err;
@@ -3787,6 +3806,13 @@ static int mlx5_fs_mode_validate(struct devlink *devlink, u32 id,
 	char *value = val.vstr;
 	u8 eswitch_mode;
 
+	eswitch_mode = mlx5_eswitch_mode(dev);
+	if (eswitch_mode == MLX5_ESWITCH_OFFLOADS) {
+		NL_SET_ERR_MSG_FMT_MOD(extack,
+				       "Changing fs mode is not supported when eswitch offloads enabled.");
+		return -EOPNOTSUPP;
+	}
+
 	if (!strcmp(value, "dmfs"))
 		return 0;
 
@@ -3810,14 +3836,6 @@ static int mlx5_fs_mode_validate(struct devlink *devlink, u32 id,
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Bad parameter: supported values are [\"dmfs\", \"smfs\", \"hmfs\"]");
 		return -EINVAL;
-	}
-
-	eswitch_mode = mlx5_eswitch_mode(dev);
-	if (eswitch_mode == MLX5_ESWITCH_OFFLOADS) {
-		NL_SET_ERR_MSG_FMT_MOD(extack,
-				       "Moving to %s is not supported when eswitch offloads enabled.",
-				       value);
-		return -EOPNOTSUPP;
 	}
 
 	return 0;

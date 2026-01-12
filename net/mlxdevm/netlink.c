@@ -411,7 +411,7 @@ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
 		return mlxdevm_nl_inst_iter_dumpit(msg, cb, flags, dump_one);
 }
 
-struct genl_family mlxdevm_nl_family __ro_after_init = {
+struct genl_family mlxdevm_nl_family  = {
 	.name		= MLXDEVM_GENL_NAME,
 	.version	= MLXDEVM_GENL_VERSION,
 	.netnsok	= true,

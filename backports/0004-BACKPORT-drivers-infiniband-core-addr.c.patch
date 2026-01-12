@@ -189,12 +189,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 -#endif
 +#endif /*IS_ENABLED(CONFIG_IPV6) */
  
- static int addr_resolve_neigh(const struct dst_entry *dst,
- 			      const struct sockaddr *dst_in,
-@@ -471,6 +542,15 @@ static int copy_src_l2_addr(struct rdma_
- 			    const struct net_device *ndev)
+ static bool is_dst_local(const struct dst_entry *dst)
  {
- 	int ret = 0;
+@@ -477,6 +548,15 @@ static int rdma_set_src_addr_rcu(struct
+ 				 const struct dst_entry *dst)
+ {
+ 	struct net_device *ndev = READ_ONCE(dst->dev);
 +#ifndef HAVE_RT_USES_GATEWAY
 +	const struct sockaddr_in *dst_in4 =
 +		(const struct sockaddr_in *)dst_in;
@@ -205,9 +205,9 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 +		(const void *)&dst_in6->sin6_addr;
 +#endif
  
- 	if (dst->dev->flags & IFF_LOOPBACK)
- 		ret = rdma_translate_ip(dst_in, dev_addr);
-@@ -482,7 +562,11 @@ static int copy_src_l2_addr(struct rdma_
+ 	/* A physical device must be the RDMA device to use */
+ 	if (is_dst_local(dst)) {
+@@ -502,7 +582,11 @@ static int rdma_set_src_addr_rcu(struct
  	 * we're definitely in RoCE v2 (as RoCE v1 isn't routable) set the
  	 * network type accordingly.
  	 */

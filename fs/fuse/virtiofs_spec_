@@ -30,9 +30,11 @@
 # SOFTWARE.
 #
 
-%{!?_name: %define _name virtiofs}
-%{!?_version: %define _version 4.0}
-%{!?_release: %define _release 0}
+%{!?_name: %global _name virtiofs}
+%{!?_version: %global _version 4.0}
+%{!?_release: %global _release 0}
+
+%bcond_with building_kmods
 
 # KMP is disabled by default
 %{!?KMP: %global KMP 0}
@@ -66,6 +68,7 @@ Vendor: NVIDIA Corporation
 %description
 %{name} kernel modules
 
+%if %{with building_kmods}
 # build KMP rpms?
 %if "%{KMP}" == "1"
 %global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
@@ -80,7 +83,27 @@ BuildRequires: %kernel_module_package_buildreqs
 %global kernel_release() %{KVERSION}
 %global flavors_to_build default
 %endif
+%endif
 
+%package dkms
+Summary: DKMS-built driver for %{name}
+Group: System Environment/Base
+%if "%{_vendor}" == "suse"
+Provides:  virtiofs-kmp = %{version}-%{release}, virtiofs-kmp-default = %{version}-%{release}, virtiofs-modules = %{version}-%{release}
+Obsoletes: virtiofs-kmp < %{version}-%{release}, virtiofs-kmp-default < %{version}-%{release}, virtiofs-modules < %{version}-%{release}
+%else
+Provides:  kmod-virtiofs = %{version}-%{release}, virtiofs-modules = %{version}-%{release}
+Obsoletes: kmod-virtiofs < %{version}-%{release}, virtiofs-modules < %{version}-%{release}
+%endif
+Requires: mlnx-ofa_kernel-dkms
+Requires: dkms >= 3.2
+%description dkms
+DKMS package for %{name}
+
+Install this package if you want to generate mlnx-ofa_kernel drivers for all
+kernels at install time.
+
+%if %{with building_kmods}
 #
 # setup module sign scripts if paths to the keys are given
 #
@@ -134,6 +157,9 @@ BuildRequires: %kernel_module_package_buildreqs
 %endif
 
 %{!?install_mod_dir: %global install_mod_dir updates/%{name}}
+%else
+%global debug_package %{nil}
+%endif # with building_kmods
 
 %prep
 %setup
@@ -146,6 +172,7 @@ mkdir obj
 export EXTRA_CFLAGS='-DVERSION=\"%version\"'
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export CONF_OPTIONS="%{configure_options}"
+%if %{with building_kmods}
 for flavor in %{flavors_to_build}; do
 	export K_BUILD=%{kernel_source $flavor}
 	export KVER=%{kernel_release $K_BUILD}
@@ -156,11 +183,15 @@ for flavor in %{flavors_to_build}; do
 	make
 	cd -
 done
+%endif
 
 %install
 export INSTALL_MOD_PATH=%{buildroot}
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export PREFIX=%{_prefix}
+mkdir -p %{buildroot}%{_usrsrc}
+cp -a source %{buildroot}%{_usrsrc}/%{name}-%{version}/
+%if %{with building_kmods}
 for flavor in %flavors_to_build; do
 	export K_BUILD=%{kernel_source $flavor}
 	export KVER=%{kernel_release $K_BUILD}
@@ -170,6 +201,12 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
+sed -e '/^PACKAGE_VERSION=/s/=.*/="%{version}"/' \
+	-e 's/AUTOINSTALL=.*/AUTOINSTALL="yes"/' \
+	-e '$aBUILD_DEPENDS="mlnx-ofa_kernel"' \
+	-e '$aBUILD_DEPENDS_REBUILD="yes"' \
+	<source/dkms.conf \
+	> %{buildroot}%{_usrsrc}/%{name}-%{version}/dkms.conf
 
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
@@ -198,6 +235,7 @@ mod_path=${mod_path/\/${ko_name}}
     %endif
 %endif
 done
+%endif
 
 
 %clean
@@ -209,15 +247,29 @@ if [ $1 -ge 1 ]; then # 1 : This package is being installed or reinstalled
 fi # 1 : closed
 # END of post
 
+%if %{with building_kmods}
 %postun
 /sbin/depmod %{KVERSION}
+%endif
 
+%post dkms
+/usr/src/mlnx-ofa_kernel-%{version}/ofed_scripts/dkms_ofed_move_back
+/usr/sbin/dkms install %{name}/%{version} || :
+
+%preun dkms
+/usr/sbin/dkms remove  %{name}/%{version} --all || :
+
+%if %{with building_kmods}
 %if "%{KMP}" != "1"
 %files
 %defattr(-,root,root,-)
 /lib/modules/%{KVERSION}/%{install_mod_dir}/
 %config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-*.conf
 %endif
+%endif
+
+%files dkms
+%{_usrsrc}/%{name}-%{version}
 
 %changelog
 * Mon Jan 27 2025 Aurelien Aptel <aaptel@nvidia.com>

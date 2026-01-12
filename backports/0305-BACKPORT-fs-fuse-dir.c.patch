@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
 
 Change-Id: If8400c6a9c87cf7033713f8a6517c8ab74a345ed
 ---
- fs/fuse/dir.c | 72 ++++++++++++++++++++++++++++++++++++++++++++++-----
- 1 file changed, 66 insertions(+), 6 deletions(-)
+ fs/fuse/dir.c | 151 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 149 insertions(+), 2 deletions(-)
 
 --- a/fs/fuse/dir.c
 +++ b/fs/fuse/dir.c
-@@ -192,8 +192,12 @@ static void fuse_lookup_init(struct fuse
+@@ -195,10 +195,17 @@ static void fuse_lookup_init(struct fuse
   * the lookup once more.  If the lookup results in the same inode,
   * then refresh the attributes, timeouts and mark the dentry valid.
   */
@@ -20,66 +20,180 @@ Change-Id: If8400c6a9c87cf7033713f8a6517c8ab74a345ed
 +#endif
  {
  	struct inode *inode;
- 	struct dentry *parent;
-@@ -473,7 +477,12 @@ static int get_security_context(struct d
- 	const char *name;
++#ifdef HAVE_D_REVALIDATE_2_PARAMS
++	struct dentry *parent;
++#endif
+ 	struct fuse_mount *fm;
+ 	struct fuse_inode *fi;
+ 	int ret;
+@@ -230,9 +237,17 @@ static int fuse_dentry_revalidate(struct
+ 
+ 		attr_version = fuse_get_attr_version(fm->fc);
+ 
++#ifdef HAVE_D_REVALIDATE_2_PARAMS
++		parent = dget_parent(entry);
++		fuse_lookup_init(fm->fc, &args, get_node_id(d_inode(parent)),
++				 &entry->d_name, &outarg);
++		ret = fuse_simple_request(fm, &args);
++		dput(parent);
++#else
+ 		fuse_lookup_init(fm->fc, &args, get_node_id(dir),
+ 				 name, &outarg);
+ 		ret = fuse_simple_request(fm, &args);
++#endif
+ 		/* Zero nodeid is same as -ENOENT */
+ 		if (!ret && !outarg.nodeid)
+ 			ret = -ENOENT;
+@@ -266,7 +281,13 @@ static int fuse_dentry_revalidate(struct
+ 			if (test_bit(FUSE_I_INIT_RDPLUS, &fi->state))
+ 				return -ECHILD;
+ 		} else if (test_and_clear_bit(FUSE_I_INIT_RDPLUS, &fi->state)) {
++#ifdef HAVE_D_REVALIDATE_2_PARAMS
++			parent = dget_parent(entry);
++			fuse_advise_use_readdirplus(d_inode(parent));
++			dput(parent);
++#else
+ 			fuse_advise_use_readdirplus(dir);
++#endif
+ 		}
+ 	}
+ 	ret = 1;
+@@ -466,29 +487,60 @@ static int get_security_context(struct d
+ {
+ 	struct fuse_secctx *fctx;
+ 	struct fuse_secctx_header *header;
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++	void *ctx = NULL, *ptr;
++	u32 ctxlen, total_len = sizeof(*header);
++#else
++#ifdef HAVE_STRUCT_LSMCONTEXT
++	struct lsmcontext lsmctx = { };
++#else
+ 	struct lsm_context lsmctx = { };
++#endif
+ 	void *ptr;
+ 	u32 total_len = sizeof(*header);
++#endif
+ 	int err, nr_ctx = 0;
+ 	const char *name = NULL;
  	size_t namelen;
  
 +#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
 +	err = security_dentry_init_security(entry, mode, &entry->d_name,
 +					    &name, &ctx, &ctxlen);
++	if (err) {
++		if (err != -EOPNOTSUPP)
++			goto out_err;
++		/* No LSM is supporting this security hook. Ignore error */
++		ctxlen = 0;
++		ctx = NULL;
++	}
 +#else
- 	err = -EOPNOTSUPP;
+ 	err = security_dentry_init_security(entry, mode, &entry->d_name,
+ 					    &name, &lsmctx);
+ 
+ 	/* If no LSM is supporting this security hook ignore error */
+ 	if (err && err != -EOPNOTSUPP)
+ 		goto out_err;
 +#endif
  
- 	if (err) {
- 		if (err != -EOPNOTSUPP)
-@@ -775,9 +784,14 @@ no_open:
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++	if (ctxlen) {
++#else
+ 	if (lsmctx.len) {
++#endif
+ 		nr_ctx = 1;
+ 		namelen = strlen(name) + 1;
+ 		err = -EIO;
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++		if (WARN_ON(namelen > XATTR_NAME_MAX + 1 || ctxlen > S32_MAX))
++			goto out_err;
++		total_len += FUSE_REC_ALIGN(sizeof(*fctx) + namelen + ctxlen);
++#else
+ 		if (WARN_ON(namelen > XATTR_NAME_MAX + 1 ||
+ 		    lsmctx.len > S32_MAX))
+ 			goto out_err;
+ 		total_len += FUSE_REC_ALIGN(sizeof(*fctx) + namelen +
+ 					    lsmctx.len);
++#endif
+ 	}
+ 
+ 	err = -ENOMEM;
+@@ -501,20 +553,32 @@ static int get_security_context(struct d
+ 	ptr += sizeof(*header);
+ 	if (nr_ctx) {
+ 		fctx = ptr;
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++		fctx->size = ctxlen;
++#else
+ 		fctx->size = lsmctx.len;
++#endif
+ 		ptr += sizeof(*fctx);
+ 
+ 		strcpy(ptr, name);
+ 		ptr += namelen;
+ 
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++		memcpy(ptr, ctx, ctxlen);
++#else
+ 		memcpy(ptr, lsmctx.context, lsmctx.len);
++#endif
+ 	}
+ 	ext->size = total_len;
+ 	ext->value = header;
+ 	err = 0;
+ out_err:
++#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY_6_PARAMS
++	kfree(ctx);
++#else
+ 	if (nr_ctx)
+ 		security_release_secctx(&lsmctx);
++#endif
+ 	return err;
+ }
+ 
+@@ -781,7 +845,12 @@ no_open:
  /*
   * Code shared between mknod, mkdir, symlink and link
   */
--static struct dentry *create_new_entry(struct fuse_mount *fm, struct fuse_args *args,
--				       struct inode *dir, struct dentry *entry,
--				       umode_t mode)
-+#ifdef HAVE_MKDIR_RET_INT
-+static int
-+#else
+-static struct dentry *create_new_entry(struct mnt_idmap *idmap, struct fuse_mount *fm,
++#ifdef HAVE_MKDIR_RET_DENTRY
 +static struct dentry *
++#else
++static int
 +#endif
-+create_new_entry(struct fuse_mount *fm, struct fuse_args *args,
-+		 struct inode *dir, struct dentry *entry,
-+		 umode_t mode)
++create_new_entry(struct mnt_idmap *idmap, struct fuse_mount *fm,
+ 			    struct fuse_args *args, struct inode *dir,
+ 			    struct dentry *entry, umode_t mode)
  {
- 	struct fuse_entry_out outarg;
- 	struct inode *inode;
-@@ -786,11 +800,19 @@ static struct dentry *create_new_entry(s
+@@ -792,11 +861,19 @@ static struct dentry *create_new_entry(s
  	struct fuse_forget_link *forget;
  
  	if (fuse_is_bad(dir))
-+#ifdef HAVE_MKDIR_RET_INT
-+		return -EIO;
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  		return ERR_PTR(-EIO);
++#else
++		return -EIO;
 +#endif
  
  	forget = fuse_alloc_forget();
  	if (!forget)
-+#ifdef HAVE_MKDIR_RET_INT
-+		return -ENOMEM;
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  		return ERR_PTR(-ENOMEM);
++#else
++		return -ENOMEM;
 +#endif
  
  	memset(&outarg, 0, sizeof(outarg));
  	args->nodeid = get_node_id(dir);
-@@ -820,33 +842,53 @@ static struct dentry *create_new_entry(s
- 			  &outarg.attr, ATTR_TIMEOUT(&outarg), 0);
+@@ -826,30 +903,50 @@ static struct dentry *create_new_entry(s
+ 			  &outarg.attr, ATTR_TIMEOUT(&outarg), 0, 0);
  	if (!inode) {
  		fuse_queue_forget(fm, forget, outarg.nodeid, 1);
-+#ifdef HAVE_MKDIR_RET_INT
-+		return -ENOMEM;
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  		return ERR_PTR(-ENOMEM);
++#else
++		return -ENOMEM;
 +#endif
  	}
  	kfree(forget);
@@ -87,102 +201,182 @@ Change-Id: If8400c6a9c87cf7033713f8a6517c8ab74a345ed
  	d_drop(entry);
  	d = d_splice_alias(inode, entry);
  	if (IS_ERR(d))
-+#ifdef HAVE_MKDIR_RET_INT
-+		return PTR_ERR(d);
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  		return d;
++#else
++		return PTR_ERR(d);
 +#endif
  
  	if (d) {
  		fuse_change_entry_timeout(d, &outarg);
-+#ifdef HAVE_MKDIR_RET_INT
++#ifndef HAVE_MKDIR_RET_DENTRY
 +		dput(d);
 +#endif
  	} else {
  		fuse_change_entry_timeout(entry, &outarg);
  	}
  	fuse_dir_changed(dir);
-+#ifdef HAVE_MKDIR_RET_INT
-+	return 0;
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  	return d;
++#else
++	return 0;
 +#endif
  
   out_put_forget_req:
  	if (err == -EEXIST)
  		fuse_invalidate_entry(entry);
  	kfree(forget);
-+#ifdef HAVE_MKDIR_RET_INT
-+	return err;
-+#else
++#ifdef HAVE_MKDIR_RET_DENTRY
  	return ERR_PTR(err);
++#else
++	return err;
 +#endif
  }
  
-+#ifndef HAVE_MKDIR_RET_INT
- static int create_new_nondir(struct fuse_mount *fm,
--		struct fuse_args *args, struct inode *dir,
--		struct dentry *entry, umode_t mode)
-+			     struct fuse_args *args, struct inode *dir,
-+			     struct dentry *entry, umode_t mode)
- {
- 	/*
- 	 * Note that when creating anything other than a directory we
-@@ -859,6 +901,7 @@ static int create_new_nondir(struct fuse
++#ifdef HAVE_MKDIR_RET_DENTRY
+ static int create_new_nondir(struct mnt_idmap *idmap, struct fuse_mount *fm,
+                             struct fuse_args *args, struct inode *dir,
+                             struct dentry *entry, umode_t mode)
+@@ -865,6 +962,7 @@ static int create_new_nondir(struct mnt_
  
- 	return PTR_ERR(create_new_entry(fm, args, dir, entry, mode));
+        return PTR_ERR(create_new_entry(idmap, fm, args, dir, entry, mode));
  }
 +#endif
  
  static int fuse_mknod(struct mnt_idmap *idmap, struct inode *dir,
  		      struct dentry *entry, umode_t mode, dev_t rdev)
-@@ -880,7 +923,11 @@ static int fuse_mknod(struct mnt_idmap *
+@@ -886,7 +984,11 @@ static int fuse_mknod(struct mnt_idmap *
  	args.in_args[0].value = &inarg;
  	args.in_args[1].size = entry->d_name.len + 1;
  	args.in_args[1].value = entry->d_name.name;
-+#ifdef HAVE_MKDIR_RET_INT
-+	return create_new_entry(fm, &args, dir, entry, mode);
++#ifdef HAVE_MKDIR_RET_DENTRY
+ 	return create_new_nondir(idmap, fm, &args, dir, entry, mode);
 +#else
- 	return create_new_nondir(fm, &args, dir, entry, mode);
++	return create_new_entry(idmap, fm, &args, dir, entry, mode);
 +#endif
  }
  
  static int fuse_create(struct mnt_idmap *idmap, struct inode *dir,
-@@ -906,7 +953,12 @@ static int fuse_tmpfile(struct mnt_idmap
+@@ -913,7 +1015,12 @@ static int fuse_tmpfile(struct mnt_idmap
  	return err;
  }
  
--static struct dentry * fuse_mkdir(struct mnt_idmap *idmap, struct inode *dir,
-+#ifdef HAVE_MKDIR_RET_INT 
-+static int
-+#else   
+-static struct dentry *fuse_mkdir(struct mnt_idmap *idmap, struct inode *dir,
++#ifdef HAVE_MKDIR_RET_DENTRY
 +static struct dentry *
++#else
++static int
 +#endif
 +fuse_mkdir(struct mnt_idmap *idmap, struct inode *dir,
  		      struct dentry *entry, umode_t mode)
  {
  	struct fuse_mkdir_in inarg;
-@@ -941,7 +993,11 @@ static int fuse_symlink(struct mnt_idmap
- 	args.in_args[0].value = entry->d_name.name;
- 	args.in_args[1].size = len;
- 	args.in_args[1].value = link;
-+#ifdef HAVE_MKDIR_RET_INT
-+	return create_new_entry(fm, &args, dir, entry, S_IFLNK);
+@@ -949,7 +1056,11 @@ static int fuse_symlink(struct mnt_idmap
+ 	args.in_args[1].value = entry->d_name.name;
+ 	args.in_args[2].size = len;
+ 	args.in_args[2].value = link;
++#ifdef HAVE_MKDIR_RET_DENTRY
+ 	return create_new_nondir(idmap, fm, &args, dir, entry, S_IFLNK);
 +#else
- 	return create_new_nondir(fm, &args, dir, entry, S_IFLNK);
++	return create_new_entry(idmap, fm, &args, dir, entry, S_IFLNK);
 +#endif
  }
  
  void fuse_flush_time_update(struct inode *inode)
-@@ -1135,7 +1191,11 @@ static int fuse_link(struct dentry *entr
+@@ -1112,7 +1223,11 @@ static int fuse_rename2(struct mnt_idmap
+ 		if (fc->no_rename2 || fc->minor < 23)
+ 			return -EINVAL;
+ 
++#ifdef HAVE_INVALID_MNT_IDMAP
+ 		err = fuse_rename_common((flags & RENAME_WHITEOUT) ? idmap : &invalid_mnt_idmap,
++#else
++		err = fuse_rename_common((flags & RENAME_WHITEOUT) ? idmap : NULL,
++#endif
+ 					 olddir, oldent, newdir, newent, flags,
+ 					 FUSE_RENAME2,
+ 					 sizeof(struct fuse_rename2_in));
+@@ -1121,7 +1236,11 @@ static int fuse_rename2(struct mnt_idmap
+ 			err = -EINVAL;
+ 		}
+ 	} else {
++#ifdef HAVE_INVALID_MNT_IDMAP
+ 		err = fuse_rename_common(&invalid_mnt_idmap, olddir, oldent, newdir, newent, 0,
++#else
++		err = fuse_rename_common(NULL, olddir, oldent, newdir, newent, 0,
++#endif
+ 					 FUSE_RENAME,
+ 					 sizeof(struct fuse_rename_in));
+ 	}
+@@ -1146,7 +1265,15 @@ static int fuse_link(struct dentry *entr
  	args.in_args[0].value = &inarg;
  	args.in_args[1].size = newent->d_name.len + 1;
  	args.in_args[1].value = newent->d_name.name;
-+#ifdef HAVE_MKDIR_RET_INT
-+	err = create_new_entry(fm, &args, newdir, newent, inode->i_mode);
++#ifdef HAVE_MKDIR_RET_DENTRY
+ 	err = create_new_nondir(&invalid_mnt_idmap, fm, &args, newdir, newent, inode->i_mode);
 +#else
- 	err = create_new_nondir(fm, &args, newdir, newent, inode->i_mode);
++#ifdef HAVE_INVALID_MNT_IDMAP
++	err = create_new_entry(&invalid_mnt_idmap, fm, &args, newdir, newent, inode->i_mode);
++#else
++	err = create_new_entry(NULL, fm, &args, newdir, newent, inode->i_mode);
++#endif
 +#endif
  	if (!err)
  		fuse_update_ctime_in_cache(inode);
  	else if (err == -EINTR)
+@@ -1499,7 +1626,9 @@ static int fuse_access(struct inode *ino
+ 	 * we have fc->default_permissions = 1 and access
+ 	 * permission checks are done on the kernel side.
+ 	 */
++#ifdef HAVE_SB_I_NOIDMAP
+ 	WARN_ON_ONCE(!(fm->sb->s_iflags & SB_I_NOIDMAP));
++#endif
+ 
+ 	if (fm->fc->no_access)
+ 		return 0;
+@@ -1651,7 +1780,11 @@ static const char *fuse_get_link(struct
+ 		goto out_err;
+ 
+ 	if (fc->cache_symlinks)
++#ifdef HAVE_PAGE_GET_LINK_RAW
+ 		return page_get_link_raw(dentry, inode, callback);
++#else
++		return page_get_link(dentry, inode, callback);
++#endif
+ 
+ 	err = -ECHILD;
+ 	if (!dentry)
+@@ -1897,12 +2030,22 @@ int fuse_flush_times(struct inode *inode
+ 	memset(&outarg, 0, sizeof(outarg));
+ 
+ 	inarg.valid = FATTR_MTIME;
++#ifdef HAVE_INODE_GET_MTIME
+ 	inarg.mtime = inode_get_mtime_sec(inode);
+ 	inarg.mtimensec = inode_get_mtime_nsec(inode);
++#else
++	inarg.mtime = inode->i_mtime.tv_sec;
++	inarg.mtimensec = inode->i_mtime.tv_nsec;
++#endif
+ 	if (fm->fc->minor >= 23) {
+ 		inarg.valid |= FATTR_CTIME;
++#ifdef HAVE_INODE_GET_MTIME
+ 		inarg.ctime = inode_get_ctime_sec(inode);
+ 		inarg.ctimensec = inode_get_ctime_nsec(inode);
++#else
++		inarg.ctime = inode_get_ctime(inode).tv_sec;
++		inarg.ctimensec = inode_get_ctime(inode).tv_nsec;
++#endif
+ 	}
+ 	if (ff) {
+ 		inarg.valid |= FATTR_FH;
+@@ -2041,7 +2184,11 @@ int fuse_do_setattr(struct mnt_idmap *id
+ 	/* the kernel maintains i_mtime locally */
+ 	if (trust_local_cmtime) {
+ 		if (attr->ia_valid & ATTR_MTIME)
++#ifdef HAVE_INODE_GET_MTIME
+ 			inode_set_mtime_to_ts(inode, attr->ia_mtime);
++#else
++			inode->i_mtime = attr->ia_mtime;
++#endif
+ 		if (attr->ia_valid & ATTR_CTIME)
+ 			inode_set_ctime_to_ts(inode, attr->ia_ctime);
+ 		/* FIXME: clear I_DIRTY_SYNC? */

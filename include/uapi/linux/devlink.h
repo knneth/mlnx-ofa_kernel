@@ -51,4 +51,9 @@ enum devlink_port_fn_opstate {
 #define DEVLINK_PORT_FLAVOUR_PCI_SF  7
 #endif
 
+#ifndef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+#define DEVLINK_RATE_TCS_MAX 8
+#define DEVLINK_RATE_TC_INDEX_MAX (DEVLINK_RATE_TCS_MAX - 1)
+#endif
+
 #endif /* _COMPAT_UAPI_LINUX_DEVLINK_H */

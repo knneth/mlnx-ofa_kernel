@@ -7,13 +7,13 @@ Subject: [PATCH] BACKPORT: fs/fuse/acl.c
 
 --- a/fs/fuse/acl.c
 +++ b/fs/fuse/acl.c
-@@ -146,8 +146,13 @@ int fuse_set_acl(struct mnt_idmap *idmap
+@@ -144,8 +144,13 @@ int fuse_set_acl(struct mnt_idmap *idmap
  		 * be stripped.
  		 */
  		if (fc->posix_acl &&
 +#ifdef HAVE_IN_GROUP_OR_CAPABLE
- 		    !in_group_or_capable(&nop_mnt_idmap, inode,
- 					 i_gid_into_vfsgid(&nop_mnt_idmap, inode)))
+ 		    !in_group_or_capable(idmap, inode,
+ 					 i_gid_into_vfsgid(idmap, inode)))
 +#else
 +			!vfsgid_in_group_p(i_gid_into_vfsgid(&nop_mnt_idmap, inode)) &&
 +			!capable_wrt_inode_uidgid(&nop_mnt_idmap, inode, CAP_FSETID))

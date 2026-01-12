@@ -26,6 +26,9 @@
 #
 #
 
+# Also build kernel modules, not just DKMS
+%bcond_with building_kmods
+
 # KMP is disabled by default
 %{!?KMP: %global KMP 0}
 
@@ -47,12 +50,12 @@
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
 # This seems to break only this package and not other kernel packages.
-%if "%{_vendor}" == "azl" || (0%{?rhel} >= 10)
+%if "%{_vendor}" == "azl" || (0%{?rhel} >= 10) || (0%{?amzn} == 2023)
 %global _hardened_cflags %{nil}
 %endif
 
-# WA: Centos Stream 10 kernel doesn't support PIC mode, so we removed the following flags
-%if (0%{?rhel} >= 10)
+# WA: Centos Stream 10 and amazonlinux 2023 kernel doesn't support PIC mode, so we removed the following flags
+%if (0%{?rhel} >= 10) || (0%{?amzn} == 2023)
 %global _hardening_gcc_ldflags %{nil}
 %global _gcc_lto_cflags %{nil}
 %global _legacy_options -fcommon -fno-exceptions
@@ -96,8 +99,8 @@
 %{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 25.07}
-%{!?_release: %global _release OFED.25.07.0.9.7.1}
+%{!?_version: %global _version 25.10}
+%{!?_release: %global _release OFED.25.10.1.2.2.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -145,9 +148,10 @@ Requires: systemd-sysvcompat
 %description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-1.2.2.tgz
 
 
+%if %{with building_kmods}
 # build KMP rpms?
 %if "%{KMP}" == "1"
 %global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
@@ -190,7 +194,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-1.2.2.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -221,7 +225,8 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.07-0.9.7.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-1.2.2.tgz
+%endif # end building_kmods
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -233,6 +238,27 @@ You should probably only install this package if you want to view the
 sourecs of driver. Use the -devel package if you want to build other
 drivers against it.
 
+%package dkms
+Summary: DKMS-built driver for %{name}
+Group: System Environment/Base
+%if "%{_vendor}" == "suse"
+Provides:  mlnx-ofa_kernel-kmp = %{version}-%{release}, mlnx-ofa_kernel-kmp-default = %{version}-%{release}, mlnx-ofa_kernel-modules = %{version}-%{release}
+Obsoletes: mlnx-ofa_kernel-kmp < %{version}-%{release}, mlnx-ofa_kernel-kmp-default < %{version}-%{release}, mlnx-ofa_kernel-modules < %{version}-%{release}
+%else
+Provides:  kmod-mlnx-ofa_kernel = %{version}-%{release}, mlnx-ofa_kernel-modules = %{version}-%{release}
+Obsoletes: kmod-mlnx-ofa_kernel < %{version}-%{release}, mlnx-ofa_kernel-modules < %{version}-%{release}
+%endif
+Provides:  mlnx-ofa_kernel-devel = %{version}-%{release}
+Obsoletes: mlnx-ofa_kernel-devel < %{version}-%{release}
+Requires: %{name}-source = %{version}
+Requires: dkms >= 3.2
+%description dkms
+DKMS package for %{name}
+
+Install this package if you want to generate mlnx-ofa_kernel drivers for all
+kernels at install time.
+
+%if %{with building_kmods}
 #
 # setup module sign scripts if paths to the keys are given
 #
@@ -283,6 +309,9 @@ drivers against it.
 %if "%{_vendor}" == "suse"
 %global install_mod_dir updates
 %endif
+%else
+%global debug_package %{nil}
+%endif # with building_kmods
 
 %{!?install_mod_dir: %global install_mod_dir updates}
 
@@ -294,6 +323,7 @@ mv "$@" source/
 mkdir obj
 
 %build
+%if %{with building_kmods}
 EXTRA_CFLAGS='-DVERSION=\"%version\"'
 export EXTRA_CFLAGS
 export INSTALL_MOD_DIR=%{install_mod_dir}
@@ -311,6 +341,7 @@ for flavor in %flavors_to_build; do
 	make build_py_scripts
 	cd -
 done
+%endif # end building_kmods
 
 %install
 export RECORD_PY_FILES=1
@@ -320,6 +351,7 @@ export NAME=%{name}
 export VERSION=%{version}
 export PREFIX=%{_prefix}
 mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}
+%if %{with building_kmods}
 for flavor in %flavors_to_build; do
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
@@ -366,6 +398,17 @@ echo "override ${mod_name} * extra/%{_name}${mod_path}" >> %{buildroot}%{_syscon
 done
 %endif
 %endif
+%else
+(
+	cd source
+	touch configure.mk.kernel ofed_scripts/openib.conf.tmp
+	make install_scripts CONFIG_MLX5_CORE=m CONFIG_INFINIBAND_IPOIB=m prefix=%{_prefix}
+	rm -f configure.mk.kernel ofed_scripts/openib.conf.tmp
+)
+%endif # end building_kmods
+
+mkdir -p %{buildroot}%{_datadir}/dkms/modules_to_force_install
+echo "%{name}" > %{buildroot}%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 # copy sources
 mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}
@@ -427,6 +470,7 @@ esac
 rm -rf %{buildroot}
 
 
+%if %{with building_kmods}
 %if "%{KMP}" != "1"
 %post -n %{non_kmp_pname}
 /sbin/depmod %{KVERSION}
@@ -446,6 +490,7 @@ if [ $1 = 0 ]; then  # 1 : Erase, not upgrade
 	fi
 fi
 %endif # end KMP=1
+%endif # end building_kmods
 
 %post -n %{utils_pname}
 if [ $1 -eq 1 ]; then # 1 : This package is being installed
@@ -529,6 +574,7 @@ fi
 
 #end of post uninstall
 
+%if %{with building_kmods}
 %post -n %{devel_pname}
 if [ -d "%{_prefix}/src/ofa_kernel/default" -a $1 -gt 1 ]; then
 	touch %{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}.missing_link
@@ -565,10 +611,37 @@ for flag_file in %{_prefix}/src/ofa_kernel/*/*.missing_link; do
 	rm -f "$flag_file"
 done
 
+# Needed for upgrading from devel package. Hopefully may be removed in the future:
+%posttrans dkms
+/usr/src/mlnx-ofa_kernel-%{version}/ofed_scripts/dkms_ofed_move_back
+
 %postun -n %{devel_pname}
 update-alternatives --remove \
 	ofa_kernel_headers \
 	%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION} \
+%endif # end building_kmods
+
+%post dkms
+/usr/sbin/dkms add     %{name}/%{version} && \
+/usr/sbin/dkms build   %{name}/%{version} && \
+/usr/sbin/dkms install %{name}/%{version} || :
+if [ "$1" != 0 ] && rpm -q mlnx-ofa_kernel-devel >/dev/null; then
+	arch=`uname -m`
+	headers_dir=
+	for conf in /usr/src/ofa_kernel/$arch/*/configure; do
+		if rpm -qf "$conf" >/dev/null 2>&1; then
+			headers_dir=${conf%/*}
+			break
+		fi
+	done
+	if [ -d "$headers_dir" ]; then
+		kvers="${headers_dir##*/}"
+		mv "$headers_dir" "/usr/src/ofa_kernel/$arch/dkms_moved_$kvers"
+	fi
+fi
+
+%preun dkms
+/usr/sbin/dkms remove  %{name}/%{version} --all || :
 
 %files -n %{utils_pname}
 %defattr(-,root,root,-)
@@ -609,6 +682,7 @@ update-alternatives --remove \
 %{_sbindir}/ibdev2netdev
 %endif
 
+%if %{with building_kmods}
 %if "%{KMP}" != "1"
 %files -n %{non_kmp_pname}
 /lib/modules/%{KVERSION}/%{install_mod_dir}/
@@ -625,12 +699,18 @@ update-alternatives --remove \
 %dir %{_prefix}/src/ofa_kernel/%{_arch}
 %ghost %{_prefix}/src/ofa_kernel/default
 %{_prefix}/src/ofa_kernel/%{_arch}/[0-9]*
+%endif # end building_kmods
 
 %files source
 %defattr(-,root,root,-)
 %dir %{_prefix}/src/ofa_kernel-%{version}
 %{_prefix}/src/ofa_kernel-%version/source
 %{_prefix}/src/mlnx-ofa_kernel-%version
+
+%files dkms
+# None - all files are in the package -source
+%dir %{_datadir}/dkms/modules_to_force_install
+%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 %changelog
 * Thu Jun 18 2015 Alaa Hleihel <alaa@mellanox.com>

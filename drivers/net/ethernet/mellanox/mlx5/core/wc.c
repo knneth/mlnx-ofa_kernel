@@ -7,6 +7,10 @@
 #include "mlx5_core.h"
 #include "wq.h"
 
+#if IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && IS_ENABLED(CONFIG_ARM64)
+#include <asm/neon.h>
+#endif
+
 #define TEST_WC_NUM_WQES 255
 #define TEST_WC_LOG_CQ_SZ (order_base_2(TEST_WC_NUM_WQES))
 #define TEST_WC_SQ_LOG_WQ_SZ TEST_WC_LOG_CQ_SZ
@@ -255,27 +259,26 @@ static void mlx5_wc_destroy_sq(struct mlx5_wc_sq *sq)
 	mlx5_wq_destroy(&sq->wq_ctrl);
 }
 
-#ifdef __aarch64__
-static inline void custom_iowrite64_copy(void *out_ptr, void* in_ptr)
+static void mlx5_iowrite64_copy(struct mlx5_wc_sq *sq, __be32 mmio_wqe[16],
+				size_t mmio_wqe_size, unsigned int offset)
 {
-	asm volatile(
-		"ldp     x1, x2, [ %[in_ptr] ]\n"
-		"isb\n"
-		"str     x1, [ %[out_ptr] ]\n"
-		"str     x2, [ %[out_ptr], #8 ]\n"
-		"str     xzr, [ %[out_ptr], #16 ]\n"
-		"str     xzr, [ %[out_ptr], #24 ]\n"
-		"str     xzr, [ %[out_ptr], #32 ]\n"
-		"str     xzr, [ %[out_ptr], #40 ]\n"
-		"str     xzr, [ %[out_ptr], #48 ]\n"
-		"str     xzr, [ %[out_ptr], #56 ]\n"
+#if IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && IS_ENABLED(CONFIG_ARM64)
+	if (cpu_has_neon()) {
+		kernel_neon_begin();
+		asm volatile
+		(".arch_extension simd\n\t"
+		"ld1 {v0.16b, v1.16b, v2.16b, v3.16b}, [%0]\n\t"
+		"st1 {v0.16b, v1.16b, v2.16b, v3.16b}, [%1]"
 		:
-		: [in_ptr] "r"(in_ptr), [out_ptr] "r"(out_ptr)
-		: "x1", "x2", "memory"
-	);
-	dgh();
-}
+		: "r"(mmio_wqe), "r"(sq->bfreg.map + offset)
+		: "memory", "v0", "v1", "v2", "v3");
+		kernel_neon_end();
+		return;
+	}
 #endif
+	__iowrite64_copy(sq->bfreg.map + offset, mmio_wqe,
+			 mmio_wqe_size / 8);
+}
 
 static void mlx5_wc_post_nop(struct mlx5_wc_sq *sq, unsigned int *offset,
 			     bool signaled)
@@ -311,12 +314,7 @@ static void mlx5_wc_post_nop(struct mlx5_wc_sq *sq, unsigned int *offset,
 	 */
 	wmb();
 
-#ifdef __aarch64__
-	custom_iowrite64_copy(sq->bfreg.map + *offset, mmio_wqe);
-#else
-	__iowrite64_copy(sq->bfreg.map + *offset, mmio_wqe,
-			 sizeof(mmio_wqe) / 8);
-#endif
+	mlx5_iowrite64_copy(sq, mmio_wqe, sizeof(mmio_wqe), *offset);
 
 	*offset ^= buf_size;
 }

@@ -9,11 +9,20 @@
 /* acpi_storage_d3 exist */
 #undef HAVE_ACPI_STORAGE_D3
 
+/* write_begin takes const struct kiocb * */
+#undef HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB
+
 /* adjfine is defined */
 #undef HAVE_ADJUST_BY_SCALED_PPM
 
 /* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
 #undef HAVE_ALLOC_BULK_PAGES_API_RENAME
+
+/* alloc_workqueue is a macro */
+#undef HAVE_ALLOC_WORKQUEUE_MACRO
+
+/* alloc_workqueue_noprof exists */
+#undef HAVE_ALLOC_WORKQUEUE_NOPROF
 
 /* apple_rtkit_ops.crashed takes 3 params */
 #undef HAVE_APPLE_RTKIT_OPS_CRASHED_3_PARAMS
@@ -216,6 +225,9 @@
 /* include/linux/blk-integrity.h exists */
 #undef HAVE_BLK_INTEGRITY_H
 
+/* blk_integrity has metadata_size field */
+#undef HAVE_BLK_INTEGRITY_METADATA_SIZE
+
 /* struct blk_integrity has pi_offset */
 #undef HAVE_BLK_INTEGRITY_PI_OFFSET
 
@@ -406,9 +418,6 @@
 /* cancel_work is exported by the kernel */
 #undef HAVE_CANCEL_WORK_EXPORTED
 
-/* __free anotation for kvfree could be used */
-#undef HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER
-
 /* cap_rss_sym_xor_supported is defined */
 #undef HAVE_CAP_RSS_SYM_XOR_SUPPORTED
 
@@ -451,11 +460,17 @@
 /* const __read_once_size exist */
 #undef HAVE_CONST_READ_ONCE_SIZE
 
+/* sb->s_xattr point is double-const */
+#undef HAVE_CONST_XATTR_HANDLER
+
 /* include/linux/container_of.h exists */
 #undef HAVE_CONTAINER_OF_H
 
 /* kernel supports v6.10-rc1: convert __be16 tunnel flags to bitmaps */
 #undef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+
+/* copy_folio_from_iter is defined */
+#undef HAVE_COPY_FOLIO_FROM_ITER
 
 /* kernel supports v6.11 'core tracks custom RSS contexts set' */
 #undef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
@@ -465,6 +480,9 @@
 
 /* kernel provides control flag checking helpers */
 #undef HAVE_CTRL_FLAG_HELPERS
+
+/* cyclecounter read callback takes non-const parameter */
+#undef HAVE_CYCLECOUNTER_READ_NON_CONST
 
 /* DEFINE_SEQ_ATTRIBUTE is defined */
 #undef HAVE_DEFINE_SEQ_ATTRIBUTE
@@ -495,6 +513,9 @@
 
 /* struct devlink_ops.eswitch_mode_set has extack */
 #undef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
+
+/* enum devlink_eswitch_state exists */
+#undef HAVE_DEVLINK_ESWITCH_STATE
 
 /* devlink_flash_update_end_notify */
 #undef HAVE_DEVLINK_FLASH_UPDATE_END_NOTIFY
@@ -537,6 +558,9 @@
 
 /* rate functions are defined */
 #undef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+
+/* rate tc_bw_set functions are defined */
+#undef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
 
 /* reload is defined */
 #undef HAVE_DEVLINK_HAS_RELOAD
@@ -755,7 +779,10 @@
 #undef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
 
 /* function dev_get_port_parent_id exists */
-#undef HAVE_DEV_GET_PORT_PARENT_ID
+#undef HAVE_DEV_GET_PORT_PARENT_ID_FUNC
+
+/* function dev_net_rcu is defined */
+#undef HAVE_DEV_NET_RCU
 
 /* dev_page_is_reusable is defined */
 #undef HAVE_DEV_PAGE_IS_REUSABLE
@@ -856,11 +883,20 @@
 /* ethtool supprts 50G-pre-lane link modes */
 #undef HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES
 
+/* ethtool_ops has get_rxfh_fields callback */
+#undef HAVE_ETHTOOL_GET_RXFH_FIELDS
+
 /* ethtool_link_ksettings has lanes */
 #undef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
 
 /* linux/ethtool_netlink.h exists */
 #undef HAVE_ETHTOOL_NETLINK_H
+
+/* ethtool_ops has cap_rss_ctx_supported field */
+#undef HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED
+
+/* rxfh_per_ctx_fields is defined */
+#undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS
 
 /* rxfh_per_ctx_key is defined */
 #undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY
@@ -906,6 +942,9 @@
 
 /* fib_nh has fib_nh_dev */
 #undef HAVE_FIB_NH_DEV
+
+/* FILEID_INO64_GEN is defined */
+#undef HAVE_FILEID_INO64
 
 /* sruct file has f_iocb_flags */
 #undef HAVE_FILE_F_IOCB_FLAGS
@@ -1054,6 +1093,18 @@
 /* flow_stats_update has 6 parameters */
 #undef HAVE_FLOW_STATS_UPDATE_6_PARAMS
 
+/* folio_copy is exported by the kernel */
+#undef HAVE_FOLIO_COPY_EXPORTED
+
+/* folio_end_read is defined */
+#undef HAVE_FOLIO_END_READ
+
+/* folio_index() is defined */
+#undef HAVE_FOLIO_INDEX
+
+/* folio_mark_dirty_lock is defined */
+#undef HAVE_FOLIO_MARK_DIRTY_LOCK
+
 /* FOLL_LONGTERM is defined */
 #undef HAVE_FOLL_LONGTERM
 
@@ -1065,9 +1116,6 @@
 
 /* from_timer macro is defined */
 #undef HAVE_FROM_TIMER
-
-/* if fsparam_uid is defined */
-#undef HAVE_FSPARAM_UID
 
 /* linux/fs.h has struct kiocb ki_complete 2 args */
 #undef HAVE_FS_KIOCB_KI_COMPLETE_2_ARG
@@ -1196,6 +1244,9 @@
 /* if grab_cache_page_write_begin() exists */
 #undef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
 
+/* group_cpus_evenly takes nummasks parameter */
+#undef HAVE_GROUP_CPUS_EVENLY_NUMMASKS
+
 /* GRO_LEGACY_MAX_SIZE defined */
 #undef HAVE_GRO_LEGACY_MAX_SIZE
 
@@ -1220,9 +1271,6 @@
 /* hwmon_chip_info get const nvme_hwmon_ops */
 #undef HAVE_HWMON_CHIP_INFO_CONST_INFO
 
-/* rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined */
-#undef HAVE_IB_UMEM_DMABUF_GET_PINNED
-
 /* ida_alloc is defined */
 #undef HAVE_IDA_ALLOC
 
@@ -1244,6 +1292,9 @@
 /* inet_confirm_addr is exported by the kernel */
 #undef HAVE_INET_CONFIRM_ADDR_EXPORTED
 
+/* inode_get_mtime is defined */
+#undef HAVE_INODE_GET_MTIME
+
 /* interval_tree functions exported by the kernel */
 #undef HAVE_INTERVAL_TREE_EXPORTED
 
@@ -1252,6 +1303,9 @@
 
 /* int_pow defined */
 #undef HAVE_INT_POW
+
+/* invalid_mnt_idmap is defined */
+#undef HAVE_INVALID_MNT_IDMAP
 
 /* linux/compat.h has in_compat_syscall */
 #undef HAVE_IN_COMPAT_SYSCALL
@@ -1334,14 +1388,14 @@
 /* iscsi_conn has member login_sockaddr */
 #undef HAVE_ISCSI_CONN_LOGIN_SOCKADDR
 
-/* iscsi_conn_unbind is defined */
-#undef HAVE_ISCSI_CONN_UNBIND
-
 /* libiscsi.h iscsi_host_remove has 2 parameters */
 #undef HAVE_ISCSI_HOST_REMOVE_2_PARAMS
 
 /* iscsi_put_endpoint is defined */
 #undef HAVE_ISCSI_PUT_ENDPOINT
+
+/* struct iscsi_transport has member unbind_conn */
+#undef HAVE_ISCSI_TRANSPORT_UNBIND_CONN
 
 /* is_cow_mapping is defined */
 #undef HAVE_IS_COW_MAPPING
@@ -1351,9 +1405,6 @@
 
 /* is_pci_p2pdma_page is defined */
 #undef HAVE_IS_PCI_P2PDMA_PAGE_IN_MM_H
-
-/* is_tcf_police is defined */
-#undef HAVE_IS_TCF_POLICE
 
 /* uio.h has ITER_ALLOW_P2PDMA */
 #undef HAVE_ITER_ALLOW_P2PDMA
@@ -1394,6 +1445,9 @@
 /* uapi/linux/mei_uuid.h is exists */
 #undef HAVE_LINUX_MEI_UUID_H
 
+/* linux/pfn_t.h header exists */
+#undef HAVE_LINUX_PFN_T_H
+
 /* linux/sed-opal.h exists */
 #undef HAVE_LINUX_SED_OPAL_H
 
@@ -1421,8 +1475,8 @@
 /* memremap_compat_align is defined */
 #undef HAVE_MEMREMAP_COMPAT_ALIGN
 
-/* if struct inode_operations->mkdir returns an int */
-#undef HAVE_MKDIR_RET_INT
+/* if struct inode_operations->mkdir returns a dentry */
+#undef HAVE_MKDIR_RET_DENTRY
 
 /* map_lock has mmap_read_lock */
 #undef HAVE_MMAP_READ_LOCK
@@ -1517,6 +1571,9 @@
 /* ndo_xsk_wakeup is defined */
 #undef HAVE_NDO_XSK_WAKEUP
 
+/* netdev_lock exists */
+#undef HAVE_NETDEVICE_NETDEV_LOCK
+
 /* netdev_bpf struct has pool member */
 #undef HAVE_NETDEV_BPF_XSK_BUFF_POOL
 
@@ -1562,6 +1619,9 @@
 /* NETIF_F_HW_TLS_RX is defined in netdev_features.h */
 #undef HAVE_NETIF_F_HW_TLS_RX
 
+/* netif_get_port_parent_id function exists */
+#undef HAVE_NETIF_GET_PORT_PARENT_ID_FUNC
+
 /* netif_is_bareudp is defined */
 #undef HAVE_NETIF_IS_BAREDUDP
 
@@ -1592,6 +1652,9 @@
 /* struct netlink_callback has member ctx */
 #undef HAVE_NETLINK_CALLBACK_HAS_CTX
 
+/* HAVE_NETMEM_DMA_UNMAP_ADDR_SET exists */
+#undef HAVE_NETMEM_DMA_UNMAP_ADDR_SET
+
 /* netpoll_poll_dev is exported by the kernel */
 #undef HAVE_NETPOLL_POLL_DEV_EXPORTED
 
@@ -1600,6 +1663,9 @@
 
 /* struct net_device has devlink_port */
 #undef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
+
+/* net_device has lock field */
+#undef HAVE_NET_DEVICE_LOCK_FIELD
 
 /* struct net_device has lower_level */
 #undef HAVE_NET_DEVICE_LOWER_LEVEL
@@ -1618,6 +1684,9 @@
 
 /* net_namespace get const struct device */
 #undef HAVE_NET_NAMESPACE_GET_CONST_DEVICE
+
+/* net/netdev_lock.h header exists */
+#undef HAVE_NET_NETDEV_LOCK_H
 
 /* net/nexthop.h is defined */
 #undef HAVE_NET_NEXTHOP_H
@@ -1667,6 +1736,9 @@
 /* nla_strscpy exist */
 #undef HAVE_NLA_STRSCPY
 
+/* macro nlmsg_for_each_attr_type is defined */
+#undef HAVE_NLMSG_FOR_EACH_ATTR_TYPE
+
 /* nlmsg_parse_deprecated exist */
 #undef HAVE_NLMSG_PARSE_DEPRECATED
 
@@ -1675,6 +1747,9 @@
 
 /* NL_ASSERT_CTX_FITS exists */
 #undef HAVE_NL_ASSERT_CTX_FITS
+
+/* macro NL_SET_ERR_ATTR_MISS is defined */
+#undef HAVE_NL_SET_ERR_ATTR_MISS
 
 /* include/linux/netlink.h provides NL_SET_ERR_MSG_FMT_MOD */
 #undef HAVE_NL_SET_ERR_MSG_FMT_MOD
@@ -1688,6 +1763,9 @@
 
 /* include/linux/fs.h declares function no_llseek */
 #undef HAVE_NO_LLSEEK
+
+/* NR_WRITEBACK_TEMP enum exists */
+#undef HAVE_NR_WRITEBACK_TEMP
 
 /* nvme_auth_derive_tls_psk is defined */
 #undef HAVE_NVME_AUTH_DERIVE_TLS_PSK
@@ -1721,6 +1799,9 @@
 
 /* linux/page_frag_cache.h has page_frag_cache_drain */
 #undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H
+
+/* page_get_link_raw is defined */
+#undef HAVE_PAGE_GET_LINK_RAW
 
 /* net/page_pool/helpers.h has page_pool_nid_changed */
 #undef HAVE_PAGE_POLL_NID_CHANGED_HELPERS
@@ -2038,6 +2119,9 @@
 /* linux/sbitmap.h has sbitmap_get with 2 params */
 #undef HAVE_SBITMAP_GET_2_PARAMS
 
+/* SB_I_NOIDMAP is defined */
+#undef HAVE_SB_I_NOIDMAP
+
 /* scsi_block_targets is defined */
 #undef HAVE_SCSI_BLOCK_TARGETS
 
@@ -2104,6 +2188,9 @@
 /* genhd.h has set_capacity_revalidate_and_notify */
 #undef HAVE_SET_CAPACITY_REVALIDATE_AND_NOTIFY
 
+/* set_default_d_op function exists */
+#undef HAVE_SET_DEFAULT_D_OP
+
 /* struct se_cmd has member sense_info */
 #undef HAVE_SE_CMD_HAS_SENSE_INFO
 
@@ -2121,6 +2208,9 @@
 
 /* linux/overflow.h has size_add size_mul size_sub */
 #undef HAVE_SIZE_MUL_SUB_ADD
+
+/* skb_copy_and_crc32c_datagram_iter exist */
+#undef HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER
 
 /* linux/skbuff.h skb_frag_fill_page_desc is defined */
 #undef HAVE_SKB_FRAG_FILL_PAGE_DESC
@@ -2158,6 +2248,9 @@
 /* struct sock has sk_use_task_frag */
 #undef HAVE_SK_USE_TASK_FRAG
 
+/* SLAB_NO_OBJ_EXT is defined */
+#undef HAVE_SLAB_NO_OBJ_EXT
+
 /* net/sock.h has sock_no_linger */
 #undef HAVE_SOCK_NO_LINGER
 
@@ -2169,6 +2262,9 @@
 
 /* net/sock.h has sock_set_reuseaddr */
 #undef HAVE_SOCK_SET_REUSEADDR
+
+/* splice_copy_file_range is defined */
+#undef HAVE_SPLICE_COPY_FILE_RANGE
 
 /* split_page is exported by the kernel */
 #undef HAVE_SPLIT_PAGE_EXPORTED
@@ -2189,6 +2285,9 @@
 /* strscpy_pad is defined */
 #undef HAVE_STRSCPY_PAD
 
+/* struct file_kattr exists */
+#undef HAVE_STRUCT_FILE_KATTR
+
 /* struct genl_ops exists */
 #undef HAVE_STRUCT_GENL_SPLIT_OPS
 
@@ -2203,6 +2302,9 @@
 
 /* struct rtnl_link_ops has netns_refund */
 #undef HAVE_STRUCT_LINK_OPS_IPOIB_LINK_OPS_HAS_NETNS_REFUND
+
+/* struct lsmcontext is defined */
+#undef HAVE_STRUCT_LSMCONTEXT
 
 /* struct macsec_context has update_pn */
 #undef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
@@ -2450,6 +2552,9 @@
 /* udp_tunnel.h has struct udp_tunnel_nic_info is defined */
 #undef HAVE_UDP_TUNNEL_NIC_INFO
 
+/* UDP_TUNNEL_NIC_INFO_MAY_SLEEP flag exists */
+#undef HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP
+
 /* udp_tunnel.h has enum UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN */
 #undef HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN
 
@@ -2464,6 +2569,9 @@
 
 /* struct flow_block_offload has unlocked_driver_cb */
 #undef HAVE_UNLOCKED_DRIVER_CB
+
+/* unpin_folio is defined */
+#undef HAVE_UNPIN_FOLIO
 
 /* unpin_user_pages_dirty_lock is exported by the kernel */
 #undef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
@@ -2498,6 +2606,9 @@
 /* sturct vfio_precopy_info exists */
 #undef HAVE_VFIO_PRECOPY_INFO
 
+/* virtio_device_reset_prepare is defined */
+#undef HAVE_VIRTIO_DEVICE_RESET_PREPARE
+
 /* if struct virtqueue_info is defined */
 #undef HAVE_VIRTQUEUE_INFO
 
@@ -2515,6 +2626,9 @@
 
 /* want_init_on_alloc is defined */
 #undef HAVE_WANT_INIT_ON_ALLOC
+
+/* writeback_control has for_reclaim field */
+#undef HAVE_WRITEBACK_CONTROL_FOR_RECLAIM
 
 /* if address_space_operations->write_begin takes a folio param */
 #undef HAVE_WRITE_BEGIN_FOLIO

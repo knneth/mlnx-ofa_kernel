@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 2 ++
- 1 file changed, 2 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/port_buffer.c  | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
@@ -16,7 +16,30 @@ Subject: [PATCH] BACKPORT:
  int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
  			    struct mlx5e_port_buffer *port_buffer)
  {
-@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(stru
+@@ -293,6 +294,9 @@ static int port_set_buffer(struct mlx5e_
+ 	void *in;
+ 	int err;
+ 	int i;
++	u64 size;
++	u64 xoff;
++	u64 xon;
+ 
+ 	in = kzalloc(sz, GFP_KERNEL);
+ 	if (!in)
+@@ -306,9 +310,9 @@ static int port_set_buffer(struct mlx5e_
+ 		void *buffer = MLX5_ADDR_OF(pbmc_reg, in, buffer[i]);
+ 		current_headroom_cells += MLX5_GET(bufferx_reg, buffer, size);
+ 
+-		u64 size = port_buffer->buffer[i].size;
+-		u64 xoff = port_buffer->buffer[i].xoff;
+-		u64 xon = port_buffer->buffer[i].xon;
++		size = port_buffer->buffer[i].size;
++		xoff = port_buffer->buffer[i].xoff;
++		xon = port_buffer->buffer[i].xon;
+ 
+ 		do_div(size, port_buff_cell_sz);
+ 		new_headroom_cells += size;
+@@ -589,3 +593,4 @@ int mlx5e_port_manual_buffer_config(stru
  
  	return err;
  }

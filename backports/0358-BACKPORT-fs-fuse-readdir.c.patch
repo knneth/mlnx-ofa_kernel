@@ -1,0 +1,34 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/readdir.c
+
+Change-Id: I58bedb3467fa3361a240a62e2b2707192c7e391f
+---
+ fs/fuse/readdir.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/fs/fuse/readdir.c
++++ b/fs/fuse/readdir.c
+@@ -479,7 +479,11 @@ retry_locked:
+ 	if (!fi->rdc.cached) {
+ 		/* Starting cache? Set cache mtime. */
+ 		if (!ctx->pos && !fi->rdc.size) {
++#ifdef HAVE_INODE_GET_MTIME
+ 			fi->rdc.mtime = inode_get_mtime(inode);
++#else
++			fi->rdc.mtime = inode->i_mtime;
++#endif
+ 			fi->rdc.iversion = inode_query_iversion(inode);
+ 		}
+ 		spin_unlock(&fi->rdc.lock);
+@@ -491,7 +495,11 @@ retry_locked:
+ 	 * changed, and reset the cache if so.
+ 	 */
+ 	if (!ctx->pos) {
++#ifdef HAVE_INODE_GET_MTIME
+ 		struct timespec64 mtime = inode_get_mtime(inode);
++#else
++		struct timespec64 mtime = inode->i_mtime;
++#endif
+ 
+ 		if (inode_peek_iversion(inode) != fi->rdc.iversion ||
+ 		    !timespec64_equal(&fi->rdc.mtime, &mtime)) {

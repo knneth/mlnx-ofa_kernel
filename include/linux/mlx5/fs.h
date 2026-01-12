@@ -118,6 +118,7 @@ enum mlx5_flow_namespace_type {
 };
 
 enum {
+	FDB_DROP_ROOT,
 	FDB_BYPASS_PATH,
 	FDB_CRYPTO_INGRESS,
 	FDB_TC_OFFLOAD,
@@ -330,6 +331,8 @@ struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging);
 void mlx5_fc_destroy(struct mlx5_core_dev *dev, struct mlx5_fc *counter);
 struct mlx5_fc *mlx5_fc_local_create(u32 counter_id, u32 offset, u32 bulk_size);
 void mlx5_fc_local_destroy(struct mlx5_fc *counter);
+void mlx5_fc_local_get(struct mlx5_fc *counter);
+void mlx5_fc_local_put(struct mlx5_fc *counter);
 u64 mlx5_fc_query_lastuse(struct mlx5_fc *counter);
 void mlx5_fc_query_cached(struct mlx5_fc *counter,
 			  u64 *bytes, u64 *packets, u64 *lastuse);

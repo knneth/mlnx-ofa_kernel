@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 
 ---
- .../mellanox/mlx5/core/ipoib/ethtool.c        | 55 +++++++++++++++++--
- 1 file changed, 50 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/ipoib/ethtool.c        | 79 +++++++++++++++++--
+ 1 file changed, 74 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
@@ -113,7 +113,33 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
  
-@@ -268,9 +309,11 @@ static int mlx5i_get_rxnfc(struct net_de
+@@ -238,6 +279,25 @@ static u32 mlx5i_flow_type_mask(u32 flow
+ 	return flow_type & ~(FLOW_EXT | FLOW_MAC_EXT | FLOW_RSS);
+ }
+ 
++#ifdef HAVE_ETHTOOL_GET_RXFH_FIELDS
++static int mlx5i_set_rxfh_fields(struct net_device *dev,
++				 const struct ethtool_rxfh_fields *cmd,
++				 struct netlink_ext_ack *extack)
++{
++	struct mlx5e_priv *priv = mlx5i_epriv(dev);
++
++	return mlx5e_ethtool_set_rxfh_fields(priv, cmd, extack);
++}
++
++static int mlx5i_get_rxfh_fields(struct net_device *dev,
++				 struct ethtool_rxfh_fields *info)
++{
++	struct mlx5e_priv *priv = mlx5i_epriv(dev);
++
++	return mlx5e_ethtool_get_rxfh_fields(priv, info);
++}
++#endif
++
+ static int mlx5i_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
+@@ -268,9 +328,11 @@ static int mlx5i_get_rxnfc(struct net_de
  }
  
  const struct ethtool_ops mlx5i_ethtool_ops = {
@@ -125,7 +151,15 @@ Subject: [PATCH] BACKPORT:
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -286,11 +329,13 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -283,14 +345,21 @@ const struct ethtool_ops mlx5i_ethtool_o
+ 	.get_coalesce       = mlx5i_get_coalesce,
+ 	.set_coalesce       = mlx5i_set_coalesce,
+ 	.get_ts_info        = mlx5i_get_ts_info,
++#ifdef HAVE_ETHTOOL_GET_RXFH_FIELDS
++	/* Newer kernels (6.17+): dedicated RXFH fields callbacks */
++	.get_rxfh_fields    = mlx5i_get_rxfh_fields,
++	.set_rxfh_fields    = mlx5i_set_rxfh_fields,
++#endif
  	.get_rxnfc          = mlx5i_get_rxnfc,
  	.set_rxnfc          = mlx5i_set_rxnfc,
  	.get_link_ksettings = mlx5i_get_link_ksettings,

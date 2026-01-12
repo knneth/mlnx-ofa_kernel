@@ -65,5 +65,20 @@ static inline struct nlattr *nla_nest_start_noflag(struct sk_buff *skb,
 }
 #endif
 
+#ifndef HAVE_NLMSG_FOR_EACH_ATTR_TYPE
+/**
+ * nlmsg_for_each_attr_type - iterate over a stream of attributes
+ * @pos: loop counter, set to the current attribute
+ * @type: required attribute type for @pos
+ * @nlh: netlink message header
+ * @hdrlen: length of the family specific header
+ * @rem: initialized to len, holds bytes currently remaining in stream
+ */
+#define nlmsg_for_each_attr_type(pos, type, nlh, hdrlen, rem) \
+	nlmsg_for_each_attr(pos, nlh, hdrlen, rem) \
+		if (nla_type(pos) == type)
+
+#endif /* HAVE_NLMSG_FOR_EACH_ATTR_TYPE */
+
 #endif	/* _COMPAT_NET_NETLINK_H */
 

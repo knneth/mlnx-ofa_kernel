@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"25.07-0.9.7"
+#define DRIVER_VERSION	"25.10-1.2.2"
 
 extern uint mlx5_core_debug_mask;
 
@@ -310,7 +310,9 @@ void mlx5_sriov_detach(struct mlx5_core_dev *dev);
 int mlx5_core_sriov_configure(struct pci_dev *dev, int num_vfs);
 void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change);
 int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count);
+int mlx5_sriov_groups_sysfs_init(struct mlx5_core_dev *dev);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
+void mlx5_sriov_groups_sysfs_cleanup(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
@@ -555,6 +557,8 @@ int mlx5_init_one_light(struct mlx5_core_dev *dev);
 void mlx5_uninit_one_light(struct mlx5_core_dev *dev);
 void mlx5_unload_one_light(struct mlx5_core_dev *dev);
 
+void mlx5_query_nic_sw_system_image_guid(struct mlx5_core_dev *mdev, u8 *buf,
+					 u8 *len);
 int mlx5_vport_set_other_func_cap(struct mlx5_core_dev *dev, const void *hca_cap, u16 vport,
 				  u16 opmod);
 #define mlx5_vport_get_other_func_general_cap(dev, vport, out)		\

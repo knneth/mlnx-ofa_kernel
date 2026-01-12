@@ -101,7 +101,7 @@ ifneq ($(MLNX_KO_NO_STRIP),1)
 ifneq ($(WITH_DKMS),1)
 override_dh_strip:
 	dh_strip
-	find debian -name '*.ko' | xargs strip -g
+	find debian -name '*.ko' | xargs -r strip -g
 ifeq ($(WITH_MOD_SIGN),1)
 	tools/sign-modules $(INSTALL_MOD_PATH)/lib/modules/ $(K_BUILD)
 endif

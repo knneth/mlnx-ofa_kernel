@@ -1094,61 +1094,53 @@ do {                                                            \
 	#undef alloc_ordered_workqueue
 #endif
 
-#ifdef alloc_workqueue
-/* In kernels < 5.1, alloc_workqueue was a macro */
-#undef alloc_workqueue
+/* Helper macro to handle different kernel versions for workqueue allocation */
+#ifdef HAVE_ALLOC_WORKQUEUE_NOPROF
+/* Newer kernels (6.17+): use alloc_hooks(alloc_workqueue_noprof(...)) */
+#define mlx5_mtrack_compat_alloc_workqueue(...) \
+	alloc_hooks(alloc_workqueue_noprof(__VA_ARGS__))
+#elif !defined(HAVE_ALLOC_WORKQUEUE_MACRO)
+/* Kernels 5.1-6.16: alloc_workqueue is a function */
+#define mlx5_mtrack_compat_alloc_workqueue(name, flags, max_active, args...) \
+	alloc_workqueue(name, flags, max_active, ##args)
+#else
+/* Older kernels (< 5.1): alloc_workqueue was a macro, use __alloc_workqueue_key */
 #ifdef CONFIG_LOCKDEP
-#define alloc_workqueue(name, flags, max_active, args...)			\
-({										\
-	static struct lock_class_key __key;					\
-	const char *__lock_name;						\
-	struct workqueue_struct *wq_addr = NULL;				\
-										\
-	if (__builtin_constant_p(name))						\
-		__lock_name = (name);						\
-	else									\
-		__lock_name = #name;						\
-										\
-	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_workqueue", __func__, __LINE__)) \
-		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
-	else									\
-		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
-						&__key, __lock_name, ##args);	\
-	if (wq_addr) {								\
-		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
-	wq_addr;								\
+#define mlx5_mtrack_compat_alloc_workqueue(name, flags, max_active, args...) ({ \
+	static struct lock_class_key __key; \
+	const char *__lock_name; \
+	\
+	if (__builtin_constant_p(name)) \
+		__lock_name = (name); \
+	else \
+		__lock_name = #name; \
+	__alloc_workqueue_key((name), (flags), (max_active), &__key, __lock_name, ##args); \
 })
 #else
+#define mlx5_mtrack_compat_alloc_workqueue(name, flags, max_active, args...) \
+	__alloc_workqueue_key((name), (flags), (max_active), NULL, NULL, ##args)
+#endif
+#endif
+
+#ifdef HAVE_ALLOC_WORKQUEUE_MACRO
+/* Kernels where alloc_workqueue is defined as a macro - undefine it first */
+#undef alloc_workqueue
+#endif
+
+/* Unified alloc_workqueue wrapper with memory tracking */
 #define alloc_workqueue(name, flags, max_active, args...) ({			\
 	struct workqueue_struct *wq_addr = NULL;				\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_workqueue", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
 	else									\
-		wq_addr = __alloc_workqueue_key((name), (flags), (max_active),	\
-						NULL, NULL, ##args);		\
+		/* Handle different kernel versions for wq_addr assignment */	\
+		wq_addr = mlx5_mtrack_compat_alloc_workqueue(name, flags, max_active, ##args);									\
 	if (wq_addr) {								\
 		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	wq_addr;								\
 })
-#endif
-#else
-/* In kernels >= 5.1, alloc_workqueue is a function */
-#define alloc_workqueue(name, flags, max_active, args...) ({			\
-	struct workqueue_struct *wq_addr = NULL;				\
-										\
-	if (memtrack_inject_error(THIS_MODULE, __FILE__, "alloc_workqueue", __func__, __LINE__)) \
-		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "alloc_workqueue"); \
-	else									\
-		wq_addr = alloc_workqueue(name, flags, max_active, ##args);	\
-	if (wq_addr) {								\
-		memtrack_alloc(MEMTRACK_WORK_QUEUE, 0UL, (unsigned long)(wq_addr), 0, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
-	wq_addr;								\
-})
-#endif
 
 #define WQ_RESCUER 1 << 7 /* internal: workqueue has rescuer */
 

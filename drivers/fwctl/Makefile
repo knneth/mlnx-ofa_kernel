@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 #
 
+GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
 #BACKPORTS: Added to support 5.17 and below
 ccflags-y := -std=gnu11 -Wno-declaration-after-statement
 

@@ -2,12 +2,50 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: fs/fuse/dev.c
 
 ---
- fs/fuse/dev.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ fs/fuse/dev.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
 
 --- a/fs/fuse/dev.c
 +++ b/fs/fuse/dev.c
-@@ -887,6 +887,7 @@ copy_finish:
+@@ -38,6 +38,7 @@ void fuse_creds(struct fuse_req *req)
+ {
+ 	struct fuse_conn *fc = req->fm->fc;
+ 
++#ifdef HAVE_SB_I_NOIDMAP
+ 	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+ 		req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
+ 		req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
+@@ -45,6 +46,10 @@ void fuse_creds(struct fuse_req *req)
+ 		req->in.h.uid = FUSE_INVALID_UIDGID;
+ 		req->in.h.gid = FUSE_INVALID_UIDGID;
+ 	}
++#else
++	req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
++	req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
++#endif
+ 
+ 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
+ }
+@@ -112,6 +117,7 @@ void fuse_force_creds(struct fuse_req *r
+ {
+ 	struct fuse_conn *fc = req->fm->fc;
+ 
++#ifdef HAVE_SB_I_NOIDMAP
+ 	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+ 		req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
+ 		req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
+@@ -119,6 +125,10 @@ void fuse_force_creds(struct fuse_req *r
+ 		req->in.h.uid = FUSE_INVALID_UIDGID;
+ 		req->in.h.gid = FUSE_INVALID_UIDGID;
+ 	}
++#else
++	req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
++	req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
++#endif
+ 
+ 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
+ }
+@@ -927,6 +937,7 @@ copy_finish:
  	return err;
  }
  
@@ -15,7 +53,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  /*
   * Resending all processing queue requests.
   *
-@@ -920,6 +921,7 @@ static int fuse_notify_resend(struct fus
+@@ -960,6 +971,7 @@ static int fuse_notify_resend(struct fus
  	fuse_resend(fc);
  	return 0;
  }
@@ -23,7 +61,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
  		unsigned int size, struct fuse_copy_state *cs)
-@@ -946,8 +948,10 @@ int fuse_notify(struct fuse_conn *fc, en
+@@ -986,8 +998,10 @@ int fuse_notify(struct fuse_conn *fc, en
  	case FUSE_NOTIFY_DELETE:
  		return fuse_notify_delete(fc, size, cs);
  

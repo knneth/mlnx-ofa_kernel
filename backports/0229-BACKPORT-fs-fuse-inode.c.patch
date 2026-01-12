@@ -2,26 +2,93 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: fs/fuse/inode.c
 
 ---
- fs/fuse/inode.c | 19 ++++++++++++++++++-
- 1 file changed, 18 insertions(+), 1 deletion(-)
+ fs/fuse/inode.c | 83 +++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 81 insertions(+), 2 deletions(-)
 
 --- a/fs/fuse/inode.c
 +++ b/fs/fuse/inode.c
-@@ -714,8 +714,13 @@ static const struct fs_parameter_spec fu
- 	fsparam_string	("source",		OPT_SOURCE),
- 	fsparam_u32	("fd",			OPT_FD),
- 	fsparam_u32oct	("rootmode",		OPT_ROOTMODE),
-+#ifdef HAVE_FSPARAM_UID
- 	fsparam_uid	("user_id",		OPT_USER_ID),
- 	fsparam_gid	("group_id",		OPT_GROUP_ID),
-+#else
-+	fsparam_u32     ("user_id",             OPT_USER_ID),
-+	fsparam_u32     ("group_id",            OPT_GROUP_ID),
+@@ -26,6 +26,11 @@
+ #include <linux/pid_namespace.h>
+ #include <uapi/linux/magic.h>
+ 
++#ifndef HAVE_FILEID_INO64
++#define FILEID_INO64_GEN 0x81
++#define FILEID_INO64_GEN_PARENT 0x82
 +#endif
- 	fsparam_flag	("default_permissions",	OPT_DEFAULT_PERMISSIONS),
- 	fsparam_flag	("allow_other",		OPT_ALLOW_OTHER),
- 	fsparam_u32	("max_read",		OPT_MAX_READ),
-@@ -1194,6 +1199,7 @@ static void process_init_reply(struct fu
++
+ MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
+ MODULE_DESCRIPTION("Filesystem in Userspace");
+ MODULE_LICENSE("GPL");
+@@ -238,10 +243,20 @@ void fuse_change_attributes_common(struc
+ 	attr->mtimensec = min_t(u32, attr->mtimensec, NSEC_PER_SEC - 1);
+ 	attr->ctimensec = min_t(u32, attr->ctimensec, NSEC_PER_SEC - 1);
+ 
++#ifdef HAVE_INODE_GET_MTIME
+ 	inode_set_atime(inode, attr->atime, attr->atimensec);
++#else
++	inode->i_atime.tv_sec   = attr->atime;
++	inode->i_atime.tv_nsec  = attr->atimensec;
++#endif
+ 	/* mtime from server may be stale due to local buffered write */
+ 	if (!(cache_mask & STATX_MTIME)) {
++#ifdef HAVE_INODE_GET_MTIME
+ 		inode_set_mtime(inode, attr->mtime, attr->mtimensec);
++#else
++		inode->i_mtime.tv_sec   = attr->mtime;
++		inode->i_mtime.tv_nsec  = attr->mtimensec;
++#endif
+ 	}
+ 	if (!(cache_mask & STATX_CTIME)) {
+ 		inode_set_ctime(inode, attr->ctime, attr->ctimensec);
+@@ -324,12 +339,22 @@ static void fuse_change_attributes_i(str
+ 		attr->size = i_size_read(inode);
+ 
+ 	if (cache_mask & STATX_MTIME) {
++#ifdef HAVE_INODE_GET_MTIME
+ 		attr->mtime = inode_get_mtime_sec(inode);
+ 		attr->mtimensec = inode_get_mtime_nsec(inode);
++#else
++		attr->mtime = inode->i_mtime.tv_sec;
++		attr->mtimensec = inode->i_mtime.tv_nsec;
++#endif
+ 	}
+ 	if (cache_mask & STATX_CTIME) {
++#ifdef HAVE_INODE_GET_MTIME
+ 		attr->ctime = inode_get_ctime_sec(inode);
+ 		attr->ctimensec = inode_get_ctime_nsec(inode);
++#else
++		attr->ctime = inode_get_ctime(inode).tv_sec;
++		attr->ctimensec = inode_get_ctime(inode).tv_nsec;
++#endif
+ 	}
+ 
+ 	if ((attr_version != 0 && fi->attr_version > attr_version) ||
+@@ -338,7 +363,11 @@ static void fuse_change_attributes_i(str
+ 		return;
+ 	}
+ 
++#ifdef HAVE_INODE_GET_MTIME
+ 	old_mtime = inode_get_mtime(inode);
++#else
++	old_mtime = inode->i_mtime;
++#endif
+ 	fuse_change_attributes_common(inode, attr, sx, attr_valid, cache_mask,
+ 				      evict_ctr);
+ 
+@@ -400,7 +429,12 @@ static void fuse_init_inode(struct inode
+ {
+ 	inode->i_mode = attr->mode & S_IFMT;
+ 	inode->i_size = attr->size;
++#ifdef HAVE_INODE_GET_MTIME
+ 	inode_set_mtime(inode, attr->mtime, attr->mtimensec);
++#else
++	inode->i_mtime.tv_sec  = attr->mtime;
++	inode->i_mtime.tv_nsec = attr->mtimensec;
++#endif
+ 	inode_set_ctime(inode, attr->ctime, attr->ctimensec);
+ 	if (S_ISREG(inode->i_mode)) {
+ 		fuse_init_common(inode);
+@@ -1200,6 +1234,7 @@ static void process_init_reply(struct fu
  			 * and FUSE_WRITEBACK_CACHE, current design doesn't handle
  			 * them together.
  			 */
@@ -29,7 +96,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/inode.c
  			if (IS_ENABLED(CONFIG_FUSE_PASSTHROUGH) &&
  			    (flags & FUSE_PASSTHROUGH) &&
  			    arg->max_stack_depth > 0 &&
-@@ -1203,8 +1209,11 @@ static void process_init_reply(struct fu
+@@ -1209,16 +1244,23 @@ static void process_init_reply(struct fu
  				fc->max_stack_depth = arg->max_stack_depth;
  				fm->sb->s_stack_depth = arg->max_stack_depth;
  			}
@@ -38,32 +105,119 @@ Subject: [PATCH] BACKPORT: fs/fuse/inode.c
  			if (flags & FUSE_NO_EXPORT_SUPPORT)
  				fm->sb->s_export_op = &fuse_export_fid_operations;
 +#endif
++#ifdef HAVE_SB_I_NOIDMAP
+ 			if (flags & FUSE_ALLOW_IDMAP) {
+ 				if (fc->default_permissions)
+ 					fm->sb->s_iflags &= ~SB_I_NOIDMAP;
+ 				else
+ 					ok = false;
+ 			}
++#endif
++#ifdef CONFIG_FUSE_IO_URING
+ 			if (flags & FUSE_OVER_IO_URING && fuse_uring_enabled())
+ 				fc->io_uring = 1;
++#endif
  		} else {
  			ra_pages = fc->max_read / PAGE_SIZE;
  			fc->no_lock = 1;
-@@ -1252,7 +1261,13 @@ void fuse_send_init(struct fuse_mount *f
+@@ -1266,7 +1308,16 @@ void fuse_send_init(struct fuse_mount *f
  		FUSE_HANDLE_KILLPRIV_V2 | FUSE_SETXATTR_EXT | FUSE_INIT_EXT |
  		FUSE_SECURITY_CTX | FUSE_CREATE_SUPP_GROUP |
  		FUSE_HAS_EXPIRE_ONLY | FUSE_DIRECT_IO_ALLOW_MMAP |
--		FUSE_NO_EXPORT_SUPPORT | FUSE_HAS_RESEND;
+-		FUSE_NO_EXPORT_SUPPORT | FUSE_HAS_RESEND | FUSE_ALLOW_IDMAP;
 +#ifdef HAVE_FUSE_NO_EXPORT_SUPPORT
 +		FUSE_NO_EXPORT_SUPPORT |
 +#endif
 +#ifdef HAVE_FUSE_HAS_RESEND
 +		FUSE_HAS_RESEND |
 +#endif
++#ifdef HAVE_SB_I_NOIDMAP
++		FUSE_ALLOW_IDMAP |
++#endif
 +		0;
  #ifdef CONFIG_FUSE_DAX
  	if (fm->fc->dax)
  		flags |= FUSE_MAP_ALIGNMENT;
-@@ -1261,8 +1276,10 @@ void fuse_send_init(struct fuse_mount *f
+@@ -1275,15 +1326,18 @@ void fuse_send_init(struct fuse_mount *f
  #endif
  	if (fm->fc->auto_submounts)
  		flags |= FUSE_SUBMOUNTS;
 +#ifdef HAVE_FUSE_PASSTHROUGH
  	if (IS_ENABLED(CONFIG_FUSE_PASSTHROUGH))
  		flags |= FUSE_PASSTHROUGH;
+-
++#endif
+ 	/*
+ 	 * This is just an information flag for fuse server. No need to check
+ 	 * the reply - server is either sending IORING_OP_URING_CMD or not.
+ 	 */
++#ifdef CONFIG_FUSE_IO_URING
+ 	if (fuse_uring_enabled())
+ 		flags |= FUSE_OVER_IO_URING;
 +#endif
  
  	ia->in.flags = flags;
  	ia->in.flags2 = flags >> 32;
+@@ -1401,8 +1455,13 @@ void fuse_dev_free(struct fuse_dev *fud)
+ static void fuse_fill_attr_from_inode(struct fuse_attr *attr,
+ 				      const struct fuse_inode *fi)
+ {
++#ifdef HAVE_INODE_GET_MTIME
+ 	struct timespec64 atime = inode_get_atime(&fi->inode);
+ 	struct timespec64 mtime = inode_get_mtime(&fi->inode);
++#else
++	struct timespec64 atime = fi->inode.i_atime;
++	struct timespec64 mtime = fi->inode.i_mtime;
++#endif
+ 	struct timespec64 ctime = inode_get_ctime(&fi->inode);
+ 
+ 	*attr = (struct fuse_attr){
+@@ -1433,7 +1492,9 @@ static void fuse_sb_defaults(struct supe
+ 	sb->s_time_gran = 1;
+ 	sb->s_export_op = &fuse_export_operations;
+ 	sb->s_iflags |= SB_I_IMA_UNVERIFIABLE_SIGNATURE;
++#ifdef HAVE_SB_I_NOIDMAP
+ 	sb->s_iflags |= SB_I_NOIDMAP;
++#endif
+ 	if (sb->s_user_ns != &init_user_ns)
+ 		sb->s_iflags |= SB_I_UNTRUSTED_MOUNTER;
+ 	sb->s_flags &= ~(SB_NOSEC | SB_I_VERSION);
+@@ -1475,7 +1536,13 @@ static int fuse_fill_super_submount(stru
+ 	fi = get_fuse_inode(root);
+ 	fi->nlookup--;
+ 
++#ifdef HAVE_SET_DEFAULT_D_OP
++	/* Newer kernels (v6.17-rc1+): use set_default_d_op helper */
++	set_default_d_op(sb, &fuse_dentry_operations);
++#else
++	/* Older kernels: direct field assignment */
+ 	sb->s_d_op = &fuse_dentry_operations;
++#endif
+ 	sb->s_root = d_make_root(root);
+ 	if (!sb->s_root)
+ 		return -ENOMEM;
+@@ -1609,12 +1676,24 @@ int fuse_fill_super_common(struct super_
+ 
+ 	err = -ENOMEM;
+ 	root = fuse_get_root_inode(sb, ctx->rootmode);
++#ifdef HAVE_SET_DEFAULT_D_OP
++	/* Newer kernels (v6.17-rc1+): use set_default_d_op helper */
++	set_default_d_op(sb, &fuse_root_dentry_operations);
++#else
++	/* Older kernels: direct field assignment */
+ 	sb->s_d_op = &fuse_root_dentry_operations;
++#endif
+ 	root_dentry = d_make_root(root);
+ 	if (!root_dentry)
+ 		goto err_dev_free;
+ 	/* Root dentry doesn't have .d_revalidate */
++#ifdef HAVE_SET_DEFAULT_D_OP
++	/* Newer kernels (v6.17-rc1+): use set_default_d_op helper */
++	set_default_d_op(sb, &fuse_dentry_operations);
++#else
++	/* Older kernels: direct field assignment */
+ 	sb->s_d_op = &fuse_dentry_operations;
++#endif
+ 
+ 	mutex_lock(&fuse_mutex);
+ 	err = -EINVAL;

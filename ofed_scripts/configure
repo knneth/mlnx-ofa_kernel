@@ -43,9 +43,14 @@ Usage:  `basename $0` [options]
     --with-linux=DIR  kernel sources directory [/lib/modules/$(uname -r)/source]
     --with-linux-obj=DIR  kernel obj directory [/lib/modules/$(uname -r)/build]
     --skip-autoconf
+    --distro=DISTRO   override the distro that is used for --default
+                      (must be given before --default)
     -j[N]|--with-njobs=[N] : Allow N configure jobs at once; jobs as number of CPUs with no arg.
 
     Kernel modules configuration:
+
+    --all      Set many build module options
+    --default  Set the typical build options install.pl would set
 
     --build-dummy-mods    Build dummy modules for ULPs and storage drivers [no]
 
@@ -739,6 +744,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_DEVLINK_HAIRPIN_PARAMS
 	fi
 
+# Define HAVE_DEV_GET_PORT_PARENT_ID from both function name variants
+	if check_compat_config_h_var HAVE_NETIF_GET_PORT_PARENT_ID_FUNC ||
+	   check_compat_config_h_var HAVE_DEV_GET_PORT_PARENT_ID_FUNC
+	then
+		set_complex_define_to_config_h HAVE_DEV_GET_PORT_PARENT_ID
+	else
+		unset_complex_define_to_config_h HAVE_DEV_GET_PORT_PARENT_ID
+	fi
+
 }
 
 check_kerver_rh_cls()
@@ -926,6 +940,7 @@ CONFIG_NVME_TARGET=${CONFIG_NVME_TARGET:-''}
 CONFIG_NVME_TARGET_LOOP=${CONFIG_NVME_TARGET_LOOP:-''}
 CONFIG_NVME_TARGET_RDMA=${CONFIG_NVME_TARGET_RDMA:-''}
 CONFIG_NVME_TARGET_TCP=${CONFIG_NVME_TARGET_TCP:-''}
+CONFIG_NVME_TARGET_PCI_EPF=${CONFIG_NVME_TARGET_PCI_EPF:-''}
 CONFIG_NVME_TARGET_FC=${CONFIG_NVME_TARGET_FC:-''}
 CONFIG_NVME_TARGET_FCLOOP=${CONFIG_NVME_TARGET_FCLOOP:-''}
 CONFIG_NVME_TARGET_DUMMY=${CONFIG_NVME_TARGET_DUMMY:-''}
@@ -966,38 +981,38 @@ REBASE_STAGE="BACKPORTS"
 
 # nfs-rdma
 NFSRDMA_SUPPORTED_KVERSION="4.18"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # nvmf
 NVMF_SUPPORTED_KVERSION="4.18"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # iser/isert/srp/gds
 ISER_SUPPORTED_KVERSION="4.18.0"
 ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 GDS_SUPPORTED_KVERSION="4.18.0"
 
-VIRTIOFS_SUPPORTED_KVERSION="6.8.0"
-VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+VIRTIOFS_SUPPORTED_KVERSION="6.6.0"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # cls_act
 CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 # bridge offload
 BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.17"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.18"
 
 #ODP
 ODP_SUPPORTED_KVERSION="4.18.0"
@@ -1009,7 +1024,6 @@ IPSEC_SUPPORTED_KVERSION="4.18.0"
 MLXDEVM_SUPPORTED_KVERSION="4.18.0"
 
 KVERSION=${KVERSION:-$(uname -r)}
-GCC_VERSION=${GCC_VERSION:-$(gcc --version)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
 ignored_autofconf_vars=""
@@ -1032,6 +1046,81 @@ print_line() {
     printf '%*s\n' "$(tput cols)" '' | tr ' ' '-'
 }
 
+set_ksrc_vars() {
+	if [ ! -z "$LINUX_SRC" ]; then
+		KSRC=$LINUX_SRC
+	fi
+
+	if [ ! -z "$LINUX_OBJ" ]; then
+		KSRC_OBJ=$LINUX_OBJ
+	fi
+
+	KSRC=${KSRC:-"/lib/modules/${KVERSION}/build"}
+
+	IS_SLES=0
+	if [[ -e "/etc/SuSE-release" ]] || [[ -e "/etc/SUSE-brand" ]] || \
+		grep -qiE 'SLES|SUSE' /etc/os-release 2>/dev/null
+	then
+		IS_SLES=1
+	fi
+
+	if [ -z "$KSRC_OBJ" ]; then
+		if [[ "$IS_SLES" == 1 && "$KSRC" =~ "build" && -d ${KSRC/build/source} ]] ||
+		   [[ "$KSRC" =~ "build" && -d ${KSRC/build/source} &&
+			"X$(readlink -f $KSRC)" != "X$(readlink -f ${KSRC/build/source})" ]]; then
+			KSRC_OBJ=$KSRC
+			KSRC=${KSRC_OBJ/build/source}
+		elif [[ "$IS_SLES" == 1 && "$KSRC" =~ "linux-obj" ]]; then
+			sources_dir=$(readlink -f $KSRC 2>/dev/null | sed -e 's/-obj.*//g')
+			KSRC_OBJ=$KSRC
+			KSRC=${sources_dir}
+		fi
+	fi
+
+	KSRC_OBJ=${KSRC_OBJ:-"$KSRC"}
+
+	if [[ ! -d "${KSRC}/" && -d "${KSRC_OBJ}/" ]]; then
+		KSRC=$KSRC_OBJ
+	fi
+}
+
+get_distro() {
+	(
+		. /etc/os-release
+		id="$ID:$VERSION_ID"
+		echo "$id"
+	)
+}
+
+DISTRO_OVERRIDE=""
+get_default_build_options() {
+	local distro
+	set_ksrc_vars # only for this subshell
+	check_autofconf CONFIG_XFRM_OFFLOAD
+	check_autofconf CONFIG_INET_ESP_OFFLOAD
+	check_autofconf CONFIG_INET6_ESP_OFFLOAD
+	distro=${DISTRO_OVERRIDE:-`get_distro`}
+
+	echo --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod
+	echo --with-mlx5-mod
+	echo --with-mlxfw-mod
+	echo --with-ipoib-mod
+	echo --with-srp-mod
+	echo --with-iser-mod
+	echo --with-isert-mod
+    echo --with-fwctl
+	if [ "$CONFIG_XFRM_OFFLOAD$CONFIG_INET_ESP_OFFLOAD$CONFIG_INET6_ESP_OFFLOAD" = "111" ]; then
+		echo --with-mlx5-ipsec
+	fi
+	case "$distro" in rhel:* | kylin:* | ubuntu:18.04 | ubuntu:2[024].04 | debian:12)
+		echo --with-gds;;
+	esac
+	case "$distro" in euleros:sp8 | euleros:sp1[01])
+		echo --with-sf-cfg-drv;;
+	esac
+}
+
+
 main()
 {
         ofed_patch_params=
@@ -1051,6 +1140,15 @@ main()
 				echo "${@:2}"
 				print_line
 				;;
+		--default)
+				shift
+                                set -- "--default" `get_default_build_options` "$@"
+				print_line
+				echo "configuring MLNX_OFED with default flags:"
+				echo "${@:2}"
+				print_line
+				;;
+		--distro=*) DISTRO_OVERRIDE=${1#--distro=};;
 		-prefix | --prefix | --prefi | --pref | --pre | --pr | --p | -p)
 			shift
 			prefix=$1
@@ -1628,6 +1726,7 @@ main()
 			CONFIG_NVME_TARGET_LOOP=
 			CONFIG_NVME_TARGET_RDMA=
 			CONFIG_NVME_TARGET_TCP=
+			CONFIG_NVME_TARGET_PCI_EPF=
 			CONFIG_NVME_TARGET_FC=
 			CONFIG_NVME_TARGET_FCLOOP=
 			;;
@@ -1648,6 +1747,7 @@ main()
 			CONFIG_NVME_TARGET_LOOP=
 			CONFIG_NVME_TARGET_RDMA=
 			CONFIG_NVME_TARGET_TCP=
+			CONFIG_NVME_TARGET_PCI_EPF=
 			CONFIG_NVME_TARGET_FC=
 			CONFIG_NVME_TARGET_FCLOOP=
 			;;
@@ -1656,6 +1756,7 @@ main()
 			CONFIG_NVME_TARGET_LOOP="m"
 			CONFIG_NVME_TARGET_RDMA="m"
 			CONFIG_NVME_TARGET_TCP="m"
+			CONFIG_NVME_TARGET_PCI_EPF="m"
 			CONFIG_NVME_TARGET_FC="m"
 			CONFIG_NVME_TARGET_FCLOOP="m"
 			CONFIG_NVME_TARGET_COMMON="m"
@@ -1666,6 +1767,7 @@ main()
 			CONFIG_NVME_TARGET_LOOP=
 			CONFIG_NVME_TARGET_RDMA=
 			CONFIG_NVME_TARGET_TCP=
+			CONFIG_NVME_TARGET_PCI_EPF=
 			CONFIG_NVME_TARGET_FC=
 			CONFIG_NVME_TARGET_FCLOOP=
 			CONFIG_NVME_HOST_WITHOUT_FC=
@@ -1739,6 +1841,7 @@ main()
 			CONFIG_VIRTIO_FS="m"
 			CONFIG_FUSE_PASSTHROUGH=
 			CONFIG_FUSE_DAX=
+			CONFIG_FUSE_IO_URING=
 			;;
 		--without-virtiofs-mod)
 			CONFIG_VIRTIO_FS=
@@ -1809,22 +1912,7 @@ main()
 
 MODULES_DIR=${MODULES_DIR:-/lib/modules/${KVERSION}/updates}
 
-if [ ! -z "$LINUX_SRC" ]; then
-	KSRC=$LINUX_SRC
-fi
-
-if [ ! -z "$LINUX_OBJ" ]; then
-	KSRC_OBJ=$LINUX_OBJ
-fi
-
-KSRC=${KSRC:-"/lib/modules/${KVERSION}/build"}
-
-IS_SLES=0
-if [[ -e "/etc/SuSE-release" ]] || [[ -e "/etc/SUSE-brand" ]] || \
-	grep -qiE 'SLES|SUSE' /etc/os-release 2>/dev/null
-then
-	IS_SLES=1
-fi
+set_ksrc_vars
 
 CONFIG_IS_MARINER=
 if grep -qiE 'mariner' /etc/os-release 2>/dev/null; then
@@ -1834,25 +1922,6 @@ fi
 CONFIG_IS_AZURELINUX=
 if grep -qiE 'azurelinux' /etc/os-release 2>/dev/null; then
 	CONFIG_IS_AZURELINUX="y"
-fi
-
-if [ -z "$KSRC_OBJ" ]; then
-	if [[ "$IS_SLES" == 1 && "$KSRC" =~ "build" && -d ${KSRC/build/source} ]] ||
-	   [[ "$KSRC" =~ "build" && -d ${KSRC/build/source} &&
-		"X$(readlink -f $KSRC)" != "X$(readlink -f ${KSRC/build/source})" ]]; then
-		KSRC_OBJ=$KSRC
-		KSRC=${KSRC_OBJ/build/source}
-	elif [[ "$IS_SLES" == 1 && "$KSRC" =~ "linux-obj" ]]; then
-		sources_dir=$(readlink -f $KSRC 2>/dev/null | sed -e 's/-obj.*//g')
-		KSRC_OBJ=$KSRC
-		KSRC=${sources_dir}
-	fi
-fi
-
-KSRC_OBJ=${KSRC_OBJ:-"$KSRC"}
-
-if [[ ! -d "${KSRC}/" && -d "${KSRC_OBJ}/" ]]; then
-	KSRC=$KSRC_OBJ
 fi
 
 if check_inbox_auxiliary; then
@@ -1940,6 +2009,7 @@ if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
 		CONFIG_NVME_TARGET_LOOP=
 		CONFIG_NVME_TARGET_RDMA=
 		CONFIG_NVME_TARGET_TCP=
+		CONFIG_NVME_TARGET_PCI_EPF=
 		CONFIG_NVME_TARGET_FC=
 		CONFIG_NVME_TARGET_FCLOOP=
 		echo "Warning: NVMF TARGET requires RHEL7.4 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
@@ -1963,6 +2033,7 @@ if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
         CONFIG_NVME_TARGET_LOOP=
         CONFIG_NVME_TARGET_RDMA=
         CONFIG_NVME_TARGET_TCP=
+        CONFIG_NVME_TARGET_PCI_EPF=
         CONFIG_NVME_TARGET_FC=
         CONFIG_NVME_TARGET_FCLOOP=
         echo "Warning: NVMF not support kernel version ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
@@ -2140,6 +2211,14 @@ if [ "X${CONFIG_NVME_TARGET_TCP}" == "Xm" ]; then
     fi
 fi
 
+# Enable nvmet-target-pci-epf only when it is enabled in the kernel
+if [ "X${CONFIG_NVME_TARGET_PCI_EPF}" == "Xm" ]; then
+    check_autofconf CONFIG_NVME_TARGET_PCI_EPF
+    if [ X${CONFIG_NVME_TARGET_PCI_EPF} == "X1" ]; then
+        CONFIG_NVME_TARGET_PCI_EPF=m
+    fi
+fi
+
 # Enable GDS only for supported kernels
 if ! check_kerver ${KVERSION} ${GDS_SUPPORTED_KVERSION}; then
 	CONFIG_GPU_DIRECT_STORAGE=
@@ -2218,6 +2297,7 @@ if [ "X$BUILD_DUMMY_MODS" == "X1" ]; then
    CONFIG_NVME_TARGET_LOOP=
    CONFIG_NVME_TARGET_RDMA=
    CONFIG_NVME_TARGET_TCP=
+   CONFIG_NVME_TARGET_PCI_EPF=
    CONFIG_NVME_TARGET_FC=
    CONFIG_NVME_TARGET_FCLOOP=
 

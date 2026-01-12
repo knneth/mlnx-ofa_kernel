@@ -3,19 +3,62 @@ Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
 
 Change-Id: I735972eb235aa0500be345e78084349ce96520d6
 ---
- fs/fuse/fuse_i.h | 4 ++++
- 1 file changed, 4 insertions(+)
+ fs/fuse/fuse_i.h | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
 
 --- a/fs/fuse/fuse_i.h
 +++ b/fs/fuse/fuse_i.h
-@@ -42,6 +42,10 @@
- #undef CONFIG_FUSE_PASSTHROUGH
- #define CONFIG_VIRTIO_FS 1
+@@ -66,6 +66,10 @@ extern struct kmem_cache *fuse_inode_cac
+ extern unsigned max_user_bgreq;
+ extern unsigned max_user_congthresh;
  
 +#ifndef HAVE_FUSE_PASSTHROUGH
 +struct fuse_backing_map;
 +#endif
 +
- /** Default max number of pages that can be used in a single read request */
- #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
+ /* One forget request */
+ struct fuse_forget_link {
+ 	struct fuse_forget_one forget_one;
+@@ -1240,7 +1244,11 @@ ssize_t __fuse_simple_request(struct mnt
  
+ static inline ssize_t fuse_simple_request(struct fuse_mount *fm, struct fuse_args *args)
+ {
++#ifdef HAVE_INVALID_MNT_IDMAP
+ 	return __fuse_simple_request(&invalid_mnt_idmap, fm, args);
++#else
++	return __fuse_simple_request(NULL, fm, args);
++#endif
+ }
+ 
+ static inline ssize_t fuse_simple_idmap_request(struct mnt_idmap *idmap,
+@@ -1448,7 +1456,11 @@ ssize_t fuse_getxattr(struct inode *inod
+ 		      size_t size);
+ ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size);
+ int fuse_removexattr(struct inode *inode, const char *name);
+-extern const struct xattr_handler * const fuse_xattr_handlers[];
++extern const struct xattr_handler *
++#ifdef HAVE_CONST_XATTR_HANDLER
++const
++#endif
++fuse_xattr_handlers[];
+ 
+ struct posix_acl;
+ struct posix_acl *fuse_get_inode_acl(struct inode *inode, int type, bool rcu);
+@@ -1498,9 +1510,17 @@ void fuse_dax_cancel_work(struct fuse_co
+ long fuse_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+ long fuse_file_compat_ioctl(struct file *file, unsigned int cmd,
+ 			    unsigned long arg);
++#ifdef HAVE_STRUCT_FILE_KATTR
++/* Newer kernels (v6.17-rc1+): struct fileattr renamed to struct file_kattr */
++int fuse_fileattr_get(struct dentry *dentry, struct file_kattr *fa);
++int fuse_fileattr_set(struct mnt_idmap *idmap,
++		      struct dentry *dentry, struct file_kattr *fa);
++#else
++/* Older kernels: use original struct fileattr */
+ int fuse_fileattr_get(struct dentry *dentry, struct fileattr *fa);
+ int fuse_fileattr_set(struct mnt_idmap *idmap,
+ 		      struct dentry *dentry, struct fileattr *fa);
++#endif
+ 
+ /* iomode.c */
+ int fuse_file_cached_io_open(struct inode *inode, struct fuse_file *ff);

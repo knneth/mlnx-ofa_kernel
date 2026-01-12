@@ -17,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  #include <rdma/ib_umem_odp.h>
  #include "dm.h"
  #include "mlx5_ib.h"
-@@ -634,10 +636,17 @@ static struct attribute *order_default_a
+@@ -652,10 +654,17 @@ static struct attribute *order_default_a
  	NULL
  };
  
@@ -38,7 +38,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  };
  
  static bool someone_releasing(struct mlx5_mkey_cache *cache)
-@@ -925,8 +934,7 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(s
+@@ -943,8 +952,7 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(s
  
  static void delay_time_func(struct timer_list *t)
  {
@@ -48,7 +48,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	WRITE_ONCE(dev->fill_delay, 0);
  }
  
-@@ -1120,7 +1128,11 @@ void mlx5_mkey_cache_cleanup(struct mlx5
+@@ -1138,7 +1146,11 @@ void mlx5_mkey_cache_cleanup(struct mlx5
  	mlx5r_destroy_cache_entries(dev);
  
  	destroy_workqueue(dev->cache.wq);
@@ -60,7 +60,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  }
  
  struct ib_mr *mlx5_ib_get_dma_mr(struct ib_pd *pd, int acc)
-@@ -1569,6 +1581,7 @@ static struct ib_mr *create_real_mr(stru
+@@ -1587,6 +1599,7 @@ static struct ib_mr *create_real_mr(stru
  	return &mr->ibmr;
  }
  
@@ -68,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  					u64 iova, int access_flags,
  					struct ib_udata *udata)
-@@ -1590,7 +1603,7 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1608,7 +1621,7 @@ static struct ib_mr *create_user_odp_mr(
  		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
  			return ERR_PTR(-EINVAL);
  
@@ -77,7 +77,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  		if (IS_ERR(mr))
  			return ERR_CAST(mr);
  		return &mr->ibmr;
-@@ -1600,8 +1613,12 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1618,8 +1631,12 @@ static struct ib_mr *create_user_odp_mr(
  	if (!mlx5r_umr_can_load_pas(dev, length))
  		return ERR_PTR(-EINVAL);
  
@@ -90,7 +90,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	if (IS_ERR(odp))
  		return ERR_CAST(odp);
  
-@@ -1627,6 +1644,7 @@ err_dereg_mr:
+@@ -1645,6 +1662,7 @@ err_dereg_mr:
  	mlx5_ib_dereg_mr(&mr->ibmr, NULL);
  	return ERR_PTR(err);
  }
@@ -98,7 +98,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  				  u64 iova, int access_flags,
-@@ -1646,16 +1664,23 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1664,16 +1682,23 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
  	if (err)
  		return ERR_PTR(err);
  
@@ -122,7 +122,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  {
  	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
-@@ -1671,7 +1696,9 @@ static void mlx5_ib_dmabuf_invalidate_cb
+@@ -1689,7 +1714,9 @@ static void mlx5_ib_dmabuf_invalidate_cb
  }
  
  static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
@@ -132,7 +132,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	.move_notify = mlx5_ib_dmabuf_invalidate_cb,
  };
  
-@@ -1734,6 +1761,7 @@ err_dereg_mr:
+@@ -1752,6 +1779,7 @@ err_dereg_mr:
  	__mlx5_ib_dereg_mr(&mr->ibmr);
  	return ERR_PTR(err);
  }
@@ -140,7 +140,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  static struct ib_mr *
  reg_user_mr_dmabuf_by_data_direct(struct ib_pd *pd, u64 offset,
-@@ -1762,9 +1790,15 @@ reg_user_mr_dmabuf_by_data_direct(struct
+@@ -1780,9 +1808,15 @@ reg_user_mr_dmabuf_by_data_direct(struct
  	 */
  	if (!dev->ddr.mkey_ro_valid)
  		access_flags &= ~IB_ACCESS_RELAXED_ORDERING;
@@ -156,7 +156,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	if (IS_ERR(crossed_mr)) {
  		ret = PTR_ERR(crossed_mr);
  		goto end;
-@@ -1820,10 +1854,13 @@ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf
+@@ -1838,10 +1872,13 @@ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf
  	if (mlx5_access_flags & MLX5_IB_UAPI_REG_DMABUF_ACCESS_DATA_DIRECT)
  		return reg_user_mr_dmabuf_by_data_direct(pd, offset, length, virt_addr,
  							 fd, access_flags);
@@ -171,7 +171,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  }
  
  /*
-@@ -1989,8 +2026,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+@@ -2007,8 +2044,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
  	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
  		struct ib_umem *new_umem;
  		unsigned long page_size;
@@ -184,7 +184,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2144,17 +2184,21 @@ void mlx5_ib_revoke_data_direct_mrs(stru
+@@ -2162,17 +2202,21 @@ void mlx5_ib_revoke_data_direct_mrs(stru
  
  static int mlx5_umr_revoke_mr_with_lock(struct mlx5_ib_mr *mr)
  {
@@ -206,7 +206,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  	ret = mlx5r_umr_revoke_mr(mr);
  
-@@ -2164,20 +2208,24 @@ static int mlx5_umr_revoke_mr_with_lock(
+@@ -2182,20 +2226,24 @@ static int mlx5_umr_revoke_mr_with_lock(
  		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  	}
  
@@ -231,7 +231,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
  	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
  	bool is_odp = is_odp_mr(mr);
-@@ -2208,10 +2256,12 @@ static int mlx5r_handle_mkey_cleanup(str
+@@ -2226,10 +2274,12 @@ static int mlx5r_handle_mkey_cleanup(str
  		if (is_odp)
  			mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  
@@ -244,7 +244,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  
  		if (mr->umem && mr->umem->is_peer) {
  			ret = mlx5r_umr_revoke_mr(mr);
-@@ -2229,12 +2279,14 @@ out:
+@@ -2247,12 +2297,14 @@ out:
  			mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  		}
  
@@ -259,7 +259,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
  	}
  
  	return ret;
-@@ -3190,10 +3242,16 @@ static struct attribute *cache_default_a
+@@ -3208,10 +3260,16 @@ static struct attribute *cache_default_a
  	NULL
  };
  

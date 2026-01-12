@@ -109,7 +109,7 @@ static int mlx5_devlink_reload_fw_activate(struct devlink *devlink, struct netli
 	if (err)
 		return err;
 
-	mlx5_unload_one_devl_locked(dev, true);
+	mlx5_sync_reset_unload_flow(dev, true);
 	err = mlx5_health_wait_pci_up(dev);
 	if (err)
 		NL_SET_ERR_MSG_MOD(extack, "FW activate aborted, PCI reads fail after reset");
@@ -150,11 +150,6 @@ int mlx5_devlink_reload_down(struct devlink *devlink, bool netns_change,
 			return -EOPNOTSUPP;
 		mlx5_unload_one_light(dev);
 		return 0;
-	}
-
-	if (mlx5_lag_is_active(dev)) {
-		NL_SET_ERR_MSG_MOD(extack, "reload is unsupported in Lag mode");
-		return -EOPNOTSUPP;
 	}
 
 	if (mlx5_core_is_mp_slave(dev)) {
@@ -319,12 +314,19 @@ static const struct devlink_ops mlx5_devlink_ops = {
 #ifdef CONFIG_MLX5_ESWITCH
 	.eswitch_mode_set = mlx5_devlink_eswitch_mode_set,
 	.eswitch_mode_get = mlx5_devlink_eswitch_mode_get,
+#ifdef HAVE_DEVLINK_ESWITCH_STATE
+	.eswitch_state_get = mlx5_devlink_eswitch_state_get,
+	.eswitch_state_set = mlx5_devlink_eswitch_state_set,
+#endif
 	.eswitch_inline_mode_set = mlx5_devlink_eswitch_inline_mode_set,
 	.eswitch_inline_mode_get = mlx5_devlink_eswitch_inline_mode_get,
 	.eswitch_encap_mode_set = mlx5_devlink_eswitch_encap_mode_set,
 	.eswitch_encap_mode_get = mlx5_devlink_eswitch_encap_mode_get,
 	.rate_leaf_tx_share_set = mlx5_esw_devlink_rate_leaf_tx_share_set,
 	.rate_leaf_tx_max_set = mlx5_esw_devlink_rate_leaf_tx_max_set,
+	/* To compile on 6.15 base kernel, comment ets out. */
+	// .rate_leaf_tc_bw_set = mlx5_esw_devlink_rate_leaf_tc_bw_set,
+	// .rate_node_tc_bw_set = mlx5_esw_devlink_rate_node_tc_bw_set,
 	.rate_node_tx_share_set = mlx5_esw_devlink_rate_node_tx_share_set,
 	.rate_node_tx_max_set = mlx5_esw_devlink_rate_node_tx_max_set,
 	.rate_node_new = mlx5_esw_devlink_rate_node_new,

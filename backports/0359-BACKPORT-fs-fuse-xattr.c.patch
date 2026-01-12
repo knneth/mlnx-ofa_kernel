@@ -1,0 +1,23 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/xattr.c
+
+Change-Id: Ia30a20d7dec0c87406f59037f6d892ee44dfd3d5
+---
+ fs/fuse/xattr.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+--- a/fs/fuse/xattr.c
++++ b/fs/fuse/xattr.c
+@@ -210,7 +210,11 @@ static const struct xattr_handler fuse_x
+ 	.set    = fuse_xattr_set,
+ };
+ 
+-const struct xattr_handler * const fuse_xattr_handlers[] = {
++const struct xattr_handler *
++#ifdef HAVE_CONST_XATTR_HANDLER
++const
++#endif
++fuse_xattr_handlers[] = {
+ 	&fuse_xattr_handler,
+ 	NULL
+ };

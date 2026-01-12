@@ -1,6 +1,6 @@
-# generated automatically by aclocal 1.15 -*- Autoconf -*-
+# generated automatically by aclocal 1.16.5 -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2021 Free Software Foundation, Inc.
 
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -14,13 +14,13 @@
 m4_ifndef([AC_CONFIG_MACRO_DIRS], [m4_defun([_AM_CONFIG_MACRO_DIRS], [])m4_defun([AC_CONFIG_MACRO_DIRS], [_AM_CONFIG_MACRO_DIRS($@)])])
 m4_ifndef([AC_AUTOCONF_VERSION],
   [m4_copy([m4_PACKAGE_VERSION], [AC_AUTOCONF_VERSION])])dnl
-m4_if(m4_defn([AC_AUTOCONF_VERSION]), [2.69],,
-[m4_warning([this file was generated for autoconf 2.69.
+m4_if(m4_defn([AC_AUTOCONF_VERSION]), [2.71],,
+[m4_warning([this file was generated for autoconf 2.71.
 You have another version of autoconf.  It may work, but is not guaranteed to.
 If you have problems, you may need to regenerate the build system entirely.
 To do so, use the procedure documented by the package, typically 'autoreconf'.])])
 
-# Copyright (C) 2002-2014 Free Software Foundation, Inc.
+# Copyright (C) 2002-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -32,10 +32,10 @@ To do so, use the procedure documented by the package, typically 'autoreconf'.])
 # generated from the m4 files accompanying Automake X.Y.
 # (This private macro should not be called outside this file.)
 AC_DEFUN([AM_AUTOMAKE_VERSION],
-[am__api_version='1.15'
+[am__api_version='1.16'
 dnl Some users find AM_AUTOMAKE_VERSION and mistake it for a way to
 dnl require some minimum version.  Point them to the right macro.
-m4_if([$1], [1.15], [],
+m4_if([$1], [1.16.5], [],
       [AC_FATAL([Do not call $0, use AM_INIT_AUTOMAKE([$1]).])])dnl
 ])
 
@@ -51,14 +51,14 @@ m4_define([_AM_AUTOCONF_VERSION], [])
 # Call AM_AUTOMAKE_VERSION and AM_AUTOMAKE_VERSION so they can be traced.
 # This function is AC_REQUIREd by AM_INIT_AUTOMAKE.
 AC_DEFUN([AM_SET_CURRENT_AUTOMAKE_VERSION],
-[AM_AUTOMAKE_VERSION([1.15])dnl
+[AM_AUTOMAKE_VERSION([1.16.5])dnl
 m4_ifndef([AC_AUTOCONF_VERSION],
   [m4_copy([m4_PACKAGE_VERSION], [AC_AUTOCONF_VERSION])])dnl
 _AM_AUTOCONF_VERSION(m4_defn([AC_AUTOCONF_VERSION]))])
 
 # AM_AUX_DIR_EXPAND                                         -*- Autoconf -*-
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -110,7 +110,7 @@ am_aux_dir=`cd "$ac_aux_dir" && pwd`
 
 # Do all the work for Automake.                             -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -138,6 +138,10 @@ m4_defn([AC_PROG_CC])
 # release and drop the old call support.
 AC_DEFUN([AM_INIT_AUTOMAKE],
 [AC_PREREQ([2.65])dnl
+m4_ifdef([_$0_ALREADY_INIT],
+  [m4_fatal([$0 expanded multiple times
+]m4_defn([_$0_ALREADY_INIT]))],
+  [m4_define([_$0_ALREADY_INIT], m4_expansion_stack)])dnl
 dnl Autoconf wants to disallow AM_ names.  We explicitly allow
 dnl the ones we care about.
 m4_pattern_allow([^AM_[A-Z]+FLAGS$])dnl
@@ -174,7 +178,7 @@ m4_ifval([$3], [_AM_SET_OPTION([no-define])])dnl
 [_AM_SET_OPTIONS([$1])dnl
 dnl Diagnose old-style AC_INIT with new-style AM_AUTOMAKE_INIT.
 m4_if(
-  m4_ifdef([AC_PACKAGE_NAME], [ok]):m4_ifdef([AC_PACKAGE_VERSION], [ok]),
+  m4_ifset([AC_PACKAGE_NAME], [ok]):m4_ifset([AC_PACKAGE_VERSION], [ok]),
   [ok:ok],,
   [m4_fatal([AC_INIT should be called with package and version arguments])])dnl
  AC_SUBST([PACKAGE], ['AC_PACKAGE_TARNAME'])dnl
@@ -197,8 +201,8 @@ AC_REQUIRE([AM_PROG_INSTALL_STRIP])dnl
 AC_REQUIRE([AC_PROG_MKDIR_P])dnl
 # For better backward compatibility.  To be removed once Automake 1.9.x
 # dies out for good.  For more background, see:
-# <http://lists.gnu.org/archive/html/automake/2012-07/msg00001.html>
-# <http://lists.gnu.org/archive/html/automake/2012-07/msg00014.html>
+# <https://lists.gnu.org/archive/html/automake/2012-07/msg00001.html>
+# <https://lists.gnu.org/archive/html/automake/2012-07/msg00014.html>
 AC_SUBST([mkdir_p], ['$(MKDIR_P)'])
 # We need awk for the "check" target (and possibly the TAP driver).  The
 # system "awk" is bad on some platforms.
@@ -226,6 +230,20 @@ AC_PROVIDE_IFELSE([AC_PROG_OBJCXX],
 		  [m4_define([AC_PROG_OBJCXX],
 			     m4_defn([AC_PROG_OBJCXX])[_AM_DEPENDENCIES([OBJCXX])])])dnl
 ])
+# Variables for tags utilities; see am/tags.am
+if test -z "$CTAGS"; then
+  CTAGS=ctags
+fi
+AC_SUBST([CTAGS])
+if test -z "$ETAGS"; then
+  ETAGS=etags
+fi
+AC_SUBST([ETAGS])
+if test -z "$CSCOPE"; then
+  CSCOPE=cscope
+fi
+AC_SUBST([CSCOPE])
+
 AC_REQUIRE([AM_SILENT_RULES])dnl
 dnl The testsuite driver may need to know about EXEEXT, so add the
 dnl 'am__EXEEXT' conditional if _AM_COMPILER_EXEEXT was seen.  This
@@ -265,7 +283,7 @@ END
 Aborting the configuration process, to ensure you take notice of the issue.
 
 You can download and install GNU coreutils to get an 'rm' implementation
-that behaves properly: <http://www.gnu.org/software/coreutils/>.
+that behaves properly: <https://www.gnu.org/software/coreutils/>.
 
 If you want to complete the configuration process using your problematic
 'rm' anyway, export the environment variable ACCEPT_INFERIOR_RM_PROGRAM
@@ -307,7 +325,7 @@ for _am_header in $config_headers :; do
 done
 echo "timestamp for $_am_arg" >`AS_DIRNAME(["$_am_arg"])`/stamp-h[]$_am_stamp_count])
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -328,7 +346,7 @@ if test x"${install_sh+set}" != xset; then
 fi
 AC_SUBST([install_sh])])
 
-# Copyright (C) 2003-2014 Free Software Foundation, Inc.
+# Copyright (C) 2003-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -349,7 +367,7 @@ AC_SUBST([am__leading_dot])])
 
 # Fake the existence of programs that GNU maintainers use.  -*- Autoconf -*-
 
-# Copyright (C) 1997-2014 Free Software Foundation, Inc.
+# Copyright (C) 1997-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -370,12 +388,7 @@ AC_DEFUN([AM_MISSING_HAS_RUN],
 [AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
 AC_REQUIRE_AUX_FILE([missing])dnl
 if test x"${MISSING+set}" != xset; then
-  case $am_aux_dir in
-  *\ * | *\	*)
-    MISSING="\${SHELL} \"$am_aux_dir/missing\"" ;;
-  *)
-    MISSING="\${SHELL} $am_aux_dir/missing" ;;
-  esac
+  MISSING="\${SHELL} '$am_aux_dir/missing'"
 fi
 # Use eval to expand $SHELL
 if eval "$MISSING --is-lightweight"; then
@@ -388,7 +401,7 @@ fi
 
 # Helper functions for option handling.                     -*- Autoconf -*-
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -419,7 +432,7 @@ AC_DEFUN([_AM_IF_OPTION],
 
 # Check to make sure that the build environment is sane.    -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -500,7 +513,7 @@ AC_CONFIG_COMMANDS_PRE(
 rm -f conftest.file
 ])
 
-# Copyright (C) 2009-2014 Free Software Foundation, Inc.
+# Copyright (C) 2009-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -560,7 +573,7 @@ AC_SUBST([AM_BACKSLASH])dnl
 _AM_SUBST_NOTMAKE([AM_BACKSLASH])dnl
 ])
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -588,7 +601,7 @@ fi
 INSTALL_STRIP_PROGRAM="\$(install_sh) -c -s"
 AC_SUBST([INSTALL_STRIP_PROGRAM])])
 
-# Copyright (C) 2006-2014 Free Software Foundation, Inc.
+# Copyright (C) 2006-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -607,7 +620,7 @@ AC_DEFUN([AM_SUBST_NOTMAKE], [_AM_SUBST_NOTMAKE($@)])
 
 # Check how to create a tarball.                            -*- Autoconf -*-
 
-# Copyright (C) 2004-2014 Free Software Foundation, Inc.
+# Copyright (C) 2004-2021 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1088,20 +1101,22 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_CAN_USE_KVFREE_CLEANUP_NO_WRAPPER, [__free anotation for kvfree could be used], [
-		#include <linux/mm.h>       // Provides kvfree() function
-		#include <linux/compiler.h> // Provides __free() annotation
-	],[
-		void *rpc_alloc __free(kvfree) = NULL;
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_KVFREE_IN_SLAB_H, [kvfree prototype is in slab.h], [
 		#include <linux/slab.h>
 	],[
 		kvfree(NULL);
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SLAB_NO_OBJ_EXT, [SLAB_NO_OBJ_EXT is defined], [
+		#include <linux/slab.h>
+	],[
+		#ifdef SLAB_NO_OBJ_EXT
+			return 0;
+		#else
+			#return 1
+		#endif
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_HMM_PFN_TO_PAGE, [have hmm_pfn_to_page], [
@@ -1139,20 +1154,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		int l;
 		l = hmm_range_fault(NULL);
 		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_IB_UMEM_DMABUF_GET_PINNED, [rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined], [
-	#include <rdma/ib_umem.h>
-	],[
-		ib_umem_dmabuf_get_pinned(NULL, 0, 0, 0, 0);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_IS_TCF_POLICE, [is_tcf_police is defined], [
-	#include <net/tc_act/tc_police.h>
-	],[
-		return is_tcf_police(NULL) ? 1 : 0;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN, [udp_tunnel.h has enum UDP_TUNNEL_NIC_INFO_STATIC_IANA_VXLAN], [
@@ -1714,6 +1715,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
                 return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_ESWITCH_STATE, [enum devlink_eswitch_state exists], [
+                #include <uapi/linux/devlink.h>
+        ],[
+                enum devlink_eswitch_state state;
+                return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_FN_OPSTATE, [enum devlink_port_fn_opstate exist], [
                 #include <uapi/linux/devlink.h>
         ],[
@@ -2089,20 +2097,35 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HAS_RATE_TC_BW_SET, [rate tc_bw_set functions are defined], [
+		#include <net/devlink.h>
+	],[
+		struct devlink_ops dlops = {
+			.rate_leaf_tc_bw_set = NULL,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM, [eswitch_encap_mode_set/get is defined with enum], [
 		#include <net/devlink.h>
 		#include <uapi/linux/devlink.h>
-	],[
+
+		int local_eswitch_encap_mode_get(struct devlink *devlink,
+					      enum devlink_eswitch_encap_mode *p_encap_mode);
 		int local_eswitch_encap_mode_get(struct devlink *devlink,
 					      enum devlink_eswitch_encap_mode *p_encap_mode) {
 			return 0;
 		}
 		int local_eswitch_encap_mode_set(struct devlink *devlink,
 					      enum devlink_eswitch_encap_mode encap_mode,
+					      struct netlink_ext_ack *extack);
+		int local_eswitch_encap_mode_set(struct devlink *devlink,
+					      enum devlink_eswitch_encap_mode encap_mode,
 					      struct netlink_ext_ack *extack) {
 			return 0;
 		}
-
+	],[
 		struct devlink_ops dlops = {
 			.eswitch_encap_mode_set = local_eswitch_encap_mode_set,
 			.eswitch_encap_mode_get = local_eswitch_encap_mode_get,
@@ -2297,6 +2320,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS, [rxfh_per_ctx_fields is defined], [
+		#include <linux/ethtool.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.rxfh_per_ctx_fields = 0,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SUPPORTED_COALESCE_PARAM, [supported_coalesce_params is defined], [
 		#include <linux/ethtool.h>
 	],[
@@ -2362,6 +2395,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_SKB_COPY_AND_CRC32C_DATAGRAM_ITER, [skb_copy_and_crc32c_datagram_iter exist], [
+		#include <linux/skbuff.h>
+	],[
+		skb_copy_and_crc32c_datagram_iter(NULL, 0, NULL, 0, NULL);
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NAPI_BUILD_SKB, [linux/skbuff.h napi_build_skb is defined], [
 		#include <linux/skbuff.h>
 	],[
@@ -2390,6 +2430,162 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/skbuff.h>
 	],[
 		skb_frag_off_set(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NET_NETDEV_LOCK_H, [net/netdev_lock.h header exists], [
+		#include <net/netdev_lock.h>
+	],[
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETDEVICE_NETDEV_LOCK, [netdev_lock exists], [
+		#include <linux/netdevice.h>
+	],[
+		netdev_lock(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SET_DEFAULT_D_OP, [set_default_d_op function exists], [
+		#include <linux/dcache.h>
+	],[
+		struct super_block *sb = NULL;
+		const struct dentry_operations *ops = NULL;
+		set_default_d_op(sb, ops);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_FILE_KATTR, [struct file_kattr exists], [
+		#include <linux/fileattr.h>
+	],[
+		struct file_kattr fa;
+		fa.flags = 0;
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_LINUX_PFN_T_H, [linux/pfn_t.h header exists], [
+		#include <linux/pfn_t.h>
+	],[
+		pfn_t pfn;
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_GROUP_CPUS_EVENLY_NUMMASKS, [group_cpus_evenly takes nummasks parameter], [
+		#include <linux/group_cpus.h>
+	],[
+		unsigned int nummasks;
+		struct cpumask *masks = group_cpus_evenly(1, &nummasks);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ADDRESS_SPACE_WRITE_BEGIN_KIOCB, [write_begin takes const struct kiocb *], [
+		#include <linux/fs.h>
+		#include <linux/pagemap.h>
+
+		static int test_write_begin(const struct kiocb *iocb,
+					    struct address_space *mapping,
+					    loff_t pos, unsigned len,
+					    struct folio **foliop, void **fsdata);
+		static int test_write_begin(const struct kiocb *iocb,
+					    struct address_space *mapping,
+					    loff_t pos, unsigned len,
+					    struct folio **foliop, void **fsdata)
+		{
+			return 0;
+		}
+	],[
+		struct address_space_operations aops = {
+			.write_begin = test_write_begin,
+		};
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NET_DEVICE_LOCK_FIELD, [net_device has lock field], [
+		#include <linux/netdevice.h>
+		#include <linux/mutex.h>
+	],[
+		struct net_device dev;
+		dev.lock = (struct mutex){};
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NR_WRITEBACK_TEMP, [NR_WRITEBACK_TEMP enum exists], [
+		#include <linux/mmzone.h>
+	],[
+		enum node_stat_item item = NR_WRITEBACK_TEMP;
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_WRITEBACK_CONTROL_FOR_RECLAIM, [writeback_control has for_reclaim field], [
+		#include <linux/writeback.h>
+	],[
+		struct writeback_control wbc;
+		wbc.for_reclaim = 0;
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_UDP_TUNNEL_NIC_INFO_MAY_SLEEP, [UDP_TUNNEL_NIC_INFO_MAY_SLEEP flag exists], [
+		#include <net/udp_tunnel.h>
+	],[
+		enum udp_tunnel_nic_info_flags flags = UDP_TUNNEL_NIC_INFO_MAY_SLEEP;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED, [ethtool_ops has cap_rss_ctx_supported field], [
+		#include <linux/ethtool.h>
+	],[
+		struct ethtool_ops ops;
+		ops.cap_rss_ctx_supported = true;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_GET_RXFH_FIELDS, [ethtool_ops has get_rxfh_fields callback], [
+		#include <linux/ethtool.h>
+	],[
+		struct ethtool_ops ops = {
+			.get_rxfh_fields = NULL,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_CYCLECOUNTER_READ_NON_CONST, [cyclecounter read callback takes non-const parameter], [
+		#include <linux/timecounter.h>
+
+		static u64 test_read(struct cyclecounter *cc);
+		static u64 test_read(struct cyclecounter *cc)
+		{
+			return 0;
+		}
+	],[
+		struct cyclecounter cc = {
+			.read = test_read,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_INTEGRITY_METADATA_SIZE, [blk_integrity has metadata_size field], [
+		#include <linux/blkdev.h>
+	],[
+		struct blk_integrity bi;
+		bi.metadata_size = 0;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETIF_GET_PORT_PARENT_ID_FUNC, [netif_get_port_parent_id function exists], [
+		#include <linux/netdevice.h>
+	],[
+		struct net_device *dev = NULL;
+		struct netdev_phys_item_id ppid;
+
+		netif_get_port_parent_id(dev, &ppid, false);
 
 		return 0;
 	])
@@ -2530,6 +2726,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 
 		NL_ASSERT_CTX_FITS(int);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NETMEM_DMA_UNMAP_ADDR_SET, [HAVE_NETMEM_DMA_UNMAP_ADDR_SET exists], [
+		#include <net/netmem.h>
+
+	],[
+		#ifdef netmem_dma_unmap_addr_set
+			return 0;
+		#else
+			#return 1
+		#endif
 		return 0;
 	])
 
@@ -3236,7 +3444,7 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEV_GET_PORT_PARENT_ID, [function dev_get_port_parent_id exists], [
+	MLNX_RDMA_TEST_CASE(HAVE_DEV_GET_PORT_PARENT_ID_FUNC, [function dev_get_port_parent_id exists], [
         #include <linux/netdevice.h>
         ],[
                 dev_get_port_parent_id(NULL, NULL, 0);
@@ -3773,6 +3981,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct netlink_callback x;
 
 		x.extack = NULL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NL_SET_ERR_ATTR_MISS, [macro NL_SET_ERR_ATTR_MISS is defined], [
+		#include <linux/netlink.h>
+	],[
+		#ifdef NL_SET_ERR_ATTR_MISS
+			return 0;
+		#else
+			#return
+		#endif
 
 		return 0;
 	])
@@ -4350,6 +4570,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		};
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NLMSG_FOR_EACH_ATTR_TYPE, [macro nlmsg_for_each_attr_type is defined ], [
+		#include <net/netlink.h>
+
+	],[
+		#ifdef nlmsg_for_each_attr_type
+			return 0;
+		#else
+			#return 1
+		#endif
+
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_EVENTFD_SIGNAL_GET_1_PARAM, [linux/eventfd.h has eventfd_signal with 1 param], [
@@ -5195,11 +5427,13 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_ISCSI_CONN_UNBIND, [iscsi_conn_unbind is defined], [
+	MLNX_RDMA_TEST_CASE(HAVE_ISCSI_TRANSPORT_UNBIND_CONN, [struct iscsi_transport has member unbind_conn], [
 		#include <scsi/libiscsi.h>
+		#include <scsi/scsi_transport_iscsi.h>
 	],[
-		iscsi_conn_unbind(NULL, false);
-
+		struct iscsi_transport iscsi_iser_transport = {
+			.unbind_conn = iscsi_conn_unbind,
+		};
 		return 0;
 	])
 
@@ -7240,6 +7474,25 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_ALLOC_WORKQUEUE_NOPROF, [alloc_workqueue_noprof exists], [
+		#include <linux/workqueue.h>
+	],[
+		struct workqueue_struct *wq;
+
+		wq = alloc_workqueue_noprof("test", 0, 1);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ALLOC_WORKQUEUE_MACRO, [alloc_workqueue is a macro], [
+		#include <linux/workqueue.h>
+	],[
+		#ifdef alloc_workqueue
+			return 0;
+		#else
+			#return 1
+		#endif
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_QUEUE_FLAG_STABLE_WRITES, [QUEUE_FLAG_STABLE_WRITES is defined], [
 		#include <linux/blkdev.h>
 	],[
@@ -8802,10 +9055,10 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_MKDIR_RET_INT, [if struct inode_operations->mkdir returns an int], [
+	MLNX_RDMA_TEST_CASE(HAVE_MKDIR_RET_DENTRY, [if struct inode_operations->mkdir returns a dentry], [
 		#include <linux/fs.h>
 
-		static int my_mkdir(struct mnt_idmap *idmap, struct inode *dir, struct dentry *entry, umode_t mode)
+		static struct dentry *my_mkdir(struct mnt_idmap *idmap, struct inode *dir, struct dentry *entry, umode_t mode)
 		{return 0;}
 	],[
 		struct inode_operations ops = {.mkdir = my_mkdir};
@@ -8900,14 +9153,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#else
 			#return 1
 		#endif
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FSPARAM_UID, [if fsparam_uid is defined], [
-		#include <linux/fs_parser.h>
-	],[
-		struct fs_parameter_spec a = fsparam_uid("foo", 0);
 
 		return 0;
 	])
@@ -9173,6 +9418,136 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <linux/pci-epc.h>
 	],[
 		struct pci_epc_features s = {.intx_capable = 1};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VIRTIO_DEVICE_RESET_PREPARE, [virtio_device_reset_prepare is defined], [
+		#include <linux/virtio.h>
+	],[
+		virtio_device_reset_prepare(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FOLIO_INDEX, [folio_index() is defined], [
+		#include <linux/pagemap.h>
+	],[
+		pgoff_t r = folio_index(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INVALID_MNT_IDMAP, [invalid_mnt_idmap is defined], [
+		#include <linux/mnt_idmapping.h>
+	],[
+		struct mnt_idmap *p = &invalid_mnt_idmap;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SB_I_NOIDMAP, [SB_I_NOIDMAP is defined], [
+		#include <uapi/linux/fuse.h>
+	],[
+		unsigned long x = SB_I_NOIDMAP;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_LSMCONTEXT, [struct lsmcontext is defined], [
+		#include <linux/security.h>
+	],[
+		/* On Ubuntu 'struct lsm_context' is named 'struct lsmcontext' for some reason... */
+		struct lsmcontext x = {};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PAGE_GET_LINK_RAW, [page_get_link_raw is defined], [
+		#include <linux/fs.h>
+	],[
+		const char *s = page_get_link_raw(NULL, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FOLIO_MARK_DIRTY_LOCK, [folio_mark_dirty_lock is defined], [
+		#include <linux/mm.h>
+	],[
+		folio_mark_dirty_lock(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_COPY_FOLIO_FROM_ITER, [copy_folio_from_iter is defined], [
+		#include <linux/uio.h>
+	],[
+		size_t r = copy_folio_from_iter(NULL, 0, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_UNPIN_FOLIO, [unpin_folio is defined], [
+		#include <linux/mm.h>
+	],[
+		unpin_folio(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INODE_GET_MTIME, [inode_get_mtime is defined], [
+		#include <linux/fs.h>
+	],[
+		inode_get_mtime(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FILEID_INO64, [FILEID_INO64_GEN is defined], [
+		#include <linux/exportfs.h>
+	],[
+		int x = FILEID_INO64_GEN;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FOLIO_END_READ, [folio_end_read is defined], [
+		#include <linux/pagemap.h>
+	],[
+		folio_end_read(NULL, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SPLICE_COPY_FILE_RANGE, [splice_copy_file_range is defined], [
+		#include <linux/splice.h>
+	],[
+		splice_copy_file_range(NULL, 0, NULL, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_CONST_XATTR_HANDLER, [sb->s_xattr point is double-const], [
+		#include <linux/fs.h>
+	],[
+		struct super_block sb;
+		const struct xattr_handler * const ops;
+
+		sb.s_xattr = &ops;
+
+		return 0;
+	])
+
+	LB_CHECK_SYMBOL_EXPORT([folio_copy],
+		[mm/util.c],
+		[AC_DEFINE(HAVE_FOLIO_COPY_EXPORTED, 1,
+			[folio_copy is exported by the kernel])],
+	[])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEV_NET_RCU, [function dev_net_rcu is defined], [
+		#include <linux/netdevice.h>
+	],[
+		struct net *p = dev_net_rcu(NULL);
 
 		return 0;
 	])

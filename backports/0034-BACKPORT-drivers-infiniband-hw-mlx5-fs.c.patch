@@ -26,7 +26,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/fs.c
  	u32 flags = 0;
  	int priority;
  
-@@ -1937,7 +1940,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
+@@ -1932,7 +1935,7 @@ _get_flow_table(struct mlx5_ib_dev *dev,
  	u16 esw_owner_vhca_id = 0;
  	int max_table_size = 0;
  	u16 vport_idx = 0;
@@ -35,7 +35,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/fs.c
  	u32 flags = 0;
  	u16 vport = 0;
  	int priority;
-@@ -2477,7 +2480,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
+@@ -2472,7 +2475,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD
  {
  	struct mlx5_flow_context flow_context = {.flow_tag =
  		MLX5_FS_DEFAULT_FLOW_TAG};

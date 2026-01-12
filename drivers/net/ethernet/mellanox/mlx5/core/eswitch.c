@@ -927,13 +927,10 @@ static int esw_vport_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 				      vport_num, 1,
 				      vport->info.link_state);
 
-	/* Host PF has its own mac/guid. */
-	if (vport_num) {
-		mlx5_modify_nic_vport_mac_address(esw->dev, vport_num,
-						  vport->info.mac);
-		mlx5_modify_nic_vport_node_guid(esw->dev, vport_num,
-						vport->info.node_guid);
-	}
+	mlx5_query_nic_vport_mac_address(esw->dev, vport_num, true,
+					 vport->info.mac);
+	mlx5_query_nic_vport_node_guid(esw->dev, vport_num, true,
+				       &vport->info.node_guid);
 
 	flags = (vport->info.vlan || vport->info.qos) ?
 		SET_VLAN_STRIP | SET_VLAN_INSERT : 0;
@@ -970,7 +967,7 @@ static void esw_vport_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport
 					      vport_num, 1,
 					      MLX5_VPORT_ADMIN_STATE_DOWN);
 
-	mlx5_esw_qos_vport_disable_locked(vport);
+	mlx5_esw_qos_vport_disable(vport);
 	esw_vport_cleanup_acl(esw, vport);
 }
 
@@ -1039,12 +1036,6 @@ int mlx5_esw_vport_enable(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 		if (ret)
 			goto err_vhca_mapping;
 	}
-
-	/* External controller host PF has factory programmed MAC.
-	 * Read it from the device.
-	 */
-	if (mlx5_core_is_ecpf(esw->dev) && vport_num == MLX5_VPORT_PF)
-		mlx5_query_nic_vport_mac_address(esw->dev, vport_num, true, vport->info.mac);
 
 	esw_vport_change_handle_locked(vport);
 
@@ -2231,6 +2222,9 @@ int mlx5_eswitch_init(struct mlx5_core_dev *dev)
 	refcount_set(&esw->qos.refcnt, 0);
 
 	esw->enabled_vports = 0;
+#ifdef HAVE_DEVLINK_ESWITCH_STATE
+	esw->state = DEVLINK_ESWITCH_STATE_ACTIVE;
+#endif
 	esw->offloads.inline_mode = MLX5_INLINE_MODE_NONE;
 	if (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, reformat) &&
 	    MLX5_CAP_ESW_FLOWTABLE_FDB(dev, decap))
@@ -2688,6 +2682,9 @@ int mlx5_eswitch_get_vport_config(struct mlx5_eswitch *esw,
 	ivi->vf = vport - 1;
 
 	mutex_lock(&esw->state_lock);
+
+	mlx5_query_nic_vport_mac_address(esw->dev, vport, true,
+					 evport->info.mac);
 	ether_addr_copy(ivi->mac, evport->info.mac);
 	ivi->linkstate = evport->info.link_state;
 	ivi->vlan = evport->info.vlan;

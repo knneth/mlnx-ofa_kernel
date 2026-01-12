@@ -4,6 +4,8 @@
 # (ConnectX series) core & netdev driver
 #
 
+GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
+
 subdir-ccflags-y += -I$(src)
 subdir-ccflags-y += -I$(CWD)/net/mlxdevm
 

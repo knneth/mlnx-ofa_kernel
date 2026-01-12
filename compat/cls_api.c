@@ -22,9 +22,6 @@
 #include <net/tc_act/tc_skbedit.h>
 #include <net/tc_act/tc_tunnel_key.h>
 #include <net/tc_act/tc_sample.h>
-#ifdef HAVE_IS_TCF_POLICE
-#include <net/tc_act/tc_police.h>
-#endif
 #include <net/tc_act/tc_ct.h>
 
 int tc_setup_flow_action(struct flow_action *flow_action,
@@ -80,13 +77,6 @@ int tc_setup_flow_action(struct flow_action *flow_action,
 		} else if (is_tcf_csum(act)) {
 			entry->id = FLOW_ACTION_CSUM;
 			entry->csum_flags = tcf_csum_update_flags(act);
-#ifdef HAVE_IS_TCF_POLICE
-		} else if (is_tcf_police(act)) {
-			entry->id = FLOW_ACTION_POLICE;
-			entry->police.burst = tcf_police_tcfp_burst(act);
-			entry->police.rate_bytes_ps =
-				tcf_police_rate_bytes_ps(act);
-#endif
 #ifdef CONFIG_COMPAT_ACT_CT
 		} else if (is_tcf_ct(act)) {
 			entry->id = FLOW_ACTION_CT;

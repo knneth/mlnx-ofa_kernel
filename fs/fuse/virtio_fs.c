@@ -21,6 +21,7 @@
 #include <linux/cleanup.h>
 #include <linux/uio.h>
 #include "fuse_i.h"
+#include "fuse_dev_i.h"
 
 /* Used to help calculate the FUSE connection's max_pages limit for a request's
  * size. Parts of the struct fuse_req are sliced into scattergather lists in
@@ -79,6 +80,7 @@ struct virtio_fs_vq {
 	struct virtio_fs_req *reqs;
 	struct list_head free_reqs; /* requests pool */
 	struct list_head queued_reqs;
+	struct list_head to_send_reqs;
 	struct list_head processing;
 	struct list_head end_reqs;	/* End these requests */
 	struct work_struct dispatch_work;
@@ -86,8 +88,10 @@ struct virtio_fs_vq {
 	bool connected:1;
 	bool initialized:1;
 	bool notify:1;
+	bool during_err_handling:1;
 	struct completion init_comp;
 	long in_flight;
+	long in_flight_err_handling;
 	u32 reqctr; /* The request counter */
 	struct completion in_flight_zero; /* No inflight requests */
 	struct kobject *kobj;
@@ -154,7 +158,8 @@ struct virtio_fs_req_work {
 };
 
 static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
-				 struct virtio_fs_req *fs_req, bool in_flight);
+				 struct virtio_fs_req *fs_req, bool in_flight,
+				 gfp_t gfp);
 static void virtio_fs_notify_send_req(struct virtio_fs *fs);
 static void virtio_fs_notify_send_ack(struct virtio_fs *fs, uint64_t unique, int err);
 static int __virtio_fs_simple_notify_reply(struct virtio_fs *fs, struct fuse_mount *fm,
@@ -217,7 +222,7 @@ static void virtio_fs_free_fsc(struct fs_context *fsc)
 
 static inline unsigned vq_index_to_fsvq_index(struct virtio_fs *fs, unsigned i)
 {
-       return i + (!fs->notify_enabled && i > VQ_HIPRIO);
+	return i + (!fs->notify_enabled && i > VQ_HIPRIO);
 }
 
 static inline struct virtio_fs_vq *vq_to_fsvq(struct virtqueue *vq)
@@ -249,12 +254,25 @@ static inline void inc_in_flight_req(struct virtio_fs_vq *fsvq)
 }
 
 /* Should be called with fsvq->lock held. */
+static inline void inc_in_flight_err_handling_req(struct virtio_fs_vq *fsvq)
+{
+	fsvq->in_flight_err_handling++;
+}
+
+/* Should be called with fsvq->lock held. */
 static inline void dec_in_flight_req(struct virtio_fs_vq *fsvq)
 {
-	WARN_ON(fsvq->in_flight <= 0);
+	WARN_ON_ONCE(fsvq->in_flight <= 0);
 	fsvq->in_flight--;
 	if (!fsvq->in_flight)
 		complete(&fsvq->in_flight_zero);
+}
+
+/* Should be called with fsvq->lock held. */
+static inline void dec_in_flight_err_handling_req(struct virtio_fs_vq *fsvq)
+{
+	WARN_ON_ONCE(fsvq->in_flight_err_handling <= 0);
+	fsvq->in_flight_err_handling--;
 }
 
 static inline struct virtio_fs_req *fsvq_req_index(struct virtio_fs_vq *fsvq, int i)
@@ -349,89 +367,11 @@ static ssize_t cpu_list_show(struct kobject *kobj,
 	return pos + ret;
 }
 
-static ssize_t cpu_list_store(struct kobject *kobj,
-			      struct kobj_attribute *attr,
-			      const char *buf, size_t count)
-{
-	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
-	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
-	int qid = vq_index_to_fsvq_index(fs, fsvq->vq->index);
-	struct cpumask mask;
-	unsigned int cpu;
-	int ret;
-
-	if (qid < VQ_REQUEST) {
-		pr_err("virtio-fs: cannot change hiprio/notify vq cpu_list\n");
-		return -EPERM;
-	}
-
-	cpumask_clear(&mask);
-	ret = cpulist_parse(buf, &mask);
-	if (ret < 0) {
-		pr_err("virtio-fs: failed to parse cpulist %s\n", buf);
-		return -EINVAL;
-	}
-
-	for_each_cpu(cpu, &mask)
-		fs->mq_map[cpu] = qid;
-
-	return count;
-}
-
-static ssize_t irq_affinity_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
-{
-	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
-	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
-	const struct cpumask *mask;
-	unsigned q = fsvq->vq->index;
-
-	if (!fsvq->vq->vdev->config->get_vq_affinity) {
-		pr_err("virtio-fs: fsvq has no get_vq_affinity operation\n");
-		return 0;
-	}
-
-	mask = fsvq->vq->vdev->config->get_vq_affinity(fsvq->vq->vdev, q);
-	if (!mask) {
-		pr_err("virtio-fs: get_vq_affinity returned no masks\n");
-		return 0;
-	}
-
-	return cpumap_print_list_to_buf(buf, mask, 0, PAGE_SIZE);
-}
-
-static ssize_t irq_affinity_store(struct kobject *kobj,
-				  struct kobj_attribute *attr,
-				  const char *buf, size_t count)
-{
-	struct virtio_fs *fs = container_of(kobj->parent->parent, struct virtio_fs, kobj);
-	struct virtio_fs_vq *fsvq = virtio_fs_kobj_to_vq(fs, kobj);
-	int qid = vq_index_to_fsvq_index(fs, fsvq->vq->index);
-	struct cpumask mask;
-	int ret;
-
-	if (qid < VQ_REQUEST)
-		return -EINVAL;
-
-	cpumask_clear(&mask);
-	ret = cpulist_parse(buf, &mask);
-	if (ret < 0) {
-		pr_err("virtio-fs: failed to parse cpulist %s\n", buf);
-		return -EINVAL;
-	}
-
-	ret = virtqueue_set_affinity(fsvq->vq, &mask);
-
-	return ret ? ret : count;
-}
-
-static struct kobj_attribute virtio_fs_vq_cpu_list_attr = __ATTR_RW(cpu_list);
-static struct kobj_attribute virtio_fs_vq_irq_affinity_attr = __ATTR_RW(irq_affinity);
+static struct kobj_attribute virtio_fs_vq_cpu_list_attr = __ATTR_RO(cpu_list);
 
 static struct attribute *virtio_fs_vq_attrs[] = {
 	&virtio_fs_vq_name_attr.attr,
 	&virtio_fs_vq_cpu_list_attr.attr,
-	&virtio_fs_vq_irq_affinity_attr.attr,
 	NULL
 };
 
@@ -652,6 +592,21 @@ out_stop:
 	return ret;
 }
 
+static void virtio_fs_to_send_reqs(struct virtio_fs_vq *fsvq)
+{
+	struct virtio_fs_req *fs_req, *next;
+
+	if (list_empty(&fsvq->to_send_reqs))
+		return;
+
+	list_for_each_entry_safe(fs_req, next, &fsvq->to_send_reqs, entry) {
+		dec_in_flight_err_handling_req(fsvq);
+		inc_in_flight_req(fsvq);
+		list_move_tail(&fs_req->entry, &fsvq->queued_reqs);
+	}
+	schedule_work(&fsvq->dispatch_work);
+}
+
 static void virtio_fs_start_all_queues(struct virtio_fs *fs)
 {
 	struct virtio_fs_vq *fsvq;
@@ -664,6 +619,8 @@ static void virtio_fs_start_all_queues(struct virtio_fs *fs)
 
 		spin_lock(&fsvq->lock);
 		fsvq->connected = true;
+		fsvq->during_err_handling = false;
+		virtio_fs_to_send_reqs(fsvq);
 		spin_unlock(&fsvq->lock);
 	}
 }
@@ -1075,6 +1032,8 @@ static void virtio_fs_request_dispatch_work(struct work_struct *work)
 
 	/* Dispatch pending requests */
 	while (1) {
+		unsigned int flags;
+
 		spin_lock(&fsvq->lock);
 		fs_req = list_first_entry_or_null(&fsvq->queued_reqs,
 						  struct virtio_fs_req, entry);
@@ -1085,14 +1044,24 @@ static void virtio_fs_request_dispatch_work(struct work_struct *work)
 		list_del_init(&fs_req->entry);
 		spin_unlock(&fsvq->lock);
 
-		ret = virtio_fs_enqueue_req(fsvq, fs_req, true);
+		flags = memalloc_nofs_save();
+		ret = virtio_fs_enqueue_req(fsvq, fs_req, true, GFP_KERNEL);
+		memalloc_nofs_restore(flags);
 		if (ret < 0) {
 			if (ret == -ENOSPC) {
 				spin_lock(&fsvq->lock);
 				list_add_tail(&fs_req->entry, &fsvq->queued_reqs);
 				spin_unlock(&fsvq->lock);
 				return;
+			} else if (ret == -EAGAIN) {
+				spin_lock(&fsvq->lock);
+				list_add_tail(&fs_req->entry, &fsvq->to_send_reqs);
+				dec_in_flight_req(fsvq);
+				inc_in_flight_err_handling_req(fsvq);
+				spin_unlock(&fsvq->lock);
+				continue;
 			}
+
 			fs_req->req.out.h.error = ret;
 			spin_lock(&fsvq->lock);
 			dec_in_flight_req(fsvq);
@@ -1186,7 +1155,7 @@ static void virtio_fs_hiprio_dispatch_work(struct work_struct *work)
 }
 
 /* Allocate and copy args into req->argbuf */
-static int copy_args_to_argbuf(struct fuse_req *req)
+static int copy_args_to_argbuf(struct fuse_req *req, gfp_t gfp)
 {
 	struct fuse_args *args = req->args;
 	unsigned int offset = 0;
@@ -1200,7 +1169,7 @@ static int copy_args_to_argbuf(struct fuse_req *req)
 	len = fuse_len_args(num_in, (struct fuse_arg *) args->in_args) +
 	      fuse_len_args(num_out, args->out_args);
 
-	req->argbuf = kmalloc(len, GFP_ATOMIC);
+	req->argbuf = kmalloc(len, gfp);
 	if (!req->argbuf)
 		return -ENOMEM;
 
@@ -1260,7 +1229,7 @@ static void virtio_fs_request_complete(struct fuse_req *req,
 	struct fuse_args *args;
 	struct fuse_args_pages *ap;
 	unsigned int len, i, thislen;
-	struct page *page;
+	struct folio *folio;
 
 	/*
 	 * TODO verify that server properly follows FUSE protocol
@@ -1272,12 +1241,12 @@ static void virtio_fs_request_complete(struct fuse_req *req,
 	if (args->out_pages && args->page_zeroing) {
 		len = args->out_args[args->out_numargs - 1].size;
 		ap = container_of(args, typeof(*ap), args);
-		for (i = 0; i < ap->num_pages; i++) {
+		for (i = 0; i < ap->num_folios; i++) {
 			thislen = ap->descs[i].length;
 			if (len < thislen) {
 				WARN_ON(ap->descs[i].offset);
-				page = ap->pages[i];
-				zero_user_segment(page, len, thislen);
+				folio = ap->folios[i];
+				folio_zero_segment(folio, len, thislen);
 				len = 0;
 			} else {
 				len -= thislen;
@@ -1406,6 +1375,7 @@ static void virtio_fs_init_vq(struct virtio_fs_vq *fsvq, char *name,
 	INIT_LIST_HEAD(&fsvq->free_reqs);
 	INIT_LIST_HEAD(&fsvq->processing);
 	INIT_LIST_HEAD(&fsvq->queued_reqs);
+	INIT_LIST_HEAD(&fsvq->to_send_reqs);
 	INIT_LIST_HEAD(&fsvq->end_reqs);
 	init_completion(&fsvq->in_flight_zero);
 	init_completion(&fsvq->init_comp);
@@ -1435,12 +1405,78 @@ static void virtio_fs_cleanup_vqs(struct virtio_device *vdev)
 
 /* Initialize virtqueues */
 static int virtio_fs_setup_vqs(struct virtio_device *vdev,
-			       struct virtio_fs *fs)
+			       struct virtio_fs *fs, bool alloc_reqs)
 {
 	struct virtqueue_info *vqs_info;
-	struct virtqueue **vqs;
 	unsigned int info_idx = 0;
+	struct virtqueue **vqs;
 	unsigned int vq_nvqs;
+	unsigned int i;
+	int ret = 0;
+
+	vq_nvqs = 1 + fs->notify_enabled + fs->num_request_queues;
+	vqs = kmalloc_array(vq_nvqs, sizeof(vqs[VQ_HIPRIO]), GFP_KERNEL);
+	vqs_info = kcalloc(vq_nvqs, sizeof(*vqs_info), GFP_KERNEL);
+	if (!vqs || !vqs_info) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	/* Initialize the hiprio/forget request virtqueue */
+	vqs_info[info_idx].callback = virtio_fs_vq_done;
+	vqs_info[info_idx].name = fs->vqs[VQ_HIPRIO].name;
+	info_idx++;
+
+	if (fs->notify_enabled) {
+		/* Initialize the notify request virtqueue */
+		vqs_info[info_idx].callback = virtio_fs_vq_done;
+		vqs_info[info_idx].name = fs->vqs[VQ_NOTIFY].name;
+		info_idx++;
+	}
+
+	/* Initialize the requests virtqueues */
+	for (i = VQ_REQUEST; i < fs->nvqs; i++) {
+		vqs_info[info_idx].callback = virtio_fs_vq_done;
+		vqs_info[info_idx].name = fs->vqs[i].name;
+		info_idx++;
+	}
+
+	/* Leaving irq descriptor NULL will allow for dynamic remapping */
+	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, NULL);
+	if (ret < 0)
+		goto out;
+
+	/* Install vqs but skip notify if not enabled */
+	i = info_idx = 0;
+	fs->vqs[i++].vq = vqs[info_idx++];
+	fs->vqs[i++].vq = fs->notify_enabled ? vqs[info_idx++] : NULL;
+
+	/* Rest are requests queues */
+	for (; i < fs->nvqs; i++, info_idx++)
+		fs->vqs[i].vq = vqs[info_idx];
+
+	if (alloc_reqs) {
+		ret = virtio_fs_alloc_all_queues_requests(fs);
+		if (ret)
+			goto out_del_vqs;
+	}
+
+	kfree(vqs_info);
+	kfree(vqs);
+	return 0;
+
+out_del_vqs:
+	virtio_reset_device(vdev);
+	virtio_fs_cleanup_vqs(vdev);
+out:
+	kfree(vqs_info);
+	kfree(vqs);
+	return ret;
+}
+
+static int virtio_fs_setup_fsvqs(struct virtio_device *vdev,
+				 struct virtio_fs *fs)
+{
 	unsigned int i;
 	int ret = 0;
 
@@ -1470,77 +1506,38 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
 	if (!fs->vqs)
 		return -ENOMEM;
 
-	vq_nvqs = 1 + fs->notify_enabled + fs->num_request_queues;
-	vqs = kmalloc_array(vq_nvqs, sizeof(vqs[VQ_HIPRIO]), GFP_KERNEL);
 	fs->mq_map = kcalloc_node(nr_cpu_ids, sizeof(*fs->mq_map), GFP_KERNEL,
 					dev_to_node(&vdev->dev));
-	vqs_info = kcalloc(vq_nvqs, sizeof(*vqs_info), GFP_KERNEL);
-	if (!vqs || !vqs_info || !fs->mq_map) {
+	if (!fs->mq_map) {
 		ret = -ENOMEM;
-		goto out;
+		goto err;
 	}
 
-	/* Initialize the hiprio/forget request virtqueue */
-	vqs_info[info_idx].callback = virtio_fs_vq_done;
-	virtio_fs_init_vq(&fs->vqs[info_idx], "hiprio", VQ_HIPRIO);
-	vqs_info[info_idx].name = fs->vqs[VQ_HIPRIO].name;
-	info_idx++;
+	virtio_fs_init_vq(&fs->vqs[VQ_HIPRIO], "hiprio", VQ_HIPRIO);
 
-	if (fs->notify_enabled) {
-		/* Initialize the notify request virtqueue */
-		vqs_info[info_idx].callback = virtio_fs_vq_done;
+	if (fs->notify_enabled)
 		virtio_fs_init_vq(&fs->vqs[VQ_NOTIFY], "notify", VQ_NOTIFY);
-		vqs_info[info_idx].name = fs->vqs[VQ_NOTIFY].name;
-		info_idx++;
-	}
 
-
-	/* Initialize the requests virtqueues */
 	for (i = VQ_REQUEST; i < fs->nvqs; i++) {
 		char vq_name[VQ_NAME_LEN];
 
 		snprintf(vq_name, VQ_NAME_LEN, "requests.%u", i - VQ_REQUEST);
 		virtio_fs_init_vq(&fs->vqs[i], vq_name, VQ_REQUEST);
-		vqs_info[info_idx].callback = virtio_fs_vq_done;
-		vqs_info[info_idx].name = fs->vqs[i].name;
-		info_idx++;
 	}
 
-	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, NULL);
-	if (ret < 0)
-		goto out;
-
-	/* Install vqs but skip notify if not enabled */
-	i = info_idx = 0;
-	fs->vqs[i++].vq = vqs[info_idx++];
-	fs->vqs[i++].vq = fs->notify_enabled ? vqs[info_idx++] : NULL;
-
-	/* Rest are requests queues */
-	for (; i < fs->nvqs; i++, info_idx++)
-		fs->vqs[i].vq = vqs[info_idx];
-
-	ret = virtio_fs_alloc_all_queues_requests(fs);
+	ret = virtio_fs_setup_vqs(vdev, fs, true);
 	if (ret)
-		goto out_del_vqs;
+		goto err;
 
 	virtio_fs_start_all_queues(fs);
 
-	kfree(vqs_info);
-	kfree(vqs);
 	return 0;
 
-out_del_vqs:
-	virtio_reset_device(vdev);
-	virtio_fs_cleanup_vqs(vdev);
-out:
-	kfree(vqs_info);
-	kfree(vqs);
-	if (ret) {
-		kfree(fs->vqs);
-		kfree(fs->mq_map);
-		fs->vqs = NULL;
-		fs->mq_map = NULL;
-	}
+err:
+	kfree(fs->mq_map);
+	kfree(fs->vqs);
+	fs->mq_map = NULL;
+	fs->vqs = NULL;
 	return ret;
 }
 
@@ -1676,7 +1673,7 @@ static int virtio_fs_probe(struct virtio_device *vdev)
 	if (ret < 0)
 		goto out;
 
-	ret = virtio_fs_setup_vqs(vdev, fs);
+	ret = virtio_fs_setup_fsvqs(vdev, fs);
 	if (ret < 0)
 		goto out;
 
@@ -1707,7 +1704,7 @@ out:
 	return ret;
 }
 
-static void virtio_fs_stop_all_queues(struct virtio_fs *fs)
+static void virtio_fs_stop_all_queues(struct virtio_fs *fs, bool err_handling)
 {
 	struct virtio_fs_vq *fsvq;
 	int i;
@@ -1719,6 +1716,7 @@ static void virtio_fs_stop_all_queues(struct virtio_fs *fs)
 
 		spin_lock(&fsvq->lock);
 		fsvq->connected = false;
+		fsvq->during_err_handling = err_handling;
 		spin_unlock(&fsvq->lock);
 	}
 }
@@ -1734,7 +1732,7 @@ static void virtio_fs_remove(struct virtio_device *vdev)
 	sysfs_remove_link(&fs->kobj, "device");
 	kobject_put(fs->mqs_kobj);
 	kobject_del(&fs->kobj);
-	virtio_fs_stop_all_queues(fs);
+	virtio_fs_stop_all_queues(fs, false);
 	virtio_fs_drain_all_queues_locked(fs);
 	virtio_reset_device(vdev);
 
@@ -1766,6 +1764,45 @@ static int virtio_fs_restore(struct virtio_device *vdev)
 }
 #endif /* CONFIG_PM_SLEEP */
 
+static int virtio_fs_reset_prepare(struct virtio_device *vdev)
+{
+	struct virtio_fs *fs = vdev->priv;
+
+	mutex_lock(&virtio_fs_mutex);
+
+	/* Ensure no requests in virtqueues before deleting vqs. */
+	virtio_fs_stop_all_queues(fs, true);
+	virtio_fs_drain_all_queues_locked(fs);
+
+	/* Ensure we don't receive any more interrupts */
+	virtio_reset_device(vdev);
+
+	virtio_fs_cleanup_vqs(vdev);
+
+	mutex_unlock(&virtio_fs_mutex);
+
+	return 0;
+}
+
+static int virtio_fs_reset_done(struct virtio_device *vdev)
+{
+	struct virtio_fs *fs = vdev->priv;
+	int ret;
+
+	mutex_lock(&virtio_fs_mutex);
+	ret = virtio_fs_setup_vqs(vdev, fs, false);
+	if (ret) {
+		mutex_unlock(&virtio_fs_mutex);
+		return ret;
+	}
+
+	virtio_fs_start_all_queues(fs);
+	virtio_device_ready(vdev);
+	mutex_unlock(&virtio_fs_mutex);
+
+	return 0;
+}
+
 static const struct virtio_device_id id_table[] = {
 	{ VIRTIO_ID_FS, VIRTIO_DEV_ANY_ID },
 	{},
@@ -1786,6 +1823,8 @@ static struct virtio_driver virtio_fs_driver = {
 	.freeze			= virtio_fs_freeze,
 	.restore		= virtio_fs_restore,
 #endif
+	.reset_prepare		= virtio_fs_reset_prepare,
+	.reset_done		= virtio_fs_reset_done,
 };
 
 #define FUSE_REQ_ID_STEP (1ULL << 1)
@@ -1835,15 +1874,15 @@ static void virtio_fs_send_forget(struct fuse_mount *fm, struct fuse_forget_link
 }
 
 /* Count number of scatter-gather elements required */
-static unsigned int sg_count_fuse_pages(struct fuse_page_desc *page_descs,
-				       unsigned int num_pages,
-				       unsigned int total_len)
+static unsigned int sg_count_fuse_folios(struct fuse_folio_desc *folio_descs,
+					 unsigned int num_folios,
+					 unsigned int total_len)
 {
 	unsigned int i;
 	unsigned int this_len;
 
-	for (i = 0; i < num_pages && total_len; i++) {
-		this_len =  min(page_descs[i].length, total_len);
+	for (i = 0; i < num_folios && total_len; i++) {
+		this_len =  min(folio_descs[i].length, total_len);
 		total_len -= this_len;
 	}
 
@@ -1865,8 +1904,8 @@ static unsigned int sg_count_fuse_req(struct fuse_req *req)
 
 	if (args->in_pages) {
 		size = args->in_args[args->in_numargs - 1].size;
-		total_sgs += sg_count_fuse_pages(ap->descs, ap->num_pages,
-						 size);
+		total_sgs += sg_count_fuse_folios(ap->descs, ap->num_folios,
+						  size);
 	}
 
 	if (!test_bit(FR_ISREPLY, &req->flags))
@@ -1879,27 +1918,27 @@ static unsigned int sg_count_fuse_req(struct fuse_req *req)
 
 	if (args->out_pages) {
 		size = args->out_args[args->out_numargs - 1].size;
-		total_sgs += sg_count_fuse_pages(ap->descs, ap->num_pages,
-						 size);
+		total_sgs += sg_count_fuse_folios(ap->descs, ap->num_folios,
+						  size);
 	}
 
 	return total_sgs;
 }
 
-/* Add pages to scatter-gather list and return number of elements used */
-static unsigned int sg_init_fuse_pages(struct scatterlist *sg,
-				       struct page **pages,
-				       struct fuse_page_desc *page_descs,
-				       unsigned int num_pages,
-				       unsigned int total_len)
+/* Add folios to scatter-gather list and return number of elements used */
+static unsigned int sg_init_fuse_folios(struct scatterlist *sg,
+					struct folio **folios,
+					struct fuse_folio_desc *folio_descs,
+					unsigned int num_folios,
+				        unsigned int total_len)
 {
 	unsigned int i;
 	unsigned int this_len;
 
-	for (i = 0; i < num_pages && total_len; i++) {
+	for (i = 0; i < num_folios && total_len; i++) {
 		sg_init_table(&sg[i], 1);
-		this_len =  min(page_descs[i].length, total_len);
-		sg_set_page(&sg[i], pages[i], this_len, page_descs[i].offset);
+		this_len =  min(folio_descs[i].length, total_len);
+		sg_set_folio(&sg[i], folios[i], this_len, folio_descs[i].offset);
 		total_len -= this_len;
 	}
 
@@ -1924,10 +1963,10 @@ static unsigned int sg_init_fuse_args(struct scatterlist *sg,
 		sg_init_one(&sg[total_sgs++], argbuf, len);
 
 	if (argpages)
-		total_sgs += sg_init_fuse_pages(&sg[total_sgs],
-						ap->pages, ap->descs,
-						ap->num_pages,
-						args[numargs - 1].size);
+		total_sgs += sg_init_fuse_folios(&sg[total_sgs],
+						 ap->folios, ap->descs,
+						 ap->num_folios,
+						 args[numargs - 1].size);
 
 	if (len_used)
 		*len_used = len;
@@ -1937,7 +1976,8 @@ static unsigned int sg_init_fuse_args(struct scatterlist *sg,
 
 /* Add a request to a virtqueue and kick the device */
 static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
-				 struct virtio_fs_req *fs_req, bool in_flight)
+				 struct virtio_fs_req *fs_req, bool in_flight,
+				 gfp_t gfp)
 {
 	/* requests need at least 4 elements */
 	struct scatterlist *stack_sgs[6];
@@ -1961,8 +2001,8 @@ static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
 	/* Does the sglist fit on the stack? */
 	total_sgs = sg_count_fuse_req(req);
 	if (total_sgs > ARRAY_SIZE(stack_sgs)) {
-		sgs = kmalloc_array(total_sgs, sizeof(sgs[0]), GFP_ATOMIC);
-		sg = kmalloc_array(total_sgs, sizeof(sg[0]), GFP_ATOMIC);
+		sgs = kmalloc_array(total_sgs, sizeof(sgs[0]), gfp);
+		sg = kmalloc_array(total_sgs, sizeof(sg[0]), gfp);
 		if (!sgs || !sg) {
 			ret = -ENOMEM;
 			goto out;
@@ -1970,7 +2010,7 @@ static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
 	}
 
 	/* Use a bounce buffer since stack args cannot be mapped */
-	ret = copy_args_to_argbuf(req);
+	ret = copy_args_to_argbuf(req, gfp);
 	if (ret < 0)
 		goto out;
 
@@ -2001,8 +2041,11 @@ static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
 	spin_lock(&fsvq->lock);
 
 	if (!fsvq->connected) {
+		if (fsvq->during_err_handling)
+			ret = -EAGAIN;
+		else
+			ret = -ENOTCONN;
 		spin_unlock(&fsvq->lock);
-		ret = -ENOTCONN;
 		goto out;
 	}
 
@@ -2068,7 +2111,7 @@ static void virtio_fs_req_send_async(struct virtio_fs_req *fs_req)
 		 fuse_len_args(req->args->out_numargs, req->args->out_args),
 		 fsvq->vq->index);
 
-	ret = virtio_fs_enqueue_req(fsvq, fs_req, false);
+	ret = virtio_fs_enqueue_req(fsvq, fs_req, false, GFP_ATOMIC);
 	if (ret < 0) {
 		if (ret == -ENOSPC) {
 			/*
@@ -2078,6 +2121,12 @@ static void virtio_fs_req_send_async(struct virtio_fs_req *fs_req)
 			spin_lock(&fsvq->lock);
 			list_add_tail(&fs_req->entry, &fsvq->queued_reqs);
 			inc_in_flight_req(fsvq);
+			spin_unlock(&fsvq->lock);
+			return;
+		} else if (ret == -EAGAIN) {
+			spin_lock(&fsvq->lock);
+			list_add_tail(&fs_req->entry, &fsvq->to_send_reqs);
+			inc_in_flight_err_handling_req(fsvq);
 			spin_unlock(&fsvq->lock);
 			return;
 		}
@@ -2289,14 +2338,12 @@ static void virtio_fs_conn_destroy(struct fuse_mount *fm)
 	spin_unlock(&fsvq->lock);
 	virtio_fs_drain_all_queues(vfs);
 
-	/* fuse_conn_destroy(fm); */
-
 	/* fuse_conn_destroy() must have sent destroy. Stop all queues
 	 * and drain one more time and free fuse devices. Freeing fuse
 	 * devices will drop their reference on fuse_conn and that in
 	 * turn will drop its reference on virtio_fs object.
 	 */
-	virtio_fs_stop_all_queues(vfs);
+	virtio_fs_stop_all_queues(vfs, false);
 	virtio_fs_drain_all_queues(vfs);
 	virtio_fs_free_devs(vfs);
 }
@@ -2595,6 +2642,7 @@ static int virtio_fs_get_tree(struct fs_context *fsc)
 	fc->delete_stale = true;
 	fc->auto_submounts = true;
 	fc->sync_fs = true;
+	fc->use_pages_for_kvec_io = true;
 
 	/* Tell FUSE to split requests that exceed the virtqueue's size */
 	fc->max_pages_limit = min_t(unsigned int, fc->max_pages_limit,
@@ -2653,6 +2701,7 @@ static struct file_system_type virtio_fs_type = {
 	.name		= "virtiofs",
 	.init_fs_context = virtio_fs_init_fs_context,
 	.kill_sb	= virtio_kill_sb,
+	.fs_flags	= FS_ALLOW_IDMAP,
 };
 
 static int virtio_fs_uevent(const struct kobject *kobj, struct kobj_uevent_env *env)
@@ -2686,12 +2735,12 @@ static int __init virtio_fs_init(void)
 {
 	int ret;
 
-	pr_info("virtio-fs: Loading NVIDIA-virtiofs +mq +lockless +nvq +gds\n");
+	pr_info("virtio-fs: Loading NVIDIA-virtiofs +mq +lockless +nvq +flr +gds\n");
 
-	fuse_inode_cachep = kmem_cache_create("fuse_inode",
-					      sizeof(struct fuse_inode), 0,
-					      SLAB_HWCACHE_ALIGN|SLAB_ACCOUNT|SLAB_RECLAIM_ACCOUNT,
-					      fuse_inode_init_once);
+	fuse_inode_cachep = kmem_cache_create("nvidiavfs_inode",
+                                      sizeof(struct fuse_inode), 0,
+                                      SLAB_HWCACHE_ALIGN|SLAB_ACCOUNT|SLAB_RECLAIM_ACCOUNT,
+                                      fuse_inode_init_once);
 
 	if (!fuse_inode_cachep)
 		return -ENOMEM;
@@ -2719,6 +2768,7 @@ sysfs_exit:
 	virtio_fs_sysfs_exit();
 cache_cleanup:
 	kmem_cache_destroy(fuse_inode_cachep);
+
 	return ret;
 }
 module_init(virtio_fs_init);

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 3 +--
- 1 file changed, 1 insertion(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
@@ -16,7 +16,17 @@ Subject: [PATCH] BACKPORT:
  struct mlx5e_ipsec_hw_stats {
  	u64 ipsec_rx_pkts;
  	u64 ipsec_rx_bytes;
-@@ -305,8 +306,6 @@ struct mlx5e_ipsec_pol_entry {
+@@ -275,6 +276,9 @@ struct mlx5e_ipsec_limits {
+ struct mlx5e_ipsec_sa_entry {
+ 	struct mlx5e_ipsec_esn_state esn_state;
+ 	struct xfrm_state *x;
++#ifdef HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE
++	struct net_device *dev;
++#endif
+ 	struct mlx5e_ipsec *ipsec;
+ 	struct mlx5_accel_esp_xfrm_attrs attrs;
+ 	void (*set_iv_op)(struct sk_buff *skb, struct xfrm_state *x,
+@@ -305,8 +309,6 @@ struct mlx5e_ipsec_pol_entry {
  	struct mlx5_accel_pol_xfrm_attrs attrs;
  };
  

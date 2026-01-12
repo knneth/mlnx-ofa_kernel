@@ -5,6 +5,7 @@
 #define __MLX5_ESW_QOS_H__
 
 #include <mlxdevm_ext.h>
+#include <net/mlxdevm.h>
 
 #ifdef CONFIG_MLX5_ESWITCH
 
@@ -22,6 +23,10 @@ struct mlx5_qos_domain {
 enum sched_node_type {
 	SCHED_NODE_TYPE_VPORTS_TSAR,
 	SCHED_NODE_TYPE_VPORT,
+	SCHED_NODE_TYPE_TC_ARBITER_TSAR,
+	SCHED_NODE_TYPE_RATE_LIMITER,
+	SCHED_NODE_TYPE_VPORT_TC,
+	SCHED_NODE_TYPE_VPORTS_TC_TSAR,
 };
 
 struct mlx5_esw_sched_node {
@@ -46,6 +51,10 @@ struct mlx5_esw_sched_node {
 	struct mlx5_vport *vport;
 	/* Level in the hierarchy. The root node level is 1. */
 	u8 level;
+	/* Valid only when this node represents a traffic class. */
+	u8 tc;
+	/* Valid only for a TC arbiter node or vport TC arbiter. */
+	u32 tc_bw[DEVLINK_RATE_TCS_MAX];
 
 	/* sysfs group related fields */
 	struct kobject kobj;
@@ -89,7 +98,7 @@ esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 node_id,
 
 int mlx5_esw_qos_set_vport_rate(struct mlx5_vport *evport, u32 max_rate, u32 min_rate);
 bool mlx5_esw_qos_get_vport_rate(struct mlx5_vport *vport, u32 *max_rate, u32 *min_rate);
-void mlx5_esw_qos_vport_disable_locked(struct mlx5_vport *vport);
+void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
 
 void mlx5_esw_qos_vport_qos_free(struct mlx5_vport *vport);
 u32 mlx5_esw_qos_vport_get_sched_elem_ix(const struct mlx5_vport *vport);
@@ -110,6 +119,10 @@ int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void
 					    u64 tx_share, struct netlink_ext_ack *extack);
 int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack);
+int mlx5_esw_devlink_rate_leaf_tc_bw_set(struct devlink_rate *rate_node,
+					 void *priv,
+					 u32 *tc_bw,
+					 struct netlink_ext_ack *extack);
 int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack);
 int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *priv,
@@ -126,6 +139,14 @@ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
 					  struct devlink_rate *parent,
 					  void *priv, void *parent_priv,
 					  struct netlink_ext_ack *extack);
+int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
+					 void *priv,
+					 u32 *tc_bw,
+					 struct netlink_ext_ack *extack);
+int mlx5_esw_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
+				      void *priv,
+				      u32 *tc_bw,
+				      struct netlink_ext_ack *extack);
 #endif
 
 #endif

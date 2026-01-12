@@ -1,6 +1,7 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
 
+Change-Id: I32706600158ee81196a203191a5adca89c65b898
 ---
  drivers/infiniband/hw/mlx5/devx.c | 26 +++++++++++++++++++++++++-
  1 file changed, 25 insertions(+), 1 deletion(-)
@@ -17,21 +18,21 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
  #include <linux/xarray.h>
  
  #define UVERBS_MODULE_NAME mlx5_ib
-@@ -2251,6 +2254,7 @@ static int devx_umem_get(struct mlx5_ib_
+@@ -2252,6 +2255,7 @@ static int devx_umem_get(struct mlx5_ib_
  	if (err)
  		return err;
  
-+#ifdef HAVE_IB_UMEM_DMABUF_GET_PINNED
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
  	if (uverbs_attr_is_valid(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_DMABUF_FD)) {
  		struct ib_umem_dmabuf *umem_dmabuf;
  		int dmabuf_fd;
-@@ -2265,8 +2269,14 @@ static int devx_umem_get(struct mlx5_ib_
+@@ -2266,8 +2270,14 @@ static int devx_umem_get(struct mlx5_ib_
  		if (IS_ERR(umem_dmabuf))
  			return PTR_ERR(umem_dmabuf);
  		obj->umem = &umem_dmabuf->umem;
 -	} else {
-+	} else 
-+#endif
++	} else
++#endif	/* HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS */
 +	{
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
  		obj->umem = ib_umem_get_peer(&dev->ib_dev, addr, size, access_flags, 0);
@@ -41,7 +42,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
  		if (IS_ERR(obj->umem))
  			return PTR_ERR(obj->umem);
  	}
-@@ -2556,7 +2566,11 @@ static void dispatch_event_fd(struct lis
+@@ -2557,7 +2567,11 @@ static void dispatch_event_fd(struct lis
  
  	list_for_each_entry_rcu(item, fd_list, xa_list) {
  		if (item->eventfd)
@@ -53,7 +54,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
  		else
  			deliver_event(item, data);
  	}
-@@ -2813,6 +2827,9 @@ static const struct file_operations devx
+@@ -2814,6 +2828,9 @@ static const struct file_operations devx
  	.read	 = devx_async_cmd_event_read,
  	.poll    = devx_async_cmd_event_poll,
  	.release = uverbs_uobject_fd_release,
@@ -63,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
  };
  
  static ssize_t devx_async_event_read(struct file *filp, char __user *buf,
-@@ -2820,7 +2837,11 @@ static ssize_t devx_async_event_read(str
+@@ -2821,7 +2838,11 @@ static ssize_t devx_async_event_read(str
  {
  	struct devx_async_event_file *ev_file = filp->private_data;
  	struct devx_event_subscription *event_sub;
@@ -75,7 +76,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/devx.c
  	int ret = 0;
  	size_t eventsz;
  	bool omit_data;
-@@ -2927,6 +2948,9 @@ static const struct file_operations devx
+@@ -2928,6 +2949,9 @@ static const struct file_operations devx
  	.read	 = devx_async_event_read,
  	.poll    = devx_async_event_poll,
  	.release = uverbs_uobject_fd_release,

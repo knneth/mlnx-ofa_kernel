@@ -33,7 +33,7 @@ Subject: [PATCH] BACKPORT:
  	priv->num_ports--;
  }
  
-@@ -444,12 +452,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
+@@ -446,12 +454,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
  
  	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
  		skb->pkt_type = PACKET_HOST;

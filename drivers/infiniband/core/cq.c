@@ -324,6 +324,11 @@ void ib_free_cq(struct ib_cq *cq)
 	if (WARN_ON_ONCE(cq->cqe_used))
 		return;
 
+	if (cq->device->ops.pre_destroy_cq) {
+		ret = cq->device->ops.pre_destroy_cq(cq);
+		WARN_ONCE(ret, "Disable of kernel CQ shouldn't fail");
+	}
+
 	switch (cq->poll_ctx) {
 	case IB_POLL_DIRECT:
 		break;
@@ -340,7 +345,10 @@ void ib_free_cq(struct ib_cq *cq)
 
 	rdma_dim_destroy(cq);
 	trace_cq_free(cq);
-	ret = cq->device->ops.destroy_cq(cq, NULL);
+	if (cq->device->ops.post_destroy_cq)
+		ret = cq->device->ops.post_destroy_cq(cq);
+	else
+		ret = cq->device->ops.destroy_cq(cq, NULL);
 	WARN_ONCE(ret, "Destroy of kernel CQ shouldn't fail");
 	rdma_restrack_del(&cq->res);
 	kfree(cq->wc);

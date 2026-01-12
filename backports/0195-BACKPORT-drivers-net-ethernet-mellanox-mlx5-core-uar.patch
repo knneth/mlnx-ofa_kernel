@@ -43,7 +43,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/uar.c
  	if (!up->fp_bitmap)
  		goto error1;
  
-@@ -358,9 +372,13 @@ static int mlx5_get_pcie_dev_link_caps(s
+@@ -361,9 +375,13 @@ static int mlx5_get_pcie_dev_link_caps(s
  		*width = (lnkcap1 & PCI_EXP_LNKCAP_MLW) >>
  			PCI_EXP_LNKCAP_MLW_SHIFT;
  		if (*speed == PCI_SPEED_UNKNOWN) { /* pre-r3.0 */

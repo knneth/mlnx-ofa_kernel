@@ -159,15 +159,14 @@ int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
 }
 
 static int mlx5_query_nic_vport_context(struct mlx5_core_dev *mdev, u16 vport,
-					u32 *out)
+					bool other_vport, u32 *out)
 {
 	u32 in[MLX5_ST_SZ_DW(query_nic_vport_context_in)] = {};
 
 	MLX5_SET(query_nic_vport_context_in, in, opcode,
 		 MLX5_CMD_OP_QUERY_NIC_VPORT_CONTEXT);
 	MLX5_SET(query_nic_vport_context_in, in, vport_number, vport);
-	if (vport)
-		MLX5_SET(query_nic_vport_context_in, in, other_vport, 1);
+	MLX5_SET(query_nic_vport_context_in, in, other_vport, other_vport);
 
 	return mlx5_cmd_exec_inout(mdev, query_nic_vport_context, in, out);
 }
@@ -178,7 +177,7 @@ int mlx5_query_nic_vport_min_inline(struct mlx5_core_dev *mdev,
 	u32 out[MLX5_ST_SZ_DW(query_nic_vport_context_out)] = {};
 	int err;
 
-	err = mlx5_query_nic_vport_context(mdev, vport, out);
+	err = mlx5_query_nic_vport_context(mdev, vport, vport > 0, out);
 	if (!err)
 		*min_inline = MLX5_GET(query_nic_vport_context_out, out,
 				       nic_vport_context.min_wqe_inline_mode);
@@ -300,7 +299,7 @@ int mlx5_query_nic_vport_mtu(struct mlx5_core_dev *mdev, u16 *mtu)
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, 0, out);
+	err = mlx5_query_nic_vport_context(mdev, 0, false, out);
 	if (!err)
 		*mtu = MLX5_GET(query_nic_vport_context_out, out,
 				nic_vport_context.mtu);
@@ -560,7 +559,7 @@ int mlx5_query_nic_vport_system_image_guid(struct mlx5_core_dev *mdev,
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, 0, out);
+	err = mlx5_query_nic_vport_context(mdev, 0, false, out);
 	if (err)
 		goto out;
 
@@ -582,7 +581,7 @@ int mlx5_query_nic_vport_sd_group(struct mlx5_core_dev *mdev, u8 *sd_group)
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, 0, out);
+	err = mlx5_query_nic_vport_context(mdev, 0, false, out);
 	if (err)
 		goto out;
 
@@ -593,8 +592,8 @@ out:
 	return err;
 }
 
-int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u32 vport,
-				   u64 *node_guid)
+int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev,
+				   u16 vport, bool other_vport, u64 *node_guid)
 {
 	u32 *out;
 	int outlen = MLX5_ST_SZ_BYTES(query_nic_vport_context_out);
@@ -604,7 +603,7 @@ int mlx5_query_nic_vport_node_guid(struct mlx5_core_dev *mdev, u32 vport,
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, vport, out);
+	err = mlx5_query_nic_vport_context(mdev, vport, other_vport, out);
 	if (err)
 		goto out;
 
@@ -662,7 +661,7 @@ int mlx5_query_nic_vport_qkey_viol_cntr(struct mlx5_core_dev *mdev,
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, 0, out);
+	err = mlx5_query_nic_vport_context(mdev, 0, false, out);
 	if (err)
 		goto out;
 
@@ -937,7 +936,7 @@ int mlx5_query_nic_vport_promisc(struct mlx5_core_dev *mdev,
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, vport, out);
+	err = mlx5_query_nic_vport_context(mdev, vport, vport > 0, out);
 	if (err)
 		goto out;
 
@@ -1045,7 +1044,7 @@ int mlx5_nic_vport_query_local_lb(struct mlx5_core_dev *mdev, bool *status)
 	if (!out)
 		return -ENOMEM;
 
-	err = mlx5_query_nic_vport_context(mdev, 0, out);
+	err = mlx5_query_nic_vport_context(mdev, 0, false, out);
 	if (err)
 		goto out;
 
@@ -1326,6 +1325,25 @@ u64 mlx5_query_nic_system_image_guid(struct mlx5_core_dev *mdev)
 	return mdev->sys_image_guid;
 }
 EXPORT_SYMBOL_GPL(mlx5_query_nic_system_image_guid);
+
+void mlx5_query_nic_sw_system_image_guid(struct mlx5_core_dev *mdev, u8 *buf,
+					 u8 *len)
+{
+	u64 fw_system_image_guid;
+
+	*len = 0;
+
+	fw_system_image_guid = mlx5_query_nic_system_image_guid(mdev);
+	if (!fw_system_image_guid)
+		return;
+
+	memcpy(buf, &fw_system_image_guid, sizeof(fw_system_image_guid));
+	*len += sizeof(fw_system_image_guid);
+
+	if (MLX5_CAP_GEN_2(mdev, load_balance_id) &&
+	    MLX5_CAP_GEN_2(mdev, lag_per_mp_group))
+		buf[(*len)++] = MLX5_CAP_GEN_2(mdev, load_balance_id);
+}
 
 static bool mlx5_vport_use_vhca_id_as_func_id(struct mlx5_core_dev *dev,
 					      u16 vport_num, u16 *vhca_id)

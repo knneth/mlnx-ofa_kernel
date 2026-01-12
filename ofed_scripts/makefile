@@ -31,50 +31,11 @@ ifeq ($(CONFIG_COMPAT_TEST), y)
 CFLAGS += -DCONFIG_COMPAT_TEST
 endif
 
-CONFIG_GCC_VERSION = $(shell ofed_scripts/get_gcc_version.sh)
-
 CC  ?= $(CROSS_COMPILE)gcc
-CPP ?= $(CC) -E
 
 ifneq ($(CC),cc)
 override WITH_MAKE_PARAMS += CC="$(CC)"
 endif
-
-# try-run
-# Usage: option = $(call try-run, $(CC)...-o "$$TMP",option-ok,otherwise)
-# Exit code chooses option. "$$TMP" is can be used as temporary file and
-# is automatically cleaned up.
-TMPOUT := /tmp/
-try-run = $(shell set -e;				\
-	TMP="$(TMPOUT).$$$$.tmp";		\
-	TMPO="$(TMPOUT).$$$$.o";		\
-	if ($(1)) >/dev/null 2>&1;		\
-	then echo "$(2)";				\
-	else echo "$(3)";				\
-	fi;								\
-	rm -f "$$TMP" "$$TMPO")
-
-# cc-option
-# Usage: cflags-y += $(call cc-option,-march=winchip-c6,-march=i586)
-cc-option = $(call try-run,\
-	$(CC) $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS) $(1) -c -x c /dev/null -o "$$TMP",$(1),$(2))
-
-ifneq ($(call cc-option,-Werror=date-time),)
-KCFLAGS += -Wno-date-time
-export KCFLAGS
-endif
-
-CPP_MAJOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f1)
-CPP_MINOR := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f2)
-CPP_PATCH := $(shell $(CPP) -dumpversion 2>&1 | cut -d'.' -f3)
-# Assumes that major, minor, and patch cannot exceed 999
-CPP_VERS  := $(shell expr 0$(CPP_MAJOR) \* 1000000 + 0$(CPP_MINOR) \* 1000 + 0$(CPP_PATCH))
-
-ifneq (,$(filter $(ARCH), x86_64))
-MLNX_CFLAGS += $(shell if [ $(CPP_VERS) -ge 4004004 ]; then \
-                   echo "-Werror"; else echo ""; fi)
-endif #(,$(filter $(ARCH), i386 x86_64))
-export MLNX_CFLAGS
 
 ifneq ($(shell if (echo $(KVERSION) | grep -qE 'uek'); then \
 					echo "YES"; else echo ""; fi),)
@@ -188,6 +149,7 @@ kernel: autoversion
 		CONFIG_NVME_TARGET_LOOP=$(CONFIG_NVME_TARGET_LOOP) \
 		CONFIG_NVME_TARGET_RDMA=$(CONFIG_NVME_TARGET_RDMA) \
 		CONFIG_NVME_TARGET_TCP=$(CONFIG_NVME_TARGET_TCP) \
+		CONFIG_NVME_TARGET_PCI_EPF=$(CONFIG_NVME_TARGET_PCI_EPF) \
 		CONFIG_NVME_TARGET_FC=$(CONFIG_NVME_TARGET_FC) \
 		CONFIG_NVME_TARGET_FCLOOP=$(CONFIG_NVME_TARGET_FCLOOP) \
 		CONFIG_NVME_TARGET_DUMMY=$(CONFIG_NVME_TARGET_DUMMY) \
@@ -260,7 +222,6 @@ kernel: autoversion
 		CONFIG_MLX5_TC_SAMPLE=$(CONFIG_MLX5_TC_SAMPLE) \
 		CONFIG_MLX5_MACSEC=$(CONFIG_MLX5_MACSEC) \
 		CONFIG_MLX5_DPLL=$(CONFIG_MLX5_DPLL) \
-		CONFIG_GCC_VERSION=$(CONFIG_GCC_VERSION) \
 		CONFIG_IS_MARINER=$(CONFIG_IS_MARINER) \
 		CONFIG_IS_AZURELINUX=$(CONFIG_IS_AZURELINUX) \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \

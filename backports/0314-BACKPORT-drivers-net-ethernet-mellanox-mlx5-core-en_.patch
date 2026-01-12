@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
 ---
- .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 421 +++++++++++++++++-
- 1 file changed, 400 insertions(+), 21 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 449 +++++++++++++++++-
+ 1 file changed, 428 insertions(+), 21 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -470,7 +470,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
 +#ifdef HAVE_GET_RXFH_CONTEXT
 +static int mlx5e_get_rxfh_context(struct net_device *dev, u32 *indir,
 +				  u8 *key, u8 *hfunc, u32 rss_context)
- {
++{
 +	struct mlx5e_priv *priv = netdev_priv(dev);
 +	int err;
 +
@@ -483,7 +483,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
 +static int mlx5e_set_rxfh_context(struct net_device *dev, const u32 *indir,
 +				  const u8 *key, const u8 hfunc,
 +				  u32 *rss_context, bool delete)
-+{
+ {
 +	struct mlx5e_priv *priv = netdev_priv(dev);
 +	int err;
 +
@@ -830,7 +830,33 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  	{ "skb_tx_mpwqe",        set_pflag_skb_tx_mpwqe },
  	{ "tx_port_ts",          set_pflag_tx_port_ts },
  	{ "dropless_rq",	 set_pflag_dropless_rq},
-@@ -2491,6 +2830,7 @@ static int mlx5e_set_rxnfc(struct net_de
+@@ -2466,6 +2805,25 @@ static u32 mlx5e_get_priv_flags(struct n
+ 	return priv->channels.params.pflags;
+ }
+ 
++#ifdef HAVE_ETHTOOL_GET_RXFH_FIELDS
++static int mlx5e_get_rxfh_fields(struct net_device *dev,
++				 struct ethtool_rxfh_fields *info)
++{
++	struct mlx5e_priv *priv = netdev_priv(dev);
++
++	return mlx5e_ethtool_get_rxfh_fields(priv, info);
++}
++
++static int mlx5e_set_rxfh_fields(struct net_device *dev,
++				 const struct ethtool_rxfh_fields *cmd,
++				 struct netlink_ext_ack *extack)
++{
++	struct mlx5e_priv *priv = netdev_priv(dev);
++
++	return mlx5e_ethtool_set_rxfh_fields(priv, cmd, extack);
++}
++#endif
++
+ static int mlx5e_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
+ 			   u32 *rule_locs)
+ {
+@@ -2491,6 +2849,7 @@ static int mlx5e_set_rxnfc(struct net_de
  	return mlx5e_ethtool_set_rxnfc(priv, cmd);
  }
  
@@ -838,7 +864,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  static int query_port_status_opcode(struct mlx5_core_dev *mdev, u32 *status_opcode)
  {
  	struct mlx5_ifc_pddr_troubleshooting_page_bits *pddr_troubleshooting_page;
-@@ -2660,7 +3000,8 @@ mlx5e_get_link_ext_state(struct net_devi
+@@ -2660,7 +3019,8 @@ mlx5e_get_link_ext_state(struct net_devi
  
  	return -ENODATA;
  }
@@ -848,7 +874,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  static void mlx5e_get_eth_phy_stats(struct net_device *netdev,
  				    struct ethtool_eth_phy_stats *phy_stats)
  {
-@@ -2693,7 +3034,9 @@ static void mlx5e_get_rmon_stats(struct
+@@ -2693,7 +3053,9 @@ static void mlx5e_get_rmon_stats(struct
  
  	mlx5e_stats_rmon_get(priv, rmon_stats, ranges);
  }
@@ -858,7 +884,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  static void mlx5e_get_ts_stats(struct net_device *netdev,
  			       struct ethtool_ts_stats *ts_stats)
  {
-@@ -2701,19 +3044,39 @@ static void mlx5e_get_ts_stats(struct ne
+@@ -2701,19 +3063,43 @@ static void mlx5e_get_ts_stats(struct ne
  
  	mlx5e_stats_ts_get(priv, ts_stats);
  }
@@ -871,11 +897,15 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
 +#ifdef HAVE_ETHTOOL_LINK_KSETTINGS_HAS_LANES
  	.cap_link_lanes_supported = true,
 +#endif
-+#ifndef HAVE_GET_RXFH_CONTEXT
++#ifdef HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED
++	/* Older kernels: use cap_rss_ctx_supported field */
  	.cap_rss_ctx_supported	= true,
 +#endif
 +#ifdef HAVE_ETHTOOL_OPS_HAS_PER_CTX_KEY
  	.rxfh_per_ctx_key	= true,
++#endif
++#ifdef HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS
++	.rxfh_per_ctx_fields	= true,
 +#endif
 +#ifdef HAVE_SUPPORTED_COALESCE_PARAM
  	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
@@ -898,7 +928,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  	.get_strings       = mlx5e_get_strings,
  	.get_sset_count    = mlx5e_get_sset_count,
  	.get_ethtool_stats = mlx5e_get_ethtool_stats,
-@@ -2729,13 +3092,19 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2729,13 +3115,24 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_link_ksettings  = mlx5e_set_link_ksettings,
  	.get_rxfh_key_size   = mlx5e_get_rxfh_key_size,
  	.get_rxfh_indir_size = mlx5e_get_rxfh_indir_size,
@@ -908,6 +938,11 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
 +#endif
  	.get_rxfh          = mlx5e_get_rxfh,
  	.set_rxfh          = mlx5e_set_rxfh,
++#ifdef HAVE_ETHTOOL_GET_RXFH_FIELDS
++	/* Newer kernels (6.17+): dedicated RXFH fields callbacks */
++	.get_rxfh_fields   = mlx5e_get_rxfh_fields,
++	.set_rxfh_fields   = mlx5e_set_rxfh_fields,
++#endif
  	.get_rxnfc         = mlx5e_get_rxnfc,
  	.set_rxnfc         = mlx5e_set_rxnfc,
  	.get_tunable       = mlx5e_get_tunable,
@@ -918,7 +953,7 @@ Change-Id: I4ef62f34a172115b95cc82c5d30a707ebd585db0
  	.get_pauseparam    = mlx5e_get_pauseparam,
  	.set_pauseparam    = mlx5e_set_pauseparam,
  	.get_ts_info       = mlx5e_get_ts_info,
-@@ -2744,22 +3113,32 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2744,22 +3141,32 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_wol	   = mlx5e_set_wol,
  	.get_module_info   = mlx5e_get_module_info,
  	.get_module_eeprom = mlx5e_get_module_eeprom,

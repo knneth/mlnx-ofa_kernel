@@ -156,12 +156,12 @@ validate_revert_tracking_issue()
 	fi
 
 	if [ "$revert_upstream_status" = "ignore" ]; then
-		if ! echo "$revert_commit_msg" | grep --quiet "Issue: $IGNORE_TRACKING_ISSUE_ID"; then
+		if ! echo "$revert_commit_msg" | grep --quiet --ignore-case "Issue: $IGNORE_TRACKING_ISSUE_ID"; then
 			echo "- Commit $revert_commit_hash is a Revert commit with upstream_status=ignore, but is missing 'Issue: $IGNORE_TRACKING_ISSUE_ID'. Please insert this issue number to the commit message."
 			return 1
 		fi
 	elif [ "$revert_upstream_status" = "NA" ]; then
-		if ! echo "$revert_commit_msg" | grep --quiet "Issue: $NA_TRACKING_ISSUE_ID"; then
+		if ! echo "$revert_commit_msg" | grep --quiet --ignore-case "Issue: $NA_TRACKING_ISSUE_ID"; then
 			echo "- Commit $revert_commit_hash is a Revert commit with upstream_status=NA, but is missing 'Issue: $NA_TRACKING_ISSUE_ID'. Please insert this issue number to the commit message."
 			return 1
 		fi
@@ -319,7 +319,7 @@ do
 	fi
 
 	# Check for revert commits and make sure that the metadata entries of both the Revert commit and the commit that was reverted are valid
-	if echo "$line" | grep -q 'subject=Revert \"'; then
+	if echo "$line" | grep -q 'subject=Revert "'; then
 		all_metadata_files=$(find metadata/ -name '*.csv' ! -name 'features_metadata_db.csv')
 		revert_errors=$(validate_revert_and_reverted_metadata "$line" "$all_metadata_files")
 		if [ ! -z "$revert_errors" ]; then

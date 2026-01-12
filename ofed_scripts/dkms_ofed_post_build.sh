@@ -27,6 +27,9 @@
 #
 set -e
 
+if [[ "$1" ]]; then
+	ofa_build_src="$1"
+fi
 ofa_build_src=${ofa_build_src:-/usr/src/ofa_kernel/default/}
 build_dir=${build_dir:-$PWD/../build}
 running_kernel=$(uname -r)

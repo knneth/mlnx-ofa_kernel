@@ -93,7 +93,7 @@ Change-Id: I5392bcc35cf6aa895422d8ebe86d46dd43ae259a
  
  int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
  			      struct mlx5_port_eth_proto *eproto)
-@@ -1269,7 +1326,9 @@ u32 mlx5_port_info2linkmodes(struct mlx5
+@@ -1273,7 +1330,9 @@ u32 mlx5_port_info2linkmodes(struct mlx5
  					  force_legacy);
  	for (i = 0; i < max_size; ++i) {
  		if (table[i].speed == info->speed) {

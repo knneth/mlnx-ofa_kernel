@@ -297,6 +297,9 @@ void mlx5_free_bfreg(struct mlx5_core_dev *mdev, struct mlx5_sq_bfreg *bfreg)
 	unsigned long *bitmap;
 	struct list_head *head;
 
+	if (!bfreg || !bfreg->up)
+		return;
+
 	bfregs = &mdev->priv.bfregs;
 	if (bfreg->wc) {
 		head = &bfregs->wc_head.list;

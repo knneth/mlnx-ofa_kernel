@@ -122,6 +122,8 @@ struct mlxdevm_rate {
 
 	u32 tx_priority;
 	u32 tx_weight;
+
+	u32 tc_bw[MLXDEVM_RATE_TCS_MAX];
 };
 
 struct mlxdevm_port {
@@ -1513,6 +1515,9 @@ struct mlxdevm_ops {
 					 u32 tx_priority, struct netlink_ext_ack *extack);
 	int (*rate_leaf_tx_weight_set)(struct mlxdevm_rate *mlxdevm_rate, void *priv,
 				       u32 tx_weight, struct netlink_ext_ack *extack);
+	int (*rate_leaf_tc_bw_set)(struct mlxdevm_rate *mlxdevm_rate,
+				   void *priv, u32 *tc_bw,
+				   struct netlink_ext_ack *extack);
 	int (*rate_node_tx_share_set)(struct mlxdevm_rate *mlxdevm_rate, void *priv,
 				      u64 tx_share, struct netlink_ext_ack *extack);
 	int (*rate_node_tx_max_set)(struct mlxdevm_rate *mlxdevm_rate, void *priv,
@@ -1521,6 +1526,9 @@ struct mlxdevm_ops {
 					 u32 tx_priority, struct netlink_ext_ack *extack);
 	int (*rate_node_tx_weight_set)(struct mlxdevm_rate *mlxdevm_rate, void *priv,
 				       u32 tx_weight, struct netlink_ext_ack *extack);
+	int (*rate_node_tc_bw_set)(struct mlxdevm_rate *mlxdevm_rate,
+				   void *priv, u32 *tc_bw,
+				   struct netlink_ext_ack *extack);
 	int (*rate_node_new)(struct mlxdevm_rate *rate_node, void **priv,
 			     struct netlink_ext_ack *extack);
 	int (*rate_node_del)(struct mlxdevm_rate *rate_node, void *priv,

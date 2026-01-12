@@ -845,7 +845,7 @@ static int mlx5_query_node_guid(struct mlx5_ib_dev *dev,
 		break;
 
 	case MLX5_VPORT_ACCESS_METHOD_NIC:
-		err = mlx5_query_nic_vport_node_guid(dev->mdev, 0, &tmp);
+		err = mlx5_query_nic_vport_node_guid(dev->mdev, 0, false, &tmp);
 		break;
 
 	default:
@@ -1814,7 +1814,8 @@ static void deallocate_uars(struct mlx5_ib_dev *dev,
 }
 
 static int mlx5_ib_enable_lb_mp(struct mlx5_core_dev *master,
-				struct mlx5_core_dev *slave)
+				struct mlx5_core_dev *slave,
+				struct mlx5_ib_lb_state *lb_state)
 {
 	int err;
 
@@ -1826,6 +1827,7 @@ static int mlx5_ib_enable_lb_mp(struct mlx5_core_dev *master,
 	if (err)
 		goto out;
 
+	lb_state->force_enable = true;
 	return 0;
 
 out:
@@ -1834,15 +1836,21 @@ out:
 }
 
 static void mlx5_ib_disable_lb_mp(struct mlx5_core_dev *master,
-				  struct mlx5_core_dev *slave)
+				  struct mlx5_core_dev *slave,
+				  struct mlx5_ib_lb_state *lb_state)
 {
 	mlx5_nic_vport_update_local_lb(slave, false);
 	mlx5_nic_vport_update_local_lb(master, false);
+
+	lb_state->force_enable = false;
 }
 
 int mlx5_ib_enable_lb(struct mlx5_ib_dev *dev, bool td, bool qp)
 {
 	int err = 0;
+
+	if (dev->lb.force_enable)
+		return 0;
 
 	mutex_lock(&dev->lb.mutex);
 	if (td)
@@ -1865,6 +1873,9 @@ int mlx5_ib_enable_lb(struct mlx5_ib_dev *dev, bool td, bool qp)
 
 void mlx5_ib_disable_lb(struct mlx5_ib_dev *dev, bool td, bool qp)
 {
+	if (dev->lb.force_enable)
+		return;
+
 	mutex_lock(&dev->lb.mutex);
 	if (td)
 		dev->lb.user_td--;
@@ -3572,7 +3583,7 @@ static void mlx5_ib_unbind_slave_port(struct mlx5_ib_dev *ibdev,
 
 	lockdep_assert_held(&mlx5_ib_multiport_mutex);
 
-	mlx5_ib_disable_lb_mp(ibdev->mdev, mpi->mdev);
+	mlx5_ib_disable_lb_mp(ibdev->mdev, mpi->mdev, &ibdev->lb);
 
 	mlx5_core_mp_event_replay(ibdev->mdev,
 				  MLX5_DRIVER_EVENT_AFFILIATION_REMOVED,
@@ -3669,7 +3680,7 @@ static bool mlx5_ib_bind_slave_port(struct mlx5_ib_dev *ibdev,
 				  MLX5_DRIVER_EVENT_AFFILIATION_DONE,
 				  &key);
 
-	err = mlx5_ib_enable_lb_mp(ibdev->mdev, mpi->mdev);
+	err = mlx5_ib_enable_lb_mp(ibdev->mdev, mpi->mdev, &ibdev->lb);
 	if (err)
 		goto unbind;
 
@@ -4242,7 +4253,9 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
 	.modify_port = mlx5_ib_modify_port,
 	.modify_qp = mlx5_ib_modify_qp,
 	.modify_srq = mlx5_ib_modify_srq,
+	.pre_destroy_cq = mlx5_ib_pre_destroy_cq,
 	.poll_cq = mlx5_ib_poll_cq,
+	.post_destroy_cq = mlx5_ib_post_destroy_cq,
 	.post_recv = mlx5_ib_post_recv_nodrain,
 	.post_send = mlx5_ib_post_send_nodrain,
 	.post_srq_recv = mlx5_ib_post_srq_recv,
@@ -4941,7 +4954,8 @@ static struct ib_device *mlx5_ib_add_sub_dev(struct ib_device *parent,
 	    !MLX5_CAP_GEN_2(mparent->mdev, multiplane_qp_ud))
 		return ERR_PTR(-EOPNOTSUPP);
 
-	mplane = ib_alloc_device(mlx5_ib_dev, ib_dev);
+	mplane = ib_alloc_device_with_net(mlx5_ib_dev, ib_dev,
+					  mlx5_core_net(mparent->mdev));
 	if (!mplane)
 		return ERR_PTR(-ENOMEM);
 
@@ -5055,7 +5069,8 @@ static int mlx5r_probe(struct auxiliary_device *adev,
 
 	num_ports = max(MLX5_CAP_GEN(mdev, num_ports),
 			MLX5_CAP_GEN(mdev, num_vhca_ports));
-	dev = ib_alloc_device(mlx5_ib_dev, ib_dev);
+	dev = ib_alloc_device_with_net(mlx5_ib_dev, ib_dev,
+				       mlx5_core_net(mdev));
 	if (!dev)
 		return -ENOMEM;
 

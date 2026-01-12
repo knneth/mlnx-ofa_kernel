@@ -17,7 +17,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  
  #include <uapi/linux/devlink.h>
  
-@@ -582,6 +585,7 @@ static const struct nla_policy devlink_n
+@@ -590,6 +593,7 @@ static const struct nla_policy devlink_n
  #endif
  
  /* Ops table for mlxdevm */
@@ -25,7 +25,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  const struct genl_split_ops mlxdevm_nl_ops[29] = {
  	{
  		.cmd		= MLXDEVM_CMD_GET,
-@@ -1274,3 +1278,314 @@ const struct genl_split_ops mlxdevm_nl_o
+@@ -1282,3 +1286,314 @@ const struct genl_split_ops mlxdevm_nl_o
  	},
  #endif
  };
@@ -304,7 +304,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +		.doit		= mlxdevm_nl_rate_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_rate_set_nl_policy,
-+		.maxattr	= MLXDEVM_ATTR_RATE_TX_WEIGHT,
++		.maxattr	= MLXDEVM_ATTR_RATE_TC_BWS,
 +#elif defined(HAVE_GENL_OPS_POLICY)
 +		.policy		= mlxdevm_nl_policy,
 +#endif
@@ -318,7 +318,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +		.doit		= mlxdevm_nl_rate_new_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_rate_new_nl_policy,
-+		.maxattr	= MLXDEVM_ATTR_RATE_TX_WEIGHT,
++		.maxattr	= MLXDEVM_ATTR_RATE_TC_BWS,
 +#elif defined(HAVE_GENL_OPS_POLICY)
 +		.policy		= mlxdevm_nl_policy,
 +#endif

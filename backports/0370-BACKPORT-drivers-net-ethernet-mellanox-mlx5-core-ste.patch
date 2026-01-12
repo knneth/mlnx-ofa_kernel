@@ -1,59 +1,47 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Yevgeny Kliteynik <kliteyn@nvidia.com>
 Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
 
-Change-Id: I33a81f1fdb2eaf552d3c4e804b8720005f8c7e62
+Change-Id: Ica54b6a62fd97072179a1fabb3f7f4ad77928f7d
 ---
- .../mlx5/core/steering/hws/bwc_complex.c         | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ .../mellanox/mlx5/core/steering/hws/bwc_complex.c    | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
-@@ -1078,7 +1078,11 @@ hws_bwc_rule_complex_hash_node_get(struc
- 	if (unlikely(!node))
+@@ -675,7 +675,11 @@ __must_hold(&subm->hash_lock)
+ 	if (!sr_data)
  		return -ENOMEM;
  
 +#ifdef HAVE_IDA_ALLOC
- 	ret = ida_alloc(&bwc_matcher->complex->metadata_ida, GFP_KERNEL);
+ 	ret = ida_alloc(&subm->chain_ida, GFP_KERNEL);
 +#else
-+	ret = ida_simple_get(&bwc_matcher->complex->metadata_ida, 0, 0, GFP_KERNEL);
++	ret = ida_simple_get(&subm->chain_ida, 0, 0, GFP_KERNEL);
 +#endif
  	if (ret < 0)
- 		goto err_free_node;
- 	node->tag = ret;
-@@ -1114,7 +1118,11 @@ hws_bwc_rule_complex_hash_node_get(struc
- 		 * There's some performance advantage in skipping such cases,
- 		 * so this is left for future optimizations.
- 		 */
-+#ifdef HAVE_IDA_ALLOC
- 		ida_free(&bwc_matcher->complex->metadata_ida, node->tag);
-+#else
-+		ida_simple_remove(&bwc_matcher->complex->metadata_ida, node->tag);
-+#endif
- 		kfree(node);
- 		node = old_node;
- 	}
-@@ -1123,7 +1131,11 @@ hws_bwc_rule_complex_hash_node_get(struc
+ 		goto free_sr_data;
+ 	sr_data->chain_id = ret;
+@@ -714,7 +718,11 @@ __must_hold(&subm->hash_lock)
  	return 0;
  
- err_free_ida:
+ free_ida:
 +#ifdef HAVE_IDA_ALLOC
- 	ida_free(&bwc_matcher->complex->metadata_ida, node->tag);
+ 	ida_free(&subm->chain_ida, sr_data->chain_id);
 +#else
-+	ida_simple_remove(&bwc_matcher->complex->metadata_ida, node->tag);
++	ida_simple_remove(&subm->chain_ida, sr_data->chain_id);
 +#endif
- err_free_node:
- 	kfree(node);
- 	return ret;
-@@ -1144,7 +1156,11 @@ hws_bwc_rule_complex_hash_node_put(struc
- 		rhashtable_remove_fast(&bwc_matcher->complex->refcount_hash,
- 				       &node->hash_node,
- 				       hws_refcount_hash);
+ free_sr_data:
+ 	kfree(sr_data);
+ 
+@@ -737,7 +745,11 @@ __must_hold(&subm->hash_lock)
+ 		rhashtable_remove_fast(&subm->rules_hash,
+ 				       &sr_data->hash_node,
+ 				       hws_rules_hash_params);
 +#ifdef HAVE_IDA_ALLOC
- 		ida_free(&bwc_matcher->complex->metadata_ida, node->tag);
+ 		ida_free(&subm->chain_ida, sr_data->chain_id);
 +#else
-+		ida_simple_remove(&bwc_matcher->complex->metadata_ida, node->tag);
++		ida_simple_remove(&subm->chain_ida, sr_data->chain_id);
 +#endif
- 		kfree(node);
+ 		kfree(sr_data);
  		if (is_last_rule)
  			*is_last_rule = true;

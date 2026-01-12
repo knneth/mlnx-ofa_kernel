@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 ---
- drivers/infiniband/core/umem_odp.c | 990 ++++++++++++++++++++++++++++-
- 1 file changed, 989 insertions(+), 1 deletion(-)
+ drivers/infiniband/core/umem_odp.c | 985 ++++++++++++++++++++++++++++-
+ 1 file changed, 984 insertions(+), 1 deletion(-)
 
 --- a/drivers/infiniband/core/umem_odp.c
 +++ b/drivers/infiniband/core/umem_odp.c
@@ -197,7 +197,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 +
 +static int invalidate_range_end_trampoline(struct ib_umem_odp *item, u64 start,
 +					   u64 end, void *cookie)
- {
++{
 +	ib_umem_notifier_end_account(item);
 +	return 0;
 +}
@@ -306,7 +306,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 +}
 +
 +static struct ib_ucontext_per_mm *get_per_mm(struct ib_umem_odp *umem_odp)
-+{
+ {
 +	struct ib_ucontext *ctx = umem_odp->umem.context;
 +	struct ib_ucontext_per_mm *per_mm;
 +
@@ -876,7 +876,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  	}
  
  	start_idx = (range.start - ib_umem_start(umem_odp)) >> page_shift;
-@@ -473,23 +1132,306 @@ retry:
+@@ -473,23 +1132,301 @@ retry:
  	else
  		mutex_unlock(&umem_odp->umem_mutex);
  
@@ -1091,13 +1091,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 +#else
 +				up_read(&owning_mm->mmap_sem);
 +#endif
-+		if (npages < 0) {
-+			if (npages != -EAGAIN)
-+				pr_warn("fail to get %zu user pages with error %d\n", gup_num_pages, npages);
-+			else
-+				pr_debug("fail to get %zu user pages with error %d\n", gup_num_pages, npages);
-+			break;
-+		}
++		if (npages < 0)
++			pr_debug("fail to get %zu user pages with error %d\n", gup_num_pages, npages);
 +
 +		bcnt -= min_t(size_t, npages << PAGE_SHIFT, bcnt);
 +		mutex_lock(&umem_odp->umem_mutex);
@@ -1183,7 +1178,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  
  	lockdep_assert_held(&umem_odp->umem_mutex);
  
-@@ -497,6 +1439,7 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -497,6 +1434,7 @@ void ib_umem_odp_unmap_dma_pages(struct
  	bound = min_t(u64, bound, ib_umem_end(umem_odp));
  	for (addr = virt; addr < bound; addr += BIT(umem_odp->page_shift)) {
  		idx = (addr - ib_umem_start(umem_odp)) >> umem_odp->page_shift;
@@ -1191,7 +1186,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  		dma = umem_odp->dma_list[idx];
  
  		/* The access flags guaranteed a valid DMA address in case was NULL */
-@@ -505,6 +1448,13 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -505,6 +1443,13 @@ void ib_umem_odp_unmap_dma_pages(struct
  			struct page *page = hmm_pfn_to_page(umem_odp->pfn_list[pfn_idx]);
  
  			dma_addr = dma & ODP_DMA_ADDR_MASK;
@@ -1205,7 +1200,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  			ib_dma_unmap_page(dev, dma_addr,
  					  BIT(umem_odp->page_shift),
  					  DMA_BIDIRECTIONAL);
-@@ -521,9 +1471,47 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -521,9 +1466,47 @@ void ib_umem_odp_unmap_dma_pages(struct
  				 */
  				set_page_dirty(head_page);
  			}

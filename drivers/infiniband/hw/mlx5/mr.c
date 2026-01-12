@@ -400,6 +400,8 @@ static ssize_t cur_show(struct cache_order *co, struct order_attribute *oa,
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	int err;
 
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
+
 	err = snprintf(buf, 20, "%lu\n", ent->mkeys_queue.ci);
 	return err;
 }
@@ -410,6 +412,8 @@ static ssize_t miss_show(struct cache_order *co, struct order_attribute *oa,
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	int err;
 
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
+
 	err = snprintf(buf, 20, "%d\n", ent->miss);
 	return err;
 }
@@ -419,6 +423,8 @@ static ssize_t miss_store(struct cache_order *co, struct order_attribute *oa,
 {
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	u32 var;
+
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
 
 	if (kstrtouint(buf, 0, &var))
 		return -EINVAL;
@@ -437,6 +443,8 @@ static ssize_t size_store(struct cache_order *co, struct order_attribute *oa,
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	u32 target;
 	int err;
+
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
 
 	err = kstrtouint(buf, 0, &target);
 	if (err)
@@ -475,6 +483,8 @@ static ssize_t size_show(struct cache_order *co, struct order_attribute *oa,
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	int err;
 
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
+
 	err = snprintf(buf, 20, "%ld\n", ent->mkeys_queue.ci  + ent->in_use);
 	return err;
 }
@@ -485,6 +495,8 @@ static ssize_t limit_store(struct cache_order *co, struct order_attribute *oa,
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	u32 var;
 	int err;
+
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
 
 	err = kstrtouint(buf, 0, &var);
 	if (err)
@@ -508,6 +520,8 @@ static ssize_t limit_show(struct cache_order *co, struct order_attribute *oa,
 {
 	struct mlx5_cache_ent *ent = container_of(co, struct mlx5_cache_ent, co);
 	int err;
+
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
 
 	err = snprintf(buf, 20, "%d\n", ent->limit);
 	return err;
@@ -592,6 +606,8 @@ static ssize_t order_attr_show(struct kobject *kobj,
 		container_of(attr, struct order_attribute, attr);
 	struct cache_order *co = container_of(kobj, struct cache_order, kobj);
 
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
+
 	if (!oa->show)
 		return -EIO;
 
@@ -604,6 +620,8 @@ static ssize_t order_attr_store(struct kobject *kobj,
 	struct order_attribute *oa =
 		container_of(attr, struct order_attribute, attr);
 	struct cache_order *co = container_of(kobj, struct cache_order, kobj);
+
+	pr_warn_once("%s: MR cache sysfs to be deprecated", __func__);
 
 	if (!oa->store)
 		return -EIO;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 
 ---
- .../mellanox/mlx5/core/diag/reporter_vnic.c   | 127 +++++++++++++++++-
- 1 file changed, 122 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/diag/reporter_vnic.c   | 148 +++++++++++++++++-
+ 1 file changed, 143 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
@@ -110,10 +110,12 @@ Subject: [PATCH] BACKPORT:
  	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun))
  		devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
  					  VNIC_ENV_GET(&vnic, cq_overrun));
-@@ -107,19 +157,81 @@ void mlx5_reporter_vnic_diagnose_counter
+@@ -117,18 +167,101 @@ void mlx5_reporter_vnic_diagnose_counter
+ 		devlink_fmsg_u32_pair_put(fmsg, "odp_remote_triggered_page_fault",
+ 					  VNIC_ENV_GET(&vnic, odp_remote_triggered_page_fault));
  	}
- 	if (MLX5_CAP_GEN(dev, nic_cap_reg))
- 		mlx5_reporter_vnic_diagnose_counter_icm(dev, fmsg, vport_num, other_vport);
++	if (MLX5_CAP_GEN(dev, nic_cap_reg))
++		mlx5_reporter_vnic_diagnose_counter_icm(dev, fmsg, vport_num, other_vport);
 +#else
 +	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun)) {
 +		err = devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
@@ -135,7 +137,7 @@ Subject: [PATCH] BACKPORT:
 +		if (err)
 +			return err;
 +	}
- 
++
 +	if (MLX5_CAP_GEN(dev, nic_receive_steering_discard)) {
 +		err = devlink_fmsg_u64_pair_put(fmsg, "nic_receive_steering_discard",
 +						VNIC_ENV_GET64(&vnic,
@@ -150,9 +152,27 @@ Subject: [PATCH] BACKPORT:
 +							       generated_pkt_steering_fail));
 +		if (err)
 +			return err;
-+
++ 
 +		err = devlink_fmsg_u64_pair_put(fmsg, "handled_pkt_steering_fail",
 +						VNIC_ENV_GET64(&vnic, handled_pkt_steering_fail));
++		if (err)
++			return err;
++	}
++	if (MLX5_CAP_GEN(dev, vnic_env_cnt_bar_uar_access)) {
++		err = devlink_fmsg_u32_pair_put(fmsg, "bar_uar_access",
++						VNIC_ENV_GET(&vnic, bar_uar_access));
++		if (err)
++			return err;
++	}
++	if (MLX5_CAP_GEN(dev, vnic_env_cnt_odp_page_fault)) {
++		err = devlink_fmsg_u32_pair_put(fmsg, "odp_local_triggered_page_fault",
++						VNIC_ENV_GET(&vnic,
++							     odp_local_triggered_page_fault));
++		if (err)
++			return err;
++		err = devlink_fmsg_u32_pair_put(fmsg, "odp_remote_triggered_page_fault",
++						VNIC_ENV_GET(&vnic,
++							     odp_remote_triggered_page_fault));
 +		if (err)
 +			return err;
 +	}
@@ -194,7 +214,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static const struct devlink_health_reporter_ops mlx5_reporter_vnic_ops = {
-@@ -135,7 +247,11 @@ void mlx5_reporter_vnic_create(struct ml
+@@ -144,7 +277,11 @@ void mlx5_reporter_vnic_create(struct ml
  	health->vnic_reporter =
  		devlink_health_reporter_create(devlink,
  					       &mlx5_reporter_vnic_ops,
@@ -207,7 +227,7 @@ Subject: [PATCH] BACKPORT:
  	if (IS_ERR(health->vnic_reporter))
  		mlx5_core_warn(dev,
  			       "Failed to create vnic reporter, err = %ld\n",
-@@ -149,3 +265,4 @@ void mlx5_reporter_vnic_destroy(struct m
+@@ -158,3 +295,4 @@ void mlx5_reporter_vnic_destroy(struct m
  	if (!IS_ERR_OR_NULL(health->vnic_reporter))
  		devlink_health_reporter_destroy(health->vnic_reporter);
  }

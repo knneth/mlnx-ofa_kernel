@@ -780,6 +780,7 @@ int is_non_trackable_alloc_func(const char *func_name)
 		/* kTLS resync dump */
 		"tx_sync_info_get",
 		"mlx5e_ktls_tx_handle_resync_dump_comp",
+		"mlxdevm_nl_rate_new_doit",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);
@@ -1221,7 +1222,7 @@ int memtrack_randomize_mem(void)
 EXPORT_SYMBOL(memtrack_randomize_mem);
 
 /* module entry points */
-int init_module(void)
+static int __init memtrack_init(void)
 {
 	enum memtrack_memtype_t i;
 	int j;
@@ -1294,9 +1295,9 @@ undo_cache_create:
 	kmem_cache_destroy(meminfo_cache);
 	return -1;
 }
+module_init(memtrack_init);
 
-
-void cleanup_module(void)
+static void __exit memtrack_exit(void)
 {
 	enum memtrack_memtype_t memtype;
 	unsigned long cur_bucket;
@@ -1375,4 +1376,5 @@ void cleanup_module(void)
 	kmem_cache_destroy(meminfo_cache);
 	printk(KERN_INFO "memtrack::cleanup_module done.\n");
 }
+module_exit(memtrack_exit);
 

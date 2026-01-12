@@ -261,24 +261,6 @@ echo_warning() {
   return 1
 }
 
-count_ib_ports()
-{
-    local cnt=0
-    local ports_in_hca=0
-    sysdir=/sys/class/infiniband
-    hcas=$(/bin/ls -1 ${sysdir} 2> /dev/null)
-    for hca in $hcas
-    do
-        ports_in_hca=$(/bin/ls -1 ${sysdir}/${hca}/ports 2> /dev/null | wc -l)
-        if [ $ports_in_hca -gt $max_ports_num_in_hca ]; then
-                max_ports_num_in_hca=$ports_in_hca
-        fi
-        cnt=$[ $cnt + $ports_in_hca ]
-    done
-
-    echo $cnt
-}
-
 # Deb only
 get_interface_conf_files()
 {
@@ -324,7 +306,6 @@ check_mlnx_ofed_module() {
     return 1
 }
 
-# This involves running code. Don't do that unless running 'start'
 set_module_load_defaults() {
     MLX5_LOAD=${MLX5_LOAD:-`check_mlnx_ofed_module mlx5_core || :`}
     UMAD_LOAD=${UMAD_LOAD:-`check_mlnx_ofed_module ib_umad || :`}
@@ -410,6 +391,8 @@ set_static_ifaces_bootid_files() {
 }
 
 set_modules_to_load() {
+    set_module_load_defaults
+
     # Setting OpenIB start parameters
     POST_LOAD_MODULES=""
     if [ "X${SDP_LOAD}" == "Xyes" ]; then
@@ -791,6 +774,13 @@ get_debug_info()
 # Messes with host name, and being called unconditionally
 ib_set_node_desc()
 {
+      # If rdma-ndd is running, skip
+      if command -v systemctl >/dev/null 2>&1; then
+          if systemctl is-active -q rdma-ndd.service; then
+              log_msg "Skipping node_desc setup - handled by rdma-ndd"
+              return
+          fi
+      fi
       # Wait while node's hostname is set
       NODE_DESC_TIME_BEFORE_UPDATE=${NODE_DESC_TIME_BEFORE_UPDATE:-10}
       local declare -i UPDATE_TIMEOUT=${NODE_DESC_UPDATE_TIMEOUT:-120}
@@ -1222,44 +1212,6 @@ post_load_modules() {
     return $rc
 }
 
-renice_ib_mad() {
-    local ports_num list_of_ibmads ib_mad_pids num_of_root_ibmad_procs get_pid_retries
-
-    if [ X${RENICE_IB_MAD} != "Xyes" ]; then
-        return
-    fi
-
-    # Set max_ports_num_in_hca variable
-    ports_num=`count_ib_ports`
-    list_of_ibmads=""
-    for (( i=1 ; $i <= ${max_ports_num_in_hca} ; i++ ))
-    do
-            list_of_ibmads="${list_of_ibmads} ib_mad${i}"
-    done
-
-    ib_mad_pids=($(pidof ${list_of_ibmads} 2> /dev/null))
-    num_of_root_ibmad_procs=$(/bin/ps h -o user -p ${ib_mad_pids[*]} | grep -w root | wc -l)
-    get_pid_retries=0
-    while [ ${num_of_root_ibmad_procs} -lt $ports_num ]
-    do
-        # Wait maximum for 5 sec to get ib_mad process pid
-        if [ $get_pid_retries -gt 10 ]; then
-                echo Failed to get $ports_num ib_mad PIDs to renice. Got ${num_of_root_ibmad_procs}.
-                break
-        fi
-        usleep 500000
-        ib_mad_pids=($(pidof ${list_of_ibmads} 2> /dev/null))
-        num_of_root_ibmad_procs=$(/bin/ps h -o user -p ${ib_mad_pids[*]} | grep -w root | wc -l)
-        let get_pid_retries++
-    done
-    for ib_mad_pid in ${ib_mad_pids[*]}
-    do
-        if [ "$(/bin/ps -p ${ib_mad_pid} h -o user 2> /dev/null)" == "root" ]; then
-                renice -19 ${ib_mad_pid} > /dev/null 2>&1
-        fi
-    done
-}
-
 start()
 {
     local RC
@@ -1323,8 +1275,6 @@ start()
 
     post_load_modules
     RC=$[ $RC + $? ]
-
-    renice_ib_mad
 
     if  [ -x /sbin/sysctl_perf_tuning ] && [ "X${RUN_SYSCTL}" == "Xyes" ]; then
         /sbin/sysctl_perf_tuning load

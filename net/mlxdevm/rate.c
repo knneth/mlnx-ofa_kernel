@@ -80,6 +80,29 @@ mlxdevm_rate_get_from_info(struct mlxdevm *mlxdevm, struct genl_info *info)
 		return ERR_PTR(-EINVAL);
 }
 
+static int mlxdevm_rate_put_tc_bws(struct sk_buff *msg, u32 *tc_bw)
+{
+	struct nlattr *nla_tc_bw;
+	int i;
+
+	for (i = 0; i < MLXDEVM_RATE_TCS_MAX; i++) {
+		nla_tc_bw = nla_nest_start(msg, MLXDEVM_ATTR_RATE_TC_BWS);
+		if (!nla_tc_bw)
+			return -EMSGSIZE;
+
+		if (nla_put_u8(msg, MLXDEVM_RATE_TC_ATTR_INDEX, i) ||
+		    nla_put_u32(msg, MLXDEVM_RATE_TC_ATTR_BW, tc_bw[i]))
+			goto nla_put_failure;
+
+		nla_nest_end(msg, nla_tc_bw);
+	}
+	return 0;
+
+nla_put_failure:
+	nla_nest_cancel(msg, nla_tc_bw);
+	return -EMSGSIZE;
+}
+
 static int mlxdevm_nl_rate_fill(struct sk_buff *msg,
 				struct mlxdevm_rate *mlxdevm_rate,
 				enum mlxdevm_command cmd, u32 portid, u32 seq,
@@ -128,6 +151,9 @@ static int mlxdevm_nl_rate_fill(struct sk_buff *msg,
 		if (nla_put_string(msg, MLXDEVM_ATTR_RATE_PARENT_NODE_NAME,
 				   mlxdevm_rate->parent->name))
 			goto nla_put_failure;
+
+	if (mlxdevm_rate_put_tc_bws(msg, mlxdevm_rate->tc_bw))
+		goto nla_put_failure;
 
 	genlmsg_end(msg, hdr);
 	return 0;
@@ -318,6 +344,87 @@ mlxdevm_nl_rate_parent_node_set(struct mlxdevm_rate *mlxdevm_rate,
 	return 0;
 }
 
+static int mlxdevm_nl_rate_tc_bw_parse(struct nlattr *parent_nest, u32 *tc_bw,
+				       unsigned long *bitmap,
+				       struct netlink_ext_ack *extack)
+{
+	struct nlattr *tb[MLXDEVM_RATE_TC_ATTR_MAX + 1];
+	u8 tc_index;
+	int err;
+
+	err = nla_parse_nested(tb, MLXDEVM_RATE_TC_ATTR_MAX, parent_nest,
+			       mlxdevm_dl_rate_tc_bws_nl_policy, extack);
+	if (err)
+		return err;
+
+	if (!tb[MLXDEVM_RATE_TC_ATTR_INDEX]) {
+		NL_SET_ERR_ATTR_MISS(extack, parent_nest,
+				     MLXDEVM_RATE_TC_ATTR_INDEX);
+		return -EINVAL;
+	}
+
+	tc_index = nla_get_u8(tb[MLXDEVM_RATE_TC_ATTR_INDEX]);
+
+	if (!tb[MLXDEVM_RATE_TC_ATTR_BW]) {
+		NL_SET_ERR_ATTR_MISS(extack, parent_nest,
+				     MLXDEVM_RATE_TC_ATTR_BW);
+		return -EINVAL;
+	}
+
+	if (test_and_set_bit(tc_index, bitmap)) {
+		NL_SET_ERR_MSG_FMT(extack,
+				   "Duplicate traffic class index specified (%u)",
+				   tc_index);
+		return -EINVAL;
+	}
+
+	tc_bw[tc_index] = nla_get_u32(tb[MLXDEVM_RATE_TC_ATTR_BW]);
+
+	return 0;
+}
+
+static int mlxdevm_nl_rate_tc_bw_set(struct mlxdevm_rate *mlxdevm_rate,
+				     struct genl_info *info)
+{
+	DECLARE_BITMAP(bitmap, MLXDEVM_RATE_TCS_MAX) = {};
+	struct mlxdevm *mlxdevm = mlxdevm_rate->mlxdevm;
+	const struct mlxdevm_ops *ops = mlxdevm->ops;
+	u32 tc_bw[MLXDEVM_RATE_TCS_MAX] = {};
+	int rem, err = -EOPNOTSUPP, i;
+	struct nlattr *attr;
+
+	nlmsg_for_each_attr_type(attr, MLXDEVM_ATTR_RATE_TC_BWS, info->nlhdr,
+				 GENL_HDRLEN, rem) {
+		err = mlxdevm_nl_rate_tc_bw_parse(attr, tc_bw, bitmap,
+						  info->extack);
+		if (err)
+			return err;
+	}
+
+	for (i = 0; i < MLXDEVM_RATE_TCS_MAX; i++) {
+		if (!test_bit(i, bitmap)) {
+			NL_SET_ERR_MSG_FMT(info->extack,
+					   "Bandwidth values must be specified for all %u traffic classes",
+					   MLXDEVM_RATE_TCS_MAX);
+			return -EINVAL;
+		}
+	}
+
+	if (mlxdevm_rate_is_leaf(mlxdevm_rate))
+		err = ops->rate_leaf_tc_bw_set(mlxdevm_rate, mlxdevm_rate->priv,
+					       tc_bw, info->extack);
+	else if (mlxdevm_rate_is_node(mlxdevm_rate))
+		err = ops->rate_node_tc_bw_set(mlxdevm_rate, mlxdevm_rate->priv,
+					       tc_bw, info->extack);
+
+	if (err)
+		return err;
+
+	memcpy(mlxdevm_rate->tc_bw, tc_bw, sizeof(tc_bw));
+
+	return 0;
+}
+
 static int mlxdevm_nl_rate_set(struct mlxdevm_rate *mlxdevm_rate,
 			       const struct mlxdevm_ops *ops,
 			       struct genl_info *info)
@@ -394,6 +501,12 @@ static int mlxdevm_nl_rate_set(struct mlxdevm_rate *mlxdevm_rate,
 			return err;
 	}
 
+	if (attrs[MLXDEVM_ATTR_RATE_TC_BWS]) {
+		err = mlxdevm_nl_rate_tc_bw_set(mlxdevm_rate, info);
+		if (err)
+			return err;
+	}
+
 	return 0;
 }
 
@@ -429,6 +542,13 @@ static bool mlxdevm_rate_set_ops_supported(const struct mlxdevm_ops *ops,
 					    "TX weight set isn't supported for the leafs");
 			return false;
 		}
+		if (attrs[MLXDEVM_ATTR_RATE_TC_BWS] &&
+		    !ops->rate_leaf_tc_bw_set) {
+			NL_SET_ERR_MSG_ATTR(info->extack,
+					    attrs[MLXDEVM_ATTR_RATE_TC_BWS],
+					    "TC bandwidth set isn't supported for the leafs");
+			return false;
+		}
 	} else if (type == MLXDEVM_RATE_TYPE_NODE) {
 		if (attrs[MLXDEVM_ATTR_RATE_TX_SHARE] && !ops->rate_node_tx_share_set) {
 			NL_SET_ERR_MSG(info->extack, "TX share set isn't supported for the nodes");
@@ -453,6 +573,13 @@ static bool mlxdevm_rate_set_ops_supported(const struct mlxdevm_ops *ops,
 			NL_SET_ERR_MSG_ATTR(info->extack,
 					    attrs[MLXDEVM_ATTR_RATE_TX_WEIGHT],
 					    "TX weight set isn't supported for the nodes");
+			return false;
+		}
+		if (attrs[MLXDEVM_ATTR_RATE_TC_BWS] &&
+		    !ops->rate_node_tc_bw_set) {
+			NL_SET_ERR_MSG_ATTR(info->extack,
+					    attrs[MLXDEVM_ATTR_RATE_TC_BWS],
+					    "TC bandwidth set isn't supported for the nodes");
 			return false;
 		}
 	} else {

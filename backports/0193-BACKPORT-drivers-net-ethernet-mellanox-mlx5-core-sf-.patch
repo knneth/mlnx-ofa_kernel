@@ -7,7 +7,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
-@@ -20,15 +20,35 @@ void mlx5_sf_table_cleanup(struct mlx5_c
+@@ -21,15 +21,35 @@ bool mlx5_sf_table_empty(const struct ml
  int mlx5_devlink_sf_port_new(struct devlink *devlink,
  			     const struct devlink_port_new_attrs *add_attr,
  			     struct netlink_ext_ack *extack,

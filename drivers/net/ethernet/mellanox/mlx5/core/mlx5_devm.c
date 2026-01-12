@@ -531,6 +531,26 @@ static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm_rate *rate_node, void *
 	return mlx5_esw_devlink_rate_node_tx_max_set(NULL, priv, tx_max, extack);
 }
 
+static int mlx5_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
+					 void *priv,
+					 u32 *tc_bw,
+					 struct netlink_ext_ack *extack)
+{
+	return mlx5_esw_devm_rate_leaf_tc_bw_set(rate_leaf, priv, tc_bw, extack);
+}
+
+static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm_rate *rate_node,
+					 void *priv,
+					 u32 *tc_bw,
+					 struct netlink_ext_ack *extack)
+{
+#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
+	return mlx5_esw_devlink_rate_node_tc_bw_set(NULL, priv, tc_bw, extack);
+#else
+	return -ENOTSUPP;
+#endif
+}
+
 static int mlx5_devm_rate_node_new(struct mlxdevm_rate *rate_node, void **priv,
 				   struct netlink_ext_ack *extack)
 {
@@ -673,6 +693,8 @@ static const struct mlxdevm_ops mlx5_devm_ops = {
 	.rate_leaf_parent_set = mlx5_devm_rate_leaf_parent_set,
 	.rate_node_parent_set = mlx5_devm_rate_node_parent_set,
 	.rate_node_tx_max_set = mlx5_devm_rate_node_tx_max_set,
+	.rate_leaf_tc_bw_set = mlx5_devm_rate_leaf_tc_bw_set,
+	.rate_node_tc_bw_set = mlx5_devm_rate_node_tc_bw_set,
 	.rate_node_tx_share_set = mlx5_devm_rate_node_tx_share_set,
 	.rate_node_new = mlx5_devm_rate_node_new,
 	.rate_node_del = mlx5_devm_rate_node_del,

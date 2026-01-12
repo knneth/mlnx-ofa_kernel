@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c   | 11 ++++++-----
- 1 file changed, 6 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/en_fs_ethtool.c        | 99 ++++++++++++++++++-
+ 1 file changed, 94 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
@@ -43,15 +43,105 @@ Subject: [PATCH] BACKPORT:
  static int validate_flow(struct mlx5e_priv *priv,
  			 struct ethtool_rx_flow_spec *fs)
  {
-@@ -975,6 +974,7 @@ static int mlx5e_get_rss_hash_opt(struct
+@@ -894,6 +893,87 @@ static int flow_type_to_traffic_type(u32
+ 	}
+ }
+ 
++#ifdef HAVE_ETHTOOL_GET_RXFH_FIELDS
++int mlx5e_ethtool_set_rxfh_fields(struct mlx5e_priv *priv,
++				  const struct ethtool_rxfh_fields *nfc,
++				  struct netlink_ext_ack *extack)
++{
++	u8 rx_hash_field = 0;
++	u32 flow_type = 0;
++	u32 rss_idx;
++	int err;
++	int tt;
++
++	rss_idx = nfc->rss_context;
++
++	flow_type = flow_type_mask(nfc->flow_type);
++	tt = flow_type_to_traffic_type(flow_type);
++	if (tt < 0)
++		return tt;
++
++	/*  RSS does not support anything other than hashing to queues
++	 *  on src IP, dest IP, TCP/UDP src port and TCP/UDP dest
++	 *  port.
++	 */
++	if (flow_type != TCP_V4_FLOW &&
++	    flow_type != TCP_V6_FLOW &&
++	    flow_type != UDP_V4_FLOW &&
++	    flow_type != UDP_V6_FLOW)
++		return -EOPNOTSUPP;
++
++	if (nfc->data & ~(RXH_IP_SRC | RXH_IP_DST |
++			  RXH_L4_B_0_1 | RXH_L4_B_2_3))
++		return -EOPNOTSUPP;
++
++	if (nfc->data & RXH_IP_SRC)
++		rx_hash_field |= MLX5_HASH_FIELD_SEL_SRC_IP;
++	if (nfc->data & RXH_IP_DST)
++		rx_hash_field |= MLX5_HASH_FIELD_SEL_DST_IP;
++	if (nfc->data & RXH_L4_B_0_1)
++		rx_hash_field |= MLX5_HASH_FIELD_SEL_L4_SPORT;
++	if (nfc->data & RXH_L4_B_2_3)
++		rx_hash_field |= MLX5_HASH_FIELD_SEL_L4_DPORT;
++
++	mutex_lock(&priv->state_lock);
++	err = mlx5e_rx_res_rss_set_hash_fields(priv->rx_res, rss_idx, tt, rx_hash_field);
++	mutex_unlock(&priv->state_lock);
++
++	return err;
++}
++
++int mlx5e_ethtool_get_rxfh_fields(struct mlx5e_priv *priv,
++				  struct ethtool_rxfh_fields *nfc)
++{
++	int hash_field = 0;
++	u32 flow_type = 0;
++	u32 rss_idx;
++	int tt;
++
++	rss_idx = nfc->rss_context;
++
++	flow_type = flow_type_mask(nfc->flow_type);
++	tt = flow_type_to_traffic_type(flow_type);
++	if (tt < 0)
++		return tt;
++
++	hash_field = mlx5e_rx_res_rss_get_hash_fields(priv->rx_res, rss_idx, tt);
++	if (hash_field < 0)
++		return hash_field;
++
++	nfc->data = 0;
++
++	if (hash_field & MLX5_HASH_FIELD_SEL_SRC_IP)
++		nfc->data |= RXH_IP_SRC;
++	if (hash_field & MLX5_HASH_FIELD_SEL_DST_IP)
++		nfc->data |= RXH_IP_DST;
++	if (hash_field & MLX5_HASH_FIELD_SEL_L4_SPORT)
++		nfc->data |= RXH_L4_B_0_1;
++	if (hash_field & MLX5_HASH_FIELD_SEL_L4_DPORT)
++		nfc->data |= RXH_L4_B_2_3;
++
++	return 0;
++}
++#else /* 6.16 and below */
+ static int mlx5e_set_rss_hash_opt(struct mlx5e_priv *priv,
+ 				  struct ethtool_rxnfc *nfc)
+ {
+@@ -974,7 +1054,9 @@ static int mlx5e_get_rss_hash_opt(struct
+ 
  	return 0;
  }
++#endif
  
 +#ifdef CONFIG_MLX5_EN_RXNFC
  int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd)
  {
  	int err = 0;
-@@ -982,6 +982,7 @@ int mlx5e_ethtool_set_rxnfc(struct mlx5e
+@@ -982,13 +1064,17 @@ int mlx5e_ethtool_set_rxnfc(struct mlx5e
  	switch (cmd->cmd) {
  	case ETHTOOL_SRXCLSRLINS:
  		err = mlx5e_ethtool_flow_replace(priv, &cmd->fs, cmd->rss_context);
@@ -59,7 +149,30 @@ Subject: [PATCH] BACKPORT:
  		break;
  	case ETHTOOL_SRXCLSRLDEL:
  		err = mlx5e_ethtool_flow_remove(priv, cmd->fs.location);
-@@ -1023,4 +1024,4 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e
+ 		break;
++#ifndef HAVE_ETHTOOL_GET_RXFH_FIELDS
++	/* Older kernels: use rxnfc for RXFH operations */
+ 	case ETHTOOL_SRXFH:
+ 		err = mlx5e_set_rss_hash_opt(priv, cmd);
+ 		break;
++#endif
+ 	default:
+ 		err = -EOPNOTSUPP;
+ 		break;
+@@ -1013,9 +1099,12 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e
+ 	case ETHTOOL_GRXCLSRLALL:
+ 		err = mlx5e_ethtool_get_all_flows(priv, info, rule_locs);
+ 		break;
++#ifndef HAVE_ETHTOOL_GET_RXFH_FIELDS
++	/* Older kernels: use rxnfc for RXFH operations */
+ 	case ETHTOOL_GRXFH:
+ 		err =  mlx5e_get_rss_hash_opt(priv, info);
+ 		break;
++#endif
+ 	default:
+ 		err = -EOPNOTSUPP;
+ 		break;
+@@ -1023,4 +1112,4 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e
  
  	return err;
  }

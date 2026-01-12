@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mlx5_ib.h
 
 Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
 ---
- drivers/infiniband/hw/mlx5/mlx5_ib.h | 23 +++++++++++++++++++----
- 1 file changed, 19 insertions(+), 4 deletions(-)
+ drivers/infiniband/hw/mlx5/mlx5_ib.h | 27 +++++++++++++++++++++++----
+ 1 file changed, 23 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/hw/mlx5/mlx5_ib.h
 +++ b/drivers/infiniband/hw/mlx5/mlx5_ib.h
@@ -17,7 +17,7 @@ Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
  	refcount_t usecount;
  	/* Cacheable user Mkey must hold either a rb_key or a cache_ent. */
  	struct mlx5r_cache_rb_key rb_key;
-@@ -1345,8 +1345,11 @@ to_mmmap(struct rdma_user_mmap_entry *rd
+@@ -1347,8 +1347,11 @@ to_mmmap(struct rdma_user_mmap_entry *rd
  
  int mlx5_ib_dev_res_cq_init(struct mlx5_ib_dev *dev);
  int mlx5_ib_dev_res_srq_init(struct mlx5_ib_dev *dev);
@@ -31,7 +31,7 @@ Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
  void mlx5_ib_db_unmap_user(struct mlx5_ib_ucontext *context, struct mlx5_db *db);
  void __mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
  void mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
-@@ -1407,7 +1410,8 @@ int mlx5_ib_advise_mr(struct ib_pd *pd,
+@@ -1411,7 +1414,8 @@ int mlx5_ib_advise_mr(struct ib_pd *pd,
  int mlx5_ib_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
  int mlx5_ib_dealloc_mw(struct ib_mw *mw);
  struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
@@ -41,7 +41,7 @@ Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
  void mlx5_ib_free_odp_mr(struct mlx5_ib_mr *mr);
  struct ib_mr *mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
  				    u64 length, u64 virt_addr, int access_flags,
-@@ -1487,6 +1491,10 @@ int mlx5r_odp_create_eq(struct mlx5_ib_d
+@@ -1491,6 +1495,10 @@ int mlx5r_odp_create_eq(struct mlx5_ib_d
  void mlx5_ib_odp_cleanup_one(struct mlx5_ib_dev *ibdev);
  int __init mlx5_ib_odp_init(void);
  void mlx5_ib_odp_cleanup(void);
@@ -52,7 +52,7 @@ Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
  int mlx5_odp_init_mkey_cache(struct mlx5_ib_dev *dev);
  void mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
  			   struct mlx5_ib_mr *mr, int flags);
-@@ -1528,10 +1536,17 @@ static inline int mlx5_ib_init_dmabuf_mr
+@@ -1532,10 +1540,17 @@ static inline int mlx5_ib_init_dmabuf_mr
  {
  	return -EOPNOTSUPP;
  }
@@ -70,3 +70,15 @@ Change-Id: I66c4cbf9b72c37bd6a4ec1c87be5c697c806c548
  /* Needed for rep profile */
  void __mlx5_ib_remove(struct mlx5_ib_dev *dev,
  		      const struct mlx5_ib_profile *profile,
+@@ -1829,7 +1844,11 @@ static inline unsigned long
+ mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf,
+ 				int access_mode)
+ {
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 	return mlx5_umem_mkc_find_best_pgsz(to_mdev(umem_dmabuf->umem.ibdev),
++#else
++	return mlx5_umem_mkc_find_best_pgsz(to_mdev(umem_dmabuf->umem.context->device),
++#endif
+ 					    &umem_dmabuf->umem,
+ 					    umem_dmabuf->umem.iova,
+ 					    access_mode);

@@ -46,7 +46,7 @@ Subject: [PATCH] BACKPORT:
  	return devlink_priv(devlink);
  }
  
-@@ -37,7 +53,7 @@ void mlx5e_destroy_devlink(struct mlx5e_
+@@ -37,21 +53,40 @@ void mlx5e_destroy_devlink(struct mlx5e_
  	devlink_free(devlink);
  }
  
@@ -54,9 +54,8 @@ Subject: [PATCH] BACKPORT:
 +void
  mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
  {
- 	u64 parent_id;
-@@ -47,14 +63,33 @@ mlx5e_devlink_get_port_parent_id(struct
- 	memcpy(ppid->id, &parent_id, sizeof(parent_id));
+ 	BUILD_BUG_ON(MLX5_SW_IMAGE_GUID_MAX_BYTES > MAX_PHYS_ITEM_ID_LEN);
+ 	mlx5_query_nic_sw_system_image_guid(dev, ppid->id, &ppid->id_len);
  }
  
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
@@ -90,7 +89,7 @@ Subject: [PATCH] BACKPORT:
  	if (mlx5_core_is_pf(mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
  		attrs.phys.port_number = mlx5_get_dev_index(mdev);
-@@ -70,13 +105,110 @@ int mlx5e_devlink_port_register(struct m
+@@ -67,13 +102,110 @@ int mlx5e_devlink_port_register(struct m
  		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
  	}
  

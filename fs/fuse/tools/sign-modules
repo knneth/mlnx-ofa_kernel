@@ -39,7 +39,7 @@ if [ ! -e "${MODULE_SIGN_PUB_KEY}" ]; then
     exit 1
 fi
 
-modules=`find $moddir -name '*.ko' -o -name '*.ko.gz'`
+modules=`find $moddir -name '*.ko' -o -name '*.ko.gz' -o -name '*.ko.xz'`
 for mod in $modules
 do
     dir=`dirname $mod`
@@ -49,10 +49,12 @@ do
     rm -f ${dir}/${file}.{sig,dig}
 done
 
-RANDOMMOD=$(find $moddir -type f -name '*.ko' -o -name '*.ko.gz' | sort -R | tail -n 1)
-if [ "~Module signature appended~" != "$(tail -c 28 $RANDOMMOD)" ]; then
-    echo "*** Modules are unsigned! ***"
-    exit 1
-fi
+for mod in $modules
+do
+  if [ "~Module signature appended~" != "$(tail -c 28 $mod)" ]; then
+      echo "*** Modules are unsigned! (see $mod) ***"
+      exit 1
+  fi
+done
 
 exit 0
