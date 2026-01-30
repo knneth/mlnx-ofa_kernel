@@ -180,6 +180,9 @@ static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
 	if (!port)
 		return -ENODEV;
 
+	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
+		return -EOPNOTSUPP;
+
 	devl_lock(devlink);
 	ret = mlx5_devlink_sf_port_del(devlink, port->dl_port, extack);
 	devl_unlock(devlink);
@@ -791,7 +794,6 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 {
 	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(devm);
 	u16 *arr = val.vu16arr.data;
-	int max_eqs_sf;
 	int i;
 
 	if (!mlx5_have_dedicated_irqs(dev)) {
@@ -809,9 +811,8 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 			return -EINVAL;
 		}
 	}
-	max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
-			   mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev)));
-	if (i > max_eqs_sf) {
+			   ;
+	if (val.vu16arr.array_len > mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev))) {
 		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
 		return -EINVAL;
 	}

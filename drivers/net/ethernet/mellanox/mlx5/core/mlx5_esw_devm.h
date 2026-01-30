@@ -17,21 +17,30 @@ struct mlx5_devm_port {
 	u16 vport_num;
 };
 
+int mlx5_devm_pf_vf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
+				  struct devlink_port *dl_port);
+
 int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
 			       u32 contoller, u32 sfnum, struct devlink_port *dl_port);
-void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num);
+void mlx5_devm_port_unregister(struct mlx5_core_dev *dev, u16 vport_num);
 void mlx5_devm_sf_port_type_eth_set(struct mlx5_core_dev *dev, u16 vport_num,
 				    struct net_device *ndev);
 u32 mlx5_devm_sf_vport_to_sfnum(struct mlx5_core_dev *dev, u16 vport_num);
 u32 mlx5_devm_sf_vport_to_controller(struct mlx5_core_dev *dev, u16 vport_num);
 #else
-static inline int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
+static int mlx5_devm_pf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
+			       struct devlink_port *dl_port)
+{
+	return 0;
+}
+
+static inline int mlx5_devm_port_register(struct mlx5_core_dev *dev, u16 vport_num,
 			       u32 contoller, u32 sfnum, struct devlink_port *dl_port)
 {
 	return 0;
 }
 
-static inline void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
+static inline void mlx5_devm_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
 {
 }
 

@@ -6,6 +6,74 @@
 #include "eswitch.h"
 #include "mlx5_esw_devm.h"
 
+static void port_attrs_set(struct mlx5_core_dev *dev,
+			   struct mlxdevm_port_attrs *attrs,
+			   u16 vport_num)
+{
+	u32 controller = 0;
+	bool external;
+	u16 pfnum;
+
+	external = mlx5_core_is_ecpf_esw_manager(dev);
+	if (external)
+		controller = dev->priv.eswitch->offloads.host_number + 1;
+
+	pfnum = PCI_FUNC(dev->pdev->devfn);
+
+	if (vport_num == MLX5_VPORT_PF) {
+		attrs->pci_pf.controller = controller;
+		attrs->pci_pf.pf = pfnum;
+		attrs->pci_pf.external = external;
+		attrs->flavour = MLXDEVM_PORT_FLAVOUR_PCI_PF;
+	} else {
+		attrs->pci_vf.controller = controller;
+		attrs->pci_vf.pf = pfnum;
+		attrs->pci_vf.vf = vport_num - 1;
+		attrs->pci_vf.external = external;
+		attrs->flavour = MLXDEVM_PORT_FLAVOUR_PCI_VF;
+	}
+}
+
+int mlx5_devm_pf_vf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
+				 struct devlink_port *dl_port)
+{
+	struct mlx5_devm_device *devm_dev;
+	struct mlxdevm_port_attrs attrs;
+	struct mlx5_devm_port *port;
+	unsigned int dl_port_index;
+	u16 pfnum;
+	int ret;
+
+	devm_dev = mlx5_devm_device_get(dev);
+	if (!devm_dev)
+		return -ENODEV;
+	port = kzalloc(sizeof(*port), GFP_KERNEL);
+	if (!port)
+		return -ENOMEM;
+	pfnum = mlx5_get_dev_index(dev);
+	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
+	port->port_index = dl_port_index;
+	port->vport_num = vport_num;
+
+	port_attrs_set(dev, &attrs, vport_num);
+	mlxdevm_port_attr_set(&port->port, &attrs);
+
+	ret = mlxdevm_port_register(&devm_dev->device, &port->port, dl_port_index);
+	if (ret)
+		goto port_err;
+
+	port->port.dl_port = dl_port;
+	down_write(&devm_dev->port_list_rwsem);
+	list_add_tail(&port->list, &devm_dev->port_list);
+	up_write(&devm_dev->port_list_rwsem);
+
+	return 0;
+
+port_err:
+	kfree(port);
+	return ret;
+}
+
 int mlx5_devm_sf_port_register(struct mlx5_core_dev *dev, u16 vport_num,
 			       u32 controller, u32 sfnum, struct devlink_port *dl_port)
 {
@@ -50,7 +118,7 @@ port_err:
 	return ret;
 }
 
-void mlx5_devm_sf_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
+void mlx5_devm_port_unregister(struct mlx5_core_dev *dev, u16 vport_num)
 {
 	struct mlx5_devm_device *devm_dev;
 	struct mlx5_devm_port *port, *tmp;

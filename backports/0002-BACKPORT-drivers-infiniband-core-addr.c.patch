@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
 Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
 ---
- drivers/infiniband/core/addr.c | 100 +++++++++++++++++++++++++++++----
- 1 file changed, 90 insertions(+), 10 deletions(-)
+ drivers/infiniband/core/addr.c | 98 ++++++++++++++++++++++++++++++----
+ 1 file changed, 89 insertions(+), 9 deletions(-)
 
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
@@ -203,19 +203,10 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  static int addr6_resolve(struct sockaddr *src_sock,
  			 const struct sockaddr *dst_sock,
  			 struct rdma_dev_addr *addr,
-@@ -450,7 +517,7 @@ static int addr6_resolve(struct sockaddr
+@@ -473,6 +540,15 @@ static int rdma_set_src_addr_rcu(struct
+ 				 const struct dst_entry *dst)
  {
- 	return -EADDRNOTAVAIL;
- }
--#endif
-+#endif /*IS_ENABLED(CONFIG_IPV6) */
- 
- static int addr_resolve_neigh(const struct dst_entry *dst,
- 			      const struct sockaddr *dst_in,
-@@ -477,6 +544,15 @@ static int copy_src_l2_addr(struct rdma_
- 			    const struct net_device *ndev)
- {
- 	int ret = 0;
+ 	struct net_device *ndev = READ_ONCE(dst->dev);
 +#ifndef HAVE_RT_USES_GATEWAY
 +	const struct sockaddr_in *dst_in4 =
 +		(const struct sockaddr_in *)dst_in;
@@ -226,9 +217,9 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
 +		(const void *)&dst_in6->sin6_addr;
 +#endif
  
- 	if (dst->dev->flags & IFF_LOOPBACK)
- 		ret = rdma_translate_ip(dst_in, dev_addr);
-@@ -488,7 +564,11 @@ static int copy_src_l2_addr(struct rdma_
+ 	*ndev_flags = ndev->flags;
+ 	/* A physical device must be the RDMA device to use */
+@@ -499,7 +575,11 @@ static int rdma_set_src_addr_rcu(struct
  	 * we're definitely in RoCE v2 (as RoCE v1 isn't routable) set the
  	 * network type accordingly.
  	 */

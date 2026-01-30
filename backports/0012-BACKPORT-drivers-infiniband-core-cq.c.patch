@@ -147,7 +147,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  	return ERR_PTR(ret);
  }
  EXPORT_SYMBOL(__ib_alloc_cq);
-@@ -327,9 +356,13 @@ void ib_free_cq(struct ib_cq *cq)
+@@ -332,9 +361,13 @@ void ib_free_cq(struct ib_cq *cq)
  	switch (cq->poll_ctx) {
  	case IB_POLL_DIRECT:
  		break;
@@ -161,13 +161,13 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cancel_work_sync(&cq->work);
-@@ -339,7 +372,9 @@ void ib_free_cq(struct ib_cq *cq)
+@@ -344,7 +377,9 @@ void ib_free_cq(struct ib_cq *cq)
  	}
  
  	rdma_dim_destroy(cq);
 +#ifdef HAVE_TRACE_EVENTS_RDMA_CORE_HEADER
  	trace_cq_free(cq);
 +#endif
- 	ret = cq->device->ops.destroy_cq(cq, NULL);
- 	WARN_ONCE(ret, "Destroy of kernel CQ shouldn't fail");
- 	rdma_restrack_del(&cq->res);
+ 	if (cq->device->ops.post_destroy_cq)
+ 		ret = cq->device->ops.post_destroy_cq(cq);
+ 	else

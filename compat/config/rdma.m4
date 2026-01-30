@@ -179,21 +179,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-	#include <rdma/ib_umem.h>
-	],[
-		ib_umem_dmabuf_get_pinned(NULL, 0, 0, 0, 0);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_IB_UMEM_DMABUF_GET_PINNED, 1,
-			[rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if has is_tcf_police])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <net/tc_act/tc_police.h>
@@ -7466,6 +7451,27 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+
+		static void my_xdo_dev_state_delete(struct net_device *dev, struct xfrm_state *x)
+		{
+		}
+	],[
+		struct xfrmdev_ops x = {
+			.xdo_dev_state_delete = my_xdo_dev_state_delete,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE, 1,
+			  [if struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct xfrmdev_ops has member xdo_dev_state_add get extack])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -12506,6 +12512,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(no)
 	])
+
+
+	AC_MSG_CHECKING([io_uring_cmd_import_fixed has 6 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/io_uring/cmd.h>
+	],[
+		int r = io_uring_cmd_import_fixed(0, 0, 0, NULL, NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS, 1,
+			[io_uring_cmd_import_fixed has 6 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 ])
 #
 # COMPAT_CONFIG_HEADERS

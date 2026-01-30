@@ -42,6 +42,33 @@ struct mlxdevm_rate_group {
 };
 
 /**
+ * struct mlxdevm_port_pci_pf_attrs - mlxdevm port's PCI PF attributes
+ * @controller: Associated controller number
+ * @pf: associated PCI function number for the devlink port instance
+ * @external: when set, indicates if a port is for an external controller
+ */
+struct mlxdevm_port_pci_pf_attrs {
+	u32 controller;
+	u16 pf;
+	u8 external:1;
+};
+
+/**
+ * struct mlxdevm_port_pci_vf_attrs - mlxdevm port's PCI VF attributes
+ * @controller: Associated controller number
+ * @pf: associated PCI function number for the mlxdevm port instance
+ * @vf: associated PCI VF number of a PF for the mlxdevm port instance;
+ *      VF number starts from 0 for the first PCI virtual function
+ * @external: when set, indicates if a port is for an external controller
+ */
+struct mlxdevm_port_pci_vf_attrs {
+	u32 controller;
+	u16 pf;
+	u16 vf;
+	u8 external:1;
+};
+
+/**
  * struct mlxdevm_port_pci_sf_attrs - mlxdevm port's PCI SF attributes
  * @controller: Associated controller number
  * @sf: Associated PCI SF for of the PCI PF for this port.
@@ -63,6 +90,8 @@ struct mlxdevm_port_attrs {
 	enum mlxdevm_port_flavour flavour;
 	union {
 		struct mlxdevm_port_pci_sf_attrs pci_sf;
+		struct mlxdevm_port_pci_pf_attrs pci_pf;
+		struct mlxdevm_port_pci_vf_attrs pci_vf;
 	};
 };
 

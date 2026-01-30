@@ -713,6 +713,12 @@ static ssize_t max_tx_rate_show(struct mlx5_sriov_vf *g,
 		       "usage: write <Rate (Mbit/s)> to set VF max rate\n");
 }
 
+static bool mlx5_esw_qos_is_needed(struct mlx5_esw_sched_node *parent, u64 tx_max,
+				  u64 tx_share)
+{
+	return parent || tx_max || tx_share;
+}
+
 static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 				 struct vf_attributes *oa,
 				 const char *buf, size_t count)
@@ -726,6 +732,19 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 	err = kstrtou32(buf, 10, &max_tx_rate);
 	if (err)
 		return err;
+
+	if (!vport->qos.sched_node) {
+		/* QoS is not enabled, return if setting 0 to avoid enabling
+		 * vport QoS unnecessarily.
+		 */
+		if (!max_tx_rate)
+			return count;
+	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
+					   max_tx_rate,
+					   vport->qos.sched_node->min_rate)) {
+		mlx5_esw_qos_vport_disable(vport);
+		return count;
+	}
 
 	esw_qos_lock(esw);
 	err = mlx5_esw_qos_set_vport_max_rate(vport, max_tx_rate, NULL);
@@ -958,6 +977,19 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 	err = kstrtou32(buf, 10, &min_tx_rate);
 	if (err)
 		return err;
+
+	if (!vport->qos.sched_node) {
+		/* QoS is not enabled, return if setting 0 to avoid enabling
+		 * vport QoS unnecessarily.
+		 */
+		if (!min_tx_rate)
+			return count;
+	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
+					   vport->qos.sched_node->max_rate,
+					   min_tx_rate)) {
+		mlx5_esw_qos_vport_disable(vport);
+		return count;
+	}
 
 	esw_qos_lock(esw);
 	err = mlx5_esw_qos_set_vport_min_rate(vport, min_tx_rate, NULL);

@@ -1144,6 +1144,23 @@ mlxdevm_nl_port_attrs_put(struct sk_buff *msg, struct mlxdevm_port *port)
 				attrs->pci_sf.sf))
 			return -EMSGSIZE;
 		break;
+	case MLXDEVM_PORT_FLAVOUR_PCI_PF:
+		if (nla_put_u32(msg, MLXDEVM_ATTR_PORT_CONTROLLER_NUMBER,
+				attrs->pci_pf.controller) ||
+		    nla_put_u16(msg, MLXDEVM_ATTR_PORT_PCI_PF_NUMBER, attrs->pci_pf.pf))
+			return -EMSGSIZE;
+		if (nla_put_u8(msg, MLXDEVM_ATTR_PORT_EXTERNAL, attrs->pci_pf.external))
+			return -EMSGSIZE;
+		break;
+	case MLXDEVM_PORT_FLAVOUR_PCI_VF:
+		if (nla_put_u32(msg, MLXDEVM_ATTR_PORT_CONTROLLER_NUMBER,
+				attrs->pci_vf.controller) ||
+		    nla_put_u16(msg, MLXDEVM_ATTR_PORT_PCI_PF_NUMBER, attrs->pci_vf.pf) ||
+		    nla_put_u16(msg, MLXDEVM_ATTR_PORT_PCI_VF_NUMBER, attrs->pci_vf.vf))
+			return -EMSGSIZE;
+		if (nla_put_u8(msg, MLXDEVM_ATTR_PORT_EXTERNAL, attrs->pci_vf.external))
+			return -EMSGSIZE;
+		break;
 	default:
 		break;
 	}
@@ -1224,6 +1241,10 @@ mlxdevm_port_fn_state_fill(const struct mlxdevm_ops *ops,
 	enum mlxdevm_port_fn_state state;
 	int err;
 
+	/* state and opstate are only applicable for sf */
+	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
+		return 0;
+
 	if (!ops->port_fn_state_get)
 		return 0;
 
@@ -1268,6 +1289,8 @@ mlxdevm_port_fn_cap_fill(const struct mlxdevm_ops *ops,
 	int err;
 
 	if (!ops->port_fn_cap_get)
+		return 0;
+	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
 		return 0;
 
 	err = ops->port_fn_cap_get(port, &cap, extack);
@@ -2238,6 +2261,8 @@ static int mlxdevm_port_fn_state_set(struct mlxdevm_port *port,
 				   "Function does not support state setting");
 		return -EOPNOTSUPP;
 	}
+	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
+		return -EOPNOTSUPP;
 	return ops->port_fn_state_set(port, state, extack);
 }
 
@@ -2451,6 +2476,8 @@ mlxdevm_port_fn_cap_set(struct mlxdevm_port *port,
 		NL_SET_ERR_MSG_MOD(extack, "Function capability does not support setting");
 		return -EOPNOTSUPP;
 	}
+	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
+		return -EOPNOTSUPP;
 
 	tb = kcalloc(MLXDEVM_PORT_FUNCTION_ATTR_MAX + 1, sizeof(struct nlattr *), GFP_KERNEL);
 	if (!tb)

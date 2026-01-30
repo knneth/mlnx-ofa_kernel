@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mr.c
 
 Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
 ---
- drivers/infiniband/hw/mlx5/mr.c | 71 ++++++++++++++++++++++++++++-----
- 1 file changed, 60 insertions(+), 11 deletions(-)
+ drivers/infiniband/hw/mlx5/mr.c | 77 ++++++++++++++++++++++++++++-----
+ 1 file changed, 66 insertions(+), 11 deletions(-)
 
 --- a/drivers/infiniband/hw/mlx5/mr.c
 +++ b/drivers/infiniband/hw/mlx5/mr.c
@@ -173,41 +173,82 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2143,15 +2179,19 @@ static int mlx5_revoke_mr(struct mlx5_ib
- 	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
- 	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
- 	bool is_odp = is_odp_mr(mr);
+@@ -2140,17 +2176,21 @@ void mlx5_ib_revoke_data_direct_mrs(stru
+ 
+ static int mlx5_umr_revoke_mr_with_lock(struct mlx5_ib_mr *mr)
+ {
 +#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
  	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
- 		!to_ib_umem_dmabuf(mr->umem)->pinned;
+ 			      !to_ib_umem_dmabuf(mr->umem)->pinned;
 +#endif
- 	int rc = 0;
+ 	bool is_odp = is_odp_mr(mr);
+ 	int ret = 0;
  
  	if (is_odp)
  		mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  
 +#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
  	if (is_odp_dma_buf)
- 		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv, NULL);
+ 		dma_resv_lock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv,
+ 			      NULL);
 +#endif
  
- 	if (mr->mmkey.cacheable && !mlx5r_umr_revoke_mr(mr) && !cache_ent_find_and_store(dev, mr)) {
- 		ent = mr->mmkey.cache_ent;
-@@ -2188,11 +2228,13 @@ out:
+ 	ret = mlx5r_umr_revoke_mr(mr);
+ 
+@@ -2160,20 +2200,24 @@ static int mlx5_umr_revoke_mr_with_lock(
  		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  	}
  
 +#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
  	if (is_odp_dma_buf) {
- 		if (!rc)
+ 		if (!ret)
  			to_ib_umem_dmabuf(mr->umem)->private = NULL;
- 		dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
+ 		dma_resv_unlock(
+ 			to_ib_umem_dmabuf(mr->umem)->attach->dmabuf->resv);
  	}
 +#endif
  
- 	return rc;
+ 	return ret;
  }
-@@ -3154,10 +3196,17 @@ static struct attribute *cache_default_a
+ 
+ static int mlx5r_handle_mkey_cleanup(struct mlx5_ib_mr *mr)
+ {
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	bool is_odp_dma_buf = is_dmabuf_mr(mr) &&
+ 			      !to_ib_umem_dmabuf(mr->umem)->pinned;
++#endif
+ 	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
+ 	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
+ 	bool is_odp = is_odp_mr(mr);
+@@ -2201,10 +2245,12 @@ static int mlx5r_handle_mkey_cleanup(str
+ 		if (is_odp)
+ 			mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 		if (is_odp_dma_buf)
+ 			dma_resv_lock(to_ib_umem_dmabuf(mr->umem)
+ 					      ->attach->dmabuf->resv,
+ 				      NULL);
++#endif
+ 
+ 		if (mr->umem && mr->umem->is_peer) {
+ 			ret = mlx5r_umr_revoke_mr(mr);
+@@ -2222,12 +2268,14 @@ out:
+ 			mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
+ 		}
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 		if (is_odp_dma_buf) {
+ 			if (!ret)
+ 				to_ib_umem_dmabuf(mr->umem)->private = NULL;
+ 			dma_resv_unlock(to_ib_umem_dmabuf(mr->umem)
+ 						->attach->dmabuf->resv);
+ 		}
++#endif
+ 	}
+ 
+ 	return ret;
+@@ -3190,10 +3238,17 @@ static struct attribute *cache_default_a
  	NULL
  };
  

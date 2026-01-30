@@ -113,7 +113,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  }
  
  int mlx5_esw_offloads_pf_vf_devlink_port_init(struct mlx5_eswitch *esw,
-@@ -85,7 +134,9 @@ void mlx5_esw_offloads_pf_vf_devlink_por
+@@ -92,7 +141,9 @@ void mlx5_esw_offloads_pf_vf_devlink_por
  	kfree(vport->dl_port);
  	vport->dl_port = NULL;
  }
@@ -123,7 +123,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  static const struct devlink_port_ops mlx5_esw_pf_vf_dl_port_ops = {
  	.port_fn_hw_addr_get = mlx5_devlink_port_fn_hw_addr_get,
  	.port_fn_hw_addr_set = mlx5_devlink_port_fn_hw_addr_set,
-@@ -94,14 +145,19 @@ static const struct devlink_port_ops mlx
+@@ -101,14 +152,19 @@ static const struct devlink_port_ops mlx
  	.port_fn_migratable_get = mlx5_devlink_port_fn_migratable_get,
  	.port_fn_migratable_set = mlx5_devlink_port_fn_migratable_set,
  #ifdef CONFIG_XFRM_OFFLOAD
@@ -145,7 +145,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  
  static void mlx5_esw_offloads_sf_devlink_port_attrs_set(struct mlx5_eswitch *esw,
  							struct devlink_port *dl_port,
-@@ -113,9 +169,18 @@ static void mlx5_esw_offloads_sf_devlink
+@@ -120,9 +176,18 @@ static void mlx5_esw_offloads_sf_devlink
  
  	pfnum = mlx5_get_dev_index(dev);
  	mlx5_esw_get_port_parent_id(dev, &ppid);
@@ -164,7 +164,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  }
  
  int mlx5_esw_offloads_sf_devlink_port_init(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-@@ -135,9 +200,12 @@ void mlx5_esw_offloads_sf_devlink_port_c
+@@ -142,9 +207,12 @@ void mlx5_esw_offloads_sf_devlink_port_c
  	vport->dl_port = NULL;
  }
  
@@ -177,7 +177,7 @@ Change-Id: I567baa0f229c4fdeefee919fe9bbb67f67061a41
  #endif
  	.port_fn_hw_addr_get = mlx5_devlink_port_fn_hw_addr_get,
  	.port_fn_hw_addr_set = mlx5_devlink_port_fn_hw_addr_set,
-@@ -147,61 +215,123 @@ static const struct devlink_port_ops mlx
+@@ -154,61 +222,123 @@ static const struct devlink_port_ops mlx
  	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
  	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,
  #endif

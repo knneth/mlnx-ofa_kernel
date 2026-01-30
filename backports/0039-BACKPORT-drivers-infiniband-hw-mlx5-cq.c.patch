@@ -53,7 +53,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	u32 *cqb = NULL;
  	void *cqc;
  	int cqe_size;
-@@ -1182,9 +1198,15 @@ static int resize_user(struct mlx5_ib_de
+@@ -1197,9 +1213,15 @@ static int resize_user(struct mlx5_ib_de
  	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
  		return -EINVAL;
  
@@ -69,7 +69,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	if (IS_ERR(umem)) {
  		err = PTR_ERR(umem);
  		return err;
-@@ -1285,7 +1307,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
+@@ -1300,7 +1322,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
  	unsigned int page_offset_quantized = 0;
  	unsigned int page_shift;
  	int inlen;

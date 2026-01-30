@@ -1087,9 +1087,6 @@
 /* hwmon_chip_info get const nvme_hwmon_ops */
 #undef HAVE_HWMON_CHIP_INFO_CONST_INFO
 
-/* rdma/ib_umem.h ib_umem_dmabuf_get_pinned defined */
-#undef HAVE_IB_UMEM_DMABUF_GET_PINNED
-
 /* ida_alloc is defined */
 #undef HAVE_IDA_ALLOC
 
@@ -1125,6 +1122,9 @@
 
 /* linux/io_uring/cmd.h exists */
 #undef HAVE_IO_URING_CMD_H
+
+/* io_uring_cmd_import_fixed has 6 params */
+#undef HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS
 
 /* ip6_dst_hoplimit is exported by the kernel */
 #undef HAVE_IP6_DST_HOPLIMIT
@@ -2230,6 +2230,9 @@
 
 /* struct xfrmdev_ops has member xdo_dev_policy_add get extack */
 #undef HAVE_XDO_DEV_POLICY_ADD_GET_EXTACK
+
+/* if struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter */
+#undef HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE
 
 /* struct xfrmdev_ops has member xdo_dev_state_update_curlft */
 #undef HAVE_XDO_DEV_STATE_UPDATE_CURLFT

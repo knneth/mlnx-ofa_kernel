@@ -22,7 +22,7 @@ Change-Id: I3ababd83fac4365cbf119b9bdf4c70716f957efd
  	if (err)
  		return err;
  
-+#ifdef HAVE_IB_UMEM_DMABUF_GET_PINNED
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
  	if (uverbs_attr_is_valid(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_DMABUF_FD)) {
  		struct ib_umem_dmabuf *umem_dmabuf;
  		int dmabuf_fd;
@@ -32,7 +32,7 @@ Change-Id: I3ababd83fac4365cbf119b9bdf4c70716f957efd
  		obj->umem = &umem_dmabuf->umem;
 -	} else {
 +	} else 
-+#endif
++#endif	/* HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS  */
 +	{
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
  		obj->umem = ib_umem_get_peer(&dev->ib_dev, addr, size, access_flags, 0);

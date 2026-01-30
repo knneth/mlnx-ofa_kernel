@@ -2767,7 +2767,7 @@ int mlx5_esw_offloads_init_sf_rep(struct mlx5_eswitch *esw, struct mlx5_vport *v
 void mlx5_esw_offloads_cleanup_sf_rep(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 	mlx5_esw_offloads_sf_devlink_port_cleanup(esw, vport);
-	mlx5_devm_sf_port_unregister(esw->dev, vport->vport);
+	mlx5_devm_port_unregister(esw->dev, vport->vport);
 }
 
 int mlx5_esw_offloads_load_rep(struct mlx5_eswitch *esw, struct mlx5_vport *vport)

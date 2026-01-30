@@ -248,7 +248,7 @@ Change-Id: I16786695be3b70fde20de9b26b9eac06de91273c
  	SET_DEVICE_OP(dev_ops, iw_accept);
  	SET_DEVICE_OP(dev_ops, iw_add_ref);
  	SET_DEVICE_OP(dev_ops, iw_connect);
-@@ -2943,14 +3003,26 @@ static int __init ib_core_init(void)
+@@ -2945,14 +3005,26 @@ static int __init ib_core_init(void)
  		goto err;
  
  	ib_comp_wq = alloc_workqueue("ib-comp-wq",
@@ -278,7 +278,7 @@ Change-Id: I16786695be3b70fde20de9b26b9eac06de91273c
  	if (!ib_comp_unbound_wq)
  		goto err_comp;
  
-@@ -2980,11 +3052,17 @@ static int __init ib_core_init(void)
+@@ -2982,11 +3054,17 @@ static int __init ib_core_init(void)
  		goto err_mad;
  	}
  
@@ -296,7 +296,7 @@ Change-Id: I16786695be3b70fde20de9b26b9eac06de91273c
  
  	ret = register_pernet_device(&rdma_dev_net_ops);
  	if (ret) {
-@@ -3009,9 +3087,15 @@ err_parent:
+@@ -3011,9 +3089,15 @@ err_parent:
  	nldev_exit();
  	unregister_pernet_device(&rdma_dev_net_ops);
  err_compat:
@@ -312,7 +312,7 @@ Change-Id: I16786695be3b70fde20de9b26b9eac06de91273c
  err_mad:
  	ib_mad_cleanup();
  err_addr:
-@@ -3036,7 +3120,11 @@ static void __exit ib_core_cleanup(void)
+@@ -3038,7 +3122,11 @@ static void __exit ib_core_cleanup(void)
  	rdma_nl_unregister(RDMA_NL_LS);
  	nldev_exit();
  	unregister_pernet_device(&rdma_dev_net_ops);
@@ -324,7 +324,7 @@ Change-Id: I16786695be3b70fde20de9b26b9eac06de91273c
  	ib_sa_cleanup();
  	ib_mad_cleanup();
  	addr_cleanup();
-@@ -3046,7 +3134,9 @@ static void __exit ib_core_cleanup(void)
+@@ -3048,7 +3136,9 @@ static void __exit ib_core_cleanup(void)
  	destroy_workqueue(ib_comp_wq);
  	/* Make sure that any pending umem accounting work is done. */
  	destroy_workqueue(ib_wq);

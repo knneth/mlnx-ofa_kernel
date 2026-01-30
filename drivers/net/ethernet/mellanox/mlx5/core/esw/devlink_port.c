@@ -60,6 +60,7 @@ int mlx5_esw_offloads_pf_vf_devlink_port_init(struct mlx5_eswitch *esw,
 {
 	struct mlx5_devlink_port *dl_port;
 	u16 vport_num = vport->vport;
+	int ret;
 
 	if (!mlx5_esw_devlink_port_supported(esw, vport_num))
 		return 0;
@@ -70,6 +71,11 @@ int mlx5_esw_offloads_pf_vf_devlink_port_init(struct mlx5_eswitch *esw,
 
 	mlx5_esw_offloads_pf_vf_devlink_port_attrs_set(esw, vport_num,
 						       &dl_port->dl_port);
+
+	/* register pf and vf for mlxdevm */
+	ret = mlx5_devm_pf_vf_port_register(esw->dev, vport_num, &dl_port->dl_port);
+	if (ret)
+		return ret;
 
 	vport->dl_port = dl_port;
 	mlx5_devlink_port_init(dl_port, vport);
@@ -82,6 +88,7 @@ void mlx5_esw_offloads_pf_vf_devlink_port_cleanup(struct mlx5_eswitch *esw,
 	if (!vport->dl_port)
 		return;
 
+	mlx5_devm_port_unregister(esw->dev, vport->vport);
 	kfree(vport->dl_port);
 	vport->dl_port = NULL;
 }
