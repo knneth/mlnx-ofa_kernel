@@ -5,15 +5,17 @@
 
 #include_next <linux/module.h>
 
-/* DONT REMOVE THIS FILE */
-/* This is a workaround to support UEK3 kernels */
-#ifdef CONFIG_DTRACE
-#undef CONFIG_DTRACE
-#endif
+#ifdef MODULE_IMPORT_NS
+#undef MODULE_IMPORT_NS
 
-/* This is a workaround to support UEK4 kernels */
-#ifdef CONFIG_CTF
-#undef CONFIG_CTF
+#ifdef HAVE___EXPORT_SYMBOL_NS // 5.4 only
+#define MODULE_IMPORT_NS(ns) MODULE_INFO(import_ns, #ns)
+#else /* HAVE___EXPORT_SYMBOL_NS */
+#define MODULE_IMPORT_NS(ns) MODULE_INFO(import_ns, ns)
+#endif /* HAVE___EXPORT_SYMBOL_NS */
+
+#else
+#define MODULE_IMPORT_NS(ns)
 #endif
 
 #endif /* _COMPAT_LINUX_MODULE_H */

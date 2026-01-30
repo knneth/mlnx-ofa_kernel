@@ -277,11 +277,26 @@ int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
 
 int mlx5_sriov_attach(struct mlx5_core_dev *dev)
 {
-	if (!mlx5_core_is_pf(dev) || !pci_num_vf(dev->pdev))
+	int err;
+
+	if (!mlx5_core_is_pf(dev))
+		return 0;
+
+	err = mlx5_sriov_groups_sysfs_init(dev);
+	if (err) {
+		mlx5_core_warn(dev, "failed to init SRIOV groups sysfs (%d)\n", err);
+		return err;
+	}
+
+	if (!pci_num_vf(dev->pdev))
 		return 0;
 
 	/* If sriov VFs exist in PCI level, enable them in device level */
-	return mlx5_device_enable_sriov(dev, pci_num_vf(dev->pdev));
+	err = mlx5_device_enable_sriov(dev, pci_num_vf(dev->pdev));
+	if (err)
+		mlx5_sriov_groups_sysfs_cleanup(dev);
+
+	return err;
 }
 
 void mlx5_sriov_detach(struct mlx5_core_dev *dev)
@@ -290,6 +305,7 @@ void mlx5_sriov_detach(struct mlx5_core_dev *dev)
 		return;
 
 	mlx5_device_disable_sriov(dev, pci_num_vf(dev->pdev), false, false);
+	mlx5_sriov_groups_sysfs_cleanup(dev);
 }
 
 static u16 mlx5_get_max_vfs(struct mlx5_core_dev *dev)

@@ -63,5 +63,5 @@ Change-Id: I412120629afa3d5ec817bb2b16652c864d2c35e9
  module_pci_driver(mlx5vf_pci_driver);
 +#endif /* HAVE_VFIO_SUPPORT */
  
- MODULE_IMPORT_NS(IOMMUFD);
+ MODULE_IMPORT_NS("IOMMUFD");
  MODULE_LICENSE("GPL");

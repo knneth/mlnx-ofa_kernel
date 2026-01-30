@@ -329,7 +329,7 @@ struct fwctl_device *_fwctl_alloc_device(struct device *parent,
 	fwctl->ops = ops;
 	return_ptr(fwctl);
 }
-EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, FWCTL);
+EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, "FWCTL");
 
 /**
  * fwctl_register - Register a new device to the subsystem
@@ -347,7 +347,7 @@ int fwctl_register(struct fwctl_device *fwctl)
 		return ret;
 	return 0;
 }
-EXPORT_SYMBOL_NS_GPL(fwctl_register, FWCTL);
+EXPORT_SYMBOL_NS_GPL(fwctl_register, "FWCTL");
 
 /**
  * fwctl_unregister - Unregister a device from the subsystem
@@ -385,7 +385,7 @@ void fwctl_unregister(struct fwctl_device *fwctl)
 	 */
 	fwctl->ops = NULL;
 }
-EXPORT_SYMBOL_NS_GPL(fwctl_unregister, FWCTL);
+EXPORT_SYMBOL_NS_GPL(fwctl_unregister, "FWCTL");
 
 static int __init fwctl_init(void)
 {

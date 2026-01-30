@@ -315,7 +315,8 @@ static void nvme_peer_init_resource(struct nvme_queue *nvmeq,
 	nvmeq->resource.dd_data = dd_data;
 }
 
-int nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart)
+int nvme_peer_flush_resource(struct nvme_peer_resource *resource,
+			     bool destroy_queues)
 {
 	struct nvme_queue *nvmeq = container_of(resource, struct nvme_queue,
 						resource);
@@ -326,7 +327,7 @@ int nvme_peer_flush_resource(struct nvme_peer_resource *resource, bool restart)
 	resource->dd_data = NULL;
 	mutex_unlock(&resource->lock);
 
-	if (restart) {
+	if (destroy_queues) {
 		nvme_suspend_queue(nvmeq->dev, nvmeq->qid);
 		ret = adapter_delete_sq(nvmeq->dev, nvmeq->qid);
 		if (ret)
@@ -375,8 +376,8 @@ struct nvme_peer_resource *nvme_peer_get_resource(struct pci_dev *pdev,
 						 "Recreate qid %d\n", nvmeq->qid);
 					if (ret) {
 						dev_err(dev->ctrl.device,
-							"Failed to recreate qid %d\n",
-							nvmeq->qid);
+							"Failed to recreate qid %d ret %d\n",
+							nvmeq->qid, ret);
 						mutex_unlock(&nvmeq->resource.lock);
 						continue;
 					}

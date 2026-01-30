@@ -81,6 +81,7 @@ static const char * const ib_events[] = {
 	[IB_EXP_EVENT_XRQ_QP_ERR]	= "XRQ QP error",
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR] = "XRQ NVMF backend ctrl PCI error",
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR] = "XRQ NVMF backend ctrl timeout error",
+	[IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED] = "XRQ QP last NVMe CQE reached",
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event)

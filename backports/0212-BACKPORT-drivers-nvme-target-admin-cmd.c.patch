@@ -84,7 +84,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  
  	id->rab = 6;
  
-@@ -723,6 +749,7 @@ static void nvmet_execute_identify(struc
+@@ -727,6 +753,7 @@ static void nvmet_execute_identify(struc
  		nvmet_execute_identify_desclist(req);
  		return;
  	case NVME_ID_CNS_CS_NS:
@@ -92,7 +92,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  		switch (req->cmd->identify.csi) {
  		case NVME_CSI_NVM:
  			/* Not supported */
-@@ -734,18 +761,21 @@ static void nvmet_execute_identify(struc
+@@ -738,18 +765,21 @@ static void nvmet_execute_identify(struc
  			}
  			break;
  		}

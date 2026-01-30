@@ -36,7 +36,7 @@ Change-Id: I8c2b7c3af6d381e253ff6aab71f363553116d1d2
  	struct block_device	*bdev;
  	struct pci_dev		*pdev;
  	struct file		*file;
-@@ -540,7 +553,9 @@ u16 nvmet_parse_connect_cmd(struct nvmet
+@@ -542,7 +555,9 @@ u16 nvmet_parse_connect_cmd(struct nvmet
  void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
  u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
  u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
@@ -46,7 +46,7 @@ Change-Id: I8c2b7c3af6d381e253ff6aab71f363553116d1d2
  u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
  u16 nvmet_parse_discovery_cmd(struct nvmet_req *req);
  u16 nvmet_parse_fabrics_admin_cmd(struct nvmet_req *req);
-@@ -682,9 +697,11 @@ void nvmet_file_ns_revalidate(struct nvm
+@@ -684,9 +699,11 @@ void nvmet_file_ns_revalidate(struct nvm
  bool nvmet_ns_revalidate(struct nvmet_ns *ns);
  u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts);
  

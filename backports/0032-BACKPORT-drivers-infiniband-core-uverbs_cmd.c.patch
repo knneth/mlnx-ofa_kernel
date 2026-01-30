@@ -76,7 +76,7 @@ Change-Id: I074f44ebe16a0222d717f2d1f00b59c3e5c5ade0
  		fdput(f);
  
  	mutex_unlock(&ibudev->xrcd_tree_mutex);
-@@ -3366,7 +3390,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3374,7 +3398,11 @@ static int __uverbs_create_xsrq(struct u
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

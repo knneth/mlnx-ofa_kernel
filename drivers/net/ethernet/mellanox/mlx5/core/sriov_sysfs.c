@@ -1101,8 +1101,6 @@ static ssize_t config_show(struct mlx5_sriov_vf *g, struct vf_attributes *oa,
 		      !!bitmap_weight(ivi->vlan_trunk_8021q_bitmap,
 				      VLAN_N_VID) ? "ON" : "OFF");
 
-	p += _sprintf(p, buf, "RateGroup  : %d\n", ivi->group);
-
 	if (evport->qos.sched_nodes) {
 		struct mlx5_esw_sched_node *vports_tc_node;
 		u32 tc_bw[MLX5_MAX_NUM_TC] = {0};
@@ -1553,6 +1551,22 @@ static struct device_attribute *mlx5_class_attributes[] = {
 	&dev_attr_mlx5_num_vfs,
 };
 
+int mlx5_sriov_groups_sysfs_init(struct mlx5_core_dev *dev)
+{
+#ifdef CONFIG_MLX5_ESWITCH
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+
+	if (MLX5_CAP_QOS(dev, log_esw_max_sched_depth)) {
+		sriov->groups_config = kobject_create_and_add("groups",
+							      sriov->config);
+		if (!sriov->groups_config) {
+			return -ENOMEM;
+		}
+	}
+#endif
+	return 0;
+}
+
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
@@ -1564,17 +1578,6 @@ int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev)
 	if (!sriov->config)
 		return -ENOMEM;
 
-#ifdef CONFIG_MLX5_ESWITCH
-	if (MLX5_CAP_QOS(dev, log_esw_max_sched_depth)) {
-		sriov->groups_config = kobject_create_and_add("groups",
-							      sriov->config);
-		if (!sriov->groups_config) {
-			err = -ENOMEM;
-			goto err_groups;
-		}
-	}
-#endif
-
 	for (i = 0; i < ARRAY_SIZE(mlx5_class_attributes); i++) {
 		err = device_create_file(device, mlx5_class_attributes[i]);
 		if (err)
@@ -1584,15 +1587,21 @@ int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev)
 	return 0;
 
 err_attr:
-	if (sriov->groups_config) {
-		kobject_put(sriov->groups_config);
-		sriov->groups_config = NULL;
-	}
-
-err_groups:
+	for(i--; i >= 0; i--)
+		device_remove_file(device, mlx5_class_attributes[i]);
 	kobject_put(sriov->config);
 	sriov->config = NULL;
 	return err;
+}
+
+void mlx5_sriov_groups_sysfs_cleanup(struct mlx5_core_dev *dev)
+{
+#ifdef CONFIG_MLX5_ESWITCH
+	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
+
+	if (MLX5_CAP_QOS(dev, log_esw_max_sched_depth))
+		kobject_put(sriov->groups_config);
+#endif
 }
 
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev)
@@ -1604,8 +1613,6 @@ void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev)
 	for (i = 0; i < ARRAY_SIZE(mlx5_class_attributes); i++)
 		device_remove_file(device, mlx5_class_attributes[i]);
 
-	if (MLX5_CAP_QOS(dev, log_esw_max_sched_depth))
-		kobject_put(sriov->groups_config);
 	kobject_put(sriov->config);
 	sriov->config = NULL;
 }

@@ -9,6 +9,9 @@
 /* adjfine is defined */
 #undef HAVE_ADJUST_BY_SCALED_PPM
 
+/* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
+#undef HAVE_ALLOC_BULK_PAGES_API_RENAME
+
 /* mm.h has assert_fault_locked */
 #undef HAVE_ASSERT_FAULT_LOCKED
 
@@ -65,6 +68,9 @@
 
 /* genhd.h has bd_set_size */
 #undef HAVE_BD_SET_SIZE
+
+/* bio_add_pc_page is defined */
+#undef HAVE_BIO_ADD_PC_PAGE
 
 /* bio.h has bio_add_zone_append_page */
 #undef HAVE_BIO_ADD_ZONE_APPEND_PAGE
@@ -219,11 +225,20 @@
 /* blk_mq_destroy_queue is defined */
 #undef HAVE_BLK_MQ_DESTROY_QUEUE
 
+/* BLK_MQ_F_NO_SCHED is defined */
+#undef HAVE_BLK_MQ_F_NO_SCHED
+
+/* BLK_MQ_F_SHOULD_MERGE is defined */
+#undef HAVE_BLK_MQ_F_SHOULD_MERGE
+
 /* blk-mq.h has blk_mq_hctx_set_fq_lock_class */
 #undef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
 
 /* blk-mq.h has enum hctx_type */
 #undef HAVE_BLK_MQ_HCTX_TYPE
+
+/* blk-mq.h has blk_mq_map_hw_queues */
+#undef HAVE_BLK_MQ_MAP_HW_QUEUES
 
 /* struct blk_mq_ops has commit_rqs */
 #undef HAVE_BLK_MQ_OPS_COMMIT_RQS
@@ -242,6 +257,9 @@
 
 /* timeout from struct blk_mq_ops has 1 param */
 #undef HAVE_BLK_MQ_OPS_TIMEOUT_1_PARAM
+
+/* include/linux/blk-mq-pci.h exists */
+#undef HAVE_BLK_MQ_PCI_H
 
 /* blk_mq_quiesce_tagset is defined */
 #undef HAVE_BLK_MQ_QUEIESCE_TAGSET
@@ -266,6 +284,9 @@
 
 /* blk_mq_tag_set has member nr_maps */
 #undef HAVE_BLK_MQ_TAG_SET_HAS_NR_MAP
+
+/* blk-mq.h has blk_mq_unfreeze_queue with 2 params */
+#undef HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS
 
 /* blk_mq_wait_quiesce_done is defined */
 #undef HAVE_BLK_MQ_WAIT_QUIESCE_DONE
@@ -297,8 +318,11 @@
 /* if blk-mq.h has blk_rq_bio_prep */
 #undef HAVE_BLK_RQ_BIO_PREP
 
-/* blk_rq_integrity_map_user exists */
-#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER
+/* blk_rq_integrity_map_user has 3 params */
+#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM
+
+/* blk_rq_integrity_map_user has 4 params */
+#undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM
 
 /* blk_rq_map_integrity_sg get 2 params */
 #undef HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS
@@ -794,6 +818,9 @@
 
 /* linux/eventfd.h has eventfd_signal with 1 param */
 #undef HAVE_EVENTFD_SIGNAL_GET_1_PARAM
+
+/* EXPORT_SYMBOL_NS_GPL exist */
+#undef HAVE_EXPORT_SYMBOL_NS_GPL
 
 /* ext_pi_ref_tag is defined */
 #undef HAVE_EXT_PI_REF_TAG
@@ -1472,7 +1499,10 @@
 #undef HAVE_PAGE_DMA_ADDR_ARRAY
 
 /* linux/gfp.h has page_frag_cache_drain */
-#undef HAVE_PAGE_FRAG_CACHE_DRAIN
+#undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H
+
+/* linux/page_frag_cache.h has page_frag_cache_drain */
+#undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H
 
 /* net/page_pool/helpers.h has page_pool_nid_changed */
 #undef HAVE_PAGE_POLL_NID_CHANGED_HELPERS
@@ -1756,6 +1786,9 @@
 /* Scsi_Host has members max_segment_size */
 #undef HAVE_SCSI_HOST_MAX_SEGMENT_SIZE
 
+/* scsi_host_template has member sdev_configure */
+#undef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE
+
 /* scsi_host_template has member init_cmd_priv */
 #undef HAVE_SCSI_HOST_TEMPLATE_INIT_CMD_PRIV
 
@@ -1894,6 +1927,9 @@
 
 /* net/psample.h has struct psample_metadata */
 #undef HAVE_STRUCT_PSAMPLE_METADATA
+
+/* linux/blkdev.h has struct rq_list */
+#undef HAVE_STRUCT_RQ_LIST
 
 /* linux/overflow.h has struct_size_t */
 #undef HAVE_STRUCT_SIZE_T
@@ -2381,6 +2417,15 @@
 
 /* __blkdev_issue_discard has 5 params */
 #undef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
+
+/* compiler_types.h, compiler_attributes.h provide __counted_by macro */
+#undef HAVE___COUNTED_BY
+
+/* __EXPORT_SYMBOL_NS exist */
+#undef HAVE___EXPORT_SYMBOL_NS
+
+/* __EXPORT_SYMBOL_REF exist */
+#undef HAVE___EXPORT_SYMBOL_REF
 
 /* __flow_indr_block_cb_register is defined */
 #undef HAVE___FLOW_INDR_BLOCK_CB_REGISTER

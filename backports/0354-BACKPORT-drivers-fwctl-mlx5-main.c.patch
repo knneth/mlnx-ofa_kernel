@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
 ---
- drivers/fwctl/mlx5/main.c | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ drivers/fwctl/mlx5/main.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
 
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
@@ -54,13 +54,3 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	return 0;
  }
  
-@@ -330,7 +345,9 @@ static struct auxiliary_driver mlx5ctl_d
- 
- module_auxiliary_driver(mlx5ctl_driver);
- 
-+#ifdef MODULE_IMPORT_NS
- MODULE_IMPORT_NS(FWCTL);
-+#endif
- MODULE_DESCRIPTION("mlx5 ConnectX fwctl driver");
- MODULE_AUTHOR("Saeed Mahameed <saeedm@nvidia.com>");
- MODULE_LICENSE("Dual BSD/GPL");

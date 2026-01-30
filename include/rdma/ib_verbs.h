@@ -764,6 +764,7 @@ enum ib_event_type {
 	IB_EXP_EVENT_XRQ_QP_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR,
+	IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED,
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event);
@@ -2781,6 +2782,7 @@ struct ib_device {
 	 * It is a NULL terminated array.
 	 */
 	const struct attribute_group	*groups[4];
+	u8				hw_stats_attr_index;
 
 	u64			     uverbs_cmd_mask;
 

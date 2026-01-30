@@ -97,6 +97,8 @@ void mlx5_ib_internal_fill_nvmf_caps(struct mlx5_ib_dev *dev)
 		caps->max_frontend_nsid = 1 << MLX5_CAP_NVMF(mdev, log_max_frontend_nsid);
 	else
 		caps->max_frontend_nsid = 0;
+	caps->qp_last_nvme_cqe_reached =
+		MLX5_CAP_NVMF(mdev, qp_last_nvme_cqe_reached);
 }
 
 static void set_nvmf_backend_ctrl_attrs(struct ib_nvmf_backend_ctrl_init_attr *attr,

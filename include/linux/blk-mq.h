@@ -75,4 +75,12 @@ blk_mq_tagset_wait_completed_request(struct blk_mq_tag_set *tagset)
 }
 #endif /* HAVE_BLK_MQ_TAGSET_WAIT_COMPLETED_REQUEST */
 
+#if !defined(HAVE_STRUCT_RQ_LIST) && !defined(rq_list_add_tail)
+#define rq_list_add_tail(lastpptr, rq)	do {		\
+	(rq)->rq_next = NULL;				\
+	**(lastpptr) = rq;				\
+	*(lastpptr) = &rq->rq_next;			\
+} while (0)
+#endif
+
 #endif /* _COMPAT_LINUX_BLK_MQ_H */

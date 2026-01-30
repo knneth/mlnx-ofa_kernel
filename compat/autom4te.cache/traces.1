@@ -455,7 +455,7 @@ m4trace:configure.ac:18: -1- AH_OUTPUT([SIZEOF_UNSIGNED_LONG_LONG], [/* The size
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14354: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14600: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX])
@@ -463,7 +463,7 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14354: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14600: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX_OBJ])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX_OBJ])
@@ -472,7 +472,7 @@ m4trace:configure.ac:33: -1- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 ../../lib/autoconf/general.m4:1492: AC_ARG_WITH is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14354: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14600: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX_CONFIG])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX_CONFIG])
@@ -480,7 +480,7 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX_CONFIG$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14354: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14600: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([CONFIG_INCLUDE])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([CONFIG_INCLUDE])
@@ -507,7 +507,7 @@ m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1217: LB_LINUX_RELEASE is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14354: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14600: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([RELEASE])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([RELEASE])
@@ -3453,6 +3453,14 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SCSI_HOST_ALLOC_GET_C
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_SCSI_HOST_ALLOC_GET_CONST_SHT$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_SCSI_HOST_ALLOC_GET_CONST_SHT], [/* scsi_host_alloc get const struct scsi_host_template */
 @%:@undef HAVE_SCSI_HOST_ALLOC_GET_CONST_SHT])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE], [/* scsi_host_template has member sdev_configure */
+@%:@undef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE], [/* scsi_host_template has member sdev_configure */
+@%:@undef HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SE_CMD_HAS_SENSE_INFO])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_SE_CMD_HAS_SENSE_INFO$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_SE_CMD_HAS_SENSE_INFO], [/* struct se_cmd has member sense_info */
@@ -3877,6 +3885,14 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LINUX_SED_OPAL_H])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_LINUX_SED_OPAL_H$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_LINUX_SED_OPAL_H], [/* linux/sed-opal.h exists */
 @%:@undef HAVE_LINUX_SED_OPAL_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BIO_ADD_PC_PAGE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_ADD_PC_PAGE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BIO_ADD_PC_PAGE], [/* bio_add_pc_page is defined */
+@%:@undef HAVE_BIO_ADD_PC_PAGE])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BIO_ADD_PC_PAGE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_ADD_PC_PAGE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BIO_ADD_PC_PAGE], [/* bio_add_pc_page is defined */
+@%:@undef HAVE_BIO_ADD_PC_PAGE])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BIO_INIT_3_PARAMS])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BIO_INIT_3_PARAMS$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BIO_INIT_3_PARAMS], [/* bio.h bio_init has 3 parameters */
@@ -3893,6 +3909,14 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_AUTO_TYPE])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_AUTO_TYPE$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_AUTO_TYPE], [/* __auto_type exists */
 @%:@undef HAVE_AUTO_TYPE])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___COUNTED_BY])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___COUNTED_BY$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___COUNTED_BY], [/* compiler_types.h, compiler_attributes.h provide __counted_by macro */
+@%:@undef HAVE___COUNTED_BY])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___COUNTED_BY])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___COUNTED_BY$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___COUNTED_BY], [/* compiler_types.h, compiler_attributes.h provide __counted_by macro */
+@%:@undef HAVE___COUNTED_BY])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CONST_READ_ONCE_SIZE])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_CONST_READ_ONCE_SIZE$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_CONST_READ_ONCE_SIZE], [/* const __read_once_size exist */
@@ -5897,6 +5921,30 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ACPI_STORAGE_D3])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_ACPI_STORAGE_D3$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_ACPI_STORAGE_D3], [/* acpi_storage_d3 exist */
 @%:@undef HAVE_ACPI_STORAGE_D3])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_EXPORT_SYMBOL_NS_GPL])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_EXPORT_SYMBOL_NS_GPL$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_EXPORT_SYMBOL_NS_GPL], [/* EXPORT_SYMBOL_NS_GPL exist */
+@%:@undef HAVE_EXPORT_SYMBOL_NS_GPL])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_EXPORT_SYMBOL_NS_GPL])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_EXPORT_SYMBOL_NS_GPL$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_EXPORT_SYMBOL_NS_GPL], [/* EXPORT_SYMBOL_NS_GPL exist */
+@%:@undef HAVE_EXPORT_SYMBOL_NS_GPL])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___EXPORT_SYMBOL_REF])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___EXPORT_SYMBOL_REF$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___EXPORT_SYMBOL_REF], [/* __EXPORT_SYMBOL_REF exist */
+@%:@undef HAVE___EXPORT_SYMBOL_REF])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___EXPORT_SYMBOL_REF])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___EXPORT_SYMBOL_REF$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___EXPORT_SYMBOL_REF], [/* __EXPORT_SYMBOL_REF exist */
+@%:@undef HAVE___EXPORT_SYMBOL_REF])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___EXPORT_SYMBOL_NS])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___EXPORT_SYMBOL_NS$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___EXPORT_SYMBOL_NS], [/* __EXPORT_SYMBOL_NS exist */
+@%:@undef HAVE___EXPORT_SYMBOL_NS])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE___EXPORT_SYMBOL_NS])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE___EXPORT_SYMBOL_NS$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE___EXPORT_SYMBOL_NS], [/* __EXPORT_SYMBOL_NS exist */
+@%:@undef HAVE___EXPORT_SYMBOL_NS])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PARAM_SET_UINT_MINMAX])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PARAM_SET_UINT_MINMAX$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PARAM_SET_UINT_MINMAX], [/* linux/moduleparam.h has param_set_uint_minmax */
@@ -6713,14 +6761,30 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BDEV_FILE_OPEN_BY_PAT
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BDEV_FILE_OPEN_BY_PATH$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BDEV_FILE_OPEN_BY_PATH], [/* linux/blkdev.h has bdev_file_open_by_path */
 @%:@undef HAVE_BDEV_FILE_OPEN_BY_PATH])
-m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN$])
-m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN], [/* linux/gfp.h has page_frag_cache_drain */
-@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN])
-m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN$])
-m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN], [/* linux/gfp.h has page_frag_cache_drain */
-@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ALLOC_BULK_PAGES_API_RENAME])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_ALLOC_BULK_PAGES_API_RENAME$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_ALLOC_BULK_PAGES_API_RENAME], [/* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
+@%:@undef HAVE_ALLOC_BULK_PAGES_API_RENAME])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ALLOC_BULK_PAGES_API_RENAME])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_ALLOC_BULK_PAGES_API_RENAME$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_ALLOC_BULK_PAGES_API_RENAME], [/* linux/gfp.h has v6.14 alloc_bulk_pages API rename */
+@%:@undef HAVE_ALLOC_BULK_PAGES_API_RENAME])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H], [/* linux/gfp.h has page_frag_cache_drain */
+@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H], [/* linux/gfp.h has page_frag_cache_drain */
+@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H], [/* linux/page_frag_cache.h has page_frag_cache_drain */
+@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H], [/* linux/page_frag_cache.h has page_frag_cache_drain */
+@%:@undef HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLKDEV_ZONE_MGMT_5_PARAMS])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLKDEV_ZONE_MGMT_5_PARAMS$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLKDEV_ZONE_MGMT_5_PARAMS], [/* linux/blkdev.h has blkdev_zone_mgmt with 5 params */
@@ -6793,14 +6857,22 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_INTEGRITY_H])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_INTEGRITY_H$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_INTEGRITY_H], [/* include/linux/blk-integrity.h exists */
 @%:@undef HAVE_BLK_INTEGRITY_H])
-m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER$])
-m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER], [/* blk_rq_integrity_map_user exists */
-@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER])
-m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER])
-m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER$])
-m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER], [/* blk_rq_integrity_map_user exists */
-@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM], [/* blk_rq_integrity_map_user has 4 params */
+@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM], [/* blk_rq_integrity_map_user has 4 params */
+@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM], [/* blk_rq_integrity_map_user has 3 params */
+@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM], [/* blk_rq_integrity_map_user has 3 params */
+@%:@undef HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_RQ_MAP_INTEGRITY_SG_GET_2_PARAMS], [/* blk_rq_map_integrity_sg get 2 params */
@@ -6825,6 +6897,54 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_RQ_INTEGRITY_RETURN_B
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_RQ_INTEGRITY_RETURN_BIO_VEC$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_RQ_INTEGRITY_RETURN_BIO_VEC], [/* rq_integrity_vec returns struct bio_vec */
 @%:@undef HAVE_RQ_INTEGRITY_RETURN_BIO_VEC])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_PCI_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_PCI_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_PCI_H], [/* include/linux/blk-mq-pci.h exists */
+@%:@undef HAVE_BLK_MQ_PCI_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_PCI_H])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_PCI_H$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_PCI_H], [/* include/linux/blk-mq-pci.h exists */
+@%:@undef HAVE_BLK_MQ_PCI_H])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_F_NO_SCHED])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_NO_SCHED$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_F_NO_SCHED], [/* BLK_MQ_F_NO_SCHED is defined */
+@%:@undef HAVE_BLK_MQ_F_NO_SCHED])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_F_NO_SCHED])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_NO_SCHED$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_F_NO_SCHED], [/* BLK_MQ_F_NO_SCHED is defined */
+@%:@undef HAVE_BLK_MQ_F_NO_SCHED])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_F_SHOULD_MERGE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_SHOULD_MERGE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_F_SHOULD_MERGE], [/* BLK_MQ_F_SHOULD_MERGE is defined */
+@%:@undef HAVE_BLK_MQ_F_SHOULD_MERGE])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_F_SHOULD_MERGE])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_SHOULD_MERGE$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_F_SHOULD_MERGE], [/* BLK_MQ_F_SHOULD_MERGE is defined */
+@%:@undef HAVE_BLK_MQ_F_SHOULD_MERGE])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS], [/* blk-mq.h has blk_mq_unfreeze_queue with 2 params */
+@%:@undef HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS], [/* blk-mq.h has blk_mq_unfreeze_queue with 2 params */
+@%:@undef HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_STRUCT_RQ_LIST])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_RQ_LIST$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_STRUCT_RQ_LIST], [/* linux/blkdev.h has struct rq_list */
+@%:@undef HAVE_STRUCT_RQ_LIST])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_STRUCT_RQ_LIST])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_STRUCT_RQ_LIST$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_STRUCT_RQ_LIST], [/* linux/blkdev.h has struct rq_list */
+@%:@undef HAVE_STRUCT_RQ_LIST])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_MAP_HW_QUEUES])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_MAP_HW_QUEUES$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_MAP_HW_QUEUES], [/* blk-mq.h has blk_mq_map_hw_queues */
+@%:@undef HAVE_BLK_MQ_MAP_HW_QUEUES])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_MQ_MAP_HW_QUEUES])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_BLK_MQ_MAP_HW_QUEUES$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_BLK_MQ_MAP_HW_QUEUES], [/* blk-mq.h has blk_mq_map_hw_queues */
+@%:@undef HAVE_BLK_MQ_MAP_HW_QUEUES])
 m4trace:configure.ac:33: -1- AC_CONFIG_HEADERS([config.h])
 m4trace:configure.ac:33: -1- AC_SUBST([EXTRA_KCFLAGS])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([EXTRA_KCFLAGS])

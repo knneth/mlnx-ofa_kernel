@@ -108,6 +108,7 @@ struct nvmet_rdma_queue {
 	struct nvmet_rdma_cmd	*cmds;
 
 	struct work_struct	release_work;
+	struct work_struct	release_offload_work;
 	struct work_struct	disconnect_work;
 	struct list_head	rsp_wait_list;
 	struct list_head	rsp_wr_wait_list;
@@ -123,6 +124,8 @@ struct nvmet_rdma_queue {
 
 	bool                    offload;
 	struct nvmet_rdma_xrq   *xrq;
+	bool			offload_free_started;
+	struct mutex		offload_release_lock;
 };
 
 struct nvmet_rdma_port {
@@ -1409,12 +1412,27 @@ err_destroy_xrq:
 	goto out;
 }
 
-static void nvmet_rdma_destroy_queue_ib(struct nvmet_rdma_queue *queue)
+static void nvmet_rdma_free_queue_start(struct nvmet_rdma_queue *queue)
 {
-	/* todo: bug #974802 - need to debug with fw */
+	pr_debug("start freeing offload queue %d\n", queue->idx);
+
+	queue->offload_free_started = true;
+	nvmet_sq_destroy(&queue->nvme_sq);
+
 	ib_drain_qp(queue->qp);
 	if (queue->cm_id)
 		rdma_destroy_id(queue->cm_id);
+}
+
+static void nvmet_rdma_destroy_queue_ib(struct nvmet_rdma_queue *queue,
+					bool drain_qp)
+{
+	if (drain_qp) {
+		ib_drain_qp(queue->qp);
+		if (queue->cm_id)
+			rdma_destroy_id(queue->cm_id);
+	}
+
 	ib_destroy_qp(queue->qp);
 	ib_cq_pool_put(queue->cq, queue->recv_queue_size + 2 *
 		       queue->send_queue_size + 1);
@@ -1422,13 +1440,15 @@ static void nvmet_rdma_destroy_queue_ib(struct nvmet_rdma_queue *queue)
 		kref_put(&queue->xrq->ref, nvmet_rdma_destroy_xrq);
 }
 
-static void nvmet_rdma_free_queue(struct nvmet_rdma_queue *queue)
+static void nvmet_rdma_free_queue(struct nvmet_rdma_queue *queue,
+				  bool drain_queue)
 {
-	pr_debug("freeing queue %d\n", queue->idx);
+	pr_debug("freeing queue %d drain_queue %d\n", queue->idx, drain_queue);
 
-	nvmet_sq_destroy(&queue->nvme_sq);
+	if (drain_queue)
+		nvmet_sq_destroy(&queue->nvme_sq);
 
-	nvmet_rdma_destroy_queue_ib(queue);
+	nvmet_rdma_destroy_queue_ib(queue, drain_queue);
 	if (!queue->nsrq && !queue->offload) {
 		nvmet_rdma_free_cmds(queue->dev, queue->cmds,
 				queue->recv_queue_size,
@@ -1440,15 +1460,53 @@ static void nvmet_rdma_free_queue(struct nvmet_rdma_queue *queue)
 	kfree(queue);
 }
 
+static void nvmet_rdma_release_queue(struct nvmet_rdma_queue *queue)
+{
+	struct nvmet_rdma_device *dev = queue->dev;
+
+	if (queue->offload &&
+	    dev->device->attrs.nvmf_caps.qp_last_nvme_cqe_reached) {
+		/*
+		 * For offload queues with last NVMe CQE event support, this
+		 * function is called twice to handle potential delays in event
+		 * arrival (e.g., with slow SSDs).
+		 *
+		 * First call: Initiates the queue free process.
+		 * Second call: Completes the queue free process.
+		 *
+		 * The queue is fully freed when receiving the last NVMe CQE
+		 * event for this queue.
+		 * Note: The order of these calls and the event arrival is not
+		 * guaranteed.
+		 */
+		mutex_lock(&queue->offload_release_lock);
+		if (!queue->offload_free_started) {
+			nvmet_rdma_free_queue_start(queue);
+			mutex_unlock(&queue->offload_release_lock);
+			return;
+		}
+		mutex_unlock(&queue->offload_release_lock);
+	}
+
+	nvmet_rdma_free_queue(queue, !queue->offload_free_started);
+
+	kref_put(&dev->ref, nvmet_rdma_free_dev);
+}
+
 static void nvmet_rdma_release_queue_work(struct work_struct *w)
 {
 	struct nvmet_rdma_queue *queue =
 		container_of(w, struct nvmet_rdma_queue, release_work);
-	struct nvmet_rdma_device *dev = queue->dev;
 
-	nvmet_rdma_free_queue(queue);
+	nvmet_rdma_release_queue(queue);
+}
 
-	kref_put(&dev->ref, nvmet_rdma_free_dev);
+static void nvmet_rdma_release_offload_queue_work(struct work_struct *w)
+{
+	struct nvmet_rdma_queue *queue =
+		container_of(w, struct nvmet_rdma_queue, release_offload_work);
+
+	nvmet_rdma_release_queue(queue);
 }
 
 static void nvmet_rdma_disconnect_queue_work(struct work_struct *w)
@@ -1535,11 +1593,14 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma_device *ndev,
 	 * inside a CM callback would trigger a deadlock. (great API design..)
 	 */
 	INIT_WORK(&queue->release_work, nvmet_rdma_release_queue_work);
+	INIT_WORK(&queue->release_offload_work,
+		  nvmet_rdma_release_offload_queue_work);
 	INIT_WORK(&queue->disconnect_work, nvmet_rdma_disconnect_queue_work);
 	queue->dev = ndev;
 	queue->cm_id = cm_id;
 	queue->port = port->nport;
 	queue->offload = queue->port->offload && queue->host_qid;
+	mutex_init(&queue->offload_release_lock);
 
 	spin_lock_init(&queue->state_lock);
 	queue->state = NVMET_RDMA_Q_CONNECTING;
@@ -1628,6 +1689,11 @@ static void nvmet_rdma_qp_event(struct ib_event *event, void *priv)
 		pr_debug("received IB QP event: %s (%d)\n",
 			 ib_event_msg(event->event), event->event);
 		break;
+	case IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED:
+		pr_debug("queue %p received IB QP event: %s (%d)\n",
+			 queue, ib_event_msg(event->event), event->event);
+		queue_work(nvmet_wq, &queue->release_offload_work);
+		break;
 	default:
 		pr_err("received IB QP event: %s (%d)\n",
 		       ib_event_msg(event->event), event->event);
@@ -1714,7 +1780,7 @@ static int nvmet_rdma_queue_connect(struct rdma_cm_id *cm_id,
 	return 0;
 
 free_queue:
-	nvmet_rdma_free_queue(queue);
+	nvmet_rdma_free_queue(queue, true);
 put_device:
 	kref_put(&ndev->ref, nvmet_rdma_free_dev);
 
@@ -1924,8 +1990,6 @@ static void nvmet_rdma_disable_port(struct nvmet_rdma_port *port)
 
 	if (nport->offload && cm_id)
 		nvmet_rdma_destroy_xrqs(nport);
-
- 	port->cm_id = NULL;
 
 	if (cm_id)
 		rdma_destroy_id(cm_id);
@@ -2138,6 +2202,7 @@ static const struct nvmet_fabrics_ops nvmet_rdma_ops = {
 	.create_offload_ctrl	= nvmet_rdma_create_offload_ctrl,
 	.enable_offload_ns	= nvmet_rdma_enable_offload_ns,
 	.disable_offload_ns	= nvmet_rdma_disable_offload_ns,
+	.offload_ns_is_active	= nvmet_rdma_offload_ns_is_active,
 	.peer_to_peer_sqe_inline_size = nvmet_rdma_peer_to_peer_sqe_inline_size,
 	.peer_to_peer_mdts	= nvmet_rdma_peer_to_peer_mdts,
 	.offload_subsys_unknown_ns_cmds	= nvmet_rdma_offload_subsys_unknown_ns_cmds,
@@ -2219,6 +2284,23 @@ static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data
 
 	if (found)
 		flush_workqueue(nvmet_wq);
+
+retry:
+	/*
+	 * Wait until all devices were released. This check is needed only
+	 * for offload queues, which don't release the device before getting
+	 * last NVMe CQE events on all the queues.
+	 */
+	mutex_lock(&device_list_mutex);
+	list_for_each_entry(ndev, &device_list, entry) {
+		if (ndev->device == ib_device) {
+			mutex_unlock(&device_list_mutex);
+			msleep(100);
+			goto retry;
+		}
+	}
+	mutex_unlock(&device_list_mutex);
+	pr_info("Removed all queues of ib_device %p\n", ib_device);
 }
 
 static struct ib_client nvmet_rdma_ib_client = {

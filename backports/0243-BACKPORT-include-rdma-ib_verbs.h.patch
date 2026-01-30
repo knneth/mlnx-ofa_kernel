@@ -33,7 +33,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  #else
  __printf(2, 3) __cold
  static inline
-@@ -1543,7 +1548,12 @@ struct ib_ucontext {
+@@ -1544,7 +1549,12 @@ struct ib_ucontext {
  	struct ib_device       *device;
  	struct ib_uverbs_file  *ufile;
  
@@ -47,7 +47,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  	/*
  	 * Implementation details of the RDMA core, don't use in drivers:
  	 */
-@@ -1631,7 +1641,9 @@ struct ib_cq {
+@@ -1632,7 +1642,9 @@ struct ib_cq {
  	struct ib_wc		*wc;
  	struct list_head        pool_entry;
  	union {
@@ -57,7 +57,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  		struct work_struct	work;
  	};
  	struct workqueue_struct *comp_wq;
-@@ -2226,7 +2238,9 @@ struct ib_port_data {
+@@ -2227,7 +2239,9 @@ struct ib_port_data {
  	struct ib_port_cache cache;
  
  	struct net_device __rcu *netdev;
@@ -67,7 +67,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  	struct hlist_node ndev_hash_link;
  	struct rdma_port_counter port_counter;
  	struct ib_port *sysfs;
-@@ -2539,6 +2553,10 @@ struct ib_device_ops {
+@@ -2540,6 +2554,10 @@ struct ib_device_ops {
  			       struct ib_mr_status *mr_status);
  	int (*alloc_mw)(struct ib_mw *mw, struct ib_udata *udata);
  	int (*dealloc_mw)(struct ib_mw *mw);
@@ -78,7 +78,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  	int (*attach_mcast)(struct ib_qp *qp, union ib_gid *gid, u16 lid);
  	int (*detach_mcast)(struct ib_qp *qp, union ib_gid *gid, u16 lid);
  	int (*alloc_xrcd)(struct ib_xrcd *xrcd, struct ib_udata *udata);
-@@ -4097,7 +4115,11 @@ static inline bool ib_dma_pci_p2p_dma_su
+@@ -4099,7 +4117,11 @@ static inline bool ib_dma_pci_p2p_dma_su
  	if (ib_uses_virt_dma(dev))
  		return false;
  
@@ -90,7 +90,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  }
  
  /**
-@@ -4243,6 +4265,7 @@ static inline void ib_dma_unmap_sg_attrs
+@@ -4245,6 +4267,7 @@ static inline void ib_dma_unmap_sg_attrs
   * @direction: The direction of the DMA
   * @attrs: Optional DMA attributes for the map operation
   */
@@ -98,7 +98,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  static inline int ib_dma_map_sgtable_attrs(struct ib_device *dev,
  					   struct sg_table *sgt,
  					   enum dma_data_direction direction,
-@@ -4268,6 +4291,7 @@ static inline void ib_dma_unmap_sgtable_
+@@ -4270,6 +4293,7 @@ static inline void ib_dma_unmap_sgtable_
  	if (!ib_uses_virt_dma(dev))
  		dma_unmap_sgtable(dev->dma_device, sgt, direction, dma_attrs);
  }
@@ -106,7 +106,7 @@ Change-Id: I110a02ea48f0476b6d20223bb55337fc858b33e0
  
  /**
   * ib_dma_map_sg - Map a scatter/gather list to DMA addresses
-@@ -4431,6 +4455,45 @@ struct ib_xrcd *ib_alloc_xrcd_user(struc
+@@ -4433,6 +4457,45 @@ struct ib_xrcd *ib_alloc_xrcd_user(struc
  				   struct inode *inode, struct ib_udata *udata);
  int ib_dealloc_xrcd_user(struct ib_xrcd *xrcd, struct ib_udata *udata);
  

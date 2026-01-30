@@ -5845,6 +5845,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if scsi_host_template has member sdev_configure])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <scsi/scsi_host.h>
+	],[
+		struct scsi_host_template sht = {
+			.sdev_configure = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE, 1,
+				[scsi_host_template has member sdev_configure])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if target_core_base.h struct se_cmd has member sense_info])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <target/target_core_base.h>
@@ -6622,6 +6639,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if bio.h bio_add_pc_page is defined])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/bio.h>
+	],[
+		bio_add_pc_page(NULL, NULL, NULL, 0, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BIO_ADD_PC_PAGE, 1,
+			  [bio_add_pc_page is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if bio.h bio_init has 3 parameters])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/bio.h>
@@ -6653,6 +6685,25 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_AUTO_TYPE, 1,
 			[__auto_type exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if __auto_type exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/compiler_types.h>
+		#include <linux/compiler_attributes.h>
+
+	],[
+		#ifdef __counted_by
+			return 0;
+		#else
+			#return 1
+		#endif
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE___COUNTED_BY, 1,
+			[compiler_types.h, compiler_attributes.h provide __counted_by macro])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -10503,6 +10554,63 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if EXPORT_SYMBOL_NS_GPL exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/export.h>
+	],[
+		#ifdef EXPORT_SYMBOL_NS_GPL
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_EXPORT_SYMBOL_NS_GPL, 1,
+			[EXPORT_SYMBOL_NS_GPL exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if HAVE___EXPORT_SYMBOL_REF exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/export.h>
+	],[
+		#ifdef __EXPORT_SYMBOL_REF
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE___EXPORT_SYMBOL_REF, 1,
+			[__EXPORT_SYMBOL_REF exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if HAVE___EXPORT_SYMBOL_NS exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/export.h>
+	],[
+		#ifdef __EXPORT_SYMBOL_NS
+			return 0;
+		#else
+			#return 1
+		#endif
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE___EXPORT_SYMBOL_NS, 1,
+			[__EXPORT_SYMBOL_NS exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/moduleparam.h has param_set_uint_minmax])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/moduleparam.h>
@@ -12053,6 +12161,25 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/gfp.h has  v6.14 alloc_bulk_pages API rename])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm_types.h>
+		#include <linux/gfp.h>
+	],[
+		unsigned int to_fill = 1;
+		struct page **page_list;
+
+		alloc_pages_bulk(GFP_KERNEL_ACCOUNT, to_fill, page_list);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ALLOC_BULK_PAGES_API_RENAME, 1,
+			  [linux/gfp.h has  v6.14 alloc_bulk_pages API rename])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/gfp.h has page_frag_cache_drain])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/gfp.h>
@@ -12062,8 +12189,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_PAGE_FRAG_CACHE_DRAIN, 1,
+		MLNX_AC_DEFINE(HAVE_PAGE_FRAG_CACHE_DRAIN_IN_GFP_H, 1,
 			  [linux/gfp.h has page_frag_cache_drain])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/page_frag_cache.h has page_frag_cache_drain])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/page_frag_cache.h>
+	],[
+		page_frag_cache_drain(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PAGE_FRAG_CACHE_DRAIN_IN_PAGE_FRAG_CACHE_H, 1,
+			  [linux/page_frag_cache.h has page_frag_cache_drain])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -12203,7 +12345,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if has blk_rq_integrity_map_user])
+	AC_MSG_CHECKING([if blk_rq_integrity_map_user has 4 params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blk-integrity.h>
 	],[
@@ -12212,11 +12354,27 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER, 1,
-			[blk_rq_integrity_map_user exists])
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_4_PARAM, 1,
+			[blk_rq_integrity_map_user has 4 params])
 	],[
 		AC_MSG_RESULT(no)
 	])
+
+	AC_MSG_CHECKING([if blk_rq_integrity_map_user has 3 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-integrity.h>
+	],[
+		int ret = blk_rq_integrity_map_user(NULL, NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_RQ_INTEGRITY_MAP_USER_GET_3_PARAM, 1,
+			[blk_rq_integrity_map_user has 3 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 
 	AC_MSG_CHECKING([if blk_rq_map_integrity_sg get 2 params])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -12257,6 +12415,94 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_RQ_INTEGRITY_RETURN_BIO_VEC, 1,
 			[rq_integrity_vec returns struct bio_vec])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if include/linux/blk-mq-pci.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq-pci.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_PCI_H, 1,
+			[include/linux/blk-mq-pci.h exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blk-mq.h has BLK_MQ_F_NO_SCHED])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_NO_SCHED;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_F_NO_SCHED, 1,
+			  [BLK_MQ_F_NO_SCHED is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blk-mq.h has BLK_MQ_F_SHOULD_MERGE])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		int x = BLK_MQ_F_SHOULD_MERGE;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_F_SHOULD_MERGE, 1,
+			  [BLK_MQ_F_SHOULD_MERGE is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blk-mq.h has blk_mq_unfreeze_queue with 2 params])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		blk_mq_unfreeze_queue(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_UNFREEZE_QUEUE_2_PARAMS, 1,
+			[blk-mq.h has blk_mq_unfreeze_queue with 2 params])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blkdev.h has has struct rq_list])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		struct rq_list x;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_RQ_LIST, 1,
+			[linux/blkdev.h has struct rq_list])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if blk-mq.h has blk_mq_map_hw_queues])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blk-mq.h>
+	],[
+		blk_mq_map_hw_queues(NULL, NULL, 5);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLK_MQ_MAP_HW_QUEUES, 1,
+			[blk-mq.h has blk_mq_map_hw_queues])
 	],[
 		AC_MSG_RESULT(no)
 	])

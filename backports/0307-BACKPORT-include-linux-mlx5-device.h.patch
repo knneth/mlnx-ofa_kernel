@@ -17,7 +17,7 @@ Change-Id: I14c0cdf2fd9924f37b62ee8e62f1b49f003a63ce
  #include <linux/types.h>
  #include <rdma/ib_verbs.h>
  #include <linux/mlx5/mlx5_ifc.h>
-@@ -377,7 +379,9 @@ enum mlx5_driver_event {
+@@ -378,7 +380,9 @@ enum mlx5_driver_event {
  	MLX5_DRIVER_EVENT_UPLINK_NETDEV,
  	MLX5_DRIVER_EVENT_MACSEC_SA_ADDED,
  	MLX5_DRIVER_EVENT_MACSEC_SA_DELETED,

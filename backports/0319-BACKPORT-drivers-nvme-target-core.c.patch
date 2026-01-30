@@ -7,7 +7,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
 
 --- a/drivers/nvme/target/core.c
 +++ b/drivers/nvme/target/core.c
-@@ -678,7 +678,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+@@ -679,7 +679,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
  		nvmet_bdev_ns_revalidate(ns);
  	else
  		nvmet_file_ns_revalidate(ns);
@@ -15,7 +15,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  	return oldsize != ns->size;
  }
  
-@@ -744,7 +743,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+@@ -745,7 +744,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
  
  	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
  		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
@@ -24,7 +24,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  	if (subsys->offloadble) {
  		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
  		if (!ns->pdev) {
-@@ -902,10 +901,20 @@ static void nvmet_update_sq_head(struct
+@@ -903,10 +902,20 @@ static void nvmet_update_sq_head(struct
  	if (req->sq->size) {
  		u32 old_sqhd, new_sqhd;
  
@@ -45,7 +45,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  	}
  	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
  }
-@@ -1123,8 +1132,10 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1124,8 +1133,10 @@ static u16 nvmet_parse_io_cmd(struct nvm
  			return nvmet_file_parse_io_cmd(req);
  		return nvmet_bdev_parse_io_cmd(req);
  	case NVME_CSI_ZNS:
@@ -56,7 +56,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  		return NVME_SC_INVALID_IO_CMD_SET;
  	default:
  		return NVME_SC_INVALID_IO_CMD_SET;
-@@ -1640,7 +1651,11 @@ u16 nvmet_alloc_ctrl(const char *subsysn
+@@ -1641,7 +1652,11 @@ u16 nvmet_alloc_ctrl(const char *subsysn
  	if (!ctrl->sqs)
  		goto out_free_changed_ns_list;
  
@@ -68,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  			     subsys->cntlid_min, subsys->cntlid_max,
  			     GFP_KERNEL);
  	if (ret < 0) {
-@@ -1709,7 +1724,11 @@ static void nvmet_ctrl_free(struct kref
+@@ -1710,7 +1725,11 @@ static void nvmet_ctrl_free(struct kref
  
  	nvmet_destroy_auth(ctrl);
  
@@ -80,7 +80,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
  
  	nvmet_async_events_free(ctrl);
  	kfree(ctrl->sqs);
-@@ -1931,3 +1950,6 @@ module_exit(nvmet_exit);
+@@ -1932,3 +1951,6 @@ module_exit(nvmet_exit);
  
  MODULE_DESCRIPTION("NVMe target core framework");
  MODULE_LICENSE("GPL v2");

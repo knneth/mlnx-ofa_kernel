@@ -966,7 +966,8 @@ struct mlx5_ifc_flow_table_eswitch_cap_bits {
 };
 
 struct mlx5_ifc_nvmf_cap_bits {
-	u8	reserved_at_0[0x3];
+	u8	reserved_at_0[0x2];
+	u8	qp_last_nvme_cqe_reached[0x1];
 	u8	log_max_frontend_nsid[0x5];
 	u8	current_q_depth[0x1];
 	u8	last_req_latency[0x1];

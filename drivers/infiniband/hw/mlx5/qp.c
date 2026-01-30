@@ -408,6 +408,9 @@ static void mlx5_ib_handle_qp_event(struct work_struct *_work)
 		case MLX5_XRQ_ERROR_TYPE_QP_ERROR:
 			event.event = IB_EXP_EVENT_XRQ_QP_ERR;
 			break;
+		case MLX5_XRQ_ERROR_TYPE_QP_LAST_NVME_CQE_REACHED:
+			event.event = IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED;
+			break;
 		default:
 			pr_warn("mlx5_ib: Unexpected event type %d error type %d on QP %06x\n",
 					type, error_type, qpe_work->qp->qpn);

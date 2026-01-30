@@ -344,7 +344,8 @@ static bool nvmet_peer_to_peer_capable(struct nvmet_port *port)
 	    ops->offload_ns_error_cmds &&
 	    ops->offload_ns_backend_error_cmds &&
 	    ops->offload_query_counters &&
-	    ops->check_subsys_match_offload_port)
+	    ops->check_subsys_match_offload_port &&
+	    ops->offload_ns_is_active)
 		return ops->peer_to_peer_capable(port);
 
 	return false;

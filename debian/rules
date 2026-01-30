@@ -158,6 +158,14 @@ endif
 	cp source/ofed_scripts/mlx5.conf   debian/$(putils)/etc/infiniband
 ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/ofed_scripts/install_helper $(CURDIR)/debian/$(putils)
+	# For macsec:
+	var=; \
+	if apt-cache show "linux-modules-extra-$(kernelver)" >/dev/null 2>&1 \
+	  && LC_ALL=C apt-cache show linux-modules-extra-$(kernelver) 2>/dev/null| grep -q -v ^N:; \
+	then \
+	  var="linux-modules-extra-$(kernelver)"; \
+	fi; \
+	echo "extra:Depends=$$var" >> debian/$(pdkms).substvars
 endif
 
 	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/lib/udev/rules.d

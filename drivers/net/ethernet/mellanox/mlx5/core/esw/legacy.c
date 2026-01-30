@@ -229,10 +229,6 @@ static void esw_destroy_legacy_table(struct mlx5_eswitch *esw)
 	esw_destroy_legacy_vepa_table(esw);
 }
 
-#define MLX5_LEGACY_SRIOV_VPORT_EVENTS (MLX5_VPORT_UC_ADDR_CHANGE | \
-					MLX5_VPORT_MC_ADDR_CHANGE | \
-					MLX5_VPORT_PROMISC_CHANGE)
-
 int esw_legacy_enable(struct mlx5_eswitch *esw)
 {
 	struct mlx5_vport *vport;

@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"24.10-2.1.8"
+#define DRIVER_VERSION	"24.10-3.2.5"
 
 extern uint mlx5_core_debug_mask;
 
@@ -291,7 +291,9 @@ void mlx5_sriov_detach(struct mlx5_core_dev *dev);
 int mlx5_core_sriov_configure(struct pci_dev *dev, int num_vfs);
 void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change);
 int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count);
+int mlx5_sriov_groups_sysfs_init(struct mlx5_core_dev *dev);
 int mlx5_sriov_sysfs_init(struct mlx5_core_dev *dev);
+void mlx5_sriov_groups_sysfs_cleanup(struct mlx5_core_dev *dev);
 void mlx5_sriov_sysfs_cleanup(struct mlx5_core_dev *dev);
 int mlx5_create_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_destroy_vfs_sysfs(struct mlx5_core_dev *dev, int num_vfs);

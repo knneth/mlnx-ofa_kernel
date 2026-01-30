@@ -663,8 +663,10 @@ static void esw_update_vport_vlan_list(struct mlx5_eswitch *esw, u32 vport_num)
 		return;
 
 	esw_update_acl_trunk_bitmap(esw, vport_num);
-	esw_acl_egress_lgcy_setup(esw, vport);
-	esw_acl_ingress_lgcy_setup(esw, vport);
+	if (vport->enabled && esw->mode == MLX5_ESWITCH_LEGACY) {
+		esw_acl_egress_lgcy_setup(esw, vport);
+		esw_acl_ingress_lgcy_setup(esw, vport);
+	}
 }
 
 /* Sync vport UC/MC list from vport context
@@ -2273,8 +2275,11 @@ mlx5_esw_set_vport_mac_locked(struct mlx5_eswitch *esw,
 
 	ether_addr_copy(evport->info.mac, mac);
 	evport->info.node_guid = node_guid;
-	if (evport->enabled && esw->mode == MLX5_ESWITCH_LEGACY)
-		err = esw_acl_ingress_lgcy_setup(esw, evport);
+	if (evport->enabled && esw->mode == MLX5_ESWITCH_LEGACY) {
+		err = esw_acl_egress_lgcy_setup(esw, evport);
+		if (!err)
+			 esw_acl_ingress_lgcy_setup(esw, evport);
+	}
 
 	return err;
 }
@@ -2327,7 +2332,7 @@ static int mlx5_eswitch_update_vport_trunk(struct mlx5_eswitch *esw,
 		return err;
 
 	esw_update_acl_trunk_bitmap(esw, evport->vport);
-	if (evport->enabled && esw->mode == MLX5_ESWITCH_OFFLOADS) {
+	if (evport->enabled && esw->mode == MLX5_ESWITCH_LEGACY) {
 		err = esw_acl_egress_lgcy_setup(esw, evport);
 		if (!err)
 			err = esw_acl_ingress_lgcy_setup(esw, evport);
@@ -2336,8 +2341,10 @@ static int mlx5_eswitch_update_vport_trunk(struct mlx5_eswitch *esw,
 		bitmap_copy(evport->info.vlan_trunk_8021q_bitmap, old_trunk,
 			    VLAN_N_VID);
 		esw_update_acl_trunk_bitmap(esw, evport->vport);
-		esw_acl_egress_lgcy_setup(esw, evport);
-		esw_acl_ingress_lgcy_setup(esw, evport);
+		if (evport->enabled && esw->mode == MLX5_ESWITCH_LEGACY) {
+			esw_acl_egress_lgcy_setup(esw, evport);
+			esw_acl_ingress_lgcy_setup(esw, evport);
+		}
 	}
 
 	return err;
@@ -2356,7 +2363,7 @@ int mlx5_eswitch_add_vport_trunk_range(struct mlx5_eswitch *esw,
 	if (IS_ERR(evport))
 		return PTR_ERR(evport);
 
-	if (end_vlan > VLAN_N_VID || start_vlan > end_vlan)
+	if (end_vlan >= VLAN_N_VID || start_vlan > end_vlan)
 		return -EINVAL;
 
 	mutex_lock(&esw->state_lock);
@@ -2394,7 +2401,7 @@ int mlx5_eswitch_del_vport_trunk_range(struct mlx5_eswitch *esw,
 	if (IS_ERR(evport))
 		return PTR_ERR(evport);
 
-	if (end_vlan > VLAN_N_VID || start_vlan > end_vlan)
+	if (end_vlan >= VLAN_N_VID || start_vlan > end_vlan)
 		return -EINVAL;
 
 	mutex_lock(&esw->state_lock);

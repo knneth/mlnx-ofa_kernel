@@ -406,6 +406,8 @@ struct nvmet_fabrics_ops {
 	int (*enable_offload_ns)(struct nvmet_ctrl *ctrl, struct nvmet_ns *ns);
 	void (*disable_offload_ns)(struct nvmet_ctrl *ctrl,
 				   struct nvmet_ns *ns);
+	bool (*offload_ns_is_active)(struct nvmet_ctrl *ctrl,
+				     struct nvmet_ns *ns);
 	unsigned int (*peer_to_peer_sqe_inline_size)(struct nvmet_ctrl *ctrl);
 	u8 (*peer_to_peer_mdts)(struct nvmet_port *port);
 	u64 (*offload_subsys_unknown_ns_cmds)(struct nvmet_subsys *subsys);

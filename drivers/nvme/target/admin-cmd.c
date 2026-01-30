@@ -517,6 +517,7 @@ out:
 
 static void nvmet_execute_identify_ns(struct nvmet_req *req)
 {
+	struct nvmet_ctrl *ctrl = req->sq->ctrl;
 	struct nvme_id_ns *id;
 	u16 status;
 
@@ -539,7 +540,10 @@ static void nvmet_execute_identify_ns(struct nvmet_req *req)
 		goto done;
 	}
 
-	if (nvmet_ns_revalidate(req->ns)) {
+	if (req->ns->pdev && ctrl->offload_ctrl &&
+	    !ctrl->ops->offload_ns_is_active(ctrl, req->ns)) {
+		req->ns->size = 0;
+	} else if (nvmet_ns_revalidate(req->ns)) {
 		mutex_lock(&req->ns->subsys->lock);
 		nvmet_ns_changed(req->ns->subsys, req->ns->nsid);
 		mutex_unlock(&req->ns->subsys->lock);
