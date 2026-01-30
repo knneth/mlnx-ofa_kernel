@@ -1,5 +1,31 @@
-mlnx-ofed-kernel (24.10-OFED.24.10.4.1.4.1) unstable; urgency=low
+mlnx-ofed-kernel (24.10-4.1.4.btech1) noble; urgency=low
 
-  * Initial release (Closes: #125306)
+  * Rebase to OFED 24.10-4.1.4.0 for HWE 6.14 support
 
- -- Vladimir Sokolovsky <vlad@mellanox.com>  Mon, 31 Dec 2012 15:38:53 +0200
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Fri, 30 Jan 2026 15:05:00 +0200
+
+mlnx-ofed-kernel (24.10-2.1.8.btech2) noble; urgency=medium
+
+  * Additional access to device commands
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Sun, 22 Jun 2025 16:56:47 +0200
+
+mlnx-ofed-kernel (24.10-2.1.8.btech1) noble; urgency=medium
+
+  * Rebase to OFED 24.10-2.1.8.0
+  * Order DevX flow tables correctly in destination lists
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Mon, 5 May 2025 20:36:09 +0200
+
+mlnx-ofed-kernel (24.04-0.7.0.btech1) noble; urgency=medium
+
+  * Rebase to OFED 24.04-0.7.0.0
+  * Enable TX port timestamps by default on supporting adapters
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Wed, 10 Jul 2024 13:58:27 +0200
+
+mlnx-ofed-kernel (24.04-0.6.6.btech1) noble; urgency=medium
+
+  * Initial release for Ubuntu 24.04
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Wed, 15 May 2024 18:00:00 +0200
