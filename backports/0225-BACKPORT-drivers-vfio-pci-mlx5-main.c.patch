@@ -35,7 +35,7 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
  };
  
  static struct mlx5_vf_migration_file *
-@@ -1387,10 +1394,14 @@ static const struct vfio_device_ops mlx5
+@@ -1387,10 +1394,17 @@ static const struct vfio_device_ops mlx5
  	.mmap = vfio_pci_core_mmap,
  	.request = vfio_pci_core_request,
  	.match = vfio_pci_core_match,
@@ -47,10 +47,13 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
 +#ifdef HAVE_DETACH_IOAS_NDO
  	.detach_ioas = vfio_iommufd_physical_detach_ioas,
 +#endif
++#ifdef HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID
++	.match_token_uuid = vfio_pci_core_match_token_uuid,
++#endif
  };
  
  static int mlx5vf_pci_probe(struct pci_dev *pdev,
-@@ -1441,10 +1452,13 @@ static struct pci_driver mlx5vf_pci_driv
+@@ -1441,10 +1455,13 @@ static struct pci_driver mlx5vf_pci_driv
  	.probe = mlx5vf_pci_probe,
  	.remove = mlx5vf_pci_remove,
  	.err_handler = &mlx5vf_err_handlers,

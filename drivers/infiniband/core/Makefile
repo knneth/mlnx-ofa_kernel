@@ -31,6 +31,7 @@ ib_cm-y :=			cm.o cm_trace.o
 
 iw_cm-y :=			iwcm.o iwpm_util.o iwpm_msg.o
 
+CFLAGS_cm_trace.o +=		-I$(src)
 CFLAGS_cma_trace.o +=		-I$(src)
 rdma_cm-y :=			cma.o cma_trace.o
 

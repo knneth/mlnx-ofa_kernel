@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/health.c  | 403 +++++++++++++++---
- 1 file changed, 355 insertions(+), 48 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/health.c  | 421 +++++++++++++++---
+ 1 file changed, 369 insertions(+), 52 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/health.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/health.c
@@ -518,44 +518,58 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  	if (devlink_health_report(health->fw_fatal_reporter,
  				  "FW fatal error reported", &fw_reporter_ctx) == -ECANCELED) {
  		/* If recovery wasn't performed, due to grace period,
-@@ -730,16 +981,33 @@ void mlx5_fw_reporters_create(struct mlx
+@@ -730,16 +981,43 @@ void mlx5_fw_reporters_create(struct mlx
  	}
  
  	health->fw_reporter =
 -		devl_health_reporter_create(devlink, fw_ops, 0, dev);
-+#if defined(HAVE_DEVL_HEALTH_REPORTER_CREATE) && defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
-+		devl_health_reporter_create(devlink, fw_ops,
++#ifdef HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS
++	/* Newer kernels (6.18+): devl_ variant with 3 args
++	 * Upstream commit d2b00737 "devlink: Move graceful period parameter to reporter ops" */
++	devl_health_reporter_create(devlink, fw_ops, dev);
++#elif defined(HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (6.4-6.17): devl_ variant with 4 args
++	 * Upstream commit e71383fb "net/mlx5: Light probe local SFs" */
++	devl_health_reporter_create(devlink, fw_ops, 0, dev);
++#elif defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (5.7-6.3): devlink_ variant with 4 args
++	 * Upstream commit ba7d16c7 removed auto_recover parameter in March 2020 */
++	devlink_health_reporter_create(devlink, fw_ops, 0, dev);
 +#else
-+		devlink_health_reporter_create(devlink, &mlx5_fw_reporter_ops,
++	/* Older kernels (5.4-5.6): devlink_ variant with 5 args (with auto_recover) */
++	devlink_health_reporter_create(devlink, fw_ops, 0, false, dev);
 +#endif
-+#ifndef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
-+				0, dev);
-+#else
-+				0, false, dev);
-+#endif
-+
  	if (IS_ERR(health->fw_reporter))
- 		mlx5_core_warn(dev, "Failed to create fw reporter, err = %ld\n",
- 			       PTR_ERR(health->fw_reporter));
+-		mlx5_core_warn(dev, "Failed to create fw reporter, err = %ld\n",
+-			       PTR_ERR(health->fw_reporter));
++		mlx5_core_warn(dev, "Failed to create fw reporter, err = %pe\n",
++			       health->fw_reporter);
  
  	health->fw_fatal_reporter =
-+#ifdef HAVE_DEVL_HEALTH_REPORTER_CREATE
- 		devl_health_reporter_create(devlink,
-+#else
-+		devlink_health_reporter_create(devlink,
-+#endif
- 					    fw_fatal_ops,
+-		devl_health_reporter_create(devlink,
+-					    fw_fatal_ops,
 -					    grace_period,
 -					    dev);
-+#ifndef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
-+					       grace_period, dev);
++#ifdef HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS
++	/* Newer kernels (6.18+): devl_ variant with 3 args
++	 * Upstream commit d2b00737 "devlink: Move graceful period parameter to reporter ops" */
++	devl_health_reporter_create(devlink, fw_fatal_ops, dev);
++#elif defined(HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (6.4-6.17): devl_ variant with 4 args
++	 * Upstream commit e71383fb "net/mlx5: Light probe local SFs" */
++	devl_health_reporter_create(devlink, fw_fatal_ops, grace_period, dev);
++#elif defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (5.7-6.3): devlink_ variant with 4 args
++	 * Upstream commit ba7d16c7 removed auto_recover parameter in March 2020 */
++	devlink_health_reporter_create(devlink, fw_fatal_ops, grace_period, dev);
 +#else
-+					       grace_period, true, dev);
++	/* Older kernels (5.4-5.6): devlink_ variant with 5 args (with auto_recover) */
++	devlink_health_reporter_create(devlink, fw_fatal_ops, grace_period, true, dev);
 +#endif
  	if (IS_ERR(health->fw_fatal_reporter))
  		mlx5_core_warn(dev, "Failed to create fw fatal reporter, err = %ld\n",
  			       PTR_ERR(health->fw_fatal_reporter));
-@@ -755,6 +1023,7 @@ static void mlx5_fw_reporters_destroy(st
+@@ -755,6 +1033,7 @@ static void mlx5_fw_reporters_destroy(st
  	if (!IS_ERR_OR_NULL(health->fw_fatal_reporter))
  		devlink_health_reporter_destroy(health->fw_fatal_reporter);
  }
@@ -563,7 +577,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  
  static unsigned long get_next_poll_jiffies(struct mlx5_core_dev *dev)
  {
-@@ -771,7 +1040,9 @@ void mlx5_trigger_health_work(struct mlx
+@@ -771,7 +1050,9 @@ void mlx5_trigger_health_work(struct mlx
  {
  	struct mlx5_core_health *health = &dev->priv.health;
  
@@ -573,7 +587,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  		queue_work(health->wq, &health->fatal_report_work);
  }
  
-@@ -804,9 +1075,13 @@ static void poll_health(struct timer_lis
+@@ -804,9 +1085,13 @@ static void poll_health(struct timer_lis
  {
  	struct mlx5_core_dev *dev = from_timer(dev, t, priv.health.timer);
  	struct mlx5_core_health *health = &dev->priv.health;
@@ -587,7 +601,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  	u32 count;
  
  	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
-@@ -831,18 +1106,22 @@ static void poll_health(struct timer_lis
+@@ -831,18 +1116,22 @@ static void poll_health(struct timer_lis
  
  	health->prev = count;
  	if (health->miss_counter == MAX_MISSES) {
@@ -610,7 +624,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  
  out:
  	mod_timer(&health->timer, get_next_poll_jiffies(dev));
-@@ -870,7 +1149,11 @@ void mlx5_stop_health_poll(struct mlx5_c
+@@ -870,7 +1159,11 @@ void mlx5_stop_health_poll(struct mlx5_c
  	if (disable_health)
  		set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
  
@@ -622,7 +636,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  }
  
  void mlx5_start_health_fw_log_up(struct mlx5_core_dev *dev)
-@@ -887,7 +1170,9 @@ void mlx5_drain_health_wq(struct mlx5_co
+@@ -887,7 +1180,9 @@ void mlx5_drain_health_wq(struct mlx5_co
  
  	set_bit(MLX5_DROP_HEALTH_WORK, &health->flags);
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
@@ -632,7 +646,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  	cancel_work_sync(&health->fatal_report_work);
  }
  
-@@ -897,22 +1182,38 @@ void mlx5_health_cleanup(struct mlx5_cor
+@@ -897,22 +1192,38 @@ void mlx5_health_cleanup(struct mlx5_cor
  
  	cancel_delayed_work_sync(&health->update_fw_log_ts_work);
  	destroy_workqueue(health->wq);
@@ -671,7 +685,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/health.c
  
  	health = &dev->priv.health;
  	name = kmalloc(64, GFP_KERNEL);
-@@ -925,14 +1226,20 @@ int mlx5_health_init(struct mlx5_core_de
+@@ -925,14 +1236,20 @@ int mlx5_health_init(struct mlx5_core_de
  	kfree(name);
  	if (!health->wq)
  		goto out_err;

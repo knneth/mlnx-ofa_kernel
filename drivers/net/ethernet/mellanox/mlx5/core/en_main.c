@@ -2234,7 +2234,6 @@ static int mlx5e_alloc_cq_common(struct mlx5_core_dev *mdev,
 	mcq->set_ci_db  = cq->wq_ctrl.db.db;
 	mcq->arm_db     = cq->wq_ctrl.db.db + 1;
 	*mcq->set_ci_db = 0;
-	*mcq->arm_db    = 0;
 	mcq->vector     = param->eq_ix;
 	mcq->comp       = mlx5e_completion_event;
 	mcq->event      = mlx5e_cq_error_event;
@@ -4097,9 +4096,6 @@ mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 
 static void mlx5e_nic_set_rx_mode(struct mlx5e_priv *priv)
 {
-	if (mlx5e_is_uplink_rep(priv))
-		return; /* no rx mode for uplink rep */
-
 	queue_work(priv->wq, &priv->set_rx_mode_work);
 }
 
@@ -6785,7 +6781,7 @@ static const struct auxiliary_device_id mlx5e_id_table[] = {
 	{},
 };
 
-MODULE_DEVICE_TABLE(auxiliary_mlx5e_id_table, mlx5e_id_table);
+MODULE_DEVICE_TABLE(auxiliary, mlx5e_id_table);
 
 static struct auxiliary_driver mlx5e_driver = {
 	.name = "eth",

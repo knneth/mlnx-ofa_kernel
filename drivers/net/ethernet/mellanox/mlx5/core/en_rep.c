@@ -1381,6 +1381,11 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	mlx5_lag_add_netdev(mdev, netdev);
 }
 
+static void mlx5e_uplink_rep_set_rx_mode(struct mlx5e_priv *priv)
+{
+	queue_work(priv->wq, &priv->set_rx_mode_work);
+}
+
 static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -1390,6 +1395,8 @@ static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 		mlx5e_close(priv->netdev);
 	netif_device_detach(priv->netdev);
 	rtnl_unlock();
+
+	mlx5e_uplink_rep_set_rx_mode(priv);
 
 	mlx5e_rep_bridge_cleanup(priv);
 	mlx5e_dcbnl_delete_app(priv);
@@ -1832,7 +1839,7 @@ static const struct auxiliary_device_id mlx5e_rep_id_table[] = {
 	{},
 };
 
-MODULE_DEVICE_TABLE(auxiliary_mlx5e_rep_id_table, mlx5e_rep_id_table);
+MODULE_DEVICE_TABLE(auxiliary, mlx5e_rep_id_table);
 
 static struct auxiliary_driver mlx5e_rep_driver = {
 	.name = "eth-rep",

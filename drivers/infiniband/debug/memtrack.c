@@ -88,9 +88,6 @@
 #ifdef io_mapping_free
 	#undef io_mapping_free
 #endif
-#ifdef ioremap_nocache
-	#undef ioremap_nocache
-#endif
 #ifdef iounmap
 	#undef iounmap
 #endif

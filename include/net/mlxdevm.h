@@ -1572,8 +1572,8 @@ struct device *mlxdevm_to_dev(const struct mlxdevm *mlxdevm);
 
 /* Devlink instance explicit locking */
 void devm_lock(struct mlxdevm *mlxdevm);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-int devl_trylock(struct devlink *devlink);
+#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
+int devm_trylock(struct mlxdevm *mlxdevm);
 #endif
 void devm_unlock(struct mlxdevm *mlxdevm);
 void devm_assert_locked(struct mlxdevm *mlxdevm);

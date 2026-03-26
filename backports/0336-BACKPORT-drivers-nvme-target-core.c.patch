@@ -3,12 +3,22 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
 
 Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
 ---
- drivers/nvme/target/core.c | 31 +++++++++++++++++++++++++++++--
- 1 file changed, 29 insertions(+), 2 deletions(-)
+ drivers/nvme/target/core.c | 34 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 32 insertions(+), 2 deletions(-)
 
 --- a/drivers/nvme/target/core.c
 +++ b/drivers/nvme/target/core.c
-@@ -686,7 +686,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+@@ -7,6 +7,9 @@
+ #undef pr_fmt
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#ifdef HAVE_LINUX_HEX_H
++#include <linux/hex.h>
++#endif
+ #include <linux/module.h>
+ #include <linux/random.h>
+ #include <linux/rculist.h>
+@@ -686,7 +689,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
  		nvmet_bdev_ns_revalidate(ns);
  	else
  		nvmet_file_ns_revalidate(ns);
@@ -16,7 +26,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  	return oldsize != ns->size;
  }
  
-@@ -750,7 +749,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+@@ -750,7 +752,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
  
  	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
  		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
@@ -25,7 +35,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  	if (subsys->offloadble) {
  		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
  		if (!ns->pdev) {
-@@ -936,10 +935,20 @@ static void nvmet_update_sq_head(struct
+@@ -936,10 +938,20 @@ static void nvmet_update_sq_head(struct
  	if (req->sq->size) {
  		u32 old_sqhd, new_sqhd;
  
@@ -46,7 +56,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  	}
  	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
  }
-@@ -1279,9 +1288,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1279,9 +1291,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
  			ret = nvmet_bdev_parse_io_cmd(req);
  		break;
  	case NVME_CSI_ZNS:
@@ -58,7 +68,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  			ret = NVME_SC_INVALID_IO_CMD_SET;
  		break;
  	default:
-@@ -1804,7 +1815,11 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
+@@ -1804,7 +1818,11 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
  	if (!ctrl->sqs)
  		goto out_free_changed_ns_list;
  
@@ -70,7 +80,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  			     subsys->cntlid_min, subsys->cntlid_max,
  			     GFP_KERNEL);
  	if (ret < 0) {
-@@ -1872,7 +1887,12 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
+@@ -1872,7 +1890,12 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
  init_pr_fail:
  	mutex_unlock(&subsys->lock);
  	nvmet_stop_keep_alive_timer(ctrl);
@@ -83,7 +93,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  out_free_sqs:
  	kfree(ctrl->sqs);
  out_free_changed_ns_list:
-@@ -1908,7 +1928,11 @@ static void nvmet_ctrl_free(struct kref
+@@ -1908,7 +1931,11 @@ static void nvmet_ctrl_free(struct kref
  
  	nvmet_debugfs_ctrl_free(ctrl);
  
@@ -95,7 +105,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  
  	nvmet_async_events_free(ctrl);
  	kfree(ctrl->sqs);
-@@ -2162,3 +2186,6 @@ module_exit(nvmet_exit);
+@@ -2162,3 +2189,6 @@ module_exit(nvmet_exit);
  
  MODULE_DESCRIPTION("NVMe target core framework");
  MODULE_LICENSE("GPL v2");

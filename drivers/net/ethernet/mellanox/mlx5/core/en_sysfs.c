@@ -119,9 +119,9 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 				   struct device_attribute *attr,
 				   const char *buf, size_t count)
 {
-	 __u64 upper_limit_mbps = roundup(255 * MLX5E_100MBPS_TO_KBPS,
-						MLX5E_GBPS_TO_KBPS);
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+	u64 upper_limit_mbps = 255 * MLX5E_100MBPS_TO_KBPS;
+	u64 upper_limit_gbps = 255 * MLX5E_GBPS_TO_KBPS;
 	u8 max_bw_value[MLX5_MAX_NUM_TC];
 	u8 max_bw_unit[MLX5_MAX_NUM_TC];
 	u64 tc_maxrate[IEEE_8021QAZ_MAX_TCS];
@@ -162,15 +162,20 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 			max_bw_unit[i]  = MLX5_BW_NO_LIMIT;
 			continue;
 		}
-		if (tc_maxrate[i] < upper_limit_mbps) {
+		if (tc_maxrate[i] <= upper_limit_mbps) {
 			max_bw_value[i] = div_u64(tc_maxrate[i],
 						MLX5E_100MBPS_TO_KBPS);
 			max_bw_value[i] = max_bw_value[i] ? max_bw_value[i] : 1;
 			max_bw_unit[i]  = MLX5_100_MBPS_UNIT;
-		} else {
+		} else if (tc_maxrate[i] <= upper_limit_gbps) {
 			max_bw_value[i] = div_u64(tc_maxrate[i],
 						MLX5E_GBPS_TO_KBPS);
 			max_bw_unit[i]  = MLX5_GBPS_UNIT;
+		} else {
+			netdev_err(priv->netdev,
+				   "tc_%d maxrate %llu Kbps exceeds limit %llu\n",
+				   i, tc_maxrate[i], upper_limit_gbps);
+			return -EINVAL;
 		}
 	}
 

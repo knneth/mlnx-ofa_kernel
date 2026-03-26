@@ -1,13 +1,14 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Stav Aviram <saviram@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
 
+Change-Id: I38d087cb87b90abc9f5bd26cf075b3741494dd86
 ---
- .../ethernet/mellanox/mlx5/core/fw_reset.c    | 167 +++++++++++++++++-
- 1 file changed, 166 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/fw_reset.c    | 193 +++++++++++++++++-
+ 1 file changed, 190 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
-@@ -32,8 +32,10 @@ struct mlx5_fw_reset {
+@@ -33,8 +33,10 @@ struct mlx5_fw_reset {
  	unsigned long reset_flags;
  	u8 reset_method;
  	struct timer_list timer;
@@ -18,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  };
  
  enum {
-@@ -57,13 +59,22 @@ static void mlx5_set_fw_rst_ack(struct m
+@@ -58,13 +60,22 @@ static void mlx5_set_fw_rst_ack(struct m
  	iowrite32be(BIT(MLX5_RST_ACK_BIT_NUM), &dev->iseg->initializing);
  }
  
@@ -41,7 +42,17 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  	fw_reset = dev->priv.fw_reset;
  
  	if (ctx->val.vbool)
-@@ -79,12 +90,17 @@ static int mlx5_fw_reset_enable_remote_d
+@@ -75,17 +86,27 @@ static int mlx5_fw_reset_enable_remote_d
+ }
+ 
+ static int mlx5_fw_reset_enable_remote_dev_reset_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++						     struct devlink_param_gset_ctx *ctx,
++						     struct netlink_ext_ack *extack)
++#else
+ 						     struct devlink_param_gset_ctx *ctx)
++#endif
+ {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_fw_reset *fw_reset;
  
@@ -59,7 +70,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  
  static int mlx5_reg_mfrl_set(struct mlx5_core_dev *dev, u8 reset_level,
  			     u8 reset_type_sel, u8 sync_resp, bool sync_start)
-@@ -144,6 +160,7 @@ static int mlx5_fw_reset_get_request_inf
+@@ -145,6 +166,7 @@ static int mlx5_fw_reset_get_request_inf
  	return mlx5_reg_mfrl_query(dev, NULL, NULL, NULL, reset_method, sync_flow);
  }
  
@@ -67,7 +78,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  static int mlx5_fw_reset_get_reset_state_err(struct mlx5_core_dev *dev,
  					     struct netlink_ext_ack *extack)
  {
-@@ -222,12 +239,14 @@ int mlx5_fw_reset_verify_fw_complete(str
+@@ -223,12 +245,14 @@ int mlx5_fw_reset_verify_fw_complete(str
  	NL_SET_ERR_MSG_MOD(extack, "Sync reset did not complete successfully");
  	return rst_state;
  }
@@ -82,7 +93,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  static void mlx5_fw_reset_complete_reload(struct mlx5_core_dev *dev)
  {
  	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
-@@ -238,23 +257,34 @@ static void mlx5_fw_reset_complete_reloa
+@@ -239,25 +263,36 @@ static void mlx5_fw_reset_complete_reloa
  		complete(&fw_reset->done);
  	} else {
  		mlx5_sync_reset_unload_flow(dev, false);
@@ -102,6 +113,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		devl_unlock(devlink);
 +#endif
  	}
+ 
+ 	clear_bit(MLX5_FW_RESET_FLAGS_RESET_IN_PROGRESS, &fw_reset->reset_flags);
  }
 +#endif
  
@@ -117,7 +130,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  }
  
  static int mlx5_sync_reset_clear_reset_requested(struct mlx5_core_dev *dev, bool poll_health)
-@@ -279,10 +309,31 @@ static void mlx5_sync_reset_reload_work(
+@@ -282,10 +317,31 @@ static void mlx5_sync_reset_reload_work(
  	struct mlx5_fw_reset *fw_reset = container_of(work, struct mlx5_fw_reset,
  						      reset_reload_work);
  	struct mlx5_core_dev *dev = fw_reset->dev;
@@ -149,7 +162,58 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  }
  
  #define MLX5_RESET_POLL_INTERVAL	(HZ / 10)
-@@ -504,6 +555,9 @@ static int mlx5_pci_link_toggle(struct m
+@@ -479,7 +535,11 @@ static void mlx5_sync_reset_request_even
+ 						      reset_request_work);
+ 	struct mlx5_core_dev *dev = fw_reset->dev;
+ 	bool nack_request = false;
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	struct devlink *devlink;
++#else
++	struct mlxdevm *mlxdevm;
++#endif
+ 	u8 sync_flow;
+ 	int err;
+ 
+@@ -498,15 +558,24 @@ static void mlx5_sync_reset_request_even
+ 			nack_request = true;
+ 	}
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	devlink = priv_to_devlink(dev);
++#else
++	mlxdevm = &mlx5_devm_device_get(dev)->device;
++#endif
+ 	/* For external resets, try to acquire devl_lock. Skip if devlink reset is
+ 	 * pending (lock already held)
+ 	 */
+ 
+ 	if (nack_request ||
+ 	    (!test_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP,
+-		       &fw_reset->reset_flags) &&
+-	     !devl_trylock(devlink))) {
++ 		       &fw_reset->reset_flags)
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
++		     && !devl_trylock(devlink)
++#else
++		     && !devm_trylock(mlxdevm)
++#endif
++	     )) {
+ 		err = mlx5_fw_reset_set_reset_sync_nack(dev);
+ 		mlx5_core_warn(dev, "PCI Sync FW Update Reset Nack %s",
+ 			       err ? "Failed" : "Sent");
+@@ -526,7 +595,11 @@ static void mlx5_sync_reset_request_even
+ 
+ unlock:
+ 	if (!test_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP, &fw_reset->reset_flags))
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 		devl_unlock(devlink);
++#else
++		devm_unlock(mlxdevm);
++#endif
+ }
+ 
+ static int mlx5_pci_link_toggle(struct mlx5_core_dev *dev, u16 dev_id)
+@@ -537,6 +610,9 @@ static int mlx5_pci_link_toggle(struct m
  	struct pci_dev *sdev;
  	int cap, err;
  	u16 reg16;
@@ -159,7 +223,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  
  	cap = pci_find_capability(bridge, PCI_CAP_ID_EXP);
  	if (!cap)
-@@ -523,8 +577,16 @@ static int mlx5_pci_link_toggle(struct m
+@@ -556,8 +632,16 @@ static int mlx5_pci_link_toggle(struct m
  		return pcibios_err_to_errno(err);
  
  	/* Check link */
@@ -176,7 +240,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		msleep(1000);
  		goto restore;
  	}
-@@ -613,7 +675,12 @@ static int mlx5_sync_pci_reset(struct ml
+@@ -646,7 +730,12 @@ static int mlx5_sync_pci_reset(struct ml
  	return err;
  }
  
@@ -190,7 +254,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  {
  	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
  	unsigned long timeout;
-@@ -622,9 +689,11 @@ void mlx5_sync_reset_unload_flow(struct
+@@ -655,9 +744,11 @@ void mlx5_sync_reset_unload_flow(struct
  	u8 rst_state;
  	int err;
  
@@ -202,7 +266,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		mlx5_unload_one(dev, false);
  
  	if (!test_bit(MLX5_FW_RESET_FLAGS_UNLOAD_EVENT, &fw_reset->reset_flags))
-@@ -653,7 +722,9 @@ void mlx5_sync_reset_unload_flow(struct
+@@ -686,7 +777,9 @@ void mlx5_sync_reset_unload_flow(struct
  	if (!reset_action) {
  		mlx5_core_err(dev, "Got timeout waiting for sync reset action, state = %u\n",
  			      rst_state);
@@ -212,7 +276,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		goto done;
  	}
  
-@@ -664,7 +735,9 @@ void mlx5_sync_reset_unload_flow(struct
+@@ -697,7 +790,9 @@ void mlx5_sync_reset_unload_flow(struct
  		if (err) {
  			mlx5_core_warn(dev, "mlx5_sync_pci_reset failed, err %d\n",
  				       err);
@@ -222,7 +286,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		}
  	}
  
-@@ -697,9 +770,16 @@ static void mlx5_sync_reset_now_event(st
+@@ -730,9 +825,16 @@ static void mlx5_sync_reset_now_event(st
  	}
  
  	mlx5_enter_error_state(dev, true);
@@ -239,7 +303,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  }
  
  static void mlx5_sync_reset_unload_event(struct work_struct *work)
-@@ -723,7 +803,12 @@ static void mlx5_sync_reset_unload_event
+@@ -756,7 +858,12 @@ static void mlx5_sync_reset_unload_event
  	else
  		mlx5_enter_error_state(dev, true);
  
@@ -252,7 +316,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  }
  
  static void mlx5_sync_reset_abort_event(struct work_struct *work)
-@@ -795,6 +880,7 @@ static int fw_reset_event_notifier(struc
+@@ -831,6 +938,7 @@ static int fw_reset_event_notifier(struc
  	return NOTIFY_OK;
  }
  
@@ -260,7 +324,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  int mlx5_fw_reset_wait_reset_done(struct mlx5_core_dev *dev)
  {
  	unsigned long pci_sync_update_timeout = mlx5_tout_ms(dev, PCI_SYNC_UPDATE);
-@@ -813,13 +899,18 @@ int mlx5_fw_reset_wait_reset_done(struct
+@@ -849,13 +957,18 @@ int mlx5_fw_reset_wait_reset_done(struct
  	}
  	err = fw_reset->ret;
  	if (test_and_clear_bit(MLX5_FW_RESET_FLAGS_RELOAD_REQUIRED, &fw_reset->reset_flags)) {
@@ -279,7 +343,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  
  void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
  {
-@@ -859,12 +950,42 @@ void mlx5_drain_fw_reset(struct mlx5_cor
+@@ -895,12 +1008,42 @@ void mlx5_drain_fw_reset(struct mlx5_cor
  	cancel_delayed_work(&fw_reset->reset_timeout_work);
  }
  
@@ -322,7 +386,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  static int mlx5_devm_fw_reset_enable_remote_dev_reset_set(struct mlxdevm *mlxdevm, u32 id,
  							  struct mlxdevm_param_gset_ctx *ctx,
  							  struct netlink_ext_ack *extack)
-@@ -920,15 +1041,32 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -956,15 +1099,32 @@ int mlx5_fw_reset_init(struct mlx5_core_
  	fw_reset->dev = dev;
  	dev->priv.fw_reset = fw_reset;
  
@@ -334,7 +398,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  		goto err_devlink_params;
 +#else
 +#ifdef HAVE_DEVLINK_REGISTER_GET_1_PARAMS
-+
+ 
 +	err = devlink_params_register(priv_to_devlink(dev),
 +				      mlx5_fw_reset_devlink_params,
 +				      ARRAY_SIZE(mlx5_fw_reset_devlink_params));
@@ -342,7 +406,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
 +		goto err_devlink_params;
 +#endif
 +#endif
- 
++
 +#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
 +	devm_lock(&mlx5_devm_device_get(dev)->device);
 +#endif
@@ -355,7 +419,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  	if (err)
  		goto err_mlxdevm_params;
  
-@@ -940,14 +1078,27 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -976,14 +1136,27 @@ int mlx5_fw_reset_init(struct mlx5_core_
  	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
  	INIT_DELAYED_WORK(&fw_reset->reset_timeout_work, mlx5_sync_reset_timeout_work);
  
@@ -383,7 +447,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
  	destroy_workqueue(fw_reset->wq);
  	kfree(fw_reset);
  	return err;
-@@ -960,12 +1111,26 @@ void mlx5_fw_reset_cleanup(struct mlx5_c
+@@ -996,12 +1169,26 @@ void mlx5_fw_reset_cleanup(struct mlx5_c
  	if (!fw_reset)
  		return;
  

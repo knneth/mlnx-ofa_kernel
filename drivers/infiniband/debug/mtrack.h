@@ -7,9 +7,9 @@
 #include <linux/vmalloc.h>
 #include <linux/version.h>
 #include <linux/kernel.h>
-#include <linux/io.h>           /* For ioremap_nocache, ioremap, iounmap */
+#include <linux/io.h>           /* For ioremap, iounmap */
 #include <linux/random.h>
-# include <linux/io-mapping.h>	/* For ioremap_nocache, ioremap, iounmap */
+#include <linux/io-mapping.h>	/* For ioremap, iounmap */
 #include <linux/mm.h>           /* For all page handling */
 #include <linux/workqueue.h>    /* For all work-queue handling */
 #include <linux/scatterlist.h>  /* For using scatterlists */
@@ -30,48 +30,20 @@
 #define IS_VALID_ADDR(addr) (addr)
 #endif
 
-#ifdef CONFIG_ARM64
-#ifndef CONFIG_GENERIC_IOREMAP
-#undef ioremap
-static inline void *ioremap(phys_addr_t phys_addr, size_t size)
+static inline void *mlx5_mtrack_ioremap(phys_addr_t phys_addr, size_t size)
 {
-	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
-}
-#endif /* CONFIG_GENERIC_IOREMAP */
-
-#undef ioremap_nocache
-static inline void *ioremap_nocache(phys_addr_t phys_addr, size_t size)
-{
-#ifndef CONFIG_GENERIC_IOREMAP
-	return __ioremap(phys_addr, size, __pgprot(PROT_DEVICE_nGnRE));
-#else
-	return ioremap_prot(phys_addr, size, PROT_DEVICE_nGnRE);
-#endif
+	return ioremap(phys_addr, size);
 }
 
-#undef ioremap_wc
-static inline void *ioremap_wc(phys_addr_t phys_addr, size_t size)
+static inline void *mlx5_mtrack_ioremap_wc(phys_addr_t phys_addr, size_t size)
 {
-#ifndef CONFIG_GENERIC_IOREMAP
-	return __ioremap(phys_addr, size, __pgprot(PROT_NORMAL_NC));
-#else
-	return ioremap_prot(phys_addr, size, PROT_NORMAL_NC);
-#endif
+	return ioremap_wc(phys_addr, size);
 }
 
-/* ARCH_HAS_IOREMAP_WC was defined for arm64 until 2014-07-24 */
-#ifndef ARCH_HAS_IOREMAP_WC
-#define ARCH_HAS_IOREMAP_WC 1
-#endif
-
-#ifdef iounmap
-#undef iounmap
-static inline void iounmap(void *addr)
+static inline void mlx5_mtrack_iounmap(void *addr)
 {
-	__iounmap(addr);
+	iounmap(addr);
 }
-#endif /* iounmap  */
-#endif /* CONFIG_ARM64 */
 
 static inline void *mlx5_mtrack_kzalloc(size_t size, gfp_t flags)
 {
@@ -812,7 +784,7 @@ do {                                                            \
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "ioremap", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap");\
 	else									\
-		__memtrack_addr = ioremap(phys_addr, size);			\
+		__memtrack_addr = mlx5_mtrack_ioremap(phys_addr, size);			\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
@@ -820,34 +792,21 @@ do {                                                            \
 })
 
 #ifdef ioremap_wc
-        #define kernel_has_ioremap_wc 1
 	#undef ioremap_wc
 #endif
 
-#if defined(ARCH_HAS_IOREMAP_WC) || defined(kernel_has_ioremap_wc)
 #define ioremap_wc(phys_addr, size) ({						\
 	void __iomem *__memtrack_addr = NULL;					\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "ioremap_wc", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_wc");\
 	else									\
-		__memtrack_addr = ioremap_wc(phys_addr, size);			\
+		__memtrack_addr = mlx5_mtrack_ioremap_wc(phys_addr, size);			\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
 	}									\
 	__memtrack_addr;							\
 })
-#else
-#define ioremap_wc(phys_addr, size) ({						\
-	void __iomem *__memtrack_addr = NULL;					\
-										\
-	if (memtrack_inject_error(THIS_MODULE, __FILE__, "ioremap_wc", __func__, __LINE__)) \
-		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_wc");\
-	else									\
-		__memtrack_addr = ioremap_nocache(phys_addr, size);			\
-	__memtrack_addr;							\
-})
-#endif
 
 #define io_mapping_create_wc(base, size) ({					\
 	void __iomem *__memtrack_addr = NULL;					\
@@ -871,34 +830,6 @@ do {                                                            \
 	io_mapping_free(__memtrack_addr);					\
 })
 
-#ifdef ioremap_nocache
-	#undef ioremap_nocache
-#endif
-#ifdef CONFIG_PPC
-#define ioremap_nocache(phys_addr, size) ({					\
-	void __iomem *__memtrack_addr = NULL;					\
-										\
-	if (memtrack_inject_error(THIS_MODULE, __FILE__, "ioremap_nocache", __func__, __LINE__)) \
-		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_nocache"); \
-	else									\
-		__memtrack_addr = ioremap(phys_addr, size);			\
-	__memtrack_addr;							\
-})
-#else
-#define ioremap_nocache(phys_addr, size) ({ \
-	void __iomem *__memtrack_addr = NULL;					\
-										\
-	if (memtrack_inject_error(THIS_MODULE, __FILE__, "ioremap_nocache", __func__, __LINE__)) \
-		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "ioremap_nocache"); \
-	else									\
-		__memtrack_addr = ioremap_nocache(phys_addr, size);		\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
-		memtrack_alloc(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), size, 0UL, 0, __FILE__, __LINE__, GFP_ATOMIC); \
-	}									\
-	__memtrack_addr;							\
-})
-#endif	/* PPC */
-
 #ifdef iounmap
 	#undef iounmap
 #endif
@@ -908,7 +839,7 @@ do {                                                            \
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
 		memtrack_free(MEMTRACK_IOREMAP, 0UL, (unsigned long)(__memtrack_addr), 0UL, 0, __FILE__, __LINE__); \
 	}									\
-	iounmap(__memtrack_addr);						\
+	mlx5_mtrack_iounmap(__memtrack_addr);						\
 })
 
 

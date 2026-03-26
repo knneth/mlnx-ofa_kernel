@@ -5,13 +5,22 @@
  * header.
  */
 
-#ifndef LINUX_MOD_DEVICETABLE_H
-#define LINUX_MOD_DEVICETABLE_H
+#ifndef COMPAT_LINUX_MOD_DEVICETABLE_H
+#define COMPAT_LINUX_MOD_DEVICETABLE_H
+
+#include "../../compat/config.h"
+
+#ifdef HAVE_NATIVE_AUX
+#include_next <linux/mod_devicetable.h>
+#else
 
 #ifdef __KERNEL__
 #include <linux/mei.h>
 #include <linux/types.h>
 #include <linux/uuid.h>
+#ifdef HAVE_LINUX_MEI_UUID_H
+#include <uapi/linux/mei_uuid.h>
+#endif
 typedef unsigned long kernel_ulong_t;
 #endif
 
@@ -46,7 +55,9 @@ struct pci_device_id {
 	__u32 subvendor, subdevice;	/* Subsystem ID's or PCI_ANY_ID */
 	__u32 class, class_mask;	/* (class,subclass,prog-if) triplet */
 	kernel_ulong_t driver_data;	/* Data private to the driver */
+#ifdef HAVE_VFIO_PCI_CORE_H
 	__u32 override_only;
+#endif
 };
 
 
@@ -601,7 +612,7 @@ struct dmi_system_id {
 #define DMI_MATCH(a, b)	{ .slot = a, .substr = b }
 #define DMI_EXACT_MATCH(a, b)	{ .slot = a, .substr = b, .exact_match = 1 }
 
-#define PLATFORM_NAME_SIZE	20
+#define PLATFORM_NAME_SIZE	24
 #define PLATFORM_MODULE_PREFIX	"platform:"
 
 struct platform_device_id {
@@ -975,5 +986,6 @@ struct coreboot_device_id {
 	__u32 tag;
 	kernel_ulong_t driver_data;
 };
+#endif /* HAVE_NATIVE_AUX */
 
-#endif /* LINUX_MOD_DEVICETABLE_H */
+#endif /* COMPAT_LINUX_MOD_DEVICETABLE_H */

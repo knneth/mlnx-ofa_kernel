@@ -3,23 +3,50 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ .../mellanox/mlx5/core/ipoib/ipoib_vlan.c         | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
-@@ -149,7 +149,14 @@ static const struct net_device_ops mlx5i
+@@ -140,7 +140,9 @@ static int mlx5i_pkey_close(struct net_d
+ static int mlx5i_pkey_dev_init(struct net_device *dev);
+ static void mlx5i_pkey_dev_cleanup(struct net_device *netdev);
+ static int mlx5i_pkey_change_mtu(struct net_device *netdev, int new_mtu);
++#ifndef HAVE_NDO_HWTSTAMP_GET_SET
+ static int mlx5i_pkey_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
++#endif
+ 
+ static const struct net_device_ops mlx5i_pkey_netdev_ops = {
+ 	.ndo_open                = mlx5i_pkey_open,
+@@ -149,7 +151,18 @@ static const struct net_device_ops mlx5i
  	.ndo_get_stats64         = mlx5i_get_stats,
  	.ndo_uninit              = mlx5i_pkey_dev_cleanup,
  	.ndo_change_mtu          = mlx5i_pkey_change_mtu,
-+	.ndo_do_ioctl            = mlx5i_pkey_ioctl,
 +
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	.ndo_hwtstamp_get        = mlx5i_hwtstamp_get,
++	.ndo_hwtstamp_set        = mlx5i_hwtstamp_set,
++#else
 +#ifdef HAVE_NDO_ETH_IOCTL
  	.ndo_eth_ioctl            = mlx5i_pkey_ioctl,
 +#else
 +	.ndo_do_ioctl		  = mlx5i_pkey_ioctl,
 +#endif
++#endif
 +
  };
  
  /* Child NDOs */
+@@ -184,10 +197,12 @@ static int mlx5i_pkey_dev_init(struct ne
+ 	return mlx5i_dev_init(dev);
+ }
+ 
++#ifndef HAVE_NDO_HWTSTAMP_GET_SET
+ static int mlx5i_pkey_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+ {
+ 	return mlx5i_ioctl(dev, ifr, cmd);
+ }
++#endif
+ 
+ static void mlx5i_pkey_dev_cleanup(struct net_device *netdev)
+ {

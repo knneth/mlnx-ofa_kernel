@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/fs_core.c | 122 ++++++++++++++++--
- 1 file changed, 114 insertions(+), 8 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/fs_core.c | 127 ++++++++++++++++--
+ 1 file changed, 119 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
@@ -224,7 +224,20 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	enum mlx5_flow_steering_mode mode;
-@@ -3885,6 +3933,7 @@ static const struct devlink_param mlx5_f
+@@ -3860,7 +3908,12 @@ static int mlx5_fs_mode_set(struct devli
+ }
+ 
+ static int mlx5_fs_mode_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++			    struct devlink_param_gset_ctx *ctx,
++			    struct netlink_ext_ack *extack)
++#else
+ 			    struct devlink_param_gset_ctx *ctx)
++#endif
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 
+@@ -3885,6 +3938,7 @@ static const struct devlink_param mlx5_f
  			     mlx5_fs_mode_get, mlx5_fs_mode_set,
  			     mlx5_fs_mode_validate),
  };
@@ -232,7 +245,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  
  static int mlx5_devm_fs_mode_validate(struct mlxdevm *mlxdevm, u32 id,
  				      union mlxdevm_param_value val,
-@@ -3921,9 +3970,11 @@ static int mlx5_devm_fs_mode_validate(st
+@@ -3921,9 +3975,11 @@ static int mlx5_devm_fs_mode_validate(st
  
  	eswitch_mode = mlx5_eswitch_mode(dev);
  	if (eswitch_mode == MLX5_ESWITCH_OFFLOADS) {
@@ -244,7 +257,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  		return -EOPNOTSUPP;
  	}
  
-@@ -3994,10 +4045,21 @@ void mlx5_fs_core_cleanup(struct mlx5_co
+@@ -3994,10 +4050,21 @@ void mlx5_fs_core_cleanup(struct mlx5_co
  	cleanup_root_ns(steering->egress_root_ns);
  	cleanup_rdma_transport_roots_ns(steering);
  
@@ -266,7 +279,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  }
  
  int mlx5_fs_core_init(struct mlx5_core_dev *dev)
-@@ -4005,13 +4067,30 @@ int mlx5_fs_core_init(struct mlx5_core_d
+@@ -4005,13 +4072,30 @@ int mlx5_fs_core_init(struct mlx5_core_d
  	struct mlx5_flow_steering *steering = dev->priv.steering;
  	int err;
  
@@ -298,7 +311,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  	if (err)
  		goto err;
  
-@@ -4094,6 +4173,14 @@ void mlx5_fs_core_free(struct mlx5_core_
+@@ -4094,6 +4178,14 @@ void mlx5_fs_core_free(struct mlx5_core_
  {
  	struct mlx5_flow_steering *steering = dev->priv.steering;
  
@@ -313,7 +326,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fs_core.c
  	kmem_cache_destroy(steering->ftes_cache);
  	kmem_cache_destroy(steering->fgs_cache);
  	kfree(steering);
-@@ -4143,6 +4230,25 @@ int mlx5_fs_core_alloc(struct mlx5_core_
+@@ -4143,6 +4235,25 @@ int mlx5_fs_core_alloc(struct mlx5_core_
  		goto err;
  	}
  

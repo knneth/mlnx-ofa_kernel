@@ -45,6 +45,9 @@
 /* auxiliary device IRQs sysfs exists */
 #undef HAVE_AUX_DEV_IRQS_SYSFS
 
+/* base64_encode has 5 parameters */
+#undef HAVE_BASE64_ENCODE_5_PARAMS
+
 /* struct block_device has bd_stats */
 #undef HAVE_BDEV_BD_STATS
 
@@ -264,13 +267,6 @@
 /* blk_mq_destroy_queue is defined */
 #undef HAVE_BLK_MQ_DESTROY_QUEUE
 
-/* linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1 */
-#undef HAVE_BLK_MQ_F_NO_SCHED
-
-/* linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1
-   */
-#undef HAVE_BLK_MQ_F_SHOULD_MERGE
-
 /* blk-mq.h has blk_mq_hctx_set_fq_lock_class */
 #undef HAVE_BLK_MQ_HCTX_SET_FQ_LOCK_CLASS
 
@@ -391,6 +387,9 @@
 /* linux/blkdev.h has bdev_zone_no */
 #undef HAVE_BLK_ZONE_NO
 
+/* struct block_device_operations->getgeo has gendisk param */
+#undef HAVE_BLOCK_DEVICE_OPERATIONS_GETGEO_GENDISK
+
 /* struct block_device_operations has submit_bio */
 #undef HAVE_BLOCK_DEVICE_OPERATIONS_SUBMIT_BIO
 
@@ -399,9 +398,6 @@
 
 /* filter.h has bpf_warn_invalid_xdp_action get 3 params */
 #undef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
-
-/* bus_find_device get const */
-#undef HAVE_BUS_FIND_DEVICE_GET_CONST
 
 /* bus_type remove function return void */
 #undef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
@@ -565,11 +561,17 @@
 /* reload_up/down is defined */
 #undef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
 
+/* devlink_health_reporter_create has 3 args */
+#undef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS
+
 /* devlink_health_reporter_create has 4 args */
 #undef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS
 
 /* devlink_health_reporter_create has 5 args */
 #undef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
+
+/* devlink_health_reporter_ops has default_graceful_period */
+#undef HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD
 
 /* devlink_health_reporter_state_update exist */
 #undef HAVE_DEVLINK_HEALTH_REPORTER_STATE_UPDATE
@@ -612,6 +614,9 @@
 
 /* devlink enum has DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE */
 #undef HAVE_DEVLINK_PARAM_GENERIC_ID_IO_EQ_SIZE
+
+/* struct devlink_param get function pointer has extack parameter */
+#undef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
 
 /* devlink_param_publish is exported by the kernel */
 #undef HAVE_DEVLINK_PARAM_PUBLISH
@@ -676,8 +681,11 @@
 /* struct devlink_port has attrs.switch_port */
 #undef HAVE_DEVLINK_PORT_HAS_SWITCH_PORT
 
-/* devlink_health_reporter_create is defined */
-#undef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
+/* devlink_health_reporter_create has 3 args */
+#undef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_3_ARGS
+
+/* devlink_health_reporter_create has 4 args */
+#undef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_4_ARGS
 
 /* devlink_port_health_reporter_destroy is defined */
 #undef HAVE_DEVLINK_PORT_HEALTH_REPORTER_DESTROY
@@ -742,14 +750,20 @@
 /* devlink struct devlink_trap exists */
 #undef HAVE_DEVLINK_TRAP_SUPPORT
 
-/* devlink.h has devl_health_reporter_create */
-#undef HAVE_DEVL_HEALTH_REPORTER_CREATE
+/* devlink.h has devl_health_reporter_create 3 args */
+#undef HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS
+
+/* devlink.h has devl_health_reporter_create 4 args */
+#undef HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS
 
 /* devlink.h has devl_param_driverinit_value_get */
 #undef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
 
-/* devlink.h has devl_port_health_reporter_create */
-#undef HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE
+/* devlink.h has devl_port_health_reporter_create 3 args */
+#undef HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS
+
+/* devlink.h has devl_port_health_reporter_create 4 args */
+#undef HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_4_ARGS
 
 /* devlink.h devl_port_register defined */
 #undef HAVE_DEVL_PORT_REGISTER
@@ -847,6 +861,9 @@
 /* dma-mapping.h has dma_zalloc_coherent function */
 #undef HAVE_DMA_ZALLOC_COHERENT
 
+/* dpll_device_put has tracker argument */
+#undef HAVE_DPLL_DEVICE_PUT_TRACKER
+
 /* dpll.h has dpll_netdev_pin_set */
 #undef HAVE_DPLL_NETDEV_PIN_SET
 
@@ -894,6 +911,9 @@
 
 /* ethtool_ops has cap_rss_ctx_supported field */
 #undef HAVE_ETHTOOL_OPS_CAP_RSS_CTX_SUPPORTED
+
+/* get_rx_ring_count is defined */
+#undef HAVE_ETHTOOL_OPS_GET_RX_RING_COUNT
 
 /* rxfh_per_ctx_fields is defined */
 #undef HAVE_ETHTOOL_OPS_HAS_PER_CTX_FIELDS
@@ -960,6 +980,9 @@
 
 /* struct devlink_ops flash_update get 3 params */
 #undef HAVE_FLASH_UPDATE_GET_3_PARAMS
+
+/* struct flowi4 has flowi4_dscp field */
+#undef HAVE_FLOWI4_DSCP
 
 /* FLOW_ACTION_CONTINUE exists */
 #undef HAVE_FLOW_ACTION_CONTINUE
@@ -1099,6 +1122,9 @@
 /* folio_end_read is defined */
 #undef HAVE_FOLIO_END_READ
 
+/* struct folio has field f */
+#undef HAVE_FOLIO_FLAGS_F
+
 /* folio_index() is defined */
 #undef HAVE_FOLIO_INDEX
 
@@ -1188,6 +1214,9 @@
 
 /* gettimex64 is defined */
 #undef HAVE_GETTIMEX64
+
+/* get_fec_stats has ethtool_fec_hist parameter */
+#undef HAVE_GET_FEC_STATS_HIST
 
 /* .get_link_ext_state is defined */
 #undef HAVE_GET_LINK_EXT_STATE
@@ -1283,8 +1312,14 @@
 /* idr.h has ida_free */
 #undef HAVE_IDA_FREE
 
+/* ida_simple_remove macro is defined */
+#undef HAVE_IDA_SIMPLE_REMOVE
+
 /* idr_for_each_entry_continue_ul is defined */
 #undef HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL
+
+/* have inc_wb_stat */
+#undef HAVE_INC_WB_STAT
 
 /* inet_addr_is_any takes sockaddr_storage */
 #undef HAVE_INET_ADDR_IS_ANY_SOCKADDR_STORAGE
@@ -1292,8 +1327,17 @@
 /* inet_confirm_addr is exported by the kernel */
 #undef HAVE_INET_CONFIRM_ADDR_EXPORTED
 
+/* inet_lookup_established has 6 args */
+#undef HAVE_INET_LOOKUP_ESTABLISHED_NO_HASHINFO
+
 /* inode_get_mtime is defined */
 #undef HAVE_INODE_GET_MTIME
+
+/* have inode_just_drop */
+#undef HAVE_INODE_JUST_DROP
+
+/* inode_state_read_once exists */
+#undef HAVE_INODE_STATE_READ_ONCE
 
 /* interval_tree functions exported by the kernel */
 #undef HAVE_INTERVAL_TREE_EXPORTED
@@ -1316,6 +1360,12 @@
 /* iov_iter_is_bvec is defined */
 #undef HAVE_IOV_ITER_IS_BVEC_SET
 
+/* io_uring_cmd_done32 is defined */
+#undef HAVE_IO_URING_CMD_DONE32
+
+/* io_uring_cmd_from_tw exists */
+#undef HAVE_IO_URING_CMD_FROM_TW
+
 /* linux/io_uring/cmd.h exists */
 #undef HAVE_IO_URING_CMD_H
 
@@ -1327,6 +1377,9 @@
 
 /* io_uring_cmd_to_pdu is defined */
 #undef HAVE_IO_URING_CMD_TO_PDU
+
+/* io_uring_sqe128_cmd macro exists */
+#undef HAVE_IO_URING_SQE_CMD_2_ARGS
 
 /* ip6_dst_hoplimit is exported by the kernel */
 #undef HAVE_IP6_DST_HOPLIMIT
@@ -1415,6 +1468,9 @@
 /* ITER_DEST is defined */
 #undef HAVE_ITER_DEST
 
+/* kernel_neon_begin/end has 1 param */
+#undef HAVE_KERNEL_NEON_BEGIN_END_1_PARAM
+
 /* ethtool.h kernel_ethtool_ringparam has tcp_data_split member */
 #undef HAVE_KERNEL_RINGPARAM_TCP_DATA_SPLIT
 
@@ -1439,8 +1495,8 @@
 /* kvfree prototype is in slab.h */
 #undef HAVE_KVFREE_IN_SLAB_H
 
-/* linux/device/bus.h exists */
-#undef HAVE_LINUX_DEVICE_BUS_H
+/* linux/hex.h exists as standalone header */
+#undef HAVE_LINUX_HEX_H
 
 /* linux/iommu-dma.h exists */
 #undef HAVE_LINUX_IOMMU_DMA_H
@@ -1549,6 +1605,9 @@
 
 /* ndo_get_vf_guid is defined */
 #undef HAVE_NDO_GET_VF_GUID
+
+/* ndo_hwtstamp_get/set is defined */
+#undef HAVE_NDO_HWTSTAMP_GET_SET
 
 /* get_link_ext_stats is defined */
 #undef HAVE_NDO_LINK_EXT_STATS
@@ -1770,6 +1829,9 @@
 /* NR_WRITEBACK_TEMP enum exists */
 #undef HAVE_NR_WRITEBACK_TEMP
 
+/* nth_page macro exists */
+#undef HAVE_NTH_PAGE
+
 /* nvme_auth_derive_tls_psk is defined */
 #undef HAVE_NVME_AUTH_DERIVE_TLS_PSK
 
@@ -1944,6 +2006,9 @@
 /* port_function_state_get has 4 params */
 #undef HAVE_PORT_FUNCTION_STATE_GET_4_PARAM
 
+/* posix_acl_to_xattr allocs buffer and returns void pointer */
+#undef HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR
+
 /* proc_handler has const parameter */
 #undef HAVE_PROC_HANDLER_CONST_PARAM
 
@@ -1988,6 +2053,9 @@
 
 /* put_user_pages_dirty_lock has 3 parameters */
 #undef HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS
+
+/* queuecommand returns enum scsi_qc_status */
+#undef HAVE_QUEUECOMMAND_SCSI_QC_STATUS
 
 /* kernel supports queue and napi association */
 #undef HAVE_QUEUE_AND_NAPI_ASSOCIATION
@@ -2090,6 +2158,9 @@
 
 /* RQF_MQ_INFLIGHT is defined */
 #undef HAVE_RQF_MQ_INFLIGHT
+
+/* rq_end_io_fn has io_comp_batch argument */
+#undef HAVE_RQ_END_IO_FN_3_ARGS
 
 /* if file rq_end_io_ret exists */
 #undef HAVE_RQ_END_IO_RET
@@ -2227,6 +2298,9 @@
 /* linux/skbuff.h skb_frag_off_set is defined */
 #undef HAVE_SKB_FRAG_OFF_SET
 
+/* linux/ipv6.h has struct skb_ipv6_payload_len */
+#undef HAVE_SKB_IPV6_PAYLOAD_LEN
+
 /* linux/skbuff.h skb_is_gso_tcp is defined */
 #undef HAVE_SKB_IS_GSO_TCP
 
@@ -2253,6 +2327,9 @@
 
 /* SLAB_NO_OBJ_EXT is defined */
 #undef HAVE_SLAB_NO_OBJ_EXT
+
+/* kernel_bind and kernel_connect use sockaddr_unsized */
+#undef HAVE_SOCKADDR_UNSIZED
 
 /* net/sock.h has sock_no_linger */
 #undef HAVE_SOCK_NO_LINGER
@@ -2525,8 +2602,16 @@
 /* net/tls.h has tls_offload_rx_force_resync_request */
 #undef HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST
 
+/* tls_offload_rx_resync_async_request_end takes struct
+   tls_offload_resync_async * */
+#undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC
+
 /* net/tls.h has tls_offload_rx_resync_async_request_start */
 #undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+
+/* tls_offload_rx_resync_async_request_start takes struct
+   tls_offload_resync_async * */
+#undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC
 
 /* trace_block_bio_complete has 2 param */
 #undef HAVE_TRACE_BLOCK_BIO_COMPLETE_2_PARAM
@@ -2597,6 +2682,9 @@
 /* has vfio_combine_iova_ranges exists */
 #undef HAVE_VFIO_COMBINE_IOVA_RANGES
 
+/* struct vfio_device_ops has match_token_uuid */
+#undef HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID
+
 /* has vfio_notify_iova_map exists */
 #undef HAVE_VFIO_NOTIFY_IOVA_MAP
 
@@ -2635,6 +2723,9 @@
 
 /* if address_space_operations->write_begin takes a folio param */
 #undef HAVE_WRITE_BEGIN_FOLIO
+
+/* write_cache_pages has 4 parameters */
+#undef HAVE_WRITE_CACHE_PAGES_4_PARAMS
 
 /* xa_array is defined */
 #undef HAVE_XARRAY
@@ -2714,6 +2805,9 @@
 
 /* flags is defined */
 #undef HAVE_XDP_UMEM_FLAGS
+
+/* xdp_update_skb_frags_info exists */
+#undef HAVE_XDP_UPDATE_SKB_FRAGS_INFO
 
 /* xdp_update_skb_shared_info is defined */
 #undef HAVE_XDP_UPDATE_SKB_SHARED_INFO
@@ -2840,6 +2934,9 @@
 
 /* __blkdev_issue_discard has 5 params */
 #undef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
+
+/* __blkdev_issue_discard has 5 params and returns int */
+#undef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT
 
 /* compiler_types.h, compiler_attributes.h provide __counted_by macro */
 #undef HAVE___COUNTED_BY

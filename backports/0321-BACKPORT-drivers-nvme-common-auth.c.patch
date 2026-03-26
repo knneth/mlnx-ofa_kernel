@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
 
 Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
 ---
- drivers/nvme/common/auth.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ drivers/nvme/common/auth.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
 --- a/drivers/nvme/common/auth.c
 +++ b/drivers/nvme/common/auth.c
@@ -26,7 +26,35 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  #include <linux/nvme.h>
  #include <linux/nvme-auth.h>
  
-@@ -721,6 +724,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_dig
+@@ -178,7 +181,13 @@ struct nvme_dhchap_key *nvme_auth_extrac
+ 	if (!key)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++/* Newer kernels (6.19-rc1+): padding and variant parameters */
++	key_len = base64_decode(secret, allocated_len, key->key, true, BASE64_STD);
++#else
++/* Older kernels: 3 parameters */
+ 	key_len = base64_decode(secret, allocated_len, key->key);
++#endif
+ 	if (key_len < 0) {
+ 		pr_debug("base64 key decoding error %d\n",
+ 			 key_len);
+@@ -674,7 +683,13 @@ int nvme_auth_generate_digest(u8 hmac_id
+ 	if (ret)
+ 		goto out_free_digest;
+ 
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++/* Newer kernels (6.19-rc1+): padding and variant parameters */
++	ret = base64_encode(digest, digest_len, enc, true, BASE64_STD);
++#else
++/* Older kernels: 3 parameters */
+ 	ret = base64_encode(digest, digest_len, enc);
++#endif
+ 	if (ret < hmac_len) {
+ 		ret = -ENOKEY;
+ 		goto out_free_digest;
+@@ -721,6 +736,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_dig
   * Returns 0 on success with a valid psk pointer in @ret_psk or a negative
   * error number otherwise.
   */
@@ -34,7 +62,7 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  int nvme_auth_derive_tls_psk(int hmac_id, u8 *psk, size_t psk_len,
  		u8 *psk_digest, u8 **ret_psk)
  {
-@@ -807,6 +811,8 @@ out_free_shash:
+@@ -807,6 +823,8 @@ out_free_shash:
  	return ret;
  }
  EXPORT_SYMBOL_GPL(nvme_auth_derive_tls_psk);

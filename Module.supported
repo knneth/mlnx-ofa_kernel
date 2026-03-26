@@ -50,11 +50,16 @@ nvme.ko external
 nvme-fabrics.ko external
 nvme-rdma.ko external
 nvme-fc.ko external
+nvme-tcp.ko external
+nvme-apple.ko external
+nvme-keyring.ko external
 nvmet.ko external
 nvme-loop.ko external
 nvmet-rdma.ko external
 nvmet-fc.ko external
+nvmet-tcp.ko external
 nvme-fcloop.ko external
+nvme-auth.ko external
 rpcrdma.ko external
 xscore.ko external
 xsvnic.ko external

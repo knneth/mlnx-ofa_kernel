@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
 
 ---
- .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 62 +++++++++++++++++--
- 1 file changed, 57 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 67 +++++++++++++++++--
+ 1 file changed, 62 insertions(+), 5 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
-@@ -14,18 +14,34 @@ struct mlx5e_accel_tx_tls_state {
+@@ -14,21 +14,42 @@ struct mlx5e_accel_tx_tls_state {
  	u32 tls_tisn;
  };
  
@@ -47,7 +47,15 @@ Subject: [PATCH] BACKPORT:
  void mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
  					   struct mlx5e_tx_wqe_info *wi,
  					   u32 *dma_fifo_cc);
-@@ -40,7 +56,16 @@ mlx5e_ktls_tx_try_handle_resync_dump_com
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++void
++mlx5e_ktls_rx_resync_async_request_cancel(struct mlx5e_icosq_wqe_info *wi);
++#endif
++
+ static inline bool
+ mlx5e_ktls_tx_try_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
+ 					  struct mlx5e_tx_wqe_info *wi,
+@@ -40,7 +61,16 @@ mlx5e_ktls_tx_try_handle_resync_dump_com
  	}
  	return false;
  }
@@ -65,7 +73,7 @@ Subject: [PATCH] BACKPORT:
  bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget);
  
  static inline bool
-@@ -48,6 +73,33 @@ mlx5e_ktls_rx_pending_resync_list(struct
+@@ -48,6 +78,33 @@ mlx5e_ktls_rx_pending_resync_list(struct
  {
  	return budget && test_bit(MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC, &c->async_icosq.state);
  }

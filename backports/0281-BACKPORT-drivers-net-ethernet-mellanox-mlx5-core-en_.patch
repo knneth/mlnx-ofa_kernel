@@ -26,7 +26,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	int tc_num;
  	int err = 0;
  
-@@ -285,11 +288,21 @@ static ssize_t mlx5e_show_hfunc(struct d
+@@ -290,11 +293,21 @@ static ssize_t mlx5e_show_hfunc(struct d
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	u8 hfunc;
@@ -49,7 +49,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	mutex_unlock(&priv->state_lock);
  
  	len += sprintf(buf + len, "Operational hfunc: %s\n",
-@@ -299,7 +312,11 @@ static ssize_t mlx5e_show_hfunc(struct d
+@@ -304,7 +317,11 @@ static ssize_t mlx5e_show_hfunc(struct d
  
  	rtnl_unlock();
  
@@ -61,7 +61,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  }
  
  static ssize_t mlx5e_store_hfunc(struct device *device,
-@@ -333,7 +350,11 @@ static ssize_t mlx5e_store_hfunc(struct
+@@ -338,7 +355,11 @@ static ssize_t mlx5e_store_hfunc(struct
  			goto unlock;
  	}
  	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
@@ -74,7 +74,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	mutex_unlock(&priv->state_lock);
  	rtnl_unlock();
  
-@@ -359,11 +380,21 @@ static ssize_t mlx5e_show_xfrm(struct de
+@@ -364,11 +385,21 @@ static ssize_t mlx5e_show_xfrm(struct de
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	bool symmetric = false;
@@ -97,7 +97,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	mutex_unlock(&priv->state_lock);
  	rtnl_unlock();
  
-@@ -371,7 +402,11 @@ static ssize_t mlx5e_show_xfrm(struct de
+@@ -376,7 +407,11 @@ static ssize_t mlx5e_show_xfrm(struct de
  		       symmetric == true ?  "symmetric-or-xor" : "none");
  	len += sprintf(buf + len, "Supported xfrm: symmetric-or-xor none\n");
  
@@ -109,7 +109,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  }
  
  static ssize_t mlx5e_store_xfrm(struct device *device,
-@@ -398,7 +433,11 @@ static ssize_t mlx5e_store_xfrm(struct d
+@@ -403,7 +438,11 @@ static ssize_t mlx5e_store_xfrm(struct d
  
  	rtnl_lock();
  	mutex_lock(&priv->state_lock);
@@ -122,7 +122,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	mutex_unlock(&priv->state_lock);
  	rtnl_unlock();
  	return err ? err : count;
-@@ -1001,11 +1040,9 @@ static ssize_t mlx5e_store_force_local_l
+@@ -1006,11 +1045,9 @@ static ssize_t mlx5e_store_force_local_l
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -134,7 +134,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
  		mlx5_nic_vport_update_local_lb(mdev,
-@@ -1019,6 +1056,64 @@ static DEVICE_ATTR(force_local_lb_disabl
+@@ -1024,6 +1061,64 @@ static DEVICE_ATTR(force_local_lb_disabl
  		   mlx5e_show_force_local_lb,
  		   mlx5e_store_force_local_lb);
  
@@ -199,7 +199,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  static struct attribute *mlx5e_settings_attrs[] = {
  	&dev_attr_hfunc.attr,
  	&dev_attr_xfrm.attr,
-@@ -1234,11 +1329,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1239,11 +1334,17 @@ static struct attribute *prio_hp_attrs[]
  	NULL
  };
  
@@ -217,7 +217,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  };
  
  int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
-@@ -1560,9 +1661,18 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1565,9 +1666,18 @@ int mlx5e_sysfs_create(struct net_device
  	if (err)
  		goto remove_debug_group;
  
@@ -236,7 +236,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  
  	mlx5_eswitch_compat_sysfs_init(dev);
  
-@@ -1580,6 +1690,10 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1585,6 +1695,10 @@ int mlx5e_sysfs_create(struct net_device
  
  	return 0;
  
@@ -247,7 +247,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
  remove_phy_stat_group:
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
  remove_debug_group:
-@@ -1607,6 +1721,9 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1612,6 +1726,9 @@ void mlx5e_sysfs_remove(struct net_devic
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);

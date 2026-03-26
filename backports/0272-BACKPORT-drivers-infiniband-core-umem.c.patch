@@ -25,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  #include "uverbs.h"
  
-@@ -49,19 +57,58 @@
+@@ -51,23 +59,62 @@
  
  static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
  {
@@ -49,14 +49,18 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +#endif
  
 +#ifdef HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED
-+#ifdef HAVE_SG_APPEND_TABLE
- 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i)
++#ifdef HAVE_SG_APPEND_TABLE					   
+ 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
 +#else
-+	for_each_sg(umem->sg_head.sgl, sg, umem->sg_nents, i)
++	for_each_sg(umem->sg_head.sgl, sg, umem->sg_nents, i) {
 +#endif
  		unpin_user_page_range_dirty_lock(sg_page(sg),
 -			DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
 +				DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
+ 
+ 		if (i && !(i % RESCHED_LOOP_CNT_THRESHOLD))
+ 			cond_resched();
+ 	}
 +#else
 +	for_each_sg_page(umem->sg_head.sgl, &sg_iter, umem->sg_nents, 0) {
 +		page = sg_page_iter_page(&sg_iter);
@@ -85,7 +89,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  }
  
  /**
-@@ -92,6 +139,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -98,6 +145,7 @@ unsigned long ib_umem_find_best_pgsz(str
  
  	umem->iova = va = virt;
  
@@ -93,7 +97,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	if (umem->is_odp) {
  		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
  
-@@ -100,6 +148,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -106,6 +154,7 @@ unsigned long ib_umem_find_best_pgsz(str
  			return 0;
  		return page_size;
  	}
@@ -101,7 +105,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/* The best result is the smallest page size that results in the minimum
  	 * number of required pages. Compute the largest page size that could
-@@ -111,11 +160,16 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -117,11 +166,16 @@ unsigned long ib_umem_find_best_pgsz(str
  	/* offset into first SGL */
  	pgoff = umem->address & ~PAGE_MASK;
  
@@ -119,7 +123,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  		    end != sg_dma_address(sg)) {
  
  			curr_base = sg_dma_address(sg);
-@@ -149,6 +203,64 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -155,6 +209,64 @@ unsigned long ib_umem_find_best_pgsz(str
  }
  EXPORT_SYMBOL(ib_umem_find_best_pgsz);
  
@@ -184,7 +188,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  /**
   * __ib_umem_get - Pin and DMA map userspace memory.
   *
-@@ -158,20 +270,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -164,20 +276,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -249,7 +253,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -194,7 +350,15 @@ static struct ib_umem *__ib_umem_get(str
+@@ -200,7 +356,15 @@ static struct ib_umem *__ib_umem_get(str
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -265,7 +269,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	umem->length     = size;
  	umem->address    = addr;
  	/*
-@@ -206,12 +370,24 @@ static struct ib_umem *__ib_umem_get(str
+@@ -212,12 +376,24 @@ static struct ib_umem *__ib_umem_get(str
  	umem->owning_mm = mm = current->mm;
  	mmgrab(mm);
  
@@ -291,7 +295,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -220,31 +396,80 @@ static struct ib_umem *__ib_umem_get(str
+@@ -226,31 +402,80 @@ static struct ib_umem *__ib_umem_get(str
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -372,7 +376,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  			goto umem_release;
  		}
  
-@@ -272,8 +497,154 @@ static struct ib_umem *__ib_umem_get(str
+@@ -278,8 +503,154 @@ static struct ib_umem *__ib_umem_get(str
  	}
  	goto out;
  
@@ -527,7 +531,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -294,8 +665,22 @@ umem_release:
+@@ -300,8 +671,22 @@ umem_release:
  		goto out;
  	}
  vma:
@@ -550,7 +554,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -305,19 +690,36 @@ umem_kfree:
+@@ -311,19 +696,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -587,7 +591,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -329,16 +731,34 @@ void ib_umem_release(struct ib_umem *ume
+@@ -335,16 +737,34 @@ void ib_umem_release(struct ib_umem *ume
  {
  	if (!umem)
  		return;
@@ -622,7 +626,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	mmdrop(umem->owning_mm);
  	kfree(umem);
  }
-@@ -366,8 +786,12 @@ int ib_umem_copy_from(void *dst, struct
+@@ -372,8 +792,12 @@ int ib_umem_copy_from(void *dst, struct
  		return -EINVAL;
  	}
  

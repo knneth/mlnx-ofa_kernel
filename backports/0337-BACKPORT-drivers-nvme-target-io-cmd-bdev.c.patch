@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-bdev.c
 
 Change-Id: I33a056233c0e721749d225c977418228f7da6c03
 ---
- drivers/nvme/target/io-cmd-bdev.c | 254 +++++++++++++++++++++++++++++-
- 1 file changed, 251 insertions(+), 3 deletions(-)
+ drivers/nvme/target/io-cmd-bdev.c | 263 +++++++++++++++++++++++++++++-
+ 1 file changed, 260 insertions(+), 3 deletions(-)
 
 --- a/drivers/nvme/target/io-cmd-bdev.c
 +++ b/drivers/nvme/target/io-cmd-bdev.c
@@ -449,15 +449,24 @@ Change-Id: I33a056233c0e721749d225c977418228f7da6c03
  		return NVME_SC_INTERNAL | NVME_STATUS_DNR;
  	return 0;
  }
-@@ -374,10 +608,24 @@ static u16 nvmet_bdev_discard_range(stru
+@@ -374,10 +608,33 @@ static u16 nvmet_bdev_discard_range(stru
  	struct nvmet_ns *ns = req->ns;
  	int ret;
  
 +#ifdef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM
++# ifdef HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT
  	ret = __blkdev_issue_discard(ns->bdev,
  			nvmet_lba_to_sect(ns, range->slba),
  			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
  			GFP_KERNEL, bio);
++# else
++/* Newer kernels (7.0+): __blkdev_issue_discard returns void */
++	__blkdev_issue_discard(ns->bdev,
++			nvmet_lba_to_sect(ns, range->slba),
++			le32_to_cpu(range->nlb) << (ns->blksize_shift - 9),
++			GFP_KERNEL, bio);
++	ret = 0;
++# endif
 +#else
 +#ifdef HAVE___BLKDEV_ISSUE_DISCARD
 +	ret = __blkdev_issue_discard(ns->bdev,

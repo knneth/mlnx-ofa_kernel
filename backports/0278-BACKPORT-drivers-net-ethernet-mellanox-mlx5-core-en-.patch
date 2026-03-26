@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 
 ---
- .../mellanox/mlx5/core/en/reporter_rx.c       | 551 ++++++++++++++++--
- 1 file changed, 507 insertions(+), 44 deletions(-)
+ .../mellanox/mlx5/core/en/reporter_rx.c       | 576 ++++++++++++++++--
+ 1 file changed, 530 insertions(+), 46 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
@@ -212,7 +212,7 @@ Subject: [PATCH] BACKPORT:
 +	err = devlink_fmsg_u32_pair_put(fmsg, "rqn", rq->rqn);
 +	if (err)
 +		return err;
- 
++
 +	err = devlink_fmsg_u8_pair_put(fmsg, "HW state", hw_state);
 +	if (err)
 +		return err;
@@ -224,7 +224,7 @@ Subject: [PATCH] BACKPORT:
 +	err = devlink_fmsg_u32_pair_put(fmsg, "posted WQEs", wqes_sz);
 +	if (err)
 +		return err;
-+
+ 
 +	err = devlink_fmsg_u32_pair_put(fmsg, "cc", wq_head);
 +	if (err)
 +		return err;
@@ -733,11 +733,11 @@ Subject: [PATCH] BACKPORT:
 +	err = mlx5e_health_rsc_fmsg_dump(priv, &key, fmsg);
 +	if (err)
 +		return err;
-+
+ 
 +	err = mlx5e_health_fmsg_named_obj_nest_end(fmsg);
 +	if (err)
 +		return err;
- 
++
 +	err = devlink_fmsg_arr_pair_nest_start(fmsg, "RQs");
 +	if (err)
 +		return err;
@@ -825,41 +825,62 @@ Subject: [PATCH] BACKPORT:
  	snprintf(err_str, sizeof(err_str), "ERR CQE on ICOSQ: 0x%x", icosq->sqn);
  
  	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
-@@ -651,6 +1086,7 @@ void mlx5e_reporter_icosq_resume_recover
+@@ -651,28 +1086,71 @@ void mlx5e_reporter_icosq_resume_recover
  	mutex_unlock(&c->icosq_recovery_lock);
  }
  
++#define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
++#define MLX5E_REPORTER_RX_BURST_PERIOD 500
++
 +#ifdef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
  static const struct devlink_health_reporter_ops mlx5_rx_reporter_ops = {
  	.name = "rx",
  	.recover = mlx5e_rx_reporter_recover,
-@@ -659,20 +1095,41 @@ static const struct devlink_health_repor
+ 	.diagnose = mlx5e_rx_reporter_diagnose,
+ 	.dump = mlx5e_rx_reporter_dump,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD
++/* Newer kernels (6.18+): graceful_period and burst_period in ops */
++	.default_graceful_period = MLX5E_REPORTER_RX_GRACEFUL_PERIOD,
++	.default_burst_period = MLX5E_REPORTER_RX_BURST_PERIOD,
++#endif
  };
- 
- #define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
+-
+-#define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
 +#endif /* HAVE_DEVLINK_HEALTH_REPORT_SUPPORT */
  
  void mlx5e_reporter_rx_create(struct mlx5e_priv *priv)
  {
--	struct devlink_health_reporter *reporter;
--
--	reporter = devlink_port_health_reporter_create(priv->netdev->devlink_port,
--						       &mlx5_rx_reporter_ops,
 +#ifndef HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
-+	priv->rx_reporter = NULL;
++	 priv->rx_reporter = NULL;
++#else /*HAVE_DEVLINK_HEALTH_REPORT_SUPPORT  */
++#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
++#ifdef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
++	struct devlink_port *port = priv->netdev->devlink_port;
 +#else
++	struct devlink_port *port = mlx5e_devlink_get_dl_port(priv);
++#endif
++#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
 +#ifndef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
 +	struct devlink *devlink = priv_to_devlink(priv->mdev);
 +#endif
-+ 	struct devlink_health_reporter *reporter;
-+
+ 	struct devlink_health_reporter *reporter;
+ 
+-	reporter = devlink_port_health_reporter_create(priv->netdev->devlink_port,
+-						       &mlx5_rx_reporter_ops,
 +#ifdef HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE
-+#ifdef HAVE_NET_DEVICE_HAS_DEVLINK_PORT
-+	reporter = devlink_port_health_reporter_create(priv->netdev->devlink_port, &mlx5_rx_reporter_ops,
-+#else
-+	reporter = devlink_port_health_reporter_create(mlx5e_devlink_get_dl_port(priv), &mlx5_rx_reporter_ops,
-+#endif
++	reporter = devlink_port_health_reporter_create(port, &mlx5_rx_reporter_ops,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD
++	/* Newer kernels (6.18+): 3 args, graceful_period moved to ops
++	 * Upstream commit d2b00737 "devlink: Move graceful period parameter to reporter ops" */
++						       priv);
++#elif defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (5.7-6.17): 4 args
++	 * Upstream commit ba7d16c7 removed auto_recover parameter in March 2020 */
  						       MLX5E_REPORTER_RX_GRACEFUL_PERIOD, priv);
++#else
++	/* Older kernels (5.4-5.6): 5 args (with auto_recover) */
++						       MLX5E_REPORTER_RX_GRACEFUL_PERIOD, true, priv);
++#endif
 +#else /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
 +	reporter = devlink_health_reporter_create(devlink,
 +							&mlx5_rx_reporter_ops,
@@ -869,9 +890,12 @@ Subject: [PATCH] BACKPORT:
 +#endif
 +							priv);
 +#endif /* HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE */
++
  	if (IS_ERR(reporter)) {
- 		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %ld\n",
- 			    PTR_ERR(reporter));
+-		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %ld\n",
+-			    PTR_ERR(reporter));
++		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %pe\n",
++			    reporter);
  		return;
  	}
  	priv->rx_reporter = reporter;
@@ -879,7 +903,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
-@@ -680,6 +1137,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+@@ -680,6 +1158,12 @@ void mlx5e_reporter_rx_destroy(struct ml
  	if (!priv->rx_reporter)
  		return;
  

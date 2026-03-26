@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
 
 Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rep.c  | 370 +++++++++++++++++-
- 1 file changed, 355 insertions(+), 15 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_rep.c  | 381 +++++++++++++++++-
+ 1 file changed, 365 insertions(+), 16 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
@@ -502,7 +502,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	netif_device_attach(netdev);
  	rtnl_unlock();
  
-@@ -1388,6 +1633,12 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1393,6 +1638,12 @@ static void mlx5e_uplink_rep_disable(str
  	rtnl_lock();
  	if (netif_running(priv->netdev))
  		mlx5e_close(priv->netdev);
@@ -515,7 +515,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	netif_device_detach(priv->netdev);
  	rtnl_unlock();
  
-@@ -1396,7 +1647,9 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1403,7 +1654,9 @@ static void mlx5e_uplink_rep_disable(str
  	mlx5_notifier_unregister(mdev, &priv->events_nb);
  	mlx5e_rep_tc_disable(priv);
  	mlx5_lag_remove_netdev(mdev, priv->netdev);
@@ -525,7 +525,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  
  	mlx5e_ipsec_cleanup(priv);
  }
-@@ -1443,17 +1696,26 @@ static unsigned int mlx5e_ul_rep_stats_g
+@@ -1450,17 +1703,26 @@ static unsigned int mlx5e_ul_rep_stats_g
  	return ARRAY_SIZE(mlx5e_ul_rep_stats_grps);
  }
  
@@ -555,24 +555,30 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  }
  
  static const struct devlink_health_reporter_ops mlx5_rep_vnic_reporter_ops = {
-@@ -1467,9 +1729,14 @@ static void mlx5e_rep_vnic_reporter_crea
+@@ -1474,9 +1736,19 @@ static void mlx5e_rep_vnic_reporter_crea
  	struct mlx5e_rep_priv *rpriv = priv->ppriv;
  	struct devlink_health_reporter *reporter;
  
 -	reporter = devl_port_health_reporter_create(dl_port,
-+	reporter =
-+#ifdef HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE
-+		devl_port_health_reporter_create(dl_port,
-+#else
-+		devlink_port_health_reporter_create(dl_port,
-+#endif
- 						    &mlx5_rep_vnic_reporter_ops,
+-						    &mlx5_rep_vnic_reporter_ops,
 -						    0, rpriv);
-+						    0,rpriv);
++	reporter =
++#ifdef HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS
++	/* Newer kernels (6.18+): devl_ variant with 3 args
++	 * Upstream commit d2b00737 "devlink: Move graceful period parameter to reporter ops" */
++	devl_port_health_reporter_create(dl_port, &mlx5_rep_vnic_reporter_ops, rpriv);
++#elif defined(HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (6.2-6.17): devl_ variant with 4 args
++	 * Upstream commit cf14af140a5a "net/mlx5e: Add vnic devlink health reporter to representors" */
++	devl_port_health_reporter_create(dl_port, &mlx5_rep_vnic_reporter_ops, 0, rpriv);
++#else
++	/* Older kernels (pre-6.2): devlink_port_ variant with 4 args - backport compatibility */
++	devlink_port_health_reporter_create(dl_port, &mlx5_rep_vnic_reporter_ops, 0, rpriv);
++#endif
  	if (IS_ERR(reporter)) {
  		mlx5_core_err(priv->mdev,
  			      "Failed to create representor vnic reporter, err = %ld\n",
-@@ -1479,14 +1746,18 @@ static void mlx5e_rep_vnic_reporter_crea
+@@ -1486,14 +1758,18 @@ static void mlx5e_rep_vnic_reporter_crea
  
  	rpriv->rep_vnic_reporter = reporter;
  }
@@ -592,7 +598,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  
  static const struct mlx5e_profile mlx5e_rep_profile = {
  	.init			= mlx5e_init_rep,
-@@ -1530,6 +1801,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1537,6 +1813,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  {
  	struct mlx5e_priv *priv = netdev_priv(mlx5_uplink_netdev_get(dev));
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
@@ -602,7 +608,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	int err;
  
  	rpriv->netdev = priv->netdev;
-@@ -1538,6 +1812,19 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1545,6 +1824,19 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  	if (err)
  		return err;
  
@@ -622,7 +628,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	mlx5_smartnic_sysfs_init(rpriv->netdev);
  	mlx5_rep_sysfs_init(rpriv);
  	mlx5e_ipsec_build_netdev(priv);
-@@ -1549,10 +1836,20 @@ static void
+@@ -1556,10 +1848,20 @@ static void
  mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
  {
  	struct net_device *netdev = rpriv->netdev;
@@ -643,7 +649,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	mlx5_smartnic_sysfs_cleanup(netdev);
  	/* This bit is set when using devlink to change eswitch mode from
  	 * switchdev to legacy. As need to keep uplink netdev ifindex, we
-@@ -1579,7 +1876,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1586,7 +1888,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  {
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
  	const struct mlx5e_profile *profile;
@@ -653,7 +659,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	struct mlx5_vport *vport;
  	struct net_device *netdev;
  	struct mlx5e_priv *priv;
-@@ -1614,12 +1913,18 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1621,12 +1925,18 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  		goto err_cleanup_profile;
  	}
  
@@ -672,7 +678,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  
  	err = register_netdev(netdev);
  	if (err) {
-@@ -1631,13 +1936,32 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1638,13 +1948,32 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  
  	mlx5_rep_sysfs_init(rpriv);
  
@@ -705,7 +711,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	mlx5e_detach_netdev(netdev_priv(netdev));
  err_cleanup_profile:
  	priv->profile->cleanup(priv);
-@@ -1681,6 +2005,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1688,6 +2017,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	struct net_device *netdev = rpriv->netdev;
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct mlx5_core_dev *dev = priv->mdev;
@@ -715,7 +721,7 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	void *ppriv = priv->ppriv;
  
  	mlx5_rep_destroy_miss_meter(dev, rpriv);
-@@ -1691,8 +2018,21 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1698,8 +2030,21 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  		goto free_ppriv;
  	}
  
@@ -737,3 +743,15 @@ Change-Id: Ifd55369ed716691bdd5ca6f761de2e3b4f39516a
  	mlxdevm_port_type_clear(vport->devm_port);
  	mlx5e_detach_netdev(priv);
  	priv->profile->cleanup(priv);
+@@ -1839,7 +2184,11 @@ static const struct auxiliary_device_id
+ 	{},
+ };
+ 
++#ifdef HAVE_NATIVE_AUX
+ MODULE_DEVICE_TABLE(auxiliary, mlx5e_rep_id_table);
++#else
++MODULE_DEVICE_TABLE(auxiliary_mlx5e_rep_id_table, mlx5e_rep_id_table);
++#endif
+ 
+ static struct auxiliary_driver mlx5e_rep_driver = {
+ 	.name = "eth-rep",

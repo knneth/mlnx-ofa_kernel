@@ -408,7 +408,7 @@ TRACE_EVENT(icm_mad_send_err,
 #endif /* _TRACE_IB_CMA_H */
 
 #undef TRACE_INCLUDE_PATH
-#define TRACE_INCLUDE_PATH ../../drivers/infiniband/core
+#define TRACE_INCLUDE_PATH .
 #define TRACE_INCLUDE_FILE cm_trace
 
 #include <trace/define_trace.h>

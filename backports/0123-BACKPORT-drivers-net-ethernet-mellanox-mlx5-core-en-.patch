@@ -2,12 +2,23 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/trap.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.h
-@@ -29,9 +29,16 @@ struct mlx5e_trap {
+@@ -22,16 +22,27 @@ struct mlx5e_trap {
+ 	/* control */
+ 	struct mlx5e_priv         *priv;
+ 	struct mlx5_core_dev      *mdev;
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	struct kernel_hwtstamp_config    *tstamp;
++#else
+ 	struct hwtstamp_config    *tstamp;
++#endif
+ 	DECLARE_BITMAP(state, MLX5E_CHANNEL_NUM_STATES);
+ 
+ 	struct mlx5e_params        params;
  	struct mlx5e_rq_param      rq_param;
  };
  

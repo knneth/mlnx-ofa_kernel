@@ -748,7 +748,7 @@ m4_if([$1], [v7],
 AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
 AC_CACHE_CHECK([for $1], lb_File,
 [if test -r "$1"; then
     AS_VAR_SET(lb_File, yes)
@@ -758,7 +758,7 @@ fi])
 AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:18: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:18: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
 	new_configure_args=
 	eval "set x $ac_configure_args"
 	shift
@@ -777,14 +777,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	done
 	ac_configure_args=$new_configure_args
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:39: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:39: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
 	[$3]=$(readlink -f $with_$2)
 	LB_ARG_REPLACE_PATH([$1], $[$3])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:46: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:46: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
 	__LB_ARG_CANON_PATH([$1], m4_translit([$1], [-.], [__]), [$2])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:56: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:56: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
 for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
 	if readlink -q -e $DEFAULT_LINUX >/dev/null; then
 		break
@@ -847,7 +847,7 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:124: -1- AC_DEFUN([LB_IS_LLVM], [AC_MSG_CHECKING([kernel built with clang])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:124: -1- AC_DEFUN([LB_IS_LLVM], [AC_MSG_CHECKING([kernel built with clang])
 	_lb_is_clang=no
 	if test -f "$LINUX_OBJ/include/generated/autoconf.h"; then
 		if grep -q 2>/dev/null "define CONFIG_CLANG_VERSION 1"  "$LINUX_OBJ/include/generated/autoconf.h"; then
@@ -867,7 +867,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	fi
 	AC_MSG_RESULT($_lb_is_clang)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:149: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:149: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
 	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
 		SYMVERFILE=Modules.symvers
 	else
@@ -876,7 +876,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	AC_MSG_RESULT($SYMVERFILE)
 	AC_SUBST(SYMVERFILE)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:170: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:170: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
@@ -901,7 +901,7 @@ else
 	$3
 fi
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:3: -1- AC_DEFUN([MLNX_RDMA_SET_GLOBALS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:3: -1- AC_DEFUN([MLNX_RDMA_SET_GLOBALS], [
 	MLNX_RDMA_MODULES_DIR="$PWD/modtest"
 	MLNX_RDMA_TEST_MOD="testmod"
 	MLNX_RDMA_RUN_LOG="$MLNX_RDMA_MODULES_DIR/run.log"
@@ -915,7 +915,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	# -Wno-missing-braces: Harmless and almost always wrong
 	ERROR_FLAGS="-Werror -Wno-unused-variable -Wno-unused-value -Wno-uninitialized -Wno-missing-braces"
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:19: -1- AC_DEFUN([MLNX_RDMA_TEST_CASE], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:19: -1- AC_DEFUN([MLNX_RDMA_TEST_CASE], [
 	if false; then
 		AC_DEFINE($1, -1, [$2])
 	fi
@@ -947,12 +947,12 @@ EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "$2" > "$MLNX_RDMA_MODULES_DIR/desc"
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:53: -1- AC_DEFUN([MLNX_RDMA_BUILD_MODULES], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:53: -1- AC_DEFUN([MLNX_RDMA_BUILD_MODULES], [
 	AC_MSG_NOTICE([Test-building kernel modules test-builds])
 	make -s -C "$LINUX_OBJ" -k -j${NJOBS:-1} ccflags-y="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST=m MLNX_RDMA_SILENT=$silent modules 2>"$MLNX_RDMA_RUN_LOG"
 	echo '' # FIXME: Silence in quiet mode
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:60: -1- AC_DEFUN([MLNX_RDMA_CHECK_RESULTS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:60: -1- AC_DEFUN([MLNX_RDMA_CHECK_RESULTS], [
 	AC_MSG_CHECKING([for results from kernel modules test-builds])
 	for mlnx_rdma_mod_dir in $MLNX_RDMA_MODULES_DIR/HAVE_*; do
 		if test ! -d "$mlnx_rdma_mod_dir"; then continue; fi
@@ -965,7 +965,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	done
 	AC_MSG_RESULT([done])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:75: -1- AC_DEFUN([MLNX_RDMA_CHECK_BUILD_SANITY], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:75: -1- AC_DEFUN([MLNX_RDMA_CHECK_BUILD_SANITY], [
 	AC_MSG_CHECKING([for a working kernel modules build system])
 	MLNX_RDMA_TEST_CASE(KBUILD_WORKS, [building a kernel module works], [
 	],[
@@ -978,7 +978,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	fi
 	AC_MSG_RESULT([yes])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:90: -1- AC_DEFUN([MLNX_RDMA_CREATE_MODULES], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:90: -1- AC_DEFUN([MLNX_RDMA_CREATE_MODULES], [
 	rm -rf ${MLNX_RDMA_MODULES_DIR}
 	mkdir -p ${MLNX_RDMA_MODULES_DIR}
 
@@ -1063,6 +1063,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		static struct dpll_device_ops ddo = {
 			.clock_quality_level_get = foo_clock_quality_level_get,
 		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DPLL_DEVICE_PUT_TRACKER, [dpll_device_put has tracker argument], [
+		#include <linux/dpll.h>
+	],[
+		dpll_device_put(NULL, NULL);
 
 		return 0;
 	])
@@ -1391,17 +1399,32 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE, [devlink.h has devl_port_health_reporter_create], [
+	MLNX_RDMA_TEST_CASE(HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_4_ARGS, [devlink.h has devl_port_health_reporter_create 4 args], [
 		#include <net/devlink.h>
 	],[
 		devl_port_health_reporter_create(NULL, NULL, 0, NULL);
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVL_HEALTH_REPORTER_CREATE, [devlink.h has devl_health_reporter_create], [
+	MLNX_RDMA_TEST_CASE(HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS, [devlink.h has devl_port_health_reporter_create 3 args], [
+		#include <net/devlink.h>
+	],[
+		devl_port_health_reporter_create(NULL, NULL, NULL);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS, [devlink.h has devl_health_reporter_create 4 args], [
 		#include <net/devlink.h>
 	],[
 		devl_health_reporter_create(NULL, NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS, [devlink.h has devl_health_reporter_create 3 args], [
+		#include <net/devlink.h>
+	],[
+		devl_health_reporter_create(NULL, NULL, NULL);
 
 		return 0;
 	])
@@ -1609,6 +1632,28 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		struct devlink_param dp = {
 			.set = param_set,
 		};
+        ])
+
+        MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK, [struct devlink_param get function pointer has extack parameter], [
+                #include <net/devlink.h>
+
+		static int param_get(struct devlink *devlink,
+				     u32 id,
+				     struct devlink_param_gset_ctx *ctx,
+				     struct netlink_ext_ack *extack);
+		static int param_get(struct devlink *devlink,
+				     u32 id,
+				     struct devlink_param_gset_ctx *ctx,
+				     struct netlink_ext_ack *extack)
+		{
+			return 0;
+		}
+	],[
+		struct devlink_param dp = {
+			.get = param_get,
+		};
+
+		return 0;
         ])
 
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_DRIVERINIT_VAL, [devlink_param_driverinit_value_get exist], [
@@ -1907,12 +1952,22 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE, [devlink_health_reporter_create is defined], [
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_4_ARGS, [devlink_health_reporter_create has 4 args], [
 		#include <net/devlink.h>
 	],[
 		struct devlink_health_reporter *r;
 
 		r = devlink_port_health_reporter_create(NULL, NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_3_ARGS, [devlink_health_reporter_create has 3 args], [
+		#include <net/devlink.h>
+	],[
+		struct devlink_health_reporter *r;
+
+		r = devlink_port_health_reporter_create(NULL, NULL, NULL);
 
 		return 0;
 	])
@@ -1941,6 +1996,26 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		struct devlink_health_reporter *r;
 
 		r = devlink_health_reporter_create(NULL, NULL, 0, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS, [devlink_health_reporter_create has 3 args], [
+		#include <net/devlink.h>
+	],[
+		struct devlink_health_reporter *r;
+
+		r = devlink_health_reporter_create(NULL, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD, [devlink_health_reporter_ops has default_graceful_period], [
+		#include <net/devlink.h>
+	],[
+		struct devlink_health_reporter_ops ops = {
+			.default_graceful_period = 0,
+		};
 
 		return 0;
 	])
@@ -2400,6 +2475,20 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		skb_frag_off_set(NULL, 0);
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_LINUX_HEX_H, [linux/hex.h exists as standalone header], [
+		#include <linux/hex.h>
+	],[
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR, [posix_acl_to_xattr allocs buffer and returns void pointer], [
+		#include <linux/posix_acl_xattr.h>
+	],[
+		size_t size;
+		void *ptr = posix_acl_to_xattr(NULL, NULL, &size, GFP_KERNEL);
+		return ptr ? 0 : -ENOMEM;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_NET_NETDEV_LOCK_H, [net/netdev_lock.h header exists], [
@@ -3515,6 +3604,26 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC, [tls_offload_rx_resync_async_request_start takes struct tls_offload_resync_async *], [
+		#include <net/tls.h>
+	],[
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_start(&async, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC, [tls_offload_rx_resync_async_request_end takes struct tls_offload_resync_async *], [
+		#include <net/tls.h>
+	],[
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_end(&async, 0);
+
+		return 0;
+	])
+
        MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES, [ethtool supprts 50G-pre-lane link modes], [
               #include <uapi/linux/ethtool.h>
        ],[
@@ -4044,6 +4153,46 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_GET_FEC_STATS_HIST, [get_fec_stats has ethtool_fec_hist parameter], [
+		#include <linux/ethtool.h>
+
+		static void test_get_fec_stats(struct net_device *dev,
+					       struct ethtool_fec_stats *fec_stats,
+					       struct ethtool_fec_hist *hist);
+		static void test_get_fec_stats(struct net_device *dev,
+					       struct ethtool_fec_stats *fec_stats,
+					       struct ethtool_fec_hist *hist)
+		{
+			return;
+		}
+	],[
+		struct ethtool_ops x = {
+			.get_fec_stats = test_get_fec_stats,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FLOWI4_DSCP, [struct flowi4 has flowi4_dscp field], [
+		#include <net/flow.h>
+	],[
+		struct flowi4 fl4 = {
+			.flowi4_dscp = 0,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INET_LOOKUP_ESTABLISHED_NO_HASHINFO, [inet_lookup_established has 6 args], [
+		#include <net/inet_hashtables.h>
+	],[
+		struct sock *sk;
+
+		sk = inet_lookup_established(NULL, 0, 0, 0, 0, 0);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SKB_SET_REDIRECTED, [skb_set_redirected is defined], [
 		#include <linux/skbuff.h>
 	],[
@@ -4362,6 +4511,18 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_IDA_SIMPLE_REMOVE, [ida_simple_remove macro is defined], [
+		#include <linux/idr.h>
+	],[
+		#ifdef ida_simple_remove
+			return 0;
+		#else
+			#return
+		#endif
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL, [idr_for_each_entry_continue_ul is defined], [
 		#include <linux/idr.h>
 	],[
@@ -4498,15 +4659,6 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_BUS_FIND_DEVICE_GET_CONST, [bus_find_device get const], [
-		#include <linux/device.h>
-	],[
-		const void *data;
- 		bus_find_device(NULL, NULL, data, NULL);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_IPV4_NOT_POINTER_TCP_DEATH_ROW, [netns_ipv4 tcp_death_row memebr is not pointer], [
 		#include <net/netns/ipv4.h>
 
@@ -4566,6 +4718,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	],[
 
 		struct hop_jumbo_hdr jumbo;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SKB_IPV6_PAYLOAD_LEN, [linux/ipv6.h has struct skb_ipv6_payload_len], [
+		#include <linux/ipv6.h>
+	],[
+		skb_ipv6_payload_len(NULL);
 
 		return 0;
 	])
@@ -4962,6 +5122,22 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_QUEUECOMMAND_SCSI_QC_STATUS, [queuecommand returns enum scsi_qc_status], [
+		#include <scsi/scsi_host.h>
+
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd);
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
+		{
+			return 0;
+		}
+	],[
+		struct scsi_host_template t = {
+			.queuecommand = test_queuecommand,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SE_CMD_HAS_SENSE_INFO, [struct se_cmd has member sense_info], [
 		#include <target/target_core_base.h>
 
@@ -5042,6 +5218,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		#include <net/xdp.h>
 	],[
 		xdp_update_skb_shared_info(NULL, 0, 0, 0, false);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_XDP_UPDATE_SKB_FRAGS_INFO, [xdp_update_skb_frags_info exists], [
+		#include <net/xdp.h>
+	],[
+		xdp_update_skb_frags_info(NULL, 0, 0, 0, 0);
 
 		return 0;
 	])
@@ -5580,12 +5764,6 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_LINUX_DEVICE_BUS_H, [linux/device/bus.h exists], [
-		#include <linux/device/bus.h>
-	],[
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_BUS_TYPE_REMOVE_RETURN_VOID, [bus_type remove function return void], [
 		#include <linux/device/bus.h>
 
@@ -5868,6 +6046,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 			.bi_disk = NULL,
 		};
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT, [__blkdev_issue_discard has 5 params and returns int], [
+		#include <linux/blkdev.h>
+	],[
+		int ret = __blkdev_issue_discard(NULL, 0, 0, 0, NULL);
+
+		return ret;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_STREAM_OPEN, [fs.h has stream_open], [
@@ -6189,6 +6375,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 
 		vfio_ops.detach_ioas = NULL;
 
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID, [struct vfio_device_ops has match_token_uuid], [
+		#include <linux/vfio.h>
+	],[
+		struct vfio_device_ops vfio_ops;
+		vfio_ops.match_token_uuid = NULL;
 		return 0;
 	])
 
@@ -7410,6 +7604,28 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_SOCKADDR_UNSIZED, [kernel_bind and kernel_connect use sockaddr_unsized], [
+		#include <linux/net.h>
+	],[
+		struct socket *sock = NULL;
+		struct sockaddr_unsized *addr = NULL;
+
+		kernel_bind(sock, addr, 0);
+		kernel_connect(sock, addr, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_BASE64_ENCODE_5_PARAMS, [base64_encode has 5 parameters], [
+		#include <linux/base64.h>
+	],[
+		enum base64_variant v = BASE64_STD;
+
+		base64_encode(NULL, 0, NULL, true, v);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_ENUM_CSID_X86_ART, [clocksource_ids has CSID_X86_ART], [
 		#include <linux/clocksource_ids.h>
 	],[
@@ -8149,6 +8365,20 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_RQ_END_IO_FN_3_ARGS, [rq_end_io_fn has io_comp_batch argument], [
+		#include <linux/blk-mq.h>
+
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob);
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob)
+		{
+			return RQ_END_IO_NONE;
+		}
+	],[
+		rq_end_io_fn *fn = test_end_io;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT, [function map_queues returns int], [
 		#include <linux/blk-mq.h>
 	],[
@@ -8836,18 +9066,32 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_NO_SCHED, [linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1], [
-		#include <linux/blk-mq.h>
+	MLNX_RDMA_TEST_CASE(HAVE_BLOCK_DEVICE_OPERATIONS_GETGEO_GENDISK, [struct block_device_operations->getgeo has gendisk param], [
+		#include <linux/blkdev.h>
+		static int getgeo(struct gendisk *, struct hd_geometry *) { return 0;}
 	],[
-		int x = BLK_MQ_F_NO_SCHED;
+		struct block_device_operations bdo = {.getgeo = getgeo};
 
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_F_SHOULD_MERGE, [linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1], [
-		#include <linux/blk-mq.h>
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_CMD_FROM_TW, [io_uring_cmd_from_tw exists], [
+		#include <linux/io_uring/cmd.h>
 	],[
-		int x = BLK_MQ_F_SHOULD_MERGE;
+		struct io_tw_req tw_req = {};
+		struct io_uring_cmd *cmd;
+
+		cmd = io_uring_cmd_from_tw(tw_req);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_SQE_CMD_2_ARGS, [io_uring_sqe128_cmd macro exists], [
+		#include <linux/io_uring/cmd.h>
+	],[
+		struct io_uring_sqe sqe = {};
+		const struct io_uring_sqe *p = &sqe;
+		const void *cmd = io_uring_sqe128_cmd(p, struct io_uring_sqe);
 
 		return 0;
 	])
@@ -9307,6 +9551,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		#endif
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_CMD_DONE32, [io_uring_cmd_done32 is defined], [
+		#include <linux/io_uring/cmd.h>
+	],[
+		io_uring_cmd_done32(NULL, 0, 0, 0);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS, [io_uring_cmd_import_fixed has 6 params], [
 		#include <linux/io_uring/cmd.h>
 	],[
@@ -9448,6 +9700,16 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NTH_PAGE, [nth_page macro exists], [
+		#include <linux/mm.h>
+	],[
+		#ifdef nth_page
+			return 0;
+		#else
+			#return 1
+		#endif
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_FOLIO_MARK_DIRTY_LOCK, [folio_mark_dirty_lock is defined], [
 		#include <linux/mm.h>
 	],[
@@ -9528,14 +9790,87 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 
 		return 0;
 	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INODE_STATE_READ_ONCE, [inode_state_read_once exists], [
+		#include <linux/fs.h>
+	],[
+		struct inode *inode = NULL;
+
+		inode_state_read_once(inode);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_FOLIO_FLAGS_F, [struct folio has field f], [
+		#include <linux/mm.h>
+		#include <linux/mm_types.h>
+	],[
+		struct folio *folio = NULL;
+		unsigned long flags = folio->flags.f;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INODE_JUST_DROP, [have inode_just_drop], [
+		#include <linux/fs.h>
+	],[
+		inode_just_drop(NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_INC_WB_STAT, [have inc_wb_stat], [
+		#include <linux/backing-dev.h>
+	],[
+		inc_wb_stat(NULL, (enum wb_stat_item)0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_WRITE_CACHE_PAGES_4_PARAMS, [write_cache_pages has 4 parameters], [
+		#include <linux/writeback.h>
+	],[
+		write_cache_pages(NULL, NULL, NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_KERNEL_NEON_BEGIN_END_1_PARAM, [kernel_neon_begin/end has 1 param], [
+		#include <asm/neon.h>
+	],[
+		kernel_neon_end(NULL);
+		kernel_neon_begin(NULL);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_OPS_GET_RX_RING_COUNT, [get_rx_ring_count is defined], [
+		#include <linux/ethtool.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.get_rx_ring_count = NULL,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NDO_HWTSTAMP_GET_SET, [ndo_hwtstamp_get/set is defined], [
+		#include <linux/netdevice.h>
+	],[
+		struct net_device_ops netdev_ops = {
+			.ndo_hwtstamp_get = NULL,
+			.ndo_hwtstamp_set = NULL,
+		};
+
+		return 0;
+	])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:8643: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:8978: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
 MLNX_RDMA_SET_GLOBALS
 MLNX_RDMA_CREATE_MODULES
 MLNX_RDMA_BUILD_MODULES
 MLNX_RDMA_CHECK_RESULTS
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:8656: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:8991: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
 #
 #	Generate the config.h header file
 #
@@ -9543,7 +9878,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 	AC_SUBST(EXTRA_KCFLAGS)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_206_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:8665: -1- AC_DEFUN([MLNX_PROG_LINUX], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_205_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:9000: -1- AC_DEFUN([MLNX_PROG_LINUX], [
 LB_LINUX_PATH
 LB_IS_LLVM
 LB_LINUX_SYMVERFILE
@@ -9807,6 +10142,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_CLOCK_QUALITY_LEVEL_GET],
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CLOCK_QUALITY_LEVEL_GET$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DPLL_DEVICE_PUT_TRACKER], [dpll_device_put has tracker argument], [
+		#include <linux/dpll.h>
+	], [
+		dpll_device_put(NULL, NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_DEVICE_PUT_TRACKER$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_KVFREE_IN_SLAB_H], [kvfree prototype is in slab.h], [
 		#include <linux/slab.h>
 	], [
@@ -10130,21 +10473,36 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_PARAM_DRIVERINIT_VAL
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE], [devlink.h has devl_port_health_reporter_create], [
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_4_ARGS], [devlink.h has devl_port_health_reporter_create 4 args], [
 		#include <net/devlink.h>
 	], [
 		devl_port_health_reporter_create(NULL, NULL, 0, NULL);
 		return 0;
 	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_HEALTH_REPORTER_CREATE], [devlink.h has devl_health_reporter_create], [
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_4_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS], [devlink.h has devl_port_health_reporter_create 3 args], [
+		#include <net/devlink.h>
+	], [
+		devl_port_health_reporter_create(NULL, NULL, NULL);
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS], [devlink.h has devl_health_reporter_create 4 args], [
 		#include <net/devlink.h>
 	], [
 		devl_health_reporter_create(NULL, NULL, 0, NULL);
 
 		return 0;
 	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_HEALTH_REPORTER_CREATE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_HEALTH_REPORTER_CREATE_4_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS], [devlink.h has devl_health_reporter_create 3 args], [
+		#include <net/devlink.h>
+	], [
+		devl_health_reporter_create(NULL, NULL, NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVL_HEALTH_REPORTER_CREATE_3_ARGS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_INFO_DRIVER_NAME_PUT], [devlink.h has devlink_info_driver_name_put], [
 		#include <net/devlink.h>
 	], [
@@ -10350,6 +10708,28 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PARAM_SET_FUNCTIO
 		};
         ])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK], [struct devlink_param get function pointer has extack parameter], [
+                #include <net/devlink.h>
+
+		static int param_get(struct devlink *devlink,
+				     u32 id,
+				     struct devlink_param_gset_ctx *ctx,
+				     struct netlink_ext_ack *extack);
+		static int param_get(struct devlink *devlink,
+				     u32 id,
+				     struct devlink_param_gset_ctx *ctx,
+				     struct netlink_ext_ack *extack)
+		{
+			return 0;
+		}
+	], [
+		struct devlink_param dp = {
+			.get = param_get,
+		};
+
+		return 0;
+        ])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_DRIVERINIT_VAL], [devlink_param_driverinit_value_get exist], [
 		#include <net/devlink.h>
 	], [
@@ -10646,7 +11026,7 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_TRAP_GROUPS_REGIS
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_TRAP_GROUPS_REGISTER$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE], [devlink_health_reporter_create is defined], [
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_4_ARGS], [devlink_health_reporter_create has 4 args], [
 		#include <net/devlink.h>
 	], [
 		struct devlink_health_reporter *r;
@@ -10655,7 +11035,17 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PORT_HEALTH_REPOR
 
 		return 0;
 	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_4_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_3_ARGS], [devlink_health_reporter_create has 3 args], [
+		#include <net/devlink.h>
+	], [
+		struct devlink_health_reporter *r;
+
+		r = devlink_port_health_reporter_create(NULL, NULL, NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_PORT_HEALTH_REPORTER_CREATE_3_ARGS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_PORT_HEALTH_REPORTER_DESTROY], [devlink_port_health_reporter_destroy is defined], [
 		#include <net/devlink.h>
 	], [
@@ -10684,6 +11074,26 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_HEALTH_REPORTER_C
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS], [devlink_health_reporter_create has 3 args], [
+		#include <net/devlink.h>
+	], [
+		struct devlink_health_reporter *r;
+
+		r = devlink_health_reporter_create(NULL, NULL, NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD], [devlink_health_reporter_ops has default_graceful_period], [
+		#include <net/devlink.h>
+	], [
+		struct devlink_health_reporter_ops ops = {
+			.default_graceful_period = 0,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEVLINK_HEALTH_REPORTER_OPS_DEFAULT_GRACEFUL_PERIOD$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEVLINK_HEALTH_REPORT_BASE_SUPPORT], [structs devlink_health_reporter & devlink_fmsg exist], [
 		#include <net/devlink.h>
 	], [
@@ -11141,6 +11551,20 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SKB_FRAG_OFF_SET], [linux
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SKB_FRAG_OFF_SET$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_LINUX_HEX_H], [linux/hex.h exists as standalone header], [
+		#include <linux/hex.h>
+	], [
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_LINUX_HEX_H$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR], [posix_acl_to_xattr allocs buffer and returns void pointer], [
+		#include <linux/posix_acl_xattr.h>
+	], [
+		size_t size;
+		void *ptr = posix_acl_to_xattr(NULL, NULL, &size, GFP_KERNEL);
+		return ptr ? 0 : -ENOMEM;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_NET_NETDEV_LOCK_H], [net/netdev_lock.h header exists], [
 		#include <net/netdev_lock.h>
 	], [
@@ -12254,6 +12678,26 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_TLS_OFFLOAD_RX_RESYNC_ASY
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC], [tls_offload_rx_resync_async_request_start takes struct tls_offload_resync_async *], [
+		#include <net/tls.h>
+	], [
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_start(&async, 0, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC], [tls_offload_rx_resync_async_request_end takes struct tls_offload_resync_async *], [
+		#include <net/tls.h>
+	], [
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_end(&async, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES], [ethtool supprts 50G-pre-lane link modes], [
               #include <uapi/linux/ethtool.h>
        ], [
@@ -12783,6 +13227,46 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_NDO_GET_FEC_STATS], [get_
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NDO_GET_FEC_STATS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_GET_FEC_STATS_HIST], [get_fec_stats has ethtool_fec_hist parameter], [
+		#include <linux/ethtool.h>
+
+		static void test_get_fec_stats(struct net_device *dev,
+					       struct ethtool_fec_stats *fec_stats,
+					       struct ethtool_fec_hist *hist);
+		static void test_get_fec_stats(struct net_device *dev,
+					       struct ethtool_fec_stats *fec_stats,
+					       struct ethtool_fec_hist *hist)
+		{
+			return;
+		}
+	], [
+		struct ethtool_ops x = {
+			.get_fec_stats = test_get_fec_stats,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_GET_FEC_STATS_HIST$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_FLOWI4_DSCP], [struct flowi4 has flowi4_dscp field], [
+		#include <net/flow.h>
+	], [
+		struct flowi4 fl4 = {
+			.flowi4_dscp = 0,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FLOWI4_DSCP$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_INET_LOOKUP_ESTABLISHED_NO_HASHINFO], [inet_lookup_established has 6 args], [
+		#include <net/inet_hashtables.h>
+	], [
+		struct sock *sk;
+
+		sk = inet_lookup_established(NULL, 0, 0, 0, 0, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INET_LOOKUP_ESTABLISHED_NO_HASHINFO$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SKB_SET_REDIRECTED], [skb_set_redirected is defined], [
 		#include <linux/skbuff.h>
 	], [
@@ -13079,6 +13563,18 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IDA_ALLOC_MAX], [ida_allo
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IDA_ALLOC_MAX$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IDA_SIMPLE_REMOVE], [ida_simple_remove macro is defined], [
+		#include <linux/idr.h>
+	], [
+		#ifdef ida_simple_remove
+			return 0;
+		#else
+			#return
+		#endif
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IDA_SIMPLE_REMOVE$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL], [idr_for_each_entry_continue_ul is defined], [
 		#include <linux/idr.h>
 	], [
@@ -13215,15 +13711,6 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_CONST_BUS_TYPE_FOR_STRUCT
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BUS_FIND_DEVICE_GET_CONST], [bus_find_device get const], [
-		#include <linux/device.h>
-	], [
-		const void *data;
- 		bus_find_device(NULL, NULL, data, NULL);
-
-		return 0;
-	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BUS_FIND_DEVICE_GET_CONST$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IPV4_NOT_POINTER_TCP_DEATH_ROW], [netns_ipv4 tcp_death_row memebr is not pointer], [
 		#include <net/netns/ipv4.h>
 
@@ -13287,6 +13774,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_STRUCT_HOP_JUMBO_HDR], [n
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_STRUCT_HOP_JUMBO_HDR$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SKB_IPV6_PAYLOAD_LEN], [linux/ipv6.h has struct skb_ipv6_payload_len], [
+		#include <linux/ipv6.h>
+	], [
+		skb_ipv6_payload_len(NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SKB_IPV6_PAYLOAD_LEN$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE], [struct xfrmdev_ops xdo_dev_state_delete gets net_device parameter], [
 		#include <linux/netdevice.h>
 
@@ -13679,6 +14174,22 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SCSI_HOST_TEMPLATE_HAS_SD
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SCSI_HOST_TEMPLATE_HAS_SDEV_CONFIGURE$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_QUEUECOMMAND_SCSI_QC_STATUS], [queuecommand returns enum scsi_qc_status], [
+		#include <scsi/scsi_host.h>
+
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd);
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
+		{
+			return 0;
+		}
+	], [
+		struct scsi_host_template t = {
+			.queuecommand = test_queuecommand,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_QUEUECOMMAND_SCSI_QC_STATUS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SE_CMD_HAS_SENSE_INFO], [struct se_cmd has member sense_info], [
 		#include <target/target_core_base.h>
 
@@ -13763,6 +14274,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_XDP_UPDATE_SKB_SHARED_INF
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_XDP_UPDATE_SKB_SHARED_INFO$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_XDP_UPDATE_SKB_FRAGS_INFO], [xdp_update_skb_frags_info exists], [
+		#include <net/xdp.h>
+	], [
+		xdp_update_skb_frags_info(NULL, 0, 0, 0, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_XDP_UPDATE_SKB_FRAGS_INFO$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_XDP_METADATA_OPS_HAS_VLAN_TAG], [xdp_metadata_ops has xmo_rx_vlan_tag], [
 		#include <net/xdp.h>
 	], [
@@ -14282,12 +14801,6 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_LINUX_UNALIGNED_H], [linu
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_LINUX_UNALIGNED_H$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_LINUX_DEVICE_BUS_H], [linux/device/bus.h exists], [
-		#include <linux/device/bus.h>
-	], [
-		return 0;
-	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_LINUX_DEVICE_BUS_H$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BUS_TYPE_REMOVE_RETURN_VOID], [bus_type remove function return void], [
 		#include <linux/device/bus.h>
 
@@ -14571,6 +15084,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BIO_BI_DISK], [struct bio
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BIO_BI_DISK$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT], [__blkdev_issue_discard has 5 params and returns int], [
+		#include <linux/blkdev.h>
+	], [
+		int ret = __blkdev_issue_discard(NULL, 0, 0, 0, NULL);
+
+		return ret;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_STREAM_OPEN], [fs.h has stream_open], [
 		#include <linux/fs.h>
 	], [
@@ -14890,6 +15411,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DETACH_IOAS_NDO], [struct
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DETACH_IOAS_NDO$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID], [struct vfio_device_ops has match_token_uuid], [
+		#include <linux/vfio.h>
+	], [
+		struct vfio_device_ops vfio_ops;
+		vfio_ops.match_token_uuid = NULL;
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_VFIO_COMBINE_IOVA_RANGES], [has vfio_combine_iova_ranges exists], [
 		#include <linux/vfio.h>
 	], [
@@ -16092,6 +16621,28 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SENDPAGE_OK], [linux/net.
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SENDPAGE_OK$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SOCKADDR_UNSIZED], [kernel_bind and kernel_connect use sockaddr_unsized], [
+		#include <linux/net.h>
+	], [
+		struct socket *sock = NULL;
+		struct sockaddr_unsized *addr = NULL;
+
+		kernel_bind(sock, addr, 0);
+		kernel_connect(sock, addr, 0, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SOCKADDR_UNSIZED$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BASE64_ENCODE_5_PARAMS], [base64_encode has 5 parameters], [
+		#include <linux/base64.h>
+	], [
+		enum base64_variant v = BASE64_STD;
+
+		base64_encode(NULL, 0, NULL, true, v);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BASE64_ENCODE_5_PARAMS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_ENUM_CSID_X86_ART], [clocksource_ids has CSID_X86_ART], [
 		#include <linux/clocksource_ids.h>
 	], [
@@ -16829,6 +17380,20 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_RQ_END_IO_RET], [if file 
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_RQ_END_IO_RET$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_RQ_END_IO_FN_3_ARGS], [rq_end_io_fn has io_comp_batch argument], [
+		#include <linux/blk-mq.h>
+
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob);
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob)
+		{
+			return RQ_END_IO_NONE;
+		}
+	], [
+		rq_end_io_fn *fn = test_end_io;
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_RQ_END_IO_FN_3_ARGS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT], [function map_queues returns int], [
 		#include <linux/blk-mq.h>
 	], [
@@ -17516,22 +18081,36 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_NON_OWNER_VARIANT_OF_STAR
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NON_OWNER_VARIANT_OF_START_FREEZE_QUEUE$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BLK_MQ_F_NO_SCHED], [linux/blk-mq.h provides BLK_MQ_F_NO_SCHED which was removed in 6.14-rc1], [
-		#include <linux/blk-mq.h>
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BLOCK_DEVICE_OPERATIONS_GETGEO_GENDISK], [struct block_device_operations->getgeo has gendisk param], [
+		#include <linux/blkdev.h>
+		static int getgeo(struct gendisk *, struct hd_geometry *) { return 0;}
 	], [
-		int x = BLK_MQ_F_NO_SCHED;
+		struct block_device_operations bdo = {.getgeo = getgeo};
 
 		return 0;
 	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_NO_SCHED$])
-m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BLK_MQ_F_SHOULD_MERGE], [linux/blk-mq.h provides BLK_MQ_F_SHOULD_MERGE which was removed in 6.14-rc1], [
-		#include <linux/blk-mq.h>
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BLOCK_DEVICE_OPERATIONS_GETGEO_GENDISK$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IO_URING_CMD_FROM_TW], [io_uring_cmd_from_tw exists], [
+		#include <linux/io_uring/cmd.h>
 	], [
-		int x = BLK_MQ_F_SHOULD_MERGE;
+		struct io_tw_req tw_req = {};
+		struct io_uring_cmd *cmd;
+
+		cmd = io_uring_cmd_from_tw(tw_req);
 
 		return 0;
 	])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BLK_MQ_F_SHOULD_MERGE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IO_URING_CMD_FROM_TW$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IO_URING_SQE_CMD_2_ARGS], [io_uring_sqe128_cmd macro exists], [
+		#include <linux/io_uring/cmd.h>
+	], [
+		struct io_uring_sqe sqe = {};
+		const struct io_uring_sqe *p = &sqe;
+		const void *cmd = io_uring_sqe128_cmd(p, struct io_uring_sqe);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IO_URING_SQE_CMD_2_ARGS$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_BLK_INTEGRITY_CSUM_CRC64], [BLK_INTEGRITY_CSUM_CRC64 is defined], [
 		#include <linux/blkdev.h>
 	], [
@@ -17987,6 +18566,14 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IO_URING_CMD_TO_PDU], [io
 		#endif
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IO_URING_CMD_TO_PDU$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IO_URING_CMD_DONE32], [io_uring_cmd_done32 is defined], [
+		#include <linux/io_uring/cmd.h>
+	], [
+		io_uring_cmd_done32(NULL, 0, 0, 0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_IO_URING_CMD_DONE32$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_IO_URING_CMD_IMPORT_FIXED_6_PARAMS], [io_uring_cmd_import_fixed has 6 params], [
 		#include <linux/io_uring/cmd.h>
 	], [
@@ -18128,6 +18715,16 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_PAGE_GET_LINK_RAW], [page
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PAGE_GET_LINK_RAW$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_NTH_PAGE], [nth_page macro exists], [
+		#include <linux/mm.h>
+	], [
+		#ifdef nth_page
+			return 0;
+		#else
+			#return 1
+		#endif
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NTH_PAGE$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_FOLIO_MARK_DIRTY_LOCK], [folio_mark_dirty_lock is defined], [
 		#include <linux/mm.h>
 	], [
@@ -18207,6 +18804,79 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DEV_NET_RCU], [function d
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DEV_NET_RCU$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_INODE_STATE_READ_ONCE], [inode_state_read_once exists], [
+		#include <linux/fs.h>
+	], [
+		struct inode *inode = NULL;
+
+		inode_state_read_once(inode);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INODE_STATE_READ_ONCE$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_FOLIO_FLAGS_F], [struct folio has field f], [
+		#include <linux/mm.h>
+		#include <linux/mm_types.h>
+	], [
+		struct folio *folio = NULL;
+		unsigned long flags = folio->flags.f;
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_FOLIO_FLAGS_F$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_INODE_JUST_DROP], [have inode_just_drop], [
+		#include <linux/fs.h>
+	], [
+		inode_just_drop(NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INODE_JUST_DROP$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_INC_WB_STAT], [have inc_wb_stat], [
+		#include <linux/backing-dev.h>
+	], [
+		inc_wb_stat(NULL, (enum wb_stat_item)0);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_INC_WB_STAT$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_WRITE_CACHE_PAGES_4_PARAMS], [write_cache_pages has 4 parameters], [
+		#include <linux/writeback.h>
+	], [
+		write_cache_pages(NULL, NULL, NULL, NULL);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_WRITE_CACHE_PAGES_4_PARAMS$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_KERNEL_NEON_BEGIN_END_1_PARAM], [kernel_neon_begin/end has 1 param], [
+		#include <asm/neon.h>
+	], [
+		kernel_neon_end(NULL);
+		kernel_neon_begin(NULL);
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_KERNEL_NEON_BEGIN_END_1_PARAM$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_ETHTOOL_OPS_GET_RX_RING_COUNT], [get_rx_ring_count is defined], [
+		#include <linux/ethtool.h>
+	], [
+		const struct ethtool_ops en_ethtool_ops = {
+			.get_rx_ring_count = NULL,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ETHTOOL_OPS_GET_RX_RING_COUNT$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_NDO_HWTSTAMP_GET_SET], [ndo_hwtstamp_get/set is defined], [
+		#include <linux/netdevice.h>
+	], [
+		struct net_device_ops netdev_ops = {
+			.ndo_hwtstamp_get = NULL,
+			.ndo_hwtstamp_set = NULL,
+		};
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NDO_HWTSTAMP_GET_SET$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_BUILD_MODULES
 m4trace:configure.ac:23: -1- MLNX_RDMA_CHECK_RESULTS
 m4trace:configure.ac:23: -1- COMPAT_CONFIG_HEADERS

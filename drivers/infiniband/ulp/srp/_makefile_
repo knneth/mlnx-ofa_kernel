@@ -1,17 +1,14 @@
 KVER ?= $(shell uname -r)
 SRC_DIR ?= $(shell pwd)
 MLNX_ARCH = $(shell uname -m)
-OFA_DIR ?= $(shell test -d /usr/src/ofa_kernel-dkms/$(MLNX_ARCH) && echo /usr/src/ofa_kernel-dkms/$(MLNX_ARCH) || echo /usr/src/ofa_kernel/$(MLNX_ARCH))
-OFA = $(shell ( test -d $(OFA_DIR)/$(KVER) && echo $(OFA_DIR)/$(KVER) ) || ( test -d /var/lib/dkms/mlnx-ofed-kernel/ && ls -d /var/lib/dkms/mlnx-ofed-kernel/*/build ) || ( echo $(OFA_DIR) ))
+OFA_DIR ?= $(firstword $(wildcard /usr/src/ofa_kernel-dkms/$(MLNX_ARCH)/$(KVER) /usr/src/ofa_kernel/$(MLNX_ARCH)/$(KVER)))
+OFA = $(OFA_DIR)
 
-ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
-include $(OFA)/configure.mk.kernel
-endif
+-include $(OFA)/configure.mk.kernel
 
 export KERNELRELEASE=$(KVER)
 K_BUILD ?= /lib/modules/$(KVER)/build
 K_OBJ ?= $(K_BUILD)
-K_SRC ?= $(shell test -d /lib/modules/$(KVER)/source && echo /lib/modules/$(KVER)/source || echo $(K_BUILD))
 
 EXTRA_CFLAGS += $(shell echo $(BACKPORT_INCLUDES) | sed -e 's@/var/tmp/OFED_topdir/BUILD@/usr/src@')
 
@@ -30,9 +27,7 @@ override WITH_MAKE_PARAMS += ctf-dir=$(CWD)/.ctf
 endif
 
 # This is an UGLY compat for MOFED ib_query_gid with attrs
-ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 EXTRA_CFLAGS += -DHAVE_IB_QUERY_GID_ATTRS
-endif
 
 name := srp
 VERSION=$(shell grep "global _version " $(name).spec  | sed -e 's/.*_version //' | sed -e 's/}//' | sed -e 's/\s*//g')
@@ -75,8 +70,9 @@ LINUXINCLUDE=\
 		#
 
 default: prep
-ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
-# compile with ofed driver
+ifeq ($(wildcard $(OFA)/configure.mk.kernel),)
+	$(error Cannot build driver without mlnx-ofa_kernel installed. Failed to find it at '$(OFA)'.)
+endif
 	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) $(WITH_MAKE_PARAMS) \
 		CONFIG_SCSI_SRP_ATTRS_STANDALONE=m \
 		CONFIG_SCSI_SRP_ATTRS=m \
@@ -86,15 +82,6 @@ ifneq ($(shell test -d $(OFA) && echo "true" || echo "" ),)
 		CONFIG_CTF= \
 		LINUXINCLUDE='$(LINUXINCLUDE)' \
 		modules
-else
-# compile with inbox driver
-		make ccflags-y="$(EXTRA_CFLAGS)" -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) \
-		CONFIG_SCSI_SRP_ATTRS_STANDALONE=m \
-		CONFIG_SCSI_SRP_ATTRS=m \
-		CONFIG_INFINIBAND_SRP=m \
-		CONFIG_INFINIBAND_SRP_DUMMY= \
-		modules
-endif
 
 install:
 	make -C $(K_BUILD) O=$(K_OBJ) M=$(shell pwd) INSTALL_MOD_PATH=$(INSTALL_MOD_PATH) INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) $(WITH_MAKE_PARAMS) modules_install

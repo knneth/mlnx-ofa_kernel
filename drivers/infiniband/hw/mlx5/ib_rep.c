@@ -323,7 +323,7 @@ static const struct auxiliary_device_id mlx5r_rep_id_table[] = {
 	{},
 };
 
-MODULE_DEVICE_TABLE(auxiliary_mlx5r_rep_id_table, mlx5r_rep_id_table);
+MODULE_DEVICE_TABLE(auxiliary, mlx5r_rep_id_table);
 
 static struct auxiliary_driver mlx5r_rep_driver = {
 	.name = "rep",

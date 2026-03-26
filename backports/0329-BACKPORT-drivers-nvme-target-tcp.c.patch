@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/tcp.c
 
 Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
 ---
- drivers/nvme/target/tcp.c | 133 +++++++++++++++++++++++++++++++++++++-
- 1 file changed, 130 insertions(+), 3 deletions(-)
+ drivers/nvme/target/tcp.c | 144 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 139 insertions(+), 5 deletions(-)
 
 --- a/drivers/nvme/target/tcp.c
 +++ b/drivers/nvme/target/tcp.c
@@ -365,7 +365,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -2089,7 +2200,17 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -2089,12 +2200,29 @@ static int nvmet_tcp_add_port(struct nvm
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);
@@ -383,7 +383,21 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (so_priority > 0)
  		sock_set_priority(port->sock->sk, so_priority);
  
-@@ -2194,7 +2315,13 @@ static void nvmet_tcp_disc_port_addr(str
+-	ret = kernel_bind(port->sock, (struct sockaddr *)&port->addr,
+-			sizeof(port->addr));
++	ret = kernel_bind(port->sock,
++#ifdef HAVE_SOCKADDR_UNSIZED
++/* Newer kernels (6.19-rc1+): sockaddr_unsized parameter */
++			(struct sockaddr_unsized *)&port->addr,
++#else
++/* Older kernels: sockaddr parameter */
++			(struct sockaddr *)&port->addr,
++#endif
++                        sizeof(port->addr));
+ 	if (ret) {
+ 		pr_err("failed to bind port socket %d\n", ret);
+ 		goto err_sock;
+@@ -2194,7 +2322,13 @@ static void nvmet_tcp_disc_port_addr(str
  {
  	struct nvmet_tcp_port *port = nport->priv;
  

@@ -257,26 +257,34 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  	if (devnum < 0)
  		return NULL;
  
-@@ -311,7 +447,11 @@ _alloc_device(struct device *parent, con
+@@ -311,7 +447,15 @@ _alloc_device(struct device *parent, con
  	INIT_LIST_HEAD(&fwctl->uctx_list);
  
  	device_initialize(&fwctl->dev);
 +#ifdef HAVE_AUTO_TYPE
  	return_ptr(fwctl);
 +#else
-+	return fwctl;
++	{
++		struct fwctl_device *ret = fwctl;
++		fwctl = NULL;
++		return ret;
++	}
 +#endif
  }
  
  /* Drivers use the fwctl_alloc_device() wrapper */
-@@ -336,7 +476,11 @@ struct fwctl_device *_fwctl_alloc_device
+@@ -336,7 +480,15 @@ struct fwctl_device *_fwctl_alloc_device
  		return NULL;
  
  	fwctl->ops = ops;
 +#ifdef HAVE_AUTO_TYPE
  	return_ptr(fwctl);
 +#else
-+	return fwctl;
++	{
++		struct fwctl_device *ret = fwctl;
++		fwctl = NULL;
++		return ret;
++	}
 +#endif
  }
  EXPORT_SYMBOL_NS_GPL(_fwctl_alloc_device, "FWCTL");

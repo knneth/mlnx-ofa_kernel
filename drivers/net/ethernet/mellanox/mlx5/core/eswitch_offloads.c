@@ -55,6 +55,7 @@
 #include "en/tc/post_meter.h"
 #include "mlx5_esw_devm.h"
 #include "mlx5_devm.h"
+#include "fw_reset.h"
 
 /* There are two match-all miss flows, one for unicast dst mac and
  * one for multicast.
@@ -4232,6 +4233,12 @@ int mlx5_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 	esw = mlx5_devlink_eswitch_get(devlink);
 	if (IS_ERR(esw)) {
 		err = PTR_ERR(esw);
+		goto unlock_mlxdevm;
+	}
+
+	if (mlx5_fw_reset_in_progress(esw->dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Can't change eswitch mode during firmware reset");
+		err = -EBUSY;
 		goto unlock_mlxdevm;
 	}
 

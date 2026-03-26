@@ -819,6 +819,7 @@ static void mlx5e_destroy_promisc_table(struct mlx5e_flow_steering *fs)
 void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs,
 			       struct net_device *netdev)
 {
+	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_l2_table *ea = &fs->l2;
 
 	bool rx_mode_enable  = fs->state_destroy;
@@ -833,6 +834,12 @@ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs,
 	bool enable_broadcast  = !ea->broadcast_enabled &&  broadcast_enabled;
 	bool disable_broadcast =  ea->broadcast_enabled && !broadcast_enabled;
 	int err;
+
+	if (mlx5e_is_uplink_rep(priv)) {
+		mlx5e_handle_netdev_addr(fs, netdev);
+		goto update_vport_context;
+	}
+
 
 	if (enable_promisc) {
 		err = mlx5e_create_promisc_table(fs);
@@ -860,6 +867,7 @@ void mlx5e_fs_set_rx_mode_work(struct mlx5e_flow_steering *fs,
 	ea->allmulti_enabled  = allmulti_enabled;
 	ea->broadcast_enabled = broadcast_enabled;
 
+update_vport_context:
 	mlx5e_vport_context_update(fs, netdev);
 }
 
@@ -962,6 +970,9 @@ static int mlx5e_add_l2_flow_rule(struct mlx5e_flow_steering *fs,
 	int err = 0;
 	u8 *mc_dmac;
 	u8 *mv_dmac;
+
+	if (!ft)
+		return -EINVAL;
 
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)

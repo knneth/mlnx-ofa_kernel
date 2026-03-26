@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 45 +++++++++++++++++--
- 1 file changed, 42 insertions(+), 3 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 50 +++++++++++++++++--
+ 1 file changed, 47 insertions(+), 3 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
@@ -37,7 +37,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
  	MLX5E_ICOSQ_WQE_UMR_TLS,
  	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
  	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
-@@ -86,11 +93,24 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -86,13 +93,31 @@ int mlx5e_napi_poll(struct napi_struct *
  int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
  
  /* RX */
@@ -60,9 +60,16 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
 +#endif
  
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++static inline bool mlx5e_rx_hw_stamp(struct kernel_hwtstamp_config *config)
++#else
  static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
++#endif
++
  {
-@@ -328,17 +348,31 @@ mlx5e_dma_push_single(struct mlx5e_txqsq
+ 	return config->rx_filter == HWTSTAMP_FILTER_ALL;
+ }
+@@ -328,17 +353,31 @@ mlx5e_dma_push_single(struct mlx5e_txqsq
  	dma->type = MLX5E_DMA_MAP_SINGLE;
  }
  
@@ -96,7 +103,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
  
  static inline
  struct sk_buff **mlx5e_skb_fifo_get(struct mlx5e_skb_fifo *fifo, u16 i)
-@@ -496,6 +530,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -496,6 +535,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
  	case IPPROTO_UDP:
  		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  		fallthrough;
@@ -104,7 +111,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
  	case IPPROTO_TCP:
  		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
  		break;
-@@ -579,7 +614,11 @@ static inline bool mlx5e_icosq_can_post_
+@@ -579,7 +619,11 @@ static inline bool mlx5e_icosq_can_post_
  
  static inline struct mlx5e_mpw_info *mlx5e_get_mpw_info(struct mlx5e_rq *rq, int i)
  {

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 
 ---
- .../mellanox/mlx5/core/diag/reporter_vnic.c   | 148 +++++++++++++++++-
- 1 file changed, 143 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/diag/reporter_vnic.c   | 157 +++++++++++++++++-
+ 1 file changed, 150 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
@@ -214,20 +214,29 @@ Subject: [PATCH] BACKPORT:
  }
  
  static const struct devlink_health_reporter_ops mlx5_reporter_vnic_ops = {
-@@ -144,7 +277,11 @@ void mlx5_reporter_vnic_create(struct ml
+@@ -142,9 +275,18 @@ void mlx5_reporter_vnic_create(struct ml
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 
  	health->vnic_reporter =
- 		devlink_health_reporter_create(devlink,
- 					       &mlx5_reporter_vnic_ops,
+-		devlink_health_reporter_create(devlink,
+-					       &mlx5_reporter_vnic_ops,
 -					       0, dev);
-+					       0,
-+#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS
-+					       false,
++#ifdef HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS
++	/* Newer kernels (6.18+): devl_ variant with 3 args
++	 * Upstream commit d2b00737 "devlink: Move graceful period parameter to reporter ops" */
++		devlink_health_reporter_create(devlink, &mlx5_reporter_vnic_ops, dev);
++#elif defined(HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS)
++	/* Kernels (5.7-6.17): devlink_ variant with 4 args
++	 * Upstream commit ba7d16c7 removed auto_recover parameter in March 2020 */
++		devlink_health_reporter_create(devlink, &mlx5_reporter_vnic_ops, 0, dev);
++#else
++	/* Older kernels (5.4-5.6): devlink_ variant with 5 args (with auto_recover) */
++		devlink_health_reporter_create(devlink, &mlx5_reporter_vnic_ops, 0, false, dev);
 +#endif
-+					       dev);
  	if (IS_ERR(health->vnic_reporter))
  		mlx5_core_warn(dev,
  			       "Failed to create vnic reporter, err = %ld\n",
-@@ -158,3 +295,4 @@ void mlx5_reporter_vnic_destroy(struct m
+@@ -158,3 +300,4 @@ void mlx5_reporter_vnic_destroy(struct m
  	if (!IS_ERR_OR_NULL(health->vnic_reporter))
  		devlink_health_reporter_destroy(health->vnic_reporter);
  }

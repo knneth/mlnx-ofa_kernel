@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 
 Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
 ---
- .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 240 ++++++++++++++++--
- 1 file changed, 223 insertions(+), 17 deletions(-)
+ .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 244 ++++++++++++++++--
+ 1 file changed, 227 insertions(+), 17 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
@@ -484,7 +484,19 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  static int mlx5_devm_ct_max_offloaded_conns_get(struct mlxdevm *mlxdevm, u32 id,
  						struct mlxdevm_param_gset_ctx *ctx)
-@@ -821,7 +987,11 @@ static int mlx5_devm_ct_max_offloaded_co
+@@ -806,7 +972,11 @@ static int mlx5_devm_ct_max_offloaded_co
+ 	
+ 	devlink = mlxdevm_to_devlink(mlxdevm);
+ 
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++	mlx5_devlink_ct_max_offloaded_conns_get(devlink, id, &devlink_ctx, NULL);
++#else
+ 	mlx5_devlink_ct_max_offloaded_conns_get(devlink, id, &devlink_ctx);
++#endif
+ 	ctx->val.vu32 = devlink_ctx.val.vu32; 
+ 	return 0;
+ }
+@@ -821,7 +991,11 @@ static int mlx5_devm_ct_max_offloaded_co
  	devlink = mlxdevm_to_devlink(mlxdevm);
  	devlink_ctx.val.vu32 = ctx->val.vu32;
  
@@ -496,7 +508,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  	return 0;
  }
  
-@@ -838,6 +1008,7 @@ static int mlx5_devm_large_group_num_val
+@@ -838,6 +1012,7 @@ static int mlx5_devm_large_group_num_val
  	return mlx5_devlink_large_group_num_validate(devlink, id, devlink_val, extack);
  }
  
@@ -504,7 +516,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  static int mlx5_devm_eq_depth_validate(struct mlxdevm *mlxdevm, u32 id,
  				       union mlxdevm_param_value val,
  				       struct netlink_ext_ack *extack)
-@@ -850,6 +1021,8 @@ static int mlx5_devm_eq_depth_validate(s
+@@ -850,6 +1025,8 @@ static int mlx5_devm_eq_depth_validate(s
  
  	return mlx5_devlink_eq_depth_validate(devlink, id, devlink_val, extack); 
  }
@@ -513,7 +525,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
  					   union mlxdevm_param_value val,
-@@ -884,8 +1057,11 @@ static int mlx5_devm_cpu_affinity_valida
+@@ -884,8 +1061,11 @@ static int mlx5_devm_cpu_affinity_valida
  }
  
  static const struct mlxdevm_param mlx5_devm_params[] = {
@@ -525,7 +537,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  	MLXDEVM_PARAM_DRIVER(MLX5_DEVM_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
  			     "ct_max_offloaded_conns", MLXDEVM_PARAM_TYPE_U32,
  			     BIT(MLXDEVM_PARAM_CMODE_RUNTIME),
-@@ -899,16 +1075,21 @@ static const struct mlxdevm_param mlx5_d
+@@ -899,16 +1079,21 @@ static const struct mlxdevm_param mlx5_d
  			     NULL, NULL,
  			     mlx5_devm_large_group_num_validate),
  #endif
@@ -547,7 +559,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  static int
  mlx5_devm_hairpin_num_queues_validate(struct mlxdevm *mlxdevm, u32 id,
  				      union mlxdevm_param_value val,
-@@ -936,6 +1117,7 @@ mlx5_devm_hairpin_queue_size_validate(st
+@@ -936,6 +1121,7 @@ mlx5_devm_hairpin_queue_size_validate(st
  
  	return mlx5_devlink_hairpin_queue_size_validate(devlink, id, devlink_val, extack);
  }
@@ -555,7 +567,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  static const struct mlxdevm_param mlx5_devm_eth_params[] = {
  	MLXDEVM_PARAM_GENERIC(ENABLE_ETH, BIT(MLXDEVM_PARAM_CMODE_DRIVERINIT),
-@@ -950,6 +1132,8 @@ static const struct mlxdevm_param mlx5_d
+@@ -950,6 +1136,8 @@ static const struct mlxdevm_param mlx5_d
  			     mlx5_devm_hairpin_queue_size_validate),
  };
  
@@ -564,7 +576,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  static void mlx5_devm_hairpin_params_init_values(struct mlxdevm *mlxdevm)
  {
  	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(mlxdevm);
-@@ -973,6 +1157,8 @@ static void mlx5_devm_hairpin_params_ini
+@@ -973,6 +1161,8 @@ static void mlx5_devm_hairpin_params_ini
  	devm_param_driverinit_value_set(
  		mlxdevm, MLX5_DEVM_PARAM_ID_HAIRPIN_QUEUE_SIZE, value);
  }
@@ -573,7 +585,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  static int mlx5_devm_eth_params_register(struct mlxdevm *mlxdevm)
  {
-@@ -1175,16 +1361,22 @@ mlx5_devm_max_uc_list_params_unregister(
+@@ -1175,16 +1365,22 @@ mlx5_devm_max_uc_list_params_unregister(
  	devm_params_unregister(mlxdevm, mlx5_devm_max_uc_list_params,
  			       ARRAY_SIZE(mlx5_devm_max_uc_list_params));
  }
@@ -596,7 +608,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  #ifdef CONFIG_MLX5_ESWITCH
  	value.vu32 = ESW_OFFLOADS_DEFAULT_NUM_GROUPS;
-@@ -1193,6 +1385,7 @@ static void mlx5_devm_set_params_init_va
+@@ -1193,6 +1389,7 @@ static void mlx5_devm_set_params_init_va
  					value);
  #endif
  
@@ -604,7 +616,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  	value.vu32 = MLX5_COMP_EQ_SIZE;
  	devm_param_driverinit_value_set(mlxdevm,
  					MLXDEVM_PARAM_GENERIC_ID_IO_EQ_SIZE,
-@@ -1202,6 +1395,7 @@ static void mlx5_devm_set_params_init_va
+@@ -1202,6 +1399,7 @@ static void mlx5_devm_set_params_init_va
  	devm_param_driverinit_value_set(mlxdevm,
  					MLXDEVM_PARAM_GENERIC_ID_EVENT_EQ_SIZE,
  					value);
@@ -612,7 +624,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  	/* EQs are created only when rdma or net-dev is creating a CQ.
  	 * Hence, the initial affinity shown to the user is empty (0)
-@@ -1210,6 +1404,7 @@ static void mlx5_devm_set_params_init_va
+@@ -1210,6 +1408,7 @@ static void mlx5_devm_set_params_init_va
  	value.vu16arr.array_len = 0;
  	devm_param_driverinit_value_set(mlxdevm, MLX5_DEVM_PARAM_ID_CPU_AFFINITY, value);
  }
@@ -620,7 +632,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  
  int mlx5_devm_params_register(struct mlxdevm *mlxdevm)
  {
-@@ -1220,6 +1415,7 @@ int mlx5_devm_params_register(struct mlx
+@@ -1220,6 +1419,7 @@ int mlx5_devm_params_register(struct mlx
  	 * behaviour they configure.
  	 */
  
@@ -628,7 +640,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  	err = devm_params_register(mlxdevm, mlx5_devm_params,
  				   ARRAY_SIZE(mlx5_devm_params));
  	if (err)
-@@ -1227,6 +1423,7 @@ int mlx5_devm_params_register(struct mlx
+@@ -1227,6 +1427,7 @@ int mlx5_devm_params_register(struct mlx
  
  	mlx5_devm_set_params_init_values(mlxdevm);
  
@@ -636,7 +648,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  	err = mlx5_devm_auxdev_params_register(mlxdevm);
  	if (err)
  		goto auxdev_reg_err;
-@@ -1234,23 +1431,30 @@ int mlx5_devm_params_register(struct mlx
+@@ -1234,23 +1435,30 @@ int mlx5_devm_params_register(struct mlx
  	err = mlx5_devm_max_uc_list_params_register(mlxdevm);
  	if (err)
  		goto max_uc_list_err;
@@ -668,7 +680,7 @@ Change-Id: I18ffb6c516184279646b3215886b6e004b6ba6d7
  }
  
  int mlx5_devm_register(struct mlx5_core_dev *dev)
-@@ -1266,7 +1470,9 @@ int mlx5_devm_register(struct mlx5_core_
+@@ -1266,7 +1474,9 @@ int mlx5_devm_register(struct mlx5_core_
  	mdevm_dev->dev = dev;
  	mdevm_dev->device.ops = &mlx5_devm_ops;
  	mdevm_dev->device.dev = dev->device;

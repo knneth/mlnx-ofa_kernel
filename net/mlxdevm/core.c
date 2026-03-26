@@ -309,13 +309,13 @@ void devm_lock(struct mlxdevm *mlxdevm)
 	mutex_lock(&mlxdevm->lock);
 }
 EXPORT_SYMBOL_GPL(devm_lock);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
-int devl_trylock(struct devlink *devlink)
+#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
+int devm_trylock(struct mlxdevm *mlxdevm)
 {
-	return mutex_trylock(&devlink->lock);
+	return mutex_trylock(&mlxdevm->lock);
 }
-EXPORT_SYMBOL_GPL(devl_trylock);
+EXPORT_SYMBOL_GPL(devm_trylock);
 #endif
 
 void devm_unlock(struct mlxdevm *mlxdevm)

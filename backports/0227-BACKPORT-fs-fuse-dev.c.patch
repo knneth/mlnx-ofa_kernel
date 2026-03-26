@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: fs/fuse/dev.c
 
 ---
- fs/fuse/dev.c | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
+ fs/fuse/dev.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
 --- a/fs/fuse/dev.c
 +++ b/fs/fuse/dev.c
@@ -45,7 +45,19 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
  }
-@@ -927,6 +937,7 @@ copy_finish:
+@@ -346,7 +356,11 @@ static int fuse_check_folio(struct folio
+ {
+ 	if (folio_mapped(folio) ||
+ 	    folio->mapping != NULL ||
++#ifdef HAVE_FOLIO_FLAGS_F
++	    (folio->flags.f & PAGE_FLAGS_CHECK_AT_PREP &
++#else
+ 	    (folio->flags & PAGE_FLAGS_CHECK_AT_PREP &
++#endif
+ 	     ~(1 << PG_locked |
+ 	       1 << PG_referenced |
+ 	       1 << PG_lru |
+@@ -927,6 +941,7 @@ copy_finish:
  	return err;
  }
  
@@ -53,7 +65,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  /*
   * Resending all processing queue requests.
   *
-@@ -960,6 +971,7 @@ static int fuse_notify_resend(struct fus
+@@ -960,6 +975,7 @@ static int fuse_notify_resend(struct fus
  	fuse_resend(fc);
  	return 0;
  }
@@ -61,7 +73,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
  		unsigned int size, struct fuse_copy_state *cs)
-@@ -986,8 +998,10 @@ int fuse_notify(struct fuse_conn *fc, en
+@@ -986,8 +1002,10 @@ int fuse_notify(struct fuse_conn *fc, en
  	case FUSE_NOTIFY_DELETE:
  		return fuse_notify_delete(fc, size, cs);
  

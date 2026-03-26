@@ -29,6 +29,7 @@
 %{!?_name: %global _name mlnx-nfsrdma}
 %{!?_version: %global _version 3.4}
 %{!?_release: %global _release 0}
+%global dkms_version %{version}-%{_release}
 
 %bcond_with building_kmods
 
@@ -84,7 +85,6 @@ BuildRequires: %kernel_module_package_buildreqs
 %package dkms
 Summary: DKMS-built driver for %{name}
 Group: System Environment/Base
-Requires: mlnx-ofa_kernel-dkms
 %if "%{_vendor}" == "suse"
 Provides:  mlnx-nfsrdma-kmp = %{version}-%{release}, mlnx-nfsrdma-kmp-default = %{version}-%{release}, mlnx-nfsrdma-modules = %{version}-%{release}
 Obsoletes: mlnx-nfsrdma-kmp < %{version}-%{release}, mlnx-nfsrdma-kmp-default < %{version}-%{release}, mlnx-nfsrdma-modules < %{version}-%{release}
@@ -92,7 +92,7 @@ Obsoletes: mlnx-nfsrdma-kmp < %{version}-%{release}, mlnx-nfsrdma-kmp-default < 
 Provides:  kmod-mlnx-nfsrdma = %{version}-%{release}, mlnx-nfsrdma-modules = %{version}-%{release}
 Obsoletes: kmod-mlnx-nfsrdma < %{version}-%{release}, mlnx-nfsrdma-modules < %{version}-%{release}
 %endif
-Requires: mlnx-ofa_kernel-dkms
+Requires: mlnx-ofa_kernel-dkms = %{version}-%{release}
 Requires: dkms >= 3.2
 %description dkms
 DKMS package for %{name}
@@ -187,7 +187,9 @@ export INSTALL_MOD_PATH=%{buildroot}
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export PREFIX=%{_prefix}
 mkdir -p %{buildroot}%{_usrsrc}
-cp -a source %{buildroot}%{_usrsrc}/%{name}-%{version}/
+cp -a source %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/
+sed -i -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
+	%{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
 %if %{with building_kmods}
 for flavor in %flavors_to_build; do
 	export K_BUILD=%{kernel_source $flavor}
@@ -198,12 +200,12 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
-sed -e '/^PACKAGE_VERSION=/s/=.*/="%{version}"/' \
+sed -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
 	-e 's/AUTOINSTALL=.*/AUTOINSTALL="yes"/' \
 	-e '$aBUILD_DEPENDS="mlnx-ofa_kernel"' \
 	-e '$aBUILD_DEPENDS_REBUILD="yes"' \
 	<source/dkms.conf \
-	> %{buildroot}%{_usrsrc}/%{name}-%{version}/dkms.conf
+	> %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
 
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
@@ -252,10 +254,19 @@ fi
 %endif
 
 %post dkms
-/usr/sbin/dkms install %{name}/%{version} || :
+for ver_dir in /var/lib/dkms/%{name}/*/; do
+	[ -L "${ver_dir}/source" ] || continue
+	old_ver="${ver_dir%/}"
+	old_ver="${old_ver##*/}"
+	[ "${old_ver}" != "%{dkms_version}" ] || continue
+	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
+done
+/usr/sbin/dkms install %{name}/%{dkms_version} || :
 
 %preun dkms
-/usr/sbin/dkms remove  %{name}/%{version} --all || :
+if [ $1 -eq 0 ]; then
+	/usr/sbin/dkms remove %{name}/%{dkms_version} --all || :
+fi
 
 %if %{with building_kmods}
 %if "%{KMP}" != "1"
@@ -267,7 +278,7 @@ fi
 %endif
 
 %files dkms
-%{_usrsrc}/%{name}-%{version}
+%{_usrsrc}/%{name}-%{dkms_version}
 %dir %{_datadir}/dkms/modules_to_force_install
 %{_datadir}/dkms/modules_to_force_install/%{name}.force
 

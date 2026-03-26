@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
 
 ---
- drivers/infiniband/ulp/ipoib/ipoib_main.c | 161 ++++++++++++++++++----
- 1 file changed, 133 insertions(+), 28 deletions(-)
+ drivers/infiniband/ulp/ipoib/ipoib_main.c | 194 ++++++++++++++++++----
+ 1 file changed, 166 insertions(+), 28 deletions(-)
 
 --- a/drivers/infiniband/ulp/ipoib/ipoib_main.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_main.c
@@ -234,7 +234,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	return 0;
  
-@@ -1864,10 +1931,17 @@ static int ipoib_ioctl(struct net_device
+@@ -1864,12 +1931,44 @@ static int ipoib_ioctl(struct net_device
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  
@@ -249,10 +249,37 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
 +
 +	return priv->rn_ops->ndo_do_ioctl(dev, ifr, cmd);
 +#endif
++}
++
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++static int ipoib_hwtstamp_get(struct net_device *dev,
++			      struct kernel_hwtstamp_config *config)
++{
++	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++
++	if (!priv->rn_ops->ndo_hwtstamp_get)
++		return -EOPNOTSUPP;
++
++	return priv->rn_ops->ndo_hwtstamp_get(dev, config);
  }
  
++static int ipoib_hwtstamp_set(struct net_device *dev,
++			      struct kernel_hwtstamp_config *config,
++			      struct netlink_ext_ack *extack)
++{
++	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++
++	if (!priv->rn_ops->ndo_hwtstamp_set)
++		return -EOPNOTSUPP;
++
++	return priv->rn_ops->ndo_hwtstamp_set(dev, config, extack);
++}
++#endif
++
  static int ipoib_dev_init(struct net_device *dev)
-@@ -1951,7 +2025,11 @@ static void ipoib_parent_unregister_pre(
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+@@ -1951,7 +2050,11 @@ static void ipoib_parent_unregister_pre(
  	 * running ensures the it will not add more work.
  	 */
  	rtnl_lock();
@@ -264,7 +291,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	rtnl_unlock();
  
  	/* ipoib_event() cannot be running once this returns */
-@@ -2006,13 +2084,19 @@ static int ipoib_parent_init(struct net_
+@@ -2006,13 +2109,19 @@ static int ipoib_parent_init(struct net_
  			priv->ca->name, priv->port, result);
  		return result;
  	}
@@ -284,7 +311,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	return 0;
  }
  
-@@ -2027,8 +2111,13 @@ static void ipoib_child_init(struct net_
+@@ -2027,8 +2136,13 @@ static void ipoib_child_init(struct net_
  		memcpy(&priv->local_gid, priv->dev->dev_addr + 4,
  		       sizeof(priv->local_gid));
  	else {
@@ -298,7 +325,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  		memcpy(&priv->local_gid, &ppriv->local_gid,
  		       sizeof(priv->local_gid));
  	}
-@@ -2052,7 +2141,7 @@ static int ipoib_ndo_init(struct net_dev
+@@ -2052,7 +2166,7 @@ static int ipoib_ndo_init(struct net_dev
  	ndev->mtu = IPOIB_UD_MTU(priv->max_ib_mtu);
  	priv->mcast_mtu = priv->admin_mtu = ndev->mtu;
  	rn->mtu = priv->mcast_mtu;
@@ -307,7 +334,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	ndev->neigh_priv_len = sizeof(struct ipoib_neigh);
  
-@@ -2156,6 +2245,7 @@ static int ipoib_set_vf_guid(struct net_
+@@ -2156,6 +2270,7 @@ static int ipoib_set_vf_guid(struct net_
  	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
  }
  
@@ -315,7 +342,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  static int ipoib_get_vf_guid(struct net_device *dev, int vf,
  			     struct ifla_vf_guid *node_guid,
  			     struct ifla_vf_guid *port_guid)
-@@ -2164,6 +2254,7 @@ static int ipoib_get_vf_guid(struct net_
+@@ -2164,6 +2279,7 @@ static int ipoib_get_vf_guid(struct net_
  
  	return ib_get_vf_guid(priv->ca, vf, priv->port, node_guid, port_guid);
  }
@@ -323,7 +350,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  static int ipoib_get_vf_stats(struct net_device *dev, int vf,
  			      struct ifla_vf_stats *vf_stats)
-@@ -2197,20 +2288,28 @@ static const struct net_device_ops ipoib
+@@ -2197,20 +2313,32 @@ static const struct net_device_ops ipoib
  	.ndo_uninit		 = ipoib_ndo_uninit,
  	.ndo_open		 = ipoib_open,
  	.ndo_stop		 = ipoib_stop,
@@ -359,10 +386,14 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
 +	.ndo_do_ioctl		  = ipoib_ioctl,
 +#endif
 +
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	.ndo_hwtstamp_get	  = ipoib_hwtstamp_get,
++	.ndo_hwtstamp_set	  = ipoib_hwtstamp_set,
++#endif
  };
  
  static const struct net_device_ops ipoib_netdev_ops_vf = {
-@@ -2226,7 +2325,13 @@ static const struct net_device_ops ipoib
+@@ -2226,7 +2354,17 @@ static const struct net_device_ops ipoib
  	.ndo_get_iflink		 = ipoib_get_iflink,
  	.ndo_set_mac_address	 = ipoib_set_vf_local_mac,
  	.ndo_get_stats64	 = ipoib_get_stats,
@@ -374,10 +405,14 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
 +	.ndo_do_ioctl		  = ipoib_ioctl,
 +#endif
 +
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	.ndo_hwtstamp_get	  = ipoib_hwtstamp_get,
++	.ndo_hwtstamp_set	  = ipoib_hwtstamp_set,
++#endif
  };
  
  static const struct net_device_ops ipoib_netdev_default_pf = {
-@@ -2360,7 +2465,6 @@ int ipoib_intf_init(struct ib_device *hc
+@@ -2360,7 +2498,6 @@ int ipoib_intf_init(struct ib_device *hc
  	 */
  	priv->next_priv_destructor = dev->priv_destructor;
  	dev->priv_destructor = NULL;
@@ -385,7 +420,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	ipoib_build_priv(dev);
  
  	return 0;
-@@ -2398,7 +2502,6 @@ void ipoib_intf_free(struct net_device *
+@@ -2398,7 +2535,6 @@ void ipoib_intf_free(struct net_device *
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct rdma_netdev *rn = netdev_priv(dev);
@@ -393,7 +428,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	dev->priv_destructor = priv->next_priv_destructor;
  	if (dev->priv_destructor)
  		dev->priv_destructor(dev);
-@@ -2408,7 +2511,6 @@ void ipoib_intf_free(struct net_device *
+@@ -2408,7 +2544,6 @@ void ipoib_intf_free(struct net_device *
  	 * attempt to call priv_destructor twice, prevent that from happening.
  	 */
  	dev->priv_destructor = NULL;
@@ -401,7 +436,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	/* unregister/destroy is very complicated. Make bugs more obvious. */
  	rn->clnt_priv = NULL;
  
-@@ -2473,7 +2575,11 @@ static void set_base_guid(struct ipoib_d
+@@ -2473,7 +2608,11 @@ static void set_base_guid(struct ipoib_d
  	memcpy(&priv->local_gid.global.interface_id,
  	       &gid->global.interface_id,
  	       sizeof(gid->global.interface_id));
@@ -413,7 +448,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	clear_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
  
  	netif_addr_unlock_bh(netdev);
-@@ -2511,7 +2617,7 @@ static int ipoib_set_mac(struct net_devi
+@@ -2511,7 +2650,7 @@ static int ipoib_set_mac(struct net_devi
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	struct sockaddr_storage *ss = addr;
@@ -422,7 +457,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  
  	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
  		return -EBUSY;
-@@ -2676,6 +2782,7 @@ static struct net_device *ipoib_add_port
+@@ -2676,6 +2815,7 @@ static struct net_device *ipoib_add_port
  		if (!rc && ops->priv_size < params.sizeof_priv)
  			ops->priv_size = params.sizeof_priv;
  	}
@@ -430,7 +465,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	/*
  	 * We cannot set priv_destructor before register_netdev because we
  	 * need priv to be always valid during the error flow to execute
-@@ -2683,7 +2790,6 @@ static struct net_device *ipoib_add_port
+@@ -2683,7 +2823,6 @@ static struct net_device *ipoib_add_port
  	 * enter priv_destructor mode once we are completely registered.
  	 */
  	ndev->priv_destructor = ipoib_intf_free;
@@ -438,7 +473,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
  	if (ipoib_intercept_dev_id_attr(ndev))
  		goto sysfs_failed;
  	if (ipoib_cm_add_mode_attr(ndev))
-@@ -2754,10 +2860,9 @@ static void ipoib_remove_one(struct ib_d
+@@ -2754,10 +2893,9 @@ static void ipoib_remove_one(struct ib_d
  
  		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
  					 list)

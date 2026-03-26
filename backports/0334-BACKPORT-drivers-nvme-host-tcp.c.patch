@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
 
 Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
 ---
- drivers/nvme/host/tcp.c | 306 +++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 302 insertions(+), 4 deletions(-)
+ drivers/nvme/host/tcp.c | 326 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 319 insertions(+), 7 deletions(-)
 
 --- a/drivers/nvme/host/tcp.c
 +++ b/drivers/nvme/host/tcp.c
@@ -636,7 +636,23 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	queue->io_cpu = WORK_CPU_UNBOUND;
  	queue->request = NULL;
  	queue->data_remaining = 0;
-@@ -1851,6 +2095,7 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1841,7 +2085,14 @@ static int nvme_tcp_alloc_queue(struct n
+ 	sk_set_memalloc(queue->sock->sk);
+ 
+ 	if (nctrl->opts->mask & NVMF_OPT_HOST_TRADDR) {
+-		ret = kernel_bind(queue->sock, (struct sockaddr *)&ctrl->src_addr,
++                ret = kernel_bind(queue->sock,
++#ifdef HAVE_SOCKADDR_UNSIZED
++/* Newer kernels (6.19-rc1+): sockaddr_unsized parameter */
++			(struct sockaddr_unsized *)&ctrl->src_addr,
++#else
++/* Older kernels: sockaddr parameter */
++			(struct sockaddr *)&ctrl->src_addr,
++#endif
+ 			sizeof(ctrl->src_addr));
+ 		if (ret) {
+ 			dev_err(nctrl->device,
+@@ -1851,6 +2102,7 @@ static int nvme_tcp_alloc_queue(struct n
  		}
  	}
  
@@ -644,7 +660,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	if (nctrl->opts->mask & NVMF_OPT_HOST_IFACE) {
  		char *iface = nctrl->opts->host_iface;
  		sockptr_t optval = KERNEL_SOCKPTR(iface);
-@@ -1864,9 +2109,11 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1864,9 +2116,11 @@ static int nvme_tcp_alloc_queue(struct n
  			goto err_sock;
  		}
  	}
@@ -656,7 +672,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	if (queue->hdr_digest || queue->data_digest) {
  		ret = nvme_tcp_alloc_crypto(queue);
  		if (ret) {
-@@ -1875,13 +2122,18 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1875,20 +2129,32 @@ static int nvme_tcp_alloc_queue(struct n
  			goto err_sock;
  		}
  	}
@@ -675,7 +691,23 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	}
  
  	dev_dbg(nctrl->device, "connecting queue %d\n",
-@@ -1914,9 +2166,11 @@ err_init_connect:
+ 			nvme_tcp_queue_id(queue));
+ 
+-	ret = kernel_connect(queue->sock, (struct sockaddr *)&ctrl->addr,
+-		sizeof(ctrl->addr), 0);
++        ret = kernel_connect(queue->sock,
++#ifdef HAVE_SOCKADDR_UNSIZED
++/* Newer kernels (6.19-rc1+): sockaddr_unsized parameter */
++			(struct sockaddr_unsized *)&ctrl->addr,
++#else
++/* Older kernels: sockaddr parameter */
++			(struct sockaddr *)&ctrl->addr,
++#endif
++			sizeof(ctrl->addr), 0);
+ 	if (ret) {
+ 		dev_err(nctrl->device,
+ 			"failed to connect socket: %d\n", ret);
+@@ -1914,9 +2180,11 @@ err_init_connect:
  	kernel_sock_shutdown(queue->sock, SHUT_RDWR);
  err_rcv_pdu:
  	kfree(queue->pdu);
@@ -687,7 +719,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  err_sock:
  	/* ->sock will be released by fput() */
  	fput(queue->sock->file);
-@@ -2086,6 +2340,7 @@ static int nvme_tcp_alloc_admin_queue(st
+@@ -2086,6 +2354,7 @@ static int nvme_tcp_alloc_admin_queue(st
  	int ret;
  	key_serial_t pskid = 0;
  
@@ -695,7 +727,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	if (nvme_tcp_tls_configured(ctrl)) {
  		if (ctrl->opts->tls_key)
  			pskid = key_serial(ctrl->opts->tls_key);
-@@ -2099,6 +2354,7 @@ static int nvme_tcp_alloc_admin_queue(st
+@@ -2099,6 +2368,7 @@ static int nvme_tcp_alloc_admin_queue(st
  			}
  		}
  	}
@@ -703,7 +735,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  
  	ret = nvme_tcp_alloc_queue(ctrl, 0, pskid);
  	if (ret)
-@@ -2192,7 +2448,11 @@ static int nvme_tcp_configure_io_queues(
+@@ -2192,7 +2462,11 @@ static int nvme_tcp_configure_io_queues(
  	if (new) {
  		ret = nvme_alloc_io_tag_set(ctrl, &to_tcp_ctrl(ctrl)->tag_set,
  				&nvme_tcp_mq_ops,
@@ -715,7 +747,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  				sizeof(struct nvme_tcp_request));
  		if (ret)
  			goto out_free_io_queues;
-@@ -2649,7 +2909,12 @@ static void nvme_tcp_complete_timed_out(
+@@ -2649,7 +2923,12 @@ static void nvme_tcp_complete_timed_out(
  	nvmf_complete_timed_out_request(rq);
  }
  
@@ -729,7 +761,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  {
  	struct nvme_tcp_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_ctrl *ctrl = &req->queue->ctrl->ctrl;
-@@ -2762,6 +3027,7 @@ static blk_status_t nvme_tcp_setup_cmd_p
+@@ -2762,6 +3041,7 @@ static blk_status_t nvme_tcp_setup_cmd_p
  	return 0;
  }
  
@@ -737,7 +769,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  static void nvme_tcp_commit_rqs(struct blk_mq_hw_ctx *hctx)
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
-@@ -2769,6 +3035,7 @@ static void nvme_tcp_commit_rqs(struct b
+@@ -2769,6 +3049,7 @@ static void nvme_tcp_commit_rqs(struct b
  	if (!llist_empty(&queue->req_list))
  		queue_work_on(queue->io_cpu, nvme_tcp_wq, &queue->io_work);
  }
@@ -745,7 +777,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  
  static blk_status_t nvme_tcp_queue_rq(struct blk_mq_hw_ctx *hctx,
  		const struct blk_mq_queue_data *bd)
-@@ -2794,14 +3061,34 @@ static blk_status_t nvme_tcp_queue_rq(st
+@@ -2794,14 +3075,34 @@ static blk_status_t nvme_tcp_queue_rq(st
  	return BLK_STS_OK;
  }
  
@@ -780,7 +812,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
  	struct sock *sk = queue->sock->sk;
-@@ -2811,7 +3098,11 @@ static int nvme_tcp_poll(struct blk_mq_h
+@@ -2811,7 +3112,11 @@ static int nvme_tcp_poll(struct blk_mq_h
  		return 0;
  
  	set_bit(NVME_TCP_Q_POLLING, &queue->flags);
@@ -792,7 +824,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  		sk_busy_loop(sk, true);
  	ret = nvme_tcp_try_recv(queue);
  	clear_bit(NVME_TCP_Q_POLLING, &queue->flags);
-@@ -2846,7 +3137,9 @@ static int nvme_tcp_get_address(struct n
+@@ -2846,7 +3151,9 @@ static int nvme_tcp_get_address(struct n
  
  static const struct blk_mq_ops nvme_tcp_mq_ops = {
  	.queue_rq	= nvme_tcp_queue_rq,
@@ -802,7 +834,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	.complete	= nvme_complete_rq,
  	.init_request	= nvme_tcp_init_request,
  	.exit_request	= nvme_tcp_exit_request,
-@@ -2947,6 +3240,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
+@@ -2947,6 +3254,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
  		}
  	}
  
@@ -810,7 +842,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  	if (opts->mask & NVMF_OPT_HOST_IFACE) {
  		if (!__dev_get_by_name(&init_net, opts->host_iface)) {
  			pr_err("invalid interface passed: %s\n",
-@@ -2955,6 +3249,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
+@@ -2955,6 +3263,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
  			goto out_free_ctrl;
  		}
  	}
@@ -818,7 +850,7 @@ Change-Id: I681ba8750fd28afe97ec4978b5c0eaa7186de440
  
  	if (!opts->duplicate_connect && nvme_tcp_existing_controller(opts)) {
  		ret = -EALREADY;
-@@ -3030,7 +3325,10 @@ static struct nvmf_transport_ops nvme_tc
+@@ -3030,7 +3339,10 @@ static struct nvmf_transport_ops nvme_tc
  			  NVMF_OPT_HOST_TRADDR | NVMF_OPT_CTRL_LOSS_TMO |
  			  NVMF_OPT_HDR_DIGEST | NVMF_OPT_DATA_DIGEST |
  			  NVMF_OPT_NR_WRITE_QUEUES | NVMF_OPT_NR_POLL_QUEUES |

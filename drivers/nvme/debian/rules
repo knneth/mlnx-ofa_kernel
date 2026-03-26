@@ -30,6 +30,7 @@ endif
 
 pversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 prel := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-\(.\+\)/\2/p')
+dkms_version := $(pversion)-$(prel)
 
 export INSTALL_MOD_DIR:=updates
 export INSTALL_MOD_PATH:=$(CURDIR)/debian/$(pdkms)
@@ -73,14 +74,14 @@ endif
 
 	# For dkms
 ifeq ($(WITH_DKMS),1)
-	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(pversion)
-	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a common debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a target debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a host debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a lpfc debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(pversion)"/' <dkms.conf >debian/dkms.conf
+	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(dkms_version)
+	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a common debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a target debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a host debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a lpfc debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(dkms_version)"/' <dkms.conf >debian/dkms.conf
 
 	# Force DKMS to install our modules.
 	# This is mostly needed for modules that do not have a version number info, as DKMS

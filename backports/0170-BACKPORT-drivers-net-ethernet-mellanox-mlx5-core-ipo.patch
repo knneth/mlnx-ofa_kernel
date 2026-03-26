@@ -3,12 +3,28 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 7 ++++++-
- 1 file changed, 6 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
-@@ -118,7 +118,12 @@ struct mlx5i_tx_wqe {
+@@ -88,7 +88,15 @@ struct net_device *mlx5i_pkey_get_netdev
+ /* Shared ndo functions */
+ int mlx5i_dev_init(struct net_device *dev);
+ void mlx5i_dev_cleanup(struct net_device *dev);
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++int mlx5i_hwtstamp_set(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config,
++		       struct netlink_ext_ack *extack);
++int mlx5i_hwtstamp_get(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config);
++#else
+ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
++#endif
+ 
+ /* Parent profile functions */
+ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev);
+@@ -118,7 +126,12 @@ struct mlx5i_tx_wqe {
  	((struct mlx5i_tx_wqe *)mlx5e_fetch_wqe(&(sq)->wq, pi, sizeof(struct mlx5i_tx_wqe)))
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,

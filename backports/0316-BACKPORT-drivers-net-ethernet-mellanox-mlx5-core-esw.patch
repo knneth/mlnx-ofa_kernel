@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 
 Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
 ---
- .../net/ethernet/mellanox/mlx5/core/eswitch.c | 146 +++++++++++++++++-
- 1 file changed, 144 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/eswitch.c | 151 +++++++++++++++++-
+ 1 file changed, 149 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/eswitch.c
@@ -238,7 +238,20 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  
-@@ -2100,6 +2202,22 @@ static const struct devlink_param mlx5_e
+@@ -2085,7 +2187,12 @@ static int mlx5_devlink_esw_multiport_se
+ }
+ 
+ static int mlx5_devlink_esw_multiport_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++					  struct devlink_param_gset_ctx *ctx,
++					  struct netlink_ext_ack *extack)
++#else
+ 					  struct devlink_param_gset_ctx *ctx)
++#endif
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 
+@@ -2100,6 +2207,22 @@ static const struct devlink_param mlx5_e
  			     mlx5_devlink_esw_multiport_get,
  			     mlx5_devlink_esw_multiport_set, NULL),
  };
@@ -261,7 +274,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  
  static int mlx5_devm_esw_multiport_set(struct mlxdevm *mlxdevm, u32 id,
  				       struct mlxdevm_param_gset_ctx *ctx,
-@@ -2170,13 +2288,21 @@ int mlx5_eswitch_init(struct mlx5_core_d
+@@ -2170,13 +2293,21 @@ int mlx5_eswitch_init(struct mlx5_core_d
  	esw->first_host_vport = mlx5_eswitch_first_host_vport_num(dev);
  	dev->priv.eswitch = esw;
  
@@ -283,7 +296,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	if (err)
  		goto err_mlxdevm_params;
  
-@@ -2238,12 +2364,20 @@ abort:
+@@ -2238,12 +2369,20 @@ abort:
  	if (esw->work_queue)
  		destroy_workqueue(esw->work_queue);
  	debugfs_remove_recursive(esw->debugfs_root);
@@ -304,7 +317,7 @@ Change-Id: I8e64a93a847d461b942a3b7861b37f38b7ef2e7c
  	dev->priv.eswitch = NULL;
  	kfree(esw);
  	return err;
-@@ -2315,10 +2449,18 @@ void mlx5_eswitch_cleanup(struct mlx5_es
+@@ -2315,10 +2454,18 @@ void mlx5_eswitch_cleanup(struct mlx5_es
  	esw->dev->priv.eswitch = NULL;
  	mlx5_esw_vports_cleanup(esw);
  	debugfs_remove_recursive(esw->debugfs_root);
