@@ -318,6 +318,15 @@ check_complex_defines()
 		else
 			unset_complex_define_to_config_h HAVE_IS_PCI_P2PDMA_PAGE
 	fi
+
+# Define HAVE_DEVLINK_PORT_TYPE_ETH_SET from other flags
+	if check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM ||
+	   check_compat_config_h_var HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM
+	then
+		set_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
+	else
+		unset_complex_define_to_config_h HAVE_DEVLINK_PORT_TYPE_ETH_SET
+	fi
 }
 check_kerver_rh()
 {

@@ -40,7 +40,7 @@
 #define DIAG_GET_NEXT_BLK(dump_hdr) \
 	((struct mlx5_diag_blk *)(dump_hdr->dump + dump_hdr->total_length))
 
-static int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff)
+int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
 	size_t pci_name_sz = strlen(pci_name(mdev->pdev));
@@ -60,7 +60,7 @@ out:
 	return MLX5_DEV_NAME_SZ;
 }
 
-static int mlx5e_diag_fill_driver_version(void *buff)
+int mlx5e_diag_fill_driver_version(void *buff)
 {
 	memset(buff, 0, MLX5_DRV_VER_SZ);
 	return MLX5_DRV_VER_SZ;

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
 
 Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
 ---
- drivers/nvme/host/fc.c | 148 ++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 145 insertions(+), 3 deletions(-)
+ drivers/nvme/host/fc.c | 150 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 147 insertions(+), 3 deletions(-)
 
 --- a/drivers/nvme/host/fc.c
 +++ b/drivers/nvme/host/fc.c
@@ -338,7 +338,17 @@ Change-Id: Id5a3d60331a15a46ea4e47b0da00b14a03e2135c
  out_free_admin_tag_set:
  	blk_mq_free_tag_set(&ctrl->admin_tag_set);
  out_free_queues:
-@@ -4050,3 +4187,8 @@ module_init(nvme_fc_init_module);
+@@ -3932,7 +4069,9 @@ static const struct attribute_group *nvm
+ static struct class fc_class = {
+ 	.name = "fc",
+ 	.dev_groups = nvme_fc_attr_groups,
++#ifndef HAVE_CLASS_CREATE_GET_1_PARAM
+ 	.owner = THIS_MODULE,
++#endif
+ };
+ 
+ static int __init nvme_fc_init_module(void)
+@@ -4050,3 +4189,8 @@ module_init(nvme_fc_init_module);
  module_exit(nvme_fc_exit_module);
  
  MODULE_LICENSE("GPL v2");

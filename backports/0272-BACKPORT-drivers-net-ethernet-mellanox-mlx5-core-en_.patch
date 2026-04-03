@@ -1333,7 +1333,7 @@ Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
  }
  
  int mlx5e_tc_esw_init(struct mlx5_rep_uplink_priv *uplink_priv)
-@@ -6028,10 +6431,28 @@ void mlx5e_tc_reoffload_flows_work(struc
+@@ -6032,10 +6435,28 @@ void mlx5e_tc_reoffload_flows_work(struc
  	mutex_unlock(&rpriv->unready_flows_lock);
  }
  
@@ -1362,7 +1362,7 @@ Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
  	switch (cls_flower->command) {
  	case FLOW_CLS_REPLACE:
  		return mlx5e_configure_flower(priv->netdev, priv, cls_flower,
-@@ -6047,6 +6468,7 @@ static int mlx5e_setup_tc_cls_flower(str
+@@ -6051,6 +6472,7 @@ static int mlx5e_setup_tc_cls_flower(str
  	}
  }
  
@@ -1370,7 +1370,7 @@ Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
  int mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
  			    void *cb_priv)
  {
-@@ -6056,6 +6478,11 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
+@@ -6060,6 +6482,11 @@ int mlx5e_setup_tc_block_cb(enum tc_setu
  	if (!priv->netdev || !netif_device_present(priv->netdev))
  		return -EOPNOTSUPP;
  
@@ -1382,7 +1382,7 @@ Change-Id: I77671164640664e1f5efd0d4089304646e82b23e
  	if (mlx5e_is_uplink_rep(priv))
  		flags |= MLX5_TC_FLAG(ESW_OFFLOAD);
  	else
-@@ -6114,3 +6541,33 @@ bool mlx5e_tc_update_skb(struct mlx5_cqe
+@@ -6118,3 +6545,33 @@ bool mlx5e_tc_update_skb(struct mlx5_cqe
  
  	return true;
  }

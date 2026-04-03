@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 
 Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 ---
- net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 612 +++++++++++++++++++++++-
- 1 file changed, 611 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 643 +++++++++++++++++++++++-
+ 1 file changed, 637 insertions(+), 6 deletions(-)
 
 --- a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
@@ -181,17 +181,38 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  /**
   * svc_rdma_release_rqst - Release transport-specific per-rqst resources
   * @rqstp: svc_rqst being released
-@@ -257,7 +328,9 @@ void svc_rdma_release_rqst(struct svc_rq
+@@ -257,7 +328,30 @@ void svc_rdma_release_rqst(struct svc_rq
  	if (ctxt)
  		svc_rdma_recv_ctxt_put(rdma, ctxt);
  }
++#endif
++
++#ifdef HAVE_XPO_RELEASE_CTXT
++/**
++ * svc_rdma_release_ctxt - Release transport-specific per-rqst resources
++ * @xprt: the transport which owned the context
++ * @vctxt: the context from rqstp->rq_xprt_ctxt or dr->xprt_ctxt
++ *
++ * Ensure that the recv_ctxt is released whether or not a Reply
++ * was sent. For example, the client could close the connection,
++ * or svc_process could drop an RPC, before the Reply is sent.
++ */
++void svc_rdma_release_ctxt(struct svc_xprt *xprt, void *vctxt)
++{
++	struct svc_rdma_recv_ctxt *ctxt = vctxt;
++	struct svcxprt_rdma *rdma =
++		container_of(xprt, struct svcxprt_rdma, sc_xprt);
++
++	if (ctxt)
++		svc_rdma_recv_ctxt_put(rdma, ctxt);
++}
 +#endif
  
 +#ifdef HAVE_SVC_RDMA_PCL
  static bool svc_rdma_refresh_recvs(struct svcxprt_rdma *rdma,
  				   unsigned int wanted, bool temp)
  {
-@@ -275,11 +348,15 @@ static bool svc_rdma_refresh_recvs(struc
+@@ -275,11 +369,15 @@ static bool svc_rdma_refresh_recvs(struc
  		if (!ctxt)
  			break;
  
@@ -207,7 +228,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	}
  	if (!recv_chain)
  		return false;
-@@ -290,7 +367,9 @@ static bool svc_rdma_refresh_recvs(struc
+@@ -290,7 +388,9 @@ static bool svc_rdma_refresh_recvs(struc
  	return true;
  
  err_free:
@@ -217,7 +238,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	while (bad_wr) {
  		ctxt = container_of(bad_wr, struct svc_rdma_recv_ctxt,
  				    rc_recv_wr);
-@@ -301,7 +380,106 @@ err_free:
+@@ -301,7 +401,106 @@ err_free:
  	 * sc_pending_recvs. */
  	return false;
  }
@@ -267,7 +288,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 +	ctxt = svc_rdma_recv_ctxt_get(rdma);
 +	if (!ctxt)
 +		return -ENOMEM;
-+
+ 
 +	buflen = 0;
 +	ctxt->rc_cqe.done = svc_rdma_wc_receive;
 +	for (sge_no = 0; buflen < rdma->sc_max_req_size; sge_no++) {
@@ -275,7 +296,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 +			pr_err("svcrdma: Too many sges (%d)\n", sge_no);
 +			goto err_put_ctxt;
 +		}
- 
++
 +		page = alloc_page(GFP_KERNEL);
 +		if (!page)
 +			goto err_put_ctxt;
@@ -324,7 +345,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  /**
   * svc_rdma_post_recvs - Post initial set of Recv WRs
   * @rdma: fresh svcxprt_rdma
-@@ -310,7 +488,30 @@ err_free:
+@@ -310,7 +509,30 @@ err_free:
   */
  bool svc_rdma_post_recvs(struct svcxprt_rdma *rdma)
  {
@@ -355,7 +376,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  }
  
  /**
-@@ -325,15 +526,23 @@ static void svc_rdma_wc_receive(struct i
+@@ -325,15 +547,23 @@ static void svc_rdma_wc_receive(struct i
  	struct ib_cqe *cqe = wc->wr_cqe;
  	struct svc_rdma_recv_ctxt *ctxt;
  
@@ -379,7 +400,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	/* If receive posting fails, the connection is about to be
  	 * lost anyway. The server will not be able to send a reply
  	 * for this RPC, and the client will retransmit this RPC
-@@ -343,9 +552,18 @@ static void svc_rdma_wc_receive(struct i
+@@ -343,9 +573,18 @@ static void svc_rdma_wc_receive(struct i
  	 * to reduce the likelihood of replayed requests once the
  	 * client reconnects.
  	 */
@@ -398,7 +419,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  	/* All wc fields are now known to be valid */
  	ctxt->rc_byte_len = wc->byte_len;
-@@ -360,13 +578,22 @@ static void svc_rdma_wc_receive(struct i
+@@ -360,13 +599,22 @@ static void svc_rdma_wc_receive(struct i
  	return;
  
  flushed:
@@ -421,7 +442,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  }
  
  /**
-@@ -378,6 +605,13 @@ void svc_rdma_flush_recv_queues(struct s
+@@ -378,6 +626,13 @@ void svc_rdma_flush_recv_queues(struct s
  {
  	struct svc_rdma_recv_ctxt *ctxt;
  
@@ -435,7 +456,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	while ((ctxt = svc_rdma_next_recv_ctxt(&rdma->sc_rq_dto_q))) {
  		list_del(&ctxt->rc_list);
  		svc_rdma_recv_ctxt_put(rdma, ctxt);
-@@ -387,6 +621,7 @@ void svc_rdma_flush_recv_queues(struct s
+@@ -387,6 +642,7 @@ void svc_rdma_flush_recv_queues(struct s
  static void svc_rdma_build_arg_xdr(struct svc_rqst *rqstp,
  				   struct svc_rdma_recv_ctxt *ctxt)
  {
@@ -443,7 +464,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	struct xdr_buf *arg = &rqstp->rq_arg;
  
  	arg->head[0].iov_base = ctxt->rc_recv_buf;
-@@ -397,8 +632,72 @@ static void svc_rdma_build_arg_xdr(struc
+@@ -397,8 +653,72 @@ static void svc_rdma_build_arg_xdr(struc
  	arg->page_base = 0;
  	arg->buflen = ctxt->rc_byte_len;
  	arg->len = ctxt->rc_byte_len;
@@ -516,7 +537,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  /**
   * xdr_count_read_segments - Count number of Read segments in Read list
   * @rctxt: Ingress receive context
-@@ -517,6 +816,92 @@ static bool xdr_count_write_chunks(struc
+@@ -517,6 +837,92 @@ static bool xdr_count_write_chunks(struc
  	}
  	return true;
  }
@@ -609,7 +630,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  /* Sanity check the Write list.
   *
-@@ -535,11 +920,16 @@ static bool xdr_count_write_chunks(struc
+@@ -535,11 +941,16 @@ static bool xdr_count_write_chunks(struc
   */
  static bool xdr_check_write_list(struct svc_rdma_recv_ctxt *rctxt)
  {
@@ -626,7 +647,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	if (!xdr_count_write_chunks(rctxt, p))
  		return false;
  	if (!pcl_alloc_write(rctxt, &rctxt->rc_write_pcl, p))
-@@ -547,6 +937,20 @@ static bool xdr_check_write_list(struct
+@@ -547,6 +958,20 @@ static bool xdr_check_write_list(struct
  
  	rctxt->rc_cur_result_payload = pcl_first_chunk(&rctxt->rc_write_pcl);
  	return true;
@@ -647,7 +668,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  }
  
  /* Sanity check the Reply chunk.
-@@ -569,6 +973,7 @@ static bool xdr_check_reply_chunk(struct
+@@ -569,6 +994,7 @@ static bool xdr_check_reply_chunk(struct
  	if (!p)
  		return false;
  
@@ -655,7 +676,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	if (!xdr_item_is_present(p))
  		return true;
  	if (!xdr_check_write_chunk(rctxt))
-@@ -576,6 +981,15 @@ static bool xdr_check_reply_chunk(struct
+@@ -576,6 +1002,15 @@ static bool xdr_check_reply_chunk(struct
  
  	rctxt->rc_reply_pcl.cl_count = 1;
  	return pcl_alloc_write(rctxt, &rctxt->rc_reply_pcl, p);
@@ -671,7 +692,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  }
  
  /* RPC-over-RDMA Version One private extension: Remote Invalidation.
-@@ -588,6 +1002,7 @@ static bool xdr_check_reply_chunk(struct
+@@ -588,6 +1023,7 @@ static bool xdr_check_reply_chunk(struct
  static void svc_rdma_get_inv_rkey(struct svcxprt_rdma *rdma,
  				  struct svc_rdma_recv_ctxt *ctxt)
  {
@@ -679,7 +700,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	struct svc_rdma_segment *segment;
  	struct svc_rdma_chunk *chunk;
  	u32 inv_rkey;
-@@ -631,6 +1046,59 @@ static void svc_rdma_get_inv_rkey(struct
+@@ -631,6 +1067,59 @@ static void svc_rdma_get_inv_rkey(struct
  		}
  	}
  	ctxt->rc_inv_rkey = inv_rkey;
@@ -739,7 +760,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  }
  
  /**
-@@ -656,7 +1124,11 @@ static int svc_rdma_xdr_decode_req(struc
+@@ -656,7 +1145,11 @@ static int svc_rdma_xdr_decode_req(struc
  	unsigned int hdr_len;
  
  	rdma_argp = rq_arg->head[0].iov_base;
@@ -751,7 +772,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  	p = xdr_inline_decode(&rctxt->rc_stream,
  			      rpcrdma_fixed_maxsz * sizeof(*p));
-@@ -666,8 +1138,12 @@ static int svc_rdma_xdr_decode_req(struc
+@@ -666,8 +1159,12 @@ static int svc_rdma_xdr_decode_req(struc
  	if (*p != rpcrdma_version)
  		goto out_version;
  	p += 2;
@@ -764,7 +785,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	case rdma_msg:
  		break;
  	case rdma_nomsg:
-@@ -691,30 +1167,73 @@ static int svc_rdma_xdr_decode_req(struc
+@@ -691,30 +1188,73 @@ static int svc_rdma_xdr_decode_req(struc
  	hdr_len = xdr_stream_pos(&rctxt->rc_stream);
  	rq_arg->head[0].iov_len -= hdr_len;
  	rq_arg->len -= hdr_len;
@@ -838,7 +859,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  static void svc_rdma_send_error(struct svcxprt_rdma *rdma,
  				struct svc_rdma_recv_ctxt *rctxt,
  				int status)
-@@ -732,10 +1251,15 @@ static void svc_rdma_send_error(struct s
+@@ -732,10 +1272,15 @@ static void svc_rdma_send_error(struct s
   * the RPC/RDMA header small and fixed in size, so it is
   * straightforward to check the RPC header's direction field.
   */
@@ -854,7 +875,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  	if (!xprt->xpt_bc_xprt)
  		return false;
-@@ -758,6 +1282,36 @@ static bool svc_rdma_is_reverse_directio
+@@ -758,6 +1303,36 @@ static bool svc_rdma_is_reverse_directio
  
  	return true;
  }
@@ -891,7 +912,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  
  /**
   * svc_rdma_recvfrom - Receive an RPC call
-@@ -795,12 +1349,26 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -795,12 +1370,34 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  	struct svcxprt_rdma *rdma_xprt =
  		container_of(xprt, struct svcxprt_rdma, sc_xprt);
  	struct svc_rdma_recv_ctxt *ctxt;
@@ -900,6 +921,14 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 +#endif
  	int ret;
  
++#ifdef HAVE_SVC_FILL_WRITE_VECTOR
++	/* Prevent svc_xprt_release from releasing pages in rq_pages
++	 * if we return 0 or an error.
++	 */
++	rqstp->rq_respages = rqstp->rq_pages;
++	rqstp->rq_next_page = rqstp->rq_respages;
++#endif
++
 +#ifdef HAVE_SVC_RDMA_RELEASE_RQST
  	rqstp->rq_xprt_ctxt = NULL;
 +#endif
@@ -918,7 +947,7 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
  	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
  	if (ctxt)
  		list_del(&ctxt->rc_list);
-@@ -809,53 +1377,95 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -809,53 +1406,87 @@ int svc_rdma_recvfrom(struct svc_rqst *r
  		clear_bit(XPT_DATA, &xprt->xpt_flags);
  	spin_unlock(&rdma_xprt->sc_rq_dto_lock);
  
@@ -938,14 +967,11 @@ Change-Id: Ib3001f0bb9fb665176ad3ada55c7e9588f48b9fb
 +#endif
  	svc_rdma_build_arg_xdr(rqstp, ctxt);
  
-+#ifdef HAVE_SVC_FILL_WRITE_VECTOR
- 	/* Prevent svc_xprt_release from releasing pages in rq_pages
- 	 * if we return 0 or an error.
- 	 */
- 	rqstp->rq_respages = rqstp->rq_pages;
- 	rqstp->rq_next_page = rqstp->rq_respages;
-+#endif
-+
+-	/* Prevent svc_xprt_release from releasing pages in rq_pages
+-	 * if we return 0 or an error.
+-	 */
+-	rqstp->rq_respages = rqstp->rq_pages;
+-	rqstp->rq_next_page = rqstp->rq_respages;
 +#ifndef HAVE_SVC_RDMA_PCL
 +	p = (__be32 *)rqstp->rq_arg.head[0].iov_base;
 +#endif

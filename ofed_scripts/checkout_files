@@ -38,8 +38,6 @@ include/trace/events/ib_mad.h
 include/trace/events/rpcrdma.h
 include/trace/events/rdma.h
 include/trace/events/rdma_core.h
-include/linux/blk-mq-rdma.h
-block/blk-mq-rdma.c
 include/linux/sunrpc/rpc_rdma_cid.h
 include/linux/auxiliary_bus.h
 include/linux/mod_devicetable.h

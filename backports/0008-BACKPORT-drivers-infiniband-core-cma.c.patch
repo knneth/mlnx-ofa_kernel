@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma.c
 
 Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
 ---
- drivers/infiniband/core/cma.c | 99 ++++++++++++++++++++++++++++++++---
- 1 file changed, 93 insertions(+), 6 deletions(-)
+ drivers/infiniband/core/cma.c | 103 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 97 insertions(+), 6 deletions(-)
 
 --- a/drivers/infiniband/core/cma.c
 +++ b/drivers/infiniband/core/cma.c
@@ -275,16 +275,20 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  		struct sockaddr  *cur_daddr = cma_dst_addr(cur_id);
  		struct sockaddr  *cur_saddr = cma_src_addr(cur_id);
  		__be16 cur_dport = cma_port(cur_daddr);
-@@ -3825,7 +3890,7 @@ static int cma_alloc_any_port(enum rdma_
+@@ -3825,7 +3890,11 @@ static int cma_alloc_any_port(enum rdma_
  
  	inet_get_local_port_range(net, &low, &high);
  	remaining = (high - low) + 1;
 -	rover = prandom_u32() % remaining + low;
++#ifdef HAVE_GET_RANDOM_U32_INCLUSIVE
++	rover = get_random_u32_inclusive(low, remaining + low - 1);
++#else
 +	rover = prandom_u32_max(remaining) + low;
++#endif
  retry:
  	if (last_used_port != rover) {
  		struct rdma_bind_list *bind_list;
-@@ -3869,11 +3934,12 @@ static int cma_check_port(struct rdma_bi
+@@ -3869,11 +3938,12 @@ static int cma_check_port(struct rdma_bi
  {
  	struct rdma_id_private *cur_id;
  	struct sockaddr *addr, *cur_addr;
@@ -298,7 +302,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  		if (id_priv == cur_id)
  			continue;
  
-@@ -4277,7 +4343,9 @@ static int cma_resolve_ib_udp(struct rdm
+@@ -4277,7 +4347,9 @@ static int cma_resolve_ib_udp(struct rdm
  	req.timeout_ms = 1 << (CMA_CM_RESPONSE_TIMEOUT - 8);
  	req.max_cm_retries = CMA_MAX_CM_RETRIES;
  
@@ -308,7 +312,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	ret = ib_send_cm_sidr_req(id_priv->cm_id.ib, &req);
  	if (ret) {
  		ib_destroy_cm_id(id_priv->cm_id.ib);
-@@ -4354,7 +4422,9 @@ static int cma_connect_ib(struct rdma_id
+@@ -4354,7 +4426,9 @@ static int cma_connect_ib(struct rdma_id
  	req.ece.vendor_id = id_priv->ece.vendor_id;
  	req.ece.attr_mod = id_priv->ece.attr_mod;
  
@@ -318,7 +322,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	ret = ib_send_cm_req(id_priv->cm_id.ib, &req);
  out:
  	if (ret && !IS_ERR(id)) {
-@@ -4528,7 +4598,9 @@ static int cma_accept_ib(struct rdma_id_
+@@ -4528,7 +4602,9 @@ static int cma_accept_ib(struct rdma_id_
  	rep.ece.vendor_id = id_priv->ece.vendor_id;
  	rep.ece.attr_mod = id_priv->ece.attr_mod;
  
@@ -328,7 +332,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	ret = ib_send_cm_rep(id_priv->cm_id.ib, &rep);
  out:
  	return ret;
-@@ -4582,7 +4654,9 @@ static int cma_send_sidr_rep(struct rdma
+@@ -4582,7 +4658,9 @@ static int cma_send_sidr_rep(struct rdma
  	rep.private_data = private_data;
  	rep.private_data_len = private_data_len;
  
@@ -338,7 +342,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	return ib_send_cm_sidr_rep(id_priv->cm_id.ib, &rep);
  }
  
-@@ -4719,7 +4793,9 @@ int rdma_reject(struct rdma_cm_id *id, c
+@@ -4719,7 +4797,9 @@ int rdma_reject(struct rdma_cm_id *id, c
  			ret = cma_send_sidr_rep(id_priv, IB_SIDR_REJECT, 0,
  						private_data, private_data_len);
  		} else {
@@ -348,7 +352,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  			ret = ib_send_cm_rej(id_priv->cm_id.ib, reason, NULL, 0,
  					     private_data, private_data_len);
  		}
-@@ -4748,6 +4824,7 @@ int rdma_disconnect(struct rdma_cm_id *i
+@@ -4748,6 +4828,7 @@ int rdma_disconnect(struct rdma_cm_id *i
  		if (ret)
  			goto out;
  		/* Initiate or respond to a disconnect. */
@@ -356,7 +360,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  		trace_cm_disconnect(id_priv);
  		if (ib_send_cm_dreq(id_priv->cm_id.ib, NULL, 0)) {
  			if (!ib_send_cm_drep(id_priv->cm_id.ib, NULL, 0))
-@@ -4755,6 +4832,10 @@ int rdma_disconnect(struct rdma_cm_id *i
+@@ -4755,6 +4836,10 @@ int rdma_disconnect(struct rdma_cm_id *i
  		} else {
  			trace_cm_sent_dreq(id_priv);
  		}
@@ -367,7 +371,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	} else if (rdma_cap_iw_cm(id->device, id->port_num)) {
  		ret = iw_cm_disconnect(id_priv->cm_id.iw, 0);
  	} else
-@@ -5231,7 +5312,9 @@ static void cma_send_device_removal_put(
+@@ -5231,7 +5316,9 @@ static void cma_send_device_removal_put(
  		 */
  		cma_id_put(id_priv);
  		mutex_unlock(&id_priv->handler_mutex);
@@ -377,7 +381,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  		_destroy_id(id_priv, state);
  		return;
  	}
-@@ -5337,7 +5420,9 @@ static int cma_add_one(struct ib_device
+@@ -5337,7 +5424,9 @@ static int cma_add_one(struct ib_device
  	}
  	mutex_unlock(&lock);
  
@@ -387,7 +391,7 @@ Change-Id: I57ffea877bd35e565e93dbfd51fc81a8ff594de8
  	return 0;
  
  free_listen:
-@@ -5359,7 +5444,9 @@ static void cma_remove_one(struct ib_dev
+@@ -5359,7 +5448,9 @@ static void cma_remove_one(struct ib_dev
  {
  	struct cma_device *cma_dev = client_data;
  

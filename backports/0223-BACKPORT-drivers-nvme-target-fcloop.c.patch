@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fcloop.c
 
 Change-Id: I37e9f085d666a79bd35744ec32fe1a623e283480
 ---
- drivers/nvme/target/fcloop.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/nvme/target/fcloop.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 --- a/drivers/nvme/target/fcloop.c
 +++ b/drivers/nvme/target/fcloop.c
@@ -17,7 +17,20 @@ Change-Id: I37e9f085d666a79bd35744ec32fe1a623e283480
  #ifdef pr_fmt
  #undef pr_fmt
  #endif
-@@ -1652,3 +1654,8 @@ module_init(fcloop_init);
+@@ -1565,7 +1567,12 @@ static int __init fcloop_init(void)
+ {
+ 	int ret;
+ 
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
++	fcloop_class = class_create("fcloop");
++#else
+ 	fcloop_class = class_create(THIS_MODULE, "fcloop");
++#endif
++
+ 	if (IS_ERR(fcloop_class)) {
+ 		pr_err("couldn't register class fcloop\n");
+ 		ret = PTR_ERR(fcloop_class);
+@@ -1652,3 +1659,8 @@ module_init(fcloop_init);
  module_exit(fcloop_exit);
  
  MODULE_LICENSE("GPL v2");

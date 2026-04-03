@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
 
 Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
 ---
- .../net/ethernet/mellanox/mlx5/core/en_rep.c  | 315 +++++++++++++++++-
- 1 file changed, 302 insertions(+), 13 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_rep.c  | 334 +++++++++++++++++-
+ 1 file changed, 318 insertions(+), 16 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.c
@@ -511,7 +511,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	mlx5e_rep_tc_cleanup(rpriv);
  }
 @@ -1255,11 +1484,19 @@ static void mlx5e_uplink_rep_enable(stru
- 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
+ {
  	struct net_device *netdev = priv->netdev;
  	struct mlx5_core_dev *mdev = priv->mdev;
 +#if defined(HAVE_NET_DEVICE_MIN_MAX_MTU) || defined(HAVE_NET_DEVICE_MIN_MAX_MTU_EXTENDED)
@@ -530,7 +530,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	mlx5e_set_dev_port_mtu(priv);
  
  	mlx5e_rep_tc_enable(priv);
-@@ -1279,7 +1516,13 @@ static void mlx5e_uplink_rep_enable(stru
+@@ -1278,7 +1515,13 @@ static void mlx5e_uplink_rep_enable(stru
  	rtnl_lock();
  	if (netif_running(netdev))
  		mlx5e_open(netdev);
@@ -544,7 +544,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	netif_device_attach(netdev);
  	rtnl_unlock();
  
-@@ -1294,6 +1537,13 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1292,6 +1535,13 @@ static void mlx5e_uplink_rep_disable(str
  	rtnl_lock();
  	if (netif_running(priv->netdev))
  		mlx5e_close(priv->netdev);
@@ -558,7 +558,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	netif_device_detach(priv->netdev);
  	rtnl_unlock();
  
-@@ -1303,7 +1553,10 @@ static void mlx5e_uplink_rep_disable(str
+@@ -1300,7 +1550,10 @@ static void mlx5e_uplink_rep_disable(str
  	mlx5_notifier_unregister(mdev, &priv->events_nb);
  	mlx5e_rep_tc_disable(priv);
  	mlx5_lag_remove_netdev(mdev, priv->netdev);
@@ -569,7 +569,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  }
  
  static MLX5E_DEFINE_STATS_GRP(sw_rep, 0);
-@@ -1381,8 +1634,12 @@ static const struct mlx5e_profile mlx5e_
+@@ -1378,8 +1631,12 @@ static const struct mlx5e_profile mlx5e_
  	.update_carrier	        = mlx5e_update_carrier,
  	.rx_handlers            = &mlx5e_rx_handlers_rep,
  	.max_tc			= MLX5E_MAX_NUM_TC,
@@ -582,17 +582,23 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	.stats_grps		= mlx5e_ul_rep_stats_grps,
  	.stats_grps_num		= mlx5e_ul_rep_stats_grps_num,
  };
-@@ -1432,7 +1689,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1429,7 +1686,9 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
  {
  	struct mlx5e_priv *priv = netdev_priv(mlx5_uplink_netdev_get(dev));
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	struct devlink_port *dl_port;
 +#endif
  	int err;
  
  	rpriv->netdev = priv->netdev;
-@@ -1449,9 +1708,15 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+@@ -1441,21 +1700,35 @@ mlx5e_vport_uplink_rep_load(struct mlx5_
+ 
+ 	mlx5e_ipsec_ul_cleanup(priv);
+ 
++#ifndef HAVE_NETDEV_DEVLINK_PORT
+ 	err = mlx5e_netdev_change_profile(priv, &mlx5e_uplink_rep_profile,
+ 					  rpriv);
  	if (err)
  		goto err_metadata_insert;
  
@@ -606,23 +612,37 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
 +#endif
 +#endif
  
++#endif /* HAVE_NETDEV_DEVLINK_PORT */
  	mlx5_smartnic_sysfs_init(rpriv->netdev);
  	mlx5_rep_sysfs_init(rpriv);
-@@ -1468,7 +1733,9 @@ static void
+ 	mlx5e_ipsec_build_netdev(priv);
+ 
++#ifdef HAVE_NETDEV_DEVLINK_PORT
++	return mlx5e_netdev_change_profile(priv, &mlx5e_uplink_rep_profile, rpriv);
++#else
+ 	return 0;
++#endif
++#ifndef HAVE_NETDEV_DEVLINK_PORT
+ err_metadata_insert:
++#endif
+ 	xa_destroy(&rpriv->vport_rep_map);
+ 
+ 	return err;
+@@ -1465,7 +1738,9 @@ static void
  mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
  {
  	struct net_device *netdev = rpriv->netdev;
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	struct devlink_port *dl_port;
 +#endif
  	struct mlx5_core_dev *dev;
  	struct mlx5e_priv *priv;
  
-@@ -1480,9 +1747,11 @@ mlx5e_vport_uplink_rep_unload(struct mlx
+@@ -1477,9 +1752,11 @@ mlx5e_vport_uplink_rep_unload(struct mlx
  
  	mlx5e_ipsec_ul_cleanup(priv);
  
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
  	if (dl_port)
  		devlink_port_type_clear(dl_port);
@@ -630,7 +650,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  
  	mlx5_smartnic_sysfs_cleanup(netdev);
  	if (test_bit(MLX5_INTERFACE_STATE_TEARDOWN, &dev->intf_state)) {
-@@ -1499,7 +1768,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1496,7 +1773,9 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  {
  	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
  	const struct mlx5e_profile *profile;
@@ -640,7 +660,7 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
  	struct net_device *netdev;
  	struct mlx5e_priv *priv;
  	int err;
-@@ -1538,6 +1809,10 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+@@ -1535,6 +1814,24 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
  		goto err_cleanup_profile;
  	}
  
@@ -648,46 +668,55 @@ Change-Id: I77d23db69e3c71784702c030ee1073b7eeb7b6da
 +	if (err)
 +		goto err_compat_cleanup;
 +
- 	err = register_netdev(netdev);
- 	if (err) {
- 		netdev_warn(netdev,
-@@ -1548,12 +1823,21 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
- 
- 	mlx5_rep_sysfs_init(rpriv);
- 
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
- 	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
- 	if (dl_port)
++	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
++	if (dl_port)
++#ifndef HAVE_NETDEV_DEVLINK_PORT
 +#ifdef HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_1_PARAM
 +		devlink_port_type_eth_set(dl_port);
 +#else
- 		devlink_port_type_eth_set(dl_port, netdev);
++		devlink_port_type_eth_set(dl_port, netdev);
 +#endif
++#else
++	SET_NETDEV_DEVLINK_PORT(netdev, dl_port);
++#endif /* HAVE_NETDEV_DEVLINK_PORT */
 +#endif
++
+ 	err = register_netdev(netdev);
+ 	if (err) {
+ 		netdev_warn(netdev,
+@@ -1545,13 +1842,13 @@ mlx5e_vport_vf_rep_load(struct mlx5_core
+ 
+ 	mlx5_rep_sysfs_init(rpriv);
+ 
+-	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
+-	if (dl_port)
+-		devlink_port_type_eth_set(dl_port, netdev);
  	mlx5_devm_sf_port_type_eth_set(dev, rpriv->rep->vport, netdev);
  	return 0;
  
-+err_compat_cleanup:
+ err_detach_netdev:
 +	mlx5e_vport_rep_unload_compat(priv);
 +
- err_detach_netdev:
++err_compat_cleanup:
  	mlx5e_detach_netdev(netdev_priv(netdev));
  
-@@ -1598,7 +1882,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+ err_cleanup_profile:
+@@ -1595,7 +1892,9 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	struct net_device *netdev = rpriv->netdev;
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	struct mlx5_core_dev *dev = priv->mdev;
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	struct devlink_port *dl_port;
 +#endif
  	void *ppriv = priv->ppriv;
  
  	mlx5_rep_destroy_miss_meter(dev, rpriv);
-@@ -1612,10 +1898,13 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
+@@ -1609,10 +1908,13 @@ mlx5e_vport_rep_unload(struct mlx5_eswit
  	}
  
  	mlx5e_rep_metadata_remove(priv, rep);
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	dl_port = mlx5_esw_offloads_devlink_port(dev->priv.eswitch, rpriv->rep->vport);
  	if (dl_port)
  		devlink_port_type_clear(dl_port);

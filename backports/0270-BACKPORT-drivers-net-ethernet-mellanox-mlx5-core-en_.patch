@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 
 Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
 ---
- .../net/ethernet/mellanox/mlx5/core/en_main.c | 1366 ++++++++++++++++-
- 1 file changed, 1290 insertions(+), 76 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_main.c | 1369 ++++++++++++++++-
+ 1 file changed, 1293 insertions(+), 76 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
@@ -2967,25 +2967,28 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  
  	err = profile->init(mdev, netdev);
  	if (err) {
-@@ -6169,13 +7373,17 @@ static int mlx5e_probe(struct auxiliary_
+@@ -6169,13 +7373,20 @@ static int mlx5e_probe(struct auxiliary_
  		goto err_profile_cleanup;
  	}
  
 +	mlx5e_rep_set_sysfs_attr(netdev);
 +
++#ifdef HAVE_NETDEV_DEVLINK_PORT
++	 SET_NETDEV_DEVLINK_PORT(netdev, mlx5e_devlink_get_dl_port(priv));
++#endif
  	err = register_netdev(netdev);
  	if (err) {
  		mlx5_core_err(mdev, "register_netdev failed, %d\n", err);
  		goto err_resume;
  	}
  
-+#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
++#if defined(HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT) && !defined(HAVE_NETDEV_DEVLINK_PORT)
  	mlx5e_devlink_port_type_eth_set(priv);
 +#endif
  
  	err = mlx5e_sysfs_create(netdev);
  	if (err)
-@@ -6192,8 +7400,10 @@ err_resume:
+@@ -6192,8 +7403,10 @@ err_resume:
  err_profile_cleanup:
  	profile->cleanup(priv);
  err_devlink_cleanup:
@@ -2996,7 +2999,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	mlx5e_destroy_netdev(priv);
  	return err;
  }
-@@ -6208,7 +7418,9 @@ static void mlx5e_remove(struct auxiliar
+@@ -6208,7 +7421,9 @@ static void mlx5e_remove(struct auxiliar
  	unregister_netdev(priv->netdev);
  	mlx5e_suspend(adev, state);
  	priv->profile->cleanup(priv);
@@ -3006,7 +3009,7 @@ Change-Id: I1d79f7746d92d2763217cc6fc748ff0a8a96b359
  	mlx5e_destroy_netdev(priv);
  }
  
-@@ -6233,7 +7445,9 @@ int mlx5e_init(void)
+@@ -6233,7 +7448,9 @@ int mlx5e_init(void)
  	int ret;
  
  	mlx5e_ipsec_build_inverse_table();

@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 
 Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
 ---
- .../net/ethernet/mellanox/mlx5/core/devlink.c | 504 ++++++++++++++++--
- 1 file changed, 449 insertions(+), 55 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/devlink.c | 506 ++++++++++++++++--
+ 1 file changed, 451 insertions(+), 55 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.c
@@ -311,7 +311,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	.rate_leaf_tx_share_set = mlx5_esw_devlink_rate_leaf_tx_share_set,
  	.rate_leaf_tx_max_set = mlx5_esw_devlink_rate_leaf_tx_max_set,
  	.rate_node_tx_share_set = mlx5_esw_devlink_rate_node_tx_share_set,
-@@ -314,6 +449,9 @@ static const struct devlink_ops mlx5_dev
+@@ -314,28 +449,47 @@ static const struct devlink_ops mlx5_dev
  	.rate_node_del = mlx5_esw_devlink_rate_node_del,
  	.rate_leaf_parent_set = mlx5_esw_devlink_rate_parent_set,
  #endif
@@ -321,7 +321,12 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  #if defined(CONFIG_MLX5_SF_MANAGER) && \
     (defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_4_PARAMS) || defined(HAVE_DEVLINK_PORT_ATTRS_PCI_SF_SET_GET_5_PARAMS))
  	.port_new = mlx5_devlink_sf_port_new,
-@@ -324,18 +462,32 @@ static const struct devlink_ops mlx5_dev
++#ifndef HAVE_DEVLINK_PORT_OPS
+ 	.port_del = mlx5_devlink_sf_port_del,
++#endif /* HAVE_DEVLINK_PORT_OPS */
+ #endif
+ #if defined(CONFIG_MLX5_SF_MANAGER) && \
+     defined(HAVE_DEVLINK_HAS_PORT_FUNCTION_STATE_GET)
  	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
  	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,
  #endif
@@ -354,7 +359,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_buff *skb,
  			      struct devlink_port *dl_port)
  {
-@@ -353,7 +505,11 @@ void mlx5_devlink_trap_report(struct mlx
+@@ -353,7 +507,11 @@ void mlx5_devlink_trap_report(struct mlx
  			      dl_trap->trap.action);
  		return;
  	}
@@ -366,7 +371,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  }
  
  int mlx5_devlink_trap_get_num_active(struct mlx5_core_dev *dev)
-@@ -383,11 +539,16 @@ int mlx5_devlink_traps_get_action(struct
+@@ -383,11 +541,16 @@ int mlx5_devlink_traps_get_action(struct
  	*action = dl_trap->trap.action;
  	return 0;
  }
@@ -383,7 +388,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  }
  
  void mlx5_devlink_free(struct devlink *devlink)
-@@ -395,6 +556,7 @@ void mlx5_devlink_free(struct devlink *d
+@@ -395,6 +558,7 @@ void mlx5_devlink_free(struct devlink *d
  	devlink_free(devlink);
  }
  
@@ -391,7 +396,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  static int mlx5_devlink_fs_mode_validate(struct devlink *devlink, u32 id,
  					 union devlink_param_value val,
  					 struct netlink_ext_ack *extack)
-@@ -459,6 +621,7 @@ static int mlx5_devlink_fs_mode_get(stru
+@@ -459,6 +623,7 @@ static int mlx5_devlink_fs_mode_get(stru
  	return 0;
  }
  
@@ -399,7 +404,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  static int mlx5_devlink_enable_roce_validate(struct devlink *devlink, u32 id,
  					     union devlink_param_value val,
  					     struct netlink_ext_ack *extack)
-@@ -478,6 +641,7 @@ static int mlx5_devlink_enable_roce_vali
+@@ -478,6 +643,7 @@ static int mlx5_devlink_enable_roce_vali
  
  	return 0;
  }
@@ -407,7 +412,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  #ifdef CONFIG_MLX5_ESWITCH
  static int mlx5_devlink_large_group_num_validate(struct devlink *devlink, u32 id,
-@@ -517,25 +681,6 @@ static int mlx5_devlink_esw_port_metadat
+@@ -517,25 +683,6 @@ static int mlx5_devlink_esw_port_metadat
  	ctx->val.vbool = mlx5_eswitch_vport_match_metadata_enabled(dev->priv.eswitch);
  	return 0;
  }
@@ -433,7 +438,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static int mlx5_devlink_esw_port_metadata_validate(struct devlink *devlink, u32 id,
  						   union devlink_param_value val,
-@@ -607,7 +752,27 @@ static int mlx5_devlink_esw_pet_insert_v
+@@ -607,7 +754,27 @@ static int mlx5_devlink_esw_pet_insert_v
  
  	return 0;
  }
@@ -461,7 +466,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  static int mlx5_devlink_enable_remote_dev_reset_set(struct devlink *devlink, u32 id,
  						    struct devlink_param_gset_ctx *ctx)
  {
-@@ -625,13 +790,16 @@ static int mlx5_devlink_enable_remote_de
+@@ -625,13 +792,16 @@ static int mlx5_devlink_enable_remote_de
  	ctx->val.vbool = mlx5_fw_reset_enable_remote_dev_reset_get(dev);
  	return 0;
  }
@@ -478,7 +483,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static const struct devlink_param mlx5_devlink_params[] = {
  	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_ACTION_ON_NAT_CONNS,
-@@ -645,8 +813,15 @@ static const struct devlink_param mlx5_d
+@@ -645,8 +815,15 @@ static const struct devlink_param mlx5_d
  			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
  			     mlx5_devlink_fs_mode_get, mlx5_devlink_fs_mode_set,
  			     mlx5_devlink_fs_mode_validate),
@@ -494,7 +499,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CT_MAX_OFFLOADED_CONNS,
  			     "ct_max_offloaded_conns", DEVLINK_PARAM_TYPE_U32,
  			     BIT(DEVLINK_PARAM_CMODE_RUNTIME),
-@@ -672,47 +847,71 @@ static const struct devlink_param mlx5_d
+@@ -672,47 +849,71 @@ static const struct devlink_param mlx5_d
  			     mlx5_devlink_esw_pet_insert_set,
  			     mlx5_devlink_esw_pet_insert_validate),
  #endif
@@ -573,7 +578,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static int mlx5_devlink_eth_param_register(struct devlink *devlink)
  {
-@@ -723,14 +922,27 @@ static int mlx5_devlink_eth_param_regist
+@@ -723,14 +924,27 @@ static int mlx5_devlink_eth_param_regist
  	if (!mlx5_eth_supported(dev))
  		return 0;
  
@@ -602,7 +607,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	return 0;
  }
  
-@@ -741,7 +953,15 @@ static void mlx5_devlink_eth_param_unreg
+@@ -741,7 +955,15 @@ static void mlx5_devlink_eth_param_unreg
  	if (!mlx5_eth_supported(dev))
  		return;
  
@@ -619,7 +624,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  }
  
  static int mlx5_devlink_enable_rdma_validate(struct devlink *devlink, u32 id,
-@@ -756,9 +976,10 @@ static int mlx5_devlink_enable_rdma_vali
+@@ -756,9 +978,10 @@ static int mlx5_devlink_enable_rdma_vali
  	return 0;
  }
  
@@ -633,7 +638,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static int mlx5_devlink_rdma_param_register(struct devlink *devlink)
  {
-@@ -768,14 +989,27 @@ static int mlx5_devlink_rdma_param_regis
+@@ -768,14 +991,27 @@ static int mlx5_devlink_rdma_param_regis
  	if (!IS_ENABLED(CONFIG_MLX5_INFINIBAND))
  		return 0;
  
@@ -662,7 +667,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	return 0;
  }
  
-@@ -784,12 +1018,21 @@ static void mlx5_devlink_rdma_param_unre
+@@ -784,12 +1020,21 @@ static void mlx5_devlink_rdma_param_unre
  	if (!IS_ENABLED(CONFIG_MLX5_INFINIBAND))
  		return;
  
@@ -688,7 +693,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static int mlx5_devlink_vnet_param_register(struct devlink *devlink)
  {
-@@ -800,14 +1043,27 @@ static int mlx5_devlink_vnet_param_regis
+@@ -800,14 +1045,27 @@ static int mlx5_devlink_vnet_param_regis
  	if (!mlx5_vnet_supported(dev))
  		return 0;
  
@@ -717,7 +722,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	return 0;
  }
  
-@@ -818,7 +1074,15 @@ static void mlx5_devlink_vnet_param_unre
+@@ -818,7 +1076,15 @@ static void mlx5_devlink_vnet_param_unre
  	if (!mlx5_vnet_supported(dev))
  		return;
  
@@ -734,7 +739,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  }
  
  static int mlx5_devlink_auxdev_params_register(struct devlink *devlink)
-@@ -877,9 +1141,10 @@ static int mlx5_devlink_max_uc_list_vali
+@@ -877,9 +1143,10 @@ static int mlx5_devlink_max_uc_list_vali
  	return 0;
  }
  
@@ -747,7 +752,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  
  static int mlx5_devlink_max_uc_list_param_register(struct devlink *devlink)
  {
-@@ -890,12 +1155,22 @@ static int mlx5_devlink_max_uc_list_para
+@@ -890,12 +1157,22 @@ static int mlx5_devlink_max_uc_list_para
  	if (!MLX5_CAP_GEN_MAX(dev, log_max_current_uc_list_wr_supported))
  		return 0;
  
@@ -771,7 +776,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  					   DEVLINK_PARAM_GENERIC_ID_MAX_MACS,
  					   value);
  	return 0;
-@@ -909,21 +1184,41 @@ mlx5_devlink_max_uc_list_param_unregiste
+@@ -909,21 +1186,41 @@ mlx5_devlink_max_uc_list_param_unregiste
  	if (!MLX5_CAP_GEN_MAX(dev, log_max_current_uc_list_wr_supported))
  		return;
  
@@ -814,7 +819,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  };
  
  static int mlx5_devlink_traps_register(struct devlink *devlink)
-@@ -931,42 +1226,98 @@ static int mlx5_devlink_traps_register(s
+@@ -931,42 +1228,98 @@ static int mlx5_devlink_traps_register(s
  	struct mlx5_core_dev *core_dev = devlink_priv(devlink);
  	int err;
  
@@ -914,7 +919,7 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	err = mlx5_devlink_auxdev_params_register(devlink);
  	if (err)
  		goto auxdev_reg_err;
-@@ -974,33 +1325,76 @@ int mlx5_devlink_register(struct devlink
+@@ -974,33 +1327,76 @@ int mlx5_devlink_register(struct devlink
  	err = mlx5_devlink_max_uc_list_param_register(devlink);
  	if (err)
  		goto max_uc_list_err;

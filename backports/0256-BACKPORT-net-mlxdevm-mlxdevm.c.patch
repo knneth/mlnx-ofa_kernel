@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/mlxdevm.c
 
 Change-Id: I4f75139b210dc01aa08d199bb5042ddd322dac06
 ---
- net/mlxdevm/mlxdevm.c | 64 +++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 64 insertions(+)
+ net/mlxdevm/mlxdevm.c | 74 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 74 insertions(+)
 
 --- a/net/mlxdevm/mlxdevm.c
 +++ b/net/mlxdevm/mlxdevm.c
@@ -44,7 +44,35 @@ Change-Id: I4f75139b210dc01aa08d199bb5042ddd322dac06
  			if (err) {
  				up_read(&dev->port_list_rwsem);
  				goto out;
-@@ -2365,74 +2377,121 @@ static const struct nla_policy mlxdevm_n
+@@ -2173,6 +2185,9 @@ mlxdevm_nl_cmd_port_new_doit(struct sk_b
+ 	struct mlxdevm_port_new_attrs new_attrs = {};
+ 	struct mlxdevm *dev;
+ 	unsigned int new_port_index;
++#ifdef HAVE_DEVLINK_PORT_OPS
++	struct devlink_port *devlink_port;
++#endif
+ 	int err;
+ 
+ 	mutex_lock(&mlxdevm_mutex);
+@@ -2219,10 +2234,17 @@ mlxdevm_nl_cmd_port_new_doit(struct sk_b
+ 		new_attrs.sfnum_valid = true;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_PORT_OPS
++	err = dev->ops->port_new(dev, &new_attrs, extack, &devlink_port);
++#else
+ 	err = dev->ops->port_new(dev, &new_attrs, extack, &new_port_index);
++#endif
+ 	if (err)
+ 		goto out;
+ 
++#ifdef HAVE_DEVLINK_PORT_OPS
++	        new_port_index = devlink_port->index;
++#endif
+ 	err = mlxdevm_port_new_notifiy(dev, new_port_index, info);
+ 	if (err && err != -ENODEV) {
+ 		/* Fail to send the response; destroy newly created port. */
+@@ -2365,74 +2387,121 @@ static const struct nla_policy mlxdevm_n
  static const struct genl_ops mlxdevm_nl_ops[] = {
  	{
  		.cmd = MLXDEVM_CMD_DEV_GET,
@@ -166,7 +194,7 @@ Change-Id: I4f75139b210dc01aa08d199bb5042ddd322dac06
  		.doit = mlxdevm_nl_cmd_rate_del_doit,
  		.flags = GENL_ADMIN_PERM,
  	},
-@@ -2442,11 +2501,16 @@ static struct genl_family mlxdevm_nl_fam
+@@ -2442,11 +2511,16 @@ static struct genl_family mlxdevm_nl_fam
  	.name = MLXDEVM_GENL_NAME,
  	.version = MLXDEVM_GENL_VERSION,
  	.maxattr = MLXDEVM_ATTR_MAX,

@@ -486,6 +486,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if prandom.h has get_random_u32_inclusive])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/random.h>
+	],[
+		int a;
+		a = get_random_u32_inclusive(0, 100);
+
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GET_RANDOM_U32_INCLUSIVE, 1,
+			  [get_random_u32_inclusive defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if prandom.h has get_random_u32])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/random.h>
@@ -852,7 +867,7 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_TYPE_ETH_SET, 1,
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM, 1,
 			  [devlink_port_type_eth_set exist])
 	],[
 		AC_MSG_RESULT(no)
@@ -1155,6 +1170,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_DEVLINK_NET, 1,
 			  [devlink_net exist])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct devlink_port_ops exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/devlink.h>
+	],[
+		struct devlink_port_ops dlops = {
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DEVLINK_PORT_OPS, 1,
+			  [struct devlink_port_ops exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -2222,6 +2253,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if struct net_device has devlink_port as member])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		struct net_device netdev = {
+			.devlink_port = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NETDEV_DEVLINK_PORT, 1,
+			  [struct net_device has devlink_port as member])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct net_device_ops has ndo_xdp])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/netdevice.h>
@@ -2465,6 +2513,55 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	])
 
 	BP_CHECK_RHTABLE
+
+	AC_MSG_CHECKING([if struct ptp_clock_info has adjfine])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ptp_clock_kernel.h>
+	],[
+		struct ptp_clock_info info = {
+			.adjfine = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PTP_CLOCK_INFO_NDO_ADJFINE, 1,
+			  [adjfine is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if adjust_by_scaled_ppm exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ptp_clock_kernel.h>
+	],[
+		adjust_by_scaled_ppm(0,0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_ADJUST_BY_SCALED_PPM, 1,
+			  [adjfine is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct ptp_clock_info has adjfreq])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ptp_clock_kernel.h>
+	],[
+		struct ptp_clock_info info = {
+			.adjfreq = NULL,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PTP_CLOCK_INFO_NDO_ADJFREQ, 1,
+			  [adjfreq is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
 
 	AC_MSG_CHECKING([if struct ptp_clock_info has gettimex64])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -6870,6 +6967,49 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if net_namespace get const struct device])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/device.h>
+		static const void *net_namespace(const struct device *d) {
+			void* p = NULL;
+			return p;
+		}
+
+	],[
+		struct class cm_class = {
+			.namespace = net_namespace,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NET_NAMESPACE_GET_CONST_DEVICE, 1,
+			  [net_namespace get const struct device])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if dev_uevent get const struct device])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/device.h>
+		static int foo(const struct device *dev, struct kobj_uevent_env *env) {
+			return 0;
+		}
+
+	],[
+		struct class my_class = {
+			.dev_uevent = foo,
+		};
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CLASS_DEV_UEVENT_CONST_DEV, 1,
+			  [dev_uevent get const struct device])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if devnode get const struct device])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/device.h>
@@ -7828,6 +7968,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
         ],[
                AC_MSG_RESULT(no)
         ])
+
+	AC_MSG_CHECKING([if scsi_device.h has scsi_block_targets])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <scsi/scsi_device.h>
+	],[
+		scsi_block_targets(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SCSI_BLOCK_TARGETS, 1,
+			[scsi_block_targets is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
 
 	AC_MSG_CHECKING([if iscsi_transport.h struct iscsit_transport has member rdma_shutdown])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -12731,6 +12886,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if mm.h has release_pages])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/mm.h>
+	],[
+		release_pages(NULL, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_RELEASE_PAGES_IN_MM_H, 1,
+			[mm.h has release_pages])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if t10-pi.h has t10_pi_prepare])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/t10-pi.h>
@@ -13433,24 +13603,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blk-mq.h>
-		#include <linux/blk-mq-rdma.h>
-	],[
-		struct blk_mq_queue_map *map = NULL;
-
-		blk_mq_rdma_map_queues(map, NULL, 0);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP, 1,
-			  [linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if linux/blk-mq.h has request_to_qc_t])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blk-mq.h>
@@ -13732,6 +13884,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_XPO_RESULT_PAYLOAD, 1,
 			[struct svc_xprt_ops has 'xpo_result_payload' field])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([for "xpo_release_ctxt" inside "struct svc_xprt_ops"])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/sunrpc/svc_xprt.h>
+	],[
+		struct svc_xprt_ops dummy_svc_ops;
+
+		dummy_svc_ops.xpo_release_ctxt = NULL;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_XPO_RELEASE_CTXT, 1,
+			[struct svc_xprt_ops has 'xpo_release_ctxt' field])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -14270,6 +14439,40 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_REQUEST_QUEUE_TIMEOUT_WORK, 1,
 			[blkdev.h struct request_queue has timeout_work])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if class_create get 1 param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/device/class.h>
+	],[
+	        static struct class *uverbs_class;
+		uverbs_class = class_create("Test");
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_CLASS_CREATE_GET_1_PARAM, 1,
+			  [class_create get 1 param])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if show_class_attr_string get const])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/device/class.h>
+	],[
+	        const struct class *uverbs_class;
+	        const struct class_attribute *uverbs_attr;
+
+		show_class_attr_string(uverbs_class, uverbs_attr, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_SHOW_CLASS_ATTR_STRING_GET_CONST, 1,
+			  [show_class_attr_string get const])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -15036,6 +15239,37 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_XFRM_OFFLOAD_INNER_IPPROTO, 1,
 			  [struct xfrm_offload has inner_ipproto])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/blkdev.h has blkdev_put with holder param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		blkdev_put(NULL, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BLKDEV_PUT_HOLDER, 1,
+			[blkdev_put has holder param])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if struct gendisk has open_mode])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		struct gendisk disk;
+
+		disk.open_mode = BLK_OPEN_READ;
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_GENDISK_OPEN_MODE, 1,
+			[struct gendisk has open_mode])
 	],[
 		AC_MSG_RESULT(no)
 	])

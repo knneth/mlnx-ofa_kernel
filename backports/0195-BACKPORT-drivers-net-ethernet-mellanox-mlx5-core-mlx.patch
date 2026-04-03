@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 
 Change-Id: I78abe0eb11fea9634d41ad7d28fcaa04505d0a53
 ---
- .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 23 +++++++++++++++----
- 1 file changed, 19 insertions(+), 4 deletions(-)
+ .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 42 +++++++++++++++++--
+ 1 file changed, 38 insertions(+), 4 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
@@ -15,7 +15,51 @@ Change-Id: I78abe0eb11fea9634d41ad7d28fcaa04505d0a53
  #include <linux/log2.h>
  #include "mlx5_core.h"
  #include "fs_core.h"
-@@ -140,8 +139,11 @@ int mlx5_devm_sf_port_fn_state_get(struc
+@@ -105,14 +104,22 @@ static struct devlink *mlxdevm_to_devlin
+ int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
+ 			  const struct mlxdevm_port_new_attrs *attrs,
+ 			  struct netlink_ext_ack *extack,
++#ifdef HAVE_DEVLINK_PORT_OPS
++			  struct devlink_port **dl_port)
++#else
+ 			  unsigned int *new_port_index)
++#endif
+ {
+ 	struct devlink_port_new_attrs devl_attrs;
+ 	struct devlink *devlink;
+ 
+ 	devlink = mlxdevm_to_devlink(devm_dev);
+ 	dm_new_attrs2devl_new_attrs(attrs, &devl_attrs);
++#ifdef HAVE_DEVLINK_PORT_OPS
++	return mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, dl_port);
++#else
+ 	return mlx5_devlink_sf_port_new(devlink, &devl_attrs, extack, new_port_index);
++#endif
+ }
+ 
+ int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
+@@ -120,9 +127,20 @@ int mlx5_devm_sf_port_del(struct mlxdevm
+ 			  struct netlink_ext_ack *extack)
+ {
+ 	struct devlink *devlink;
++#ifdef HAVE_DEVLINK_PORT_OPS
++	struct devlink_port devport;
++#endif
+ 
+ 	devlink = mlxdevm_to_devlink(devm_dev);
++#ifdef HAVE_DEVLINK_PORT_OPS
++	memset(&devport, 0, sizeof(devport));
++	devport.devlink = devlink;
++	devport.index = port_index;
++
++	return mlx5_devlink_sf_port_del(devlink, &devport, extack);
++#else
+ 	return mlx5_devlink_sf_port_del(devlink, port_index, extack);
++#endif
+ }
+ 
+ int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
+@@ -140,8 +158,11 @@ int mlx5_devm_sf_port_fn_state_get(struc
  	memset(&devport, 0, sizeof(devport));
  	devport.devlink = devlink;
  	devport.index = port->index;
@@ -28,7 +72,7 @@ Change-Id: I78abe0eb11fea9634d41ad7d28fcaa04505d0a53
  	if (!ret) {
  		*state = devlink_to_mlxdevm_state(dl_state);
  		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
-@@ -162,7 +164,12 @@ int mlx5_devm_sf_port_fn_state_set(struc
+@@ -162,7 +183,12 @@ int mlx5_devm_sf_port_fn_state_set(struc
  	devport.devlink = devlink;
  	devport.index = port->index;
  	dl_state = mlxdevm_to_devlink_state(state);
@@ -41,7 +85,7 @@ Change-Id: I78abe0eb11fea9634d41ad7d28fcaa04505d0a53
  }
  
  int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
-@@ -177,8 +184,12 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
+@@ -177,8 +203,12 @@ int mlx5_devm_sf_port_fn_hw_addr_get(str
  	devport.devlink = devlink;
  	devport.index = port->index;
  
@@ -56,7 +100,7 @@ Change-Id: I78abe0eb11fea9634d41ad7d28fcaa04505d0a53
  }
  
  int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
-@@ -206,7 +217,11 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
+@@ -206,7 +236,11 @@ int mlx5_devm_sf_port_fn_hw_addr_set(str
  	memset(&devport, 0, sizeof(devport));
  	devport.devlink = devlink;
  	devport.index = port->index;

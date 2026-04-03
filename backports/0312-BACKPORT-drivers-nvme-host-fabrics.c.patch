@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
 
 Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
 ---
- drivers/nvme/host/fabrics.c | 34 ++++++++++++++++++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ drivers/nvme/host/fabrics.c | 39 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
 --- a/drivers/nvme/host/fabrics.c
 +++ b/drivers/nvme/host/fabrics.c
@@ -94,7 +94,20 @@ Change-Id: Idf6aae63bdd1a58911a7be8c7694f755df3b806b
  	opts->reconnect_delay = NVMF_DEF_RECONNECT_DELAY;
  	opts->kato = 0;
  	opts->duplicate_connect = false;
-@@ -1200,6 +1231,9 @@ static void __exit nvmf_exit(void)
+@@ -1153,7 +1184,12 @@ static int __init nvmf_init(void)
+ 	if (!nvmf_default_host)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
++	nvmf_class = class_create("nvme-fabrics");
++#else
+ 	nvmf_class = class_create(THIS_MODULE, "nvme-fabrics");
++#endif
++
+ 	if (IS_ERR(nvmf_class)) {
+ 		pr_err("couldn't register class nvme-fabrics\n");
+ 		ret = PTR_ERR(nvmf_class);
+@@ -1200,6 +1236,9 @@ static void __exit nvmf_exit(void)
  }
  
  MODULE_LICENSE("GPL v2");

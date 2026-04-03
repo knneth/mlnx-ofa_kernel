@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/mlxdevm.h
+
+---
+ include/net/mlxdevm.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/include/net/mlxdevm.h
++++ b/include/net/mlxdevm.h
+@@ -99,7 +99,11 @@ struct mlxdevm_ops {
+ 	int (*port_new)(struct mlxdevm *dev,
+ 			const struct mlxdevm_port_new_attrs *attrs,
+ 			struct netlink_ext_ack *extack,
++#ifdef HAVE_DEVLINK_PORT_OPS
++			struct devlink_port **dl_port);
++#else
+ 			unsigned int *new_port_index);
++#endif
+ 	/**
+ 	 * port_del() - Delete a port function
+ 	 * @dev: mlxdevm instance

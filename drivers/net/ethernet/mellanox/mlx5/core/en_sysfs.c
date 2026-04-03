@@ -1057,8 +1057,12 @@ static ssize_t name##_show(struct device *d,				\
 {									\
 	struct net_device *dev = to_net_dev(d);				\
 	struct mlx5e_priv *priv = netdev_priv(dev);			\
-	struct mlx5e_pport_stats *pstats = &priv->stats.pport;		\
+	struct mlx5e_pport_stats *pstats;				\
 									\
+	mutex_lock(&priv->state_lock);					\
+	mlx5e_stats_update(priv);					\
+	mutex_unlock(&priv->state_lock);				\
+	pstats = &priv->stats.pport;					\
 	return sprintf(buf, "%llu\n",					\
 			PPORT_802_3_GET(pstats, cnt));			\
 }									\

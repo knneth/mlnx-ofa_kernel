@@ -9767,6 +9767,158 @@ fi
 fi
 
 
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if prandom.h has get_random_u32_inclusive" >&5
+$as_echo_n "checking if prandom.h has get_random_u32_inclusive... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/random.h>
+
+int
+main (void)
+{
+
+		int a;
+		a = get_random_u32_inclusive(0, 100);
+
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_GET_RANDOM_U32_INCLUSIVE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/random.h>
+
+int
+main (void)
+{
+
+		int a;
+		a = get_random_u32_inclusive(0, 100);
+
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_GET_RANDOM_U32_INCLUSIVE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if prandom.h has get_random_u32" >&5
 $as_echo_n "checking if prandom.h has get_random_u32... " >&6; }
 
@@ -13631,7 +13783,7 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
-#define HAVE_DEVLINK_PORT_TYPE_ETH_SET 1
+#define HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM 1
 _ACEOF
 
 
@@ -13691,7 +13843,7 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
-#define HAVE_DEVLINK_PORT_TYPE_ETH_SET 1
+#define HAVE_DEVLINK_PORT_TYPE_ETH_SET_GET_2_PARAM 1
 _ACEOF
 
 
@@ -16856,6 +17008,160 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
 #define HAVE_DEVLINK_NET 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct devlink_port_ops exists" >&5
+$as_echo_n "checking if struct devlink_port_ops exists... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <net/devlink.h>
+
+int
+main (void)
+{
+
+		struct devlink_port_ops dlops = {
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_DEVLINK_PORT_OPS 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <net/devlink.h>
+
+int
+main (void)
+{
+
+		struct devlink_port_ops dlops = {
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_DEVLINK_PORT_OPS 1
 _ACEOF
 
 
@@ -26470,6 +26776,162 @@ fi
 fi
 
 
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct net_device has devlink_port as member" >&5
+$as_echo_n "checking if struct net_device has devlink_port as member... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/netdevice.h>
+
+int
+main (void)
+{
+
+		struct net_device netdev = {
+			.devlink_port = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_NETDEV_DEVLINK_PORT 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/netdevice.h>
+
+int
+main (void)
+{
+
+		struct net_device netdev = {
+			.devlink_port = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_NETDEV_DEVLINK_PORT 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct net_device_ops has ndo_xdp" >&5
 $as_echo_n "checking if struct net_device_ops has ndo_xdp... " >&6; }
 
@@ -31731,6 +32193,470 @@ fi
 }&
 fi
 
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct ptp_clock_info has adjfine" >&5
+$as_echo_n "checking if struct ptp_clock_info has adjfine... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		struct ptp_clock_info info = {
+			.adjfine = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_PTP_CLOCK_INFO_NDO_ADJFINE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		struct ptp_clock_info info = {
+			.adjfine = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_PTP_CLOCK_INFO_NDO_ADJFINE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if adjust_by_scaled_ppm exists" >&5
+$as_echo_n "checking if adjust_by_scaled_ppm exists... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		adjust_by_scaled_ppm(0,0);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_ADJUST_BY_SCALED_PPM 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		adjust_by_scaled_ppm(0,0);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_ADJUST_BY_SCALED_PPM 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct ptp_clock_info has adjfreq" >&5
+$as_echo_n "checking if struct ptp_clock_info has adjfreq... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		struct ptp_clock_info info = {
+			.adjfreq = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_PTP_CLOCK_INFO_NDO_ADJFREQ 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/ptp_clock_kernel.h>
+
+int
+main (void)
+{
+
+		struct ptp_clock_info info = {
+			.adjfreq = NULL,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_PTP_CLOCK_INFO_NDO_ADJFREQ 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
 
 
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct ptp_clock_info has gettimex64" >&5
@@ -73096,6 +74022,336 @@ fi
 fi
 
 
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if net_namespace get const struct device" >&5
+$as_echo_n "checking if net_namespace get const struct device... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device.h>
+		static const void *net_namespace(const struct device *d) {
+			void* p = NULL;
+			return p;
+		}
+
+
+int
+main (void)
+{
+
+		struct class cm_class = {
+			.namespace = net_namespace,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_NET_NAMESPACE_GET_CONST_DEVICE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device.h>
+		static const void *net_namespace(const struct device *d) {
+			void* p = NULL;
+			return p;
+		}
+
+
+int
+main (void)
+{
+
+		struct class cm_class = {
+			.namespace = net_namespace,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_NET_NAMESPACE_GET_CONST_DEVICE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if dev_uevent get const struct device" >&5
+$as_echo_n "checking if dev_uevent get const struct device... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device.h>
+		static int foo(const struct device *dev, struct kobj_uevent_env *env) {
+			return 0;
+		}
+
+
+int
+main (void)
+{
+
+		struct class my_class = {
+			.dev_uevent = foo,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_CLASS_DEV_UEVENT_CONST_DEV 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device.h>
+		static int foo(const struct device *dev, struct kobj_uevent_env *env) {
+			return 0;
+		}
+
+
+int
+main (void)
+{
+
+		struct class my_class = {
+			.dev_uevent = foo,
+		};
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_CLASS_DEV_UEVENT_CONST_DEV 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if devnode get const struct device" >&5
 $as_echo_n "checking if devnode get const struct device... " >&6; }
 
@@ -82202,6 +83458,158 @@ sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
 
 
                { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if scsi_device.h has scsi_block_targets" >&5
+$as_echo_n "checking if scsi_device.h has scsi_block_targets... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <scsi/scsi_device.h>
+
+int
+main (void)
+{
+
+		scsi_block_targets(NULL, NULL);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_SCSI_BLOCK_TARGETS 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <scsi/scsi_device.h>
+
+int
+main (void)
+{
+
+		scsi_block_targets(NULL, NULL);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_SCSI_BLOCK_TARGETS 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
 
 fi
@@ -130264,6 +131672,158 @@ fi
 fi
 
 
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if mm.h has release_pages" >&5
+$as_echo_n "checking if mm.h has release_pages... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/mm.h>
+
+int
+main (void)
+{
+
+		release_pages(NULL, 0);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_RELEASE_PAGES_IN_MM_H 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/mm.h>
+
+int
+main (void)
+{
+
+		release_pages(NULL, 0);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_RELEASE_PAGES_IN_MM_H 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if t10-pi.h has t10_pi_prepare" >&5
 $as_echo_n "checking if t10-pi.h has t10_pi_prepare... " >&6; }
 
@@ -136914,164 +138474,6 @@ fi
 fi
 
 
-	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map" >&5
-$as_echo_n "checking if linux/blk-mq-rdma.h has blk_mq_rdma_map_queues with map... " >&6; }
-
-# init stuff
-
-if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
-	MAX_JOBS=${NJOBS:-1}
-	RAN_MLNX_PARALLEL_INIT_ONCE=1
-	/bin/rm -rf CONFDEFS_H_DIR
-	/bin/mkdir -p CONFDEFS_H_DIR
-	declare -i CONFDEFS_H_INDEX=0
-	declare -i RUNNING_JOBS=0
-fi
-
-
-# wait if there are MAX_JOBS tests running
-if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
-	wait
-	RUNNING_JOBS=0
-else
-	let RUNNING_JOBS++
-fi
-
-# inc header index
-let CONFDEFS_H_INDEX++
-
-# run test in background if MAX_JOBS > 1
-if [ $MAX_JOBS -eq 1 ]; then
-
-{
-MAKE=${MAKE:-make}
-tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
-/bin/cp build/Makefile $tmpbuild/
-cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
-/* confdefs.h.  */
-_ACEOF
-cat confdefs.h >>$tmpbuild/conftest.$ac_ext
-cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
-/* end confdefs.h.  */
-
-#include <linux/kernel.h>
-
-		#include <linux/blk-mq.h>
-		#include <linux/blk-mq-rdma.h>
-
-int
-main (void)
-{
-
-		struct blk_mq_queue_map *map = NULL;
-
-		blk_mq_rdma_map_queues(map, NULL, 0);
-
-		return 0;
-
-  ;
-  return 0;
-}
-_ACEOF
-if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
-  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
-  (eval $ac_try) 2>&5
-  ac_status=$?
-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
-  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
-  (eval $ac_try) 2>&5
-  ac_status=$?
-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; }; then :
-
-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
-#define HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP 1
-_ACEOF
-
-
-else
-  $as_echo "$as_me: failed program was:" >&5
-sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
-
-
-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-
-fi
-/bin/rm -rf $tmpbuild
-}
-
-else
-{
-
-{
-MAKE=${MAKE:-make}
-tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
-/bin/cp build/Makefile $tmpbuild/
-cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
-/* confdefs.h.  */
-_ACEOF
-cat confdefs.h >>$tmpbuild/conftest.$ac_ext
-cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
-/* end confdefs.h.  */
-
-#include <linux/kernel.h>
-
-		#include <linux/blk-mq.h>
-		#include <linux/blk-mq-rdma.h>
-
-int
-main (void)
-{
-
-		struct blk_mq_queue_map *map = NULL;
-
-		blk_mq_rdma_map_queues(map, NULL, 0);
-
-		return 0;
-
-  ;
-  return 0;
-}
-_ACEOF
-if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
-  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
-  (eval $ac_try) 2>&5
-  ac_status=$?
-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
-  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
-  (eval $ac_try) 2>&5
-  ac_status=$?
-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; }; then :
-
-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
-#define HAVE_BLK_MQ_RDMA_MAP_QUEUES_MAP 1
-_ACEOF
-
-
-else
-  $as_echo "$as_me: failed program was:" >&5
-sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
-
-
-		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-
-fi
-/bin/rm -rf $tmpbuild
-}
-
-}&
-fi
-
-
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if linux/blk-mq.h has request_to_qc_t" >&5
 $as_echo_n "checking if linux/blk-mq.h has request_to_qc_t... " >&6; }
 
@@ -139823,6 +141225,162 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
 #define HAVE_XPO_RESULT_PAYLOAD 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for \"xpo_release_ctxt\" inside \"struct svc_xprt_ops\"" >&5
+$as_echo_n "checking for \"xpo_release_ctxt\" inside \"struct svc_xprt_ops\"... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/sunrpc/svc_xprt.h>
+
+int
+main (void)
+{
+
+		struct svc_xprt_ops dummy_svc_ops;
+
+		dummy_svc_ops.xpo_release_ctxt = NULL;
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_XPO_RELEASE_CTXT 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/sunrpc/svc_xprt.h>
+
+int
+main (void)
+{
+
+		struct svc_xprt_ops dummy_svc_ops;
+
+		dummy_svc_ops.xpo_release_ctxt = NULL;
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_XPO_RELEASE_CTXT 1
 _ACEOF
 
 
@@ -144720,6 +146278,318 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
 #define HAVE_REQUEST_QUEUE_TIMEOUT_WORK 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if class_create get 1 param" >&5
+$as_echo_n "checking if class_create get 1 param... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device/class.h>
+
+int
+main (void)
+{
+
+	        static struct class *uverbs_class;
+		uverbs_class = class_create("Test");
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_CLASS_CREATE_GET_1_PARAM 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device/class.h>
+
+int
+main (void)
+{
+
+	        static struct class *uverbs_class;
+		uverbs_class = class_create("Test");
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_CLASS_CREATE_GET_1_PARAM 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if show_class_attr_string get const" >&5
+$as_echo_n "checking if show_class_attr_string get const... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device/class.h>
+
+int
+main (void)
+{
+
+	        const struct class *uverbs_class;
+	        const struct class_attribute *uverbs_attr;
+
+		show_class_attr_string(uverbs_class, uverbs_attr, NULL);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_SHOW_CLASS_ATTR_STRING_GET_CONST 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/device/class.h>
+
+int
+main (void)
+{
+
+	        const struct class *uverbs_class;
+	        const struct class_attribute *uverbs_attr;
+
+		show_class_attr_string(uverbs_class, uverbs_attr, NULL);
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_SHOW_CLASS_ATTR_STRING_GET_CONST 1
 _ACEOF
 
 
@@ -152474,6 +154344,312 @@ if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="
 $as_echo "yes" >&6; }
 		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
 #define HAVE_XFRM_OFFLOAD_INNER_IPPROTO 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if linux/blkdev.h has blkdev_put with holder param" >&5
+$as_echo_n "checking if linux/blkdev.h has blkdev_put with holder param... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/blkdev.h>
+
+int
+main (void)
+{
+
+		blkdev_put(NULL, NULL);
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_BLKDEV_PUT_HOLDER 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/blkdev.h>
+
+int
+main (void)
+{
+
+		blkdev_put(NULL, NULL);
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_BLKDEV_PUT_HOLDER 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if struct gendisk has open_mode" >&5
+$as_echo_n "checking if struct gendisk has open_mode... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/blkdev.h>
+
+int
+main (void)
+{
+
+		struct gendisk disk;
+
+		disk.open_mode = BLK_OPEN_READ;
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_GENDISK_OPEN_MODE 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+		#include <linux/blkdev.h>
+
+int
+main (void)
+{
+
+		struct gendisk disk;
+
+		disk.open_mode = BLK_OPEN_READ;
+
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_GENDISK_OPEN_MODE 1
 _ACEOF
 
 

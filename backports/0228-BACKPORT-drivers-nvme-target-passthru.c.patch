@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
 
 Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
 ---
- drivers/nvme/target/passthru.c | 64 ++++++++++++++++++++++++++++++++++
- 1 file changed, 64 insertions(+)
+ drivers/nvme/target/passthru.c | 74 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 73 insertions(+), 1 deletion(-)
 
 --- a/drivers/nvme/target/passthru.c
 +++ b/drivers/nvme/target/passthru.c
@@ -41,7 +41,7 @@ Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
  
  	if (status == NVME_SC_SUCCESS &&
  	    req->cmd->common.opcode == nvme_admin_identify) {
-@@ -235,8 +249,12 @@ static void nvmet_passthru_execute_cmd_w
+@@ -235,22 +249,34 @@ static void nvmet_passthru_execute_cmd_w
  			nvmet_passthru_override_id_descs(req);
  			break;
  		}
@@ -54,7 +54,30 @@ Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
  
  	req->cqe->result = nvme_req(rq)->result;
  	nvmet_req_complete(req, status);
-@@ -258,18 +276,41 @@ static int nvmet_passthru_map_sg(struct
+ 	blk_mq_free_request(rq);
+ }
+ 
++#ifdef HAVE_RQ_END_IO_RET
++static enum rq_end_io_ret nvmet_passthru_req_done(struct request *rq,
++		blk_status_t blk_status)
++#else
+ static void nvmet_passthru_req_done(struct request *rq,
+-				    blk_status_t blk_status)
++		blk_status_t blk_status)
++#endif
+ {
+ 	struct nvmet_req *req = rq->end_io_data;
+ 
+ 	req->cqe->result = nvme_req(rq)->result;
+ 	nvmet_req_complete(req, nvme_req(rq)->status);
+ 	blk_mq_free_request(rq);
++#ifdef HAVE_RQ_END_IO_RET
++	return RQ_END_IO_NONE;
++#endif
+ }
+ 
+ static int nvmet_passthru_map_sg(struct nvmet_req *req, struct request *rq)
+@@ -258,18 +284,41 @@ static int nvmet_passthru_map_sg(struct
  	struct scatterlist *sg;
  	struct bio *bio;
  	int i;
@@ -96,7 +119,7 @@ Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
  
  	for_each_sg(req->sg, sg, req->sg_cnt, i) {
  		if (bio_add_pc_page(rq->q, bio, sg_page(sg), sg->length,
-@@ -279,7 +320,15 @@ static int nvmet_passthru_map_sg(struct
+@@ -279,7 +328,15 @@ static int nvmet_passthru_map_sg(struct
  		}
  	}
  
@@ -112,7 +135,7 @@ Change-Id: I2dc19fe64118e81d2e4d99860b72b80ce82ea1d4
  
  	return 0;
  }
-@@ -342,7 +391,22 @@ static void nvmet_passthru_execute_cmd(s
+@@ -342,7 +399,22 @@ static void nvmet_passthru_execute_cmd(s
  		schedule_work(&req->p.work);
  	} else {
  		rq->end_io_data = req;

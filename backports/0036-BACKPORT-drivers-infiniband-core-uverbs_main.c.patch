@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
 Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
 ---
- drivers/infiniband/core/uverbs_main.c | 72 +++++++++++++++++++++++++--
- 1 file changed, 68 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 76 +++++++++++++++++++++++++--
+ 1 file changed, 72 insertions(+), 4 deletions(-)
 
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
@@ -199,7 +199,19 @@ Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
  {
  	if (mode)
  		*mode = 0666;
-@@ -1274,6 +1333,7 @@ static int __init ib_uverbs_init(void)
+@@ -1264,7 +1323,11 @@ static int __init ib_uverbs_init(void)
+ 		goto out_alloc;
+ 	}
+ 
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
++	uverbs_class = class_create("infiniband_verbs");
++#else
+ 	uverbs_class = class_create(THIS_MODULE, "infiniband_verbs");
++#endif
+ 	if (IS_ERR(uverbs_class)) {
+ 		ret = PTR_ERR(uverbs_class);
+ 		pr_err("user_verbs: couldn't create class infiniband_verbs\n");
+@@ -1274,6 +1337,7 @@ static int __init ib_uverbs_init(void)
  	uverbs_class->devnode = uverbs_devnode;
  
  	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
@@ -207,7 +219,7 @@ Change-Id: I1c4b5fb0cba8b5480beb8b3b2794b67f97ad2f94
  	if (ret) {
  		pr_err("user_verbs: couldn't create abi_version attribute\n");
  		goto out_class;
-@@ -1310,7 +1370,11 @@ static void __exit ib_uverbs_cleanup(voi
+@@ -1310,7 +1374,11 @@ static void __exit ib_uverbs_cleanup(voi
  				 IB_UVERBS_NUM_FIXED_MINOR);
  	unregister_chrdev_region(dynamic_uverbs_dev,
  				 IB_UVERBS_NUM_DYNAMIC_MINOR);

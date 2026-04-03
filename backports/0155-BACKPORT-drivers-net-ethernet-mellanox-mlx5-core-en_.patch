@@ -72,7 +72,7 @@ Change-Id: Ib86105a2b804f1b91889f451e1108514e9bdd4d0
  
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
-@@ -1237,10 +1264,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1241,10 +1268,17 @@ static struct attribute *prio_hp_attrs[]
  	&prio_hp_attr_rate.attr,
  	NULL
  };

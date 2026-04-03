@@ -103,7 +103,6 @@ endif
 	  $(CURDIR)/ofed_scripts/generate_mlnx_en_dkms_conf.sh \
 	  > debian/$(pdkms)/usr/src/$(pname)-$(pversion)/dkms.conf
 	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/block		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
 	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
