@@ -431,7 +431,8 @@ int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
 		mlx5_qsfp_eeprom_params_set(&query.i2c_address, &query.page, &offset);
 		break;
 	default:
-		mlx5_core_err(dev, "Module ID not recognized: 0x%x\n", module_id);
+		mlx5_core_dbg(dev, "Module ID not recognized: 0x%x\n",
+			      module_id);
 		return -EINVAL;
 	}
 
@@ -529,42 +530,6 @@ int mlx5_query_port_pause(struct mlx5_core_dev *dev,
 
 	if (tx_pause)
 		*tx_pause = MLX5_GET(pfcc_reg, out, pptx);
-
-	return 0;
-}
-
-int mlx5_set_port_pfc_prevention(struct mlx5_core_dev *dev,
-				 u16 pfc_preven_critical, u16 pfc_preven_minor)
-{
-	u32 in[MLX5_ST_SZ_DW(pfcc_reg)] = {0};
-	u32 out[MLX5_ST_SZ_DW(pfcc_reg)];
-
-	MLX5_SET(pfcc_reg, in, local_port, 1);
-	MLX5_SET(pfcc_reg, in, pptx_mask_n, 1);
-	MLX5_SET(pfcc_reg, in, pprx_mask_n, 1);
-	MLX5_SET(pfcc_reg, in, ppan_mask_n, 1);
-	MLX5_SET(pfcc_reg, in, critical_stall_mask, 1);
-	MLX5_SET(pfcc_reg, in, minor_stall_mask, 1);
-	MLX5_SET(pfcc_reg, in, device_stall_critical_watermark, pfc_preven_critical);
-	MLX5_SET(pfcc_reg, in, device_stall_minor_watermark, pfc_preven_minor);
-
-	return mlx5_core_access_reg(dev, in, sizeof(in), out,
-				    sizeof(out), MLX5_REG_PFCC, 0, 1);
-}
-
-int mlx5_query_port_pfc_prevention(struct mlx5_core_dev *dev,
-				   u16 *pfc_preven_critical)
-{
-	u32 out[MLX5_ST_SZ_DW(pfcc_reg)];
-	int err;
-
-	err = mlx5_query_pfcc_reg(dev, out, sizeof(out));
-	if (err)
-		return err;
-
-	if (pfc_preven_critical)
-		*pfc_preven_critical = MLX5_GET(pfcc_reg, out,
-						device_stall_critical_watermark);
 
 	return 0;
 }
@@ -808,7 +773,7 @@ int mlx5_query_port_tc_bw_alloc(struct mlx5_core_dev *mdev,
 }
 
 int mlx5_modify_port_ets_rate_limit(struct mlx5_core_dev *mdev,
-				    u8 *max_bw_value,
+				    u16 *max_bw_value,
 				    u8 *max_bw_units)
 {
 	u32 in[MLX5_ST_SZ_DW(qetc_reg)] = {0};
@@ -831,7 +796,7 @@ int mlx5_modify_port_ets_rate_limit(struct mlx5_core_dev *mdev,
 }
 
 int mlx5_query_port_ets_rate_limit(struct mlx5_core_dev *mdev,
-				   u8 *max_bw_value,
+				   u16 *max_bw_value,
 				   u8 *max_bw_units)
 {
 	u32 out[MLX5_ST_SZ_DW(qetc_reg)];
@@ -1068,6 +1033,26 @@ int mlx5_query_trust_state(struct mlx5_core_dev *mdev, u8 *trust_state)
 	return err;
 }
 
+int mlx5_query_port_buffer_ownership(struct mlx5_core_dev *mdev,
+				     u8 *buffer_ownership)
+{
+	u32 out[MLX5_ST_SZ_DW(pfcc_reg)] = {};
+	int err;
+
+	if (!MLX5_CAP_PCAM_FEATURE(mdev, buffer_ownership)) {
+		*buffer_ownership = MLX5_BUF_OWNERSHIP_UNKNOWN;
+		return 0;
+	}
+
+	err = mlx5_query_pfcc_reg(mdev, out, sizeof(out));
+	if (err)
+		return err;
+
+	*buffer_ownership = MLX5_GET(pfcc_reg, out, buf_ownership);
+
+	return 0;
+}
+
 int mlx5_set_dscp2prio(struct mlx5_core_dev *mdev, u8 dscp, u8 prio)
 {
 	int sz = MLX5_ST_SZ_BYTES(qpdpm_reg);
@@ -1189,6 +1174,7 @@ mlx5e_ext_link_info[MLX5E_EXT_LINK_MODES_NUMBER] = {
 	[MLX5E_200GAUI_1_200GBASE_CR1_KR1]	= {.speed = 200000, .lanes = 1},
 	[MLX5E_400GAUI_2_400GBASE_CR2_KR2]	= {.speed = 400000, .lanes = 2},
 	[MLX5E_800GAUI_4_800GBASE_CR4_KR4]	= {.speed = 800000, .lanes = 4},
+	[MLX5E_1600GAUI_8_1600GBASE_CR8_KR8]	= {.speed = 1600000, .lanes = 8},
 };
 
 int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
@@ -1278,6 +1264,30 @@ u32 mlx5_port_info2linkmodes(struct mlx5_core_dev *mdev,
 		}
 	}
 	return link_modes;
+}
+
+int mlx5_port_oper_linkspeed(struct mlx5_core_dev *mdev, u32 *speed)
+{
+	const struct mlx5_link_info *table;
+	struct mlx5_port_eth_proto eproto;
+	u32 oper_speed = 0;
+	u32 max_size;
+	bool ext;
+	int err;
+	int i;
+
+	ext = mlx5_ptys_ext_supported(mdev);
+	err = mlx5_port_query_eth_proto(mdev, 1, ext, &eproto);
+	if (err)
+		return err;
+
+	mlx5e_port_get_link_mode_info_arr(mdev, &table, &max_size, false);
+	for (i = 0; i < max_size; ++i)
+		if (eproto.oper & MLX5E_PROT_MASK(i))
+			oper_speed = max(oper_speed, table[i].speed);
+
+	*speed = oper_speed;
+	return 0;
 }
 
 int mlx5_port_max_linkspeed(struct mlx5_core_dev *mdev, u32 *speed)

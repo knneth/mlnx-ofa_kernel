@@ -43,9 +43,6 @@
 MODULE_AUTHOR("Valentine Fatiev");
 MODULE_DESCRIPTION("ib_ucm dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init ib_ucm_init(void)

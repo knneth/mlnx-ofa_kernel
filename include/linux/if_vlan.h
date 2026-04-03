@@ -11,10 +11,6 @@
 #define skb_vlan_tag_get_id vlan_tx_tag_get_id
 #endif
 
-#ifndef skb_vlan_tag_get_prio
-#define skb_vlan_tag_get_prio(__skb)   ((__skb)->vlan_tci & VLAN_PRIO_MASK)
-#endif/*skb_vlan_tag_get_prio*/
-
 #ifndef ETH_P_8021AD
 #define ETH_P_8021AD    0x88A8          /* 802.1ad Service VLAN         */
 #endif

@@ -19,11 +19,6 @@ int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 		return -EOPNOTSUPP;
 
 	switch (attr->id) {
-#ifndef HAVE_NDO_GET_PORT_PARENT_ID
-	case SWITCHDEV_ATTR_ID_PORT_PARENT_ID:
-		err = mlx5e_rep_get_port_parent_id(dev, &attr->u.ppid);
-		break;
-#endif
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -32,16 +27,10 @@ int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
 }
 #endif
 
-void mlx5e_rep_set_sysfs_attr(struct net_device *netdev)
-{
-	if (!netdev)
-		return;
-}
-
+#if IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER)
 int mlx5e_vport_rep_load_compat(struct mlx5e_priv *priv)
 {
 	struct net_device *netdev = priv->netdev;
-#if IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER)
 	struct mlx5e_rep_priv *uplink_rpriv;
 #ifdef HAVE_TC_BLOCK_OFFLOAD
 	struct mlx5e_priv *upriv;
@@ -60,15 +49,11 @@ int mlx5e_vport_rep_load_compat(struct mlx5e_priv *priv)
 #endif
 	if (err)
 		return err;
-#endif
-
-	mlx5e_rep_set_sysfs_attr(netdev);
 	return 0;
 }
 
 void mlx5e_vport_rep_unload_compat(struct mlx5e_priv *priv)
 {
-#if IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER)
 	struct net_device *netdev = priv->netdev;
 	struct mlx5e_rep_priv *uplink_rpriv;
 #ifdef HAVE_TC_BLOCK_OFFLOAD
@@ -86,8 +71,8 @@ void mlx5e_vport_rep_unload_compat(struct mlx5e_priv *priv)
 				     uplink_rpriv->netdev);
 #endif
 
-#endif
 }
+#endif /* IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER */
 
 struct ip_ttl_word {
 	__u8	ttl;

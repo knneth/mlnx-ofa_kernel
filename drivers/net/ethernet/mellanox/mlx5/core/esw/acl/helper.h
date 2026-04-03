@@ -17,8 +17,7 @@ int esw_egress_acl_vlan_create(struct mlx5_eswitch *esw, struct mlx5_vport *vpor
 			       struct mlx5_flow_destination *fwd_dest,
 			       __be16 vlan_proto, u16 vlan_id, u32 flow_action);
 void esw_acl_egress_vlan_destroy(struct mlx5_vport *vport);
-int esw_acl_egress_vlan_grp_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-				   u32 start_index, u32 end_index);
+int esw_acl_egress_vlan_grp_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport);
 void esw_acl_egress_vlan_grp_destroy(struct mlx5_vport *vport);
 
 /* Ingress acl helper functions */

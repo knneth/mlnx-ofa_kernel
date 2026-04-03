@@ -1,42 +1,38 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
+ drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h | 8 ++++----
- 1 file changed, 4 insertions(+), 4 deletions(-)
+ .../ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h   | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
-@@ -12,15 +12,13 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+@@ -11,6 +11,7 @@
+ #include <linux/mlx5/driver.h>
+ #include "sf/vhca_event.h"
  
- struct mlx5_sf_dev {
- 	struct auxiliary_device adev;
--	/* Add sysfs struct in base code until
--	 * 4097699 fix is accepted upstream.
--	 * Needed to build base code w/o backports.
--	 */
-+#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
- 	struct {
- 		struct xarray irqs;
- 		struct mutex lock; /* Synchronize irq sysfs creation */
- 		bool irq_dir_exists;
- 	} sysfs;
++#if !defined(MLX_DISABLE_TRACEPOINTS)
+ TRACE_EVENT(mlx5_sf_vhca_event,
+ 	    TP_PROTO(const struct mlx5_core_dev *dev,
+ 		     const struct mlx5_vhca_state_event *event),
+@@ -20,7 +21,11 @@ TRACE_EVENT(mlx5_sf_vhca_event,
+ 			     __field(u32, sfnum)
+ 			     __field(u8, vhca_state)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
 +#endif
- 	struct mlx5_core_dev *parent_mdev;
- 	struct mlx5_core_dev *mdev;
- 	phys_addr_t bar_base_addr;
-@@ -36,11 +34,13 @@ struct mlx5_sf_dev {
- #endif
- };
+ 		    __entry->hw_fn_id = event->function_id;
+ 		    __entry->sfnum = event->sw_function_id;
+ 		    __entry->vhca_state = event->new_vhca_state;
+@@ -29,6 +34,7 @@ TRACE_EVENT(mlx5_sf_vhca_event,
+ 		      __get_str(devname), __entry->hw_fn_id,
+ 		      __entry->sfnum, __entry->vhca_state)
+ );
++#endif /* !defined(MLX_DISABLE_TRACEPOINTS) */
  
-+#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
- struct mlx5_sf_peer_devlink_event_ctx {
- 	u16 fn_id;
- 	struct devlink *devlink;
- 	int err;
- };
-+#endif
+ #endif /* _MLX5_SF_VHCA_TP_ */
  
- void mlx5_sf_dev_table_create(struct mlx5_core_dev *dev);
- void mlx5_sf_dev_table_destroy(struct mlx5_core_dev *dev);

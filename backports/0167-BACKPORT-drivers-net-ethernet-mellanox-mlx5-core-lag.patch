@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+@@ -14,6 +14,9 @@ static void mlx5_mpesw_metadata_cleanup(
+ 	struct mlx5_eswitch *esw;
+ 	u32 pf_metadata;
+ 	int i;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	mlx5_ldev_for_each(i, 0, ldev) {
+ 		dev = ldev->pf[i].dev;
+@@ -35,6 +38,9 @@ static int mlx5_mpesw_metadata_set(struc
+ 	struct mlx5_eswitch *esw;
+ 	u32 pf_metadata;
+ 	int i, err;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	mlx5_ldev_for_each(i, 0, ldev) {
+ 		dev = ldev->pf[i].dev;
+@@ -71,6 +77,9 @@ static int enable_mpesw(struct mlx5_lag
+ 	int err;
+ 	int idx;
+ 	int i;
++#ifndef HAVE_STD_GNU_99
++	int tmp;
++#endif
+ 
+ 	if (ldev->mode == MLX5_LAG_MODE_MPESW)
+ 		return 0;

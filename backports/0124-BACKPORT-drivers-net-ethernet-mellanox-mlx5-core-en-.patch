@@ -1,125 +1,57 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 50 +++++++++++++++++--
- 1 file changed, 47 insertions(+), 3 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/xsk/pool.h | 27 ++++++++++++++++++-
+ 1 file changed, 26 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
-@@ -8,6 +8,9 @@
- #include <linux/indirect_call_wrapper.h>
- #include <net/ip6_checksum.h>
- #include <net/tcp.h>
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <net/udp.h>
-+#endif
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+@@ -4,8 +4,10 @@
+ #ifndef __MLX5_EN_XSK_POOL_H__
+ #define __MLX5_EN_XSK_POOL_H__
  
- #define MLX5E_TX_WQE_EMPTY_DS_COUNT (sizeof(struct mlx5e_tx_wqe) / MLX5_SEND_WQE_DS)
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
+ #include "en.h"
  
-@@ -55,6 +58,10 @@
- #define MLX5E_MAX_KSM_PER_WQE(mdev) \
- 	MLX5E_KSM_ENTRIES_PER_WQE(MLX5_SEND_WQE_BB * mlx5e_get_max_sq_aligned_wqebbs(mdev))
- 
-+#ifdef HAVE_BASECODE_EXTRAS
-+#define MLX5_XMIT_MORE_SKB_CB 0xa
-+#endif
-+
- static inline
- ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *params,
+ 						       struct mlx5e_xsk *xsk, u16 ix)
  {
-@@ -66,7 +73,7 @@ enum mlx5e_icosq_wqe_type {
- 	MLX5E_ICOSQ_WQE_NOP,
- 	MLX5E_ICOSQ_WQE_UMR_RX,
- 	MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR,
--#ifdef CONFIG_MLX5_EN_TLS
-+#ifdef HAVE_KTLS_RX_SUPPORT
- 	MLX5E_ICOSQ_WQE_UMR_TLS,
- 	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
- 	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
-@@ -86,13 +93,31 @@ int mlx5e_napi_poll(struct napi_struct *
- int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
+@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5
  
- /* RX */
-+#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
-+void mlx5e_page_dma_unmap(struct mlx5e_rq *rq,
-+#ifdef HAVE_PAGE_DMA_ADDR
-+			  struct page *page);
-+#else
-+			  struct mlx5e_alloc_unit *au);
-+#endif
-+void mlx5e_page_release_dynamic(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au, bool recycle);
-+#endif
- INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq));
- INDIRECT_CALLABLE_DECLARE(bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq));
- int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget);
- void mlx5e_free_rx_descs(struct mlx5e_rq *rq);
-+#if defined(HAVE_PAGE_POOL_DEFRAG_PAGE) || defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
- void mlx5e_free_rx_missing_descs(struct mlx5e_rq *rq);
-+#else
-+void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
-+#endif
- 
-+#ifdef HAVE_NDO_HWTSTAMP_GET_SET
-+static inline bool mlx5e_rx_hw_stamp(struct kernel_hwtstamp_config *config)
-+#else
- static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
-+#endif
-+
- {
- 	return config->rx_filter == HWTSTAMP_FILTER_ALL;
- }
-@@ -328,17 +353,31 @@ mlx5e_dma_push_single(struct mlx5e_txqsq
- 	dma->type = MLX5E_DMA_MAP_SINGLE;
- }
- 
-+#ifdef HAVE_NETMEM_DMA_UNMAP_ADDR_SET
-+/* Newer kernels (v6.16+): use separated functions with netmem support */
- static inline void
- mlx5e_dma_push_netmem(struct mlx5e_txqsq *sq, netmem_ref netmem,
- 		      dma_addr_t addr, u32 size)
- {
- 	struct mlx5e_sq_dma *dma = mlx5e_dma_get(sq, sq->dma_fifo_pc++);
- 
--	//Forward port -reopen in backports
--	//netmem_dma_unmap_addr_set(netmem, dma, addr, addr);
-+	netmem_dma_unmap_addr_set(netmem, dma, addr, addr);
- 	dma->size = size;
- 	dma->type = MLX5E_DMA_MAP_PAGE;
+ 	return xsk->pools[ix];
  }
 +#else
-+/* Older kernels (v6.15 and below): use unified function */
-+static inline void
-+mlx5e_dma_push(struct mlx5e_txqsq *sq, dma_addr_t addr, u32 size,
-+	       enum mlx5e_dma_map_type map_type)
++static inline struct xdp_umem *mlx5e_xsk_get_pool(struct mlx5e_params *params,
++						       struct mlx5e_xsk *xsk, u16 ix)
 +{
-+	struct mlx5e_sq_dma *dma = mlx5e_dma_get(sq, sq->dma_fifo_pc++);
++	if (!xsk || !xsk->umems)
++		return NULL;
 +
-+	dma->addr = addr;
-+	dma->size = size;
-+	dma->type = map_type;
++	if (unlikely(ix >= params->num_channels))
++		return NULL;
++
++	return xsk->umems[ix];
 +}
 +#endif
  
- static inline
- struct sk_buff **mlx5e_skb_fifo_get(struct mlx5e_skb_fifo *fifo, u16 i)
-@@ -496,6 +535,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
- 	case IPPROTO_UDP:
- 		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
- 		fallthrough;
-+
- 	case IPPROTO_TCP:
- 		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
- 		break;
-@@ -579,7 +619,11 @@ static inline bool mlx5e_icosq_can_post_
+ struct mlx5e_xsk_param;
+-void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
  
- static inline struct mlx5e_mpw_info *mlx5e_get_mpw_info(struct mlx5e_rq *rq, int i)
- {
-+#if defined(HAVE_PAGE_POOL_DEFRAG_PAGE) || defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
- 	size_t isz = struct_size(rq->mpwqe.info, alloc_units.frag_pages, rq->mpwqe.pages_per_wqe);
+ /* .ndo_bpf callback. */
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
++void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
+ int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16 qid);
 +#else
-+	size_t isz = struct_size(rq->mpwqe.info, alloc_units, rq->mpwqe.pages_per_wqe);
++void mlx5e_build_xsk_param(struct xdp_umem *umem, struct mlx5e_xsk_param *xsk);
++int mlx5e_xsk_setup_pool(struct net_device *dev, struct xdp_umem *pool, u16 qid);
++#endif
++
++#ifndef HAVE_XSK_BUFF_ALLOC
++int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries);
 +#endif
  
- 	return (struct mlx5e_mpw_info *)((char *)rq->mpwqe.info + array_size(i, isz));
- }
++#endif
+ #endif /* __MLX5_EN_XSK_POOL_H__ */

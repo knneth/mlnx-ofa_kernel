@@ -10,7 +10,7 @@
 #define __is_kvfree_rcu_offset(offset) ((offset) < 4096)
 #endif
 
-#ifndef rcu_replace_pointer
+#ifndef HAVE_RCU_REPLACE_POINTER
 #define rcu_replace_pointer(rcu_ptr, ptr, c)				\
 ({									\
 	typeof(ptr) __tmp = rcu_dereference_protected((rcu_ptr), (c));	\

@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
+
+Change-Id: I05fa426608de93b95ed1379222a37771824595a4
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
+@@ -7,13 +7,17 @@
+ #include <net/protocol.h>
+ #include <net/udp.h>
+ #include <net/ip6_checksum.h>
++#ifdef HAVE_NET_PSP_H
+ #include <net/psp/types.h>
++#endif
+ 
+ #include "en.h"
+ #include "psp.h"
+ #include "en_accel/psp_rxtx.h"
+ #include "en_accel/psp.h"
+ 
++#if defined(CONFIG_MLX5_EN_PSP) && defined(HAVE_NET_PSP_H)
++
+ enum {
+ 	MLX5E_PSP_OFFLOAD_RX_SYNDROME_DECRYPTED,
+ 	MLX5E_PSP_OFFLOAD_RX_SYNDROME_AUTH_FAILED,
+@@ -198,3 +202,4 @@ bool mlx5e_psp_handle_tx_skb(struct net_
+ 
+ 	return true;
+ }
++#endif /* CONFIG_MLX5_EN_PSP && HAVE_NET_PSP_H */

@@ -10,6 +10,35 @@
 
 #include <uapi/linux/devlink.h>
 
+/* Sparse enums validation callbacks */
+static int
+mlxdevm_attr_param_type_validate(const struct nlattr *attr,
+				 struct netlink_ext_ack *extack)
+{
+	switch (nla_get_u8(attr)) {
+	case MLXDEVM_VAR_ATTR_TYPE_U8:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_U16:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_U32:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_U64:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_STRING:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_FLAG:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_NESTED:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_NUL_STRING:
+		fallthrough;
+	case MLXDEVM_VAR_ATTR_TYPE_BINARY:
+		return 0;
+	}
+	NL_SET_ERR_MSG_ATTR(extack, attr, "invalid enum value");
+	return -EINVAL;
+}
+
 /* Common nested types */
 const struct nla_policy mlxdevm_dl_port_function_nl_policy[MLXDEVM_PORT_FN_ATTR_CAPS + 1] = {
 	[MLXDEVM_PORT_FUNCTION_ATTR_HW_ADDR] = { .type = NLA_BINARY, },
@@ -24,7 +53,6 @@ const struct nla_policy mlxdevm_dl_rate_tc_bws_nl_policy[MLXDEVM_RATE_TC_ATTR_BW
 };
 
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
-
 const struct nla_policy devlink_dl_selftest_id_nl_policy[DEVLINK_ATTR_SELFTEST_ID_FLASH + 1] = {
 	[DEVLINK_ATTR_SELFTEST_ID_FLASH] = { .type = NLA_FLAG, },
 };
@@ -75,8 +103,8 @@ static const struct nla_policy mlxdevm_port_del_nl_policy[MLXDEVM_ATTR_PORT_INDE
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_PORT_INDEX] = { .type = NLA_U32, },
 };
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* DEVLINK_CMD_PORT_SPLIT - do */
 static const struct nla_policy devlink_port_split_nl_policy[DEVLINK_ATTR_PORT_SPLIT_COUNT + 1] = {
 	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
@@ -203,11 +231,15 @@ static const struct nla_policy mlxdevm_eswitch_get_nl_policy[MLXDEVM_ATTR_DEV_NA
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 };
 
-/* MLXDEVM_CMD_ESWITCH_SET - do */
+/* MLXDEVM_CMD_ESWITCH_SET - do
+ * Eswitch mode: 0=legacy, 1=switchdev, 2=switchdev_inactive.
+ * Max 2 aligns with upstream devlink (switchdev_inactive); use mlxdevm when
+ * kernel devlink does not support DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE.
+ */
 static const struct nla_policy mlxdevm_eswitch_set_nl_policy[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE + 1] = {
 	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
-	[MLXDEVM_ATTR_ESWITCH_MODE] = NLA_POLICY_MAX(NLA_U16, 1),
+	[MLXDEVM_ATTR_ESWITCH_MODE] = NLA_POLICY_MAX(NLA_U16, 2),
 	[MLXDEVM_ATTR_ESWITCH_INLINE_MODE] = NLA_POLICY_MAX(NLA_U8, 3),
 	[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE] = NLA_POLICY_MAX(NLA_U8, 1),
 };
@@ -285,11 +317,11 @@ static const struct nla_policy mlxdevm_param_set_nl_policy[MLXDEVM_ATTR_EXT_PARA
 	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_PARAM_NAME] = { .type = NLA_NUL_STRING, },
-	[MLXDEVM_ATTR_PARAM_TYPE] = { .type = NLA_U8, },
+	[MLXDEVM_ATTR_PARAM_TYPE] = NLA_POLICY_VALIDATE_FN(NLA_U8, &mlxdevm_attr_param_type_validate),
 	[MLXDEVM_ATTR_PARAM_VALUE_CMODE] = NLA_POLICY_MAX(NLA_U8, 2),
 };
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* DEVLINK_CMD_REGION_GET - do */
 static const struct nla_policy devlink_region_get_do_nl_policy[DEVLINK_ATTR_REGION_NAME + 1] = {
 	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
@@ -372,7 +404,7 @@ static const struct nla_policy devlink_health_reporter_get_dump_nl_policy[DEVLIN
 };
 
 /* DEVLINK_CMD_HEALTH_REPORTER_SET - do */
-static const struct nla_policy devlink_health_reporter_set_nl_policy[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP + 1] = {
+static const struct nla_policy devlink_health_reporter_set_nl_policy[DEVLINK_ATTR_HEALTH_REPORTER_BURST_PERIOD + 1] = {
 	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
 	[DEVLINK_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[DEVLINK_ATTR_PORT_INDEX] = { .type = NLA_U32, },
@@ -380,6 +412,7 @@ static const struct nla_policy devlink_health_reporter_set_nl_policy[DEVLINK_ATT
 	[DEVLINK_ATTR_HEALTH_REPORTER_GRACEFUL_PERIOD] = { .type = NLA_U64, },
 	[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER] = { .type = NLA_U8, },
 	[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP] = { .type = NLA_U8, },
+	[DEVLINK_ATTR_HEALTH_REPORTER_BURST_PERIOD] = { .type = NLA_U64, },
 };
 
 /* DEVLINK_CMD_HEALTH_REPORTER_RECOVER - do */
@@ -545,8 +578,8 @@ static const struct nla_policy mlxdevm_rate_del_nl_policy[MLXDEVM_ATTR_RATE_NODE
 	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING, },
 	[MLXDEVM_ATTR_RATE_NODE_NAME] = { .type = NLA_NUL_STRING, },
 };
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* DEVLINK_CMD_LINECARD_GET - do */
 static const struct nla_policy devlink_linecard_get_do_nl_policy[DEVLINK_ATTR_LINECARD_INDEX + 1] = {
 	[DEVLINK_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING, },
@@ -1027,7 +1060,7 @@ const struct genl_split_ops mlxdevm_nl_ops[29] = {
 		.doit		= devlink_nl_health_reporter_set_doit,
 		.post_doit	= devlink_nl_post_doit,
 		.policy		= devlink_health_reporter_set_nl_policy,
-		.maxattr	= DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP,
+		.maxattr	= DEVLINK_ATTR_HEALTH_REPORTER_BURST_PERIOD,
 		.flags		= GENL_ADMIN_PERM | GENL_CMD_CAP_DO,
 	},
 	{

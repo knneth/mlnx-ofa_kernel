@@ -3,11 +3,8 @@ obj-m += mlx_compat.o
 
 mlx_compat-y += main.o
 
-mlx_compat-y += output_core.o
 mlx_compat-y += interval_tree.o
 
-mlx_compat-y += pci.o
-mlx_compat-y += mmu_notifier.o
 mlx_compat-y += xarray.o
 mlx_compat-y += rdma_dim.o
 mlx_compat-y += dim.o

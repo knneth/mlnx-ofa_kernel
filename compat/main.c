@@ -2,16 +2,9 @@
 
 #include "config.h"
 
-#ifndef HAVE_XARRAY
-#include <linux/xarray.h>
-#endif
-
 MODULE_AUTHOR("Luis R. Rodriguez");
 MODULE_DESCRIPTION("Kernel backport module");
 MODULE_LICENSE("GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 
 #ifndef COMPAT_BASE
 #error "You need a COMPAT_BASE"
@@ -68,19 +61,12 @@ static int __init backport_init(void)
 	printk(KERN_INFO "compat.git: "
 	       COMPAT_BASE_TREE "\n");
 
-#ifndef HAVE_XARRAY
-	compat_radix_tree_init();
-#endif
         return 0;
 }
 module_init(backport_init);
 
 static void __exit backport_exit(void)
 {
-#ifndef HAVE_XARRAY
-	compat_radix_tree_clean();
-#endif	
-
         return;
 }
 module_exit(backport_exit);

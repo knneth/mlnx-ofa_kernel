@@ -1,102 +1,68 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
 
 ---
- .../mellanox/mlx5/core/en_accel/ktls.h        | 35 ++++++++++++++++---
- 1 file changed, 31 insertions(+), 4 deletions(-)
+ .../mellanox/mlx5/core/en_accel/macsec.c       | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
-@@ -13,10 +13,16 @@
- #include "lib/crypto.h"
- #include "lib/mlx5.h"
- 
-+#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
-+int mlx5_ktls_create_key(struct mlx5_core_dev *mdev,
-+			 struct tls_crypto_info *crypto_info, u32 *p_key_id);
-+void mlx5_ktls_destroy_key(struct mlx5_core_dev *mdev, u32 key_id);
-+#else
- struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_pool,
- 					     struct tls_crypto_info *crypto_info);
- void mlx5_ktls_destroy_key(struct mlx5_crypto_dek_pool *dek_pool,
- 			   struct mlx5_crypto_dek *dek);
-+#endif
- 
- static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
- {
-@@ -41,16 +47,30 @@ static inline bool mlx5e_ktls_type_check
- 		if (crypto_info->version == TLS_1_2_VERSION)
- 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_128);
- 		break;
-+#ifdef HAVE_TLS_CIPHER_AES_GCM_256
- 	case TLS_CIPHER_AES_GCM_256:
- 		if (crypto_info->version == TLS_1_2_VERSION)
- 			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_256);
- 		break;
-+#endif
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct
+ 		goto out;
  	}
  
- 	return false;
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
++#else
++	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
++#endif
+ 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
+ 			   assoc_num);
+ 		err = -EINVAL;
+@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct
+ 
+ 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
+ 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(tx_sa);
++#else
++	kfree_rcu(tx_sa, rcu_head);
++#endif
+ 	macsec_device->tx_sa[assoc_num] = NULL;
+ 
+ out:
+@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct m
+ 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
+ 	metadata_dst_free(rx_sc->md_dst);
+ 	kfree(rx_sc->sc_xarray_element);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(rx_sc);
++#else
++	kfree_rcu(rx_sc, rcu_head);
++#endif
  }
  
- void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
-+#ifdef HAVE_KTLS_STRUCTS
-+int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
-+void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
-+#else
-+static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
-+{
-+}
-+static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
-+{
-+	return 0;
-+}
-+#endif
- int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
- void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
- int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
-@@ -58,7 +78,12 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
- int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
- struct mlx5e_ktls_resync_resp *
- mlx5e_ktls_rx_resync_create_resp_list(void);
-+#ifdef HAVE_KTLS_RX_SUPPORT
- void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
-+#else
-+static inline void
-+mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list) {}
-+#endif
+ static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
+@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct
+ 		goto out;
+ 	}
  
- static inline bool mlx5e_is_ktls_tx(struct mlx5_core_dev *mdev)
- {
-@@ -87,7 +112,9 @@ struct mlx5e_tls {
- 	struct mlx5e_tls_sw_stats sw_stats;
- 	struct workqueue_struct *rx_wq;
- 	struct mlx5e_tls_tx_pool *tx_pool;
-+#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
- 	struct mlx5_crypto_dek_pool *dek_pool;
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
++#else
++	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
 +#endif
- 	struct mlx5e_tls_debugfs debugfs;
+ 		netdev_err(ctx->netdev,
+ 			   "MACsec offload update RX sa %d PN isn't supported\n",
+ 			   assoc_num);
+@@ -1644,7 +1660,9 @@ static const struct macsec_ops macsec_of
+ 	.mdo_add_secy = mlx5e_macsec_add_secy,
+ 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
+ 	.mdo_del_secy = mlx5e_macsec_del_secy,
++#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
+ 	.rx_uses_md_dst = true,
++#endif
  };
  
-@@ -103,16 +130,16 @@ static inline void mlx5e_ktls_build_netd
- {
- }
- 
--static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
-+static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
- {
--	return 0;
- }
- 
--static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
-+static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
- {
-+	return 0;
- }
- 
--static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
-+static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
- {
- 	return 0;
- }
+ bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)

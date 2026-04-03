@@ -1,40 +1,91 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/vlan.c
-@@ -68,6 +68,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		else
- 			*action |= MLX5_FLOW_CONTEXT_ACTION_VLAN_PUSH;
- 		break;
-+#ifdef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
- 	case FLOW_ACTION_VLAN_POP_ETH:
- 		parse_state->eth_pop = true;
- 		break;
-@@ -78,6 +79,7 @@ parse_tc_vlan_action(struct mlx5e_priv *
- 		memcpy(attr->eth.h_dest, act->vlan_push_eth.dst, ETH_ALEN);
- 		memcpy(attr->eth.h_source, act->vlan_push_eth.src, ETH_ALEN);
- 		break;
-+#endif
- 	default:
- 		NL_SET_ERR_MSG_MOD(extack, "Unexpected action id for VLAN");
- 		return -EINVAL;
-@@ -127,10 +129,12 @@ mlx5e_tc_act_vlan_add_pop_action(struct
- 	struct flow_action_entry vlan_act = {
- 		.id = FLOW_ACTION_VLAN_POP,
- 	};
--	int nest_level, err = 0;
-+	int nest_level = 1, err = 0;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+@@ -3,9 +3,15 @@
  
-+#ifdef HAVE_NET_DEVICE_LOWER_LEVEL
- 	nest_level = attr->parse_attr->filter_dev->lower_level -
- 						priv->netdev->lower_level;
+ #include <linux/math64.h>
+ #include "lib/aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
 +#endif
- 	while (nest_level--) {
- 		err = parse_tc_vlan_action(priv, &vlan_act, attr->esw_attr, &attr->action,
- 					   extack, NULL);
+ #include "meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ 
+ #define MLX5_START_COLOR_SHIFT 28
+ #define MLX5_METER_MODE_SHIFT 24
+@@ -365,8 +371,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(dev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -410,9 +418,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
+ 		return ERR_PTR(-EOPNOTSUPP);
++#endif
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -484,12 +494,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
+ {
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
++#endif
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -505,8 +519,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+ 	struct mlx5e_flow_meter_handle *meter;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -552,11 +568,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 	}
++#endif
+ 
+ 	flow_meters = kzalloc(sizeof(*flow_meters), GFP_KERNEL);
+ 	if (!flow_meters)

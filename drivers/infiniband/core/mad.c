@@ -451,10 +451,8 @@ struct ib_mad_agent *ib_register_mad_agent(struct ib_device *device,
 	mad_agent_priv->sol_fc_send_count = 0;
 	mad_agent_priv->sol_fc_wait_count = 0;
 	mad_agent_priv->sol_fc_max =
-		recv_handler ? get_sol_fc_max_outstanding(
-				       mad_reg_req,
-				       mad_agent_priv->qp_info->port_priv) :
-			       0;
+		recv_handler ? get_sol_fc_max_outstanding(mad_reg_req, 
+							  mad_agent_priv->qp_info->port_priv) : 0;
 
 	ret2 = ib_mad_agent_security_setup(&mad_agent_priv->agent, qp_type);
 	if (ret2) {
@@ -2729,7 +2727,7 @@ static void cancel_mads(struct ib_mad_agent_private *mad_agent_priv)
 				 &mad_agent_priv->send_list, agent_list)
 		change_mad_state(mad_send_wr, IB_MAD_STATE_CANCELED);
 
-	/* Empty wait and backlog list to prevent receives from finding request */
+	/* Empty wait & backlog list to prevent receives from finding request */
 	list_for_each_entry_safe(mad_send_wr, temp_mad_send_wr,
 				 &mad_agent_priv->wait_list, agent_list) {
 		change_mad_state(mad_send_wr, IB_MAD_STATE_DONE);

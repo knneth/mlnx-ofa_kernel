@@ -6,6 +6,7 @@
 #include "en/port.h"
 #include "en_accel/en_accel.h"
 #include "en_accel/ipsec.h"
+#include "en_accel/psp.h"
 #include <linux/dim.h>
 #include <net/page_pool/types.h>
 #include <net/xdp_sock_drv.h>
@@ -99,7 +100,7 @@ u8 mlx5e_mpwrq_umr_entry_size(enum mlx5e_mpwrq_umr_mode mode)
 		return sizeof(struct mlx5_ksm) * 4;
 	}
 	WARN_ONCE(1, "MPWRQ UMR mode %d is not known\n", mode);
-	return 0;
+	return 1;
 }
 
 u8 mlx5e_mpwrq_log_wqe_sz(struct mlx5_core_dev *mdev, u8 page_shift,
@@ -414,25 +415,10 @@ u8 mlx5e_mpwqe_get_log_rq_size(struct mlx5_core_dev *mdev,
 	return params->log_rq_mtu_frames - log_pkts_per_wqe;
 }
 
-u8 mlx5e_shampo_get_log_hd_entry_size(struct mlx5_core_dev *mdev,
-				      struct mlx5e_params *params)
+static u8 mlx5e_shampo_get_log_pkt_per_rsrv(struct mlx5e_params *params)
 {
-	return order_base_2(DIV_ROUND_UP(MLX5E_RX_MAX_HEAD, MLX5E_SHAMPO_WQ_BASE_HEAD_ENTRY_SIZE));
-}
-
-u8 mlx5e_shampo_get_log_rsrv_size(struct mlx5_core_dev *mdev,
-				  struct mlx5e_params *params)
-{
-	return order_base_2(MLX5E_SHAMPO_WQ_RESRV_SIZE / MLX5E_SHAMPO_WQ_BASE_RESRV_SIZE);
-}
-
-u8 mlx5e_shampo_get_log_pkt_per_rsrv(struct mlx5_core_dev *mdev,
-				     struct mlx5e_params *params)
-{
-	u32 resrv_size = BIT(mlx5e_shampo_get_log_rsrv_size(mdev, params)) *
-			 MLX5E_SHAMPO_WQ_BASE_RESRV_SIZE;
-
-	return order_base_2(DIV_ROUND_UP(resrv_size, params->sw_mtu));
+	return order_base_2(DIV_ROUND_UP(MLX5E_SHAMPO_WQ_RESRV_SIZE,
+					 params->sw_mtu));
 }
 
 u8 mlx5e_mpwqe_get_log_stride_size(struct mlx5_core_dev *mdev,
@@ -625,7 +611,7 @@ void mlx5e_build_create_cq_param(struct mlx5e_create_cq_param *ccp, struct mlx5e
 		.ch_stats = c->stats,
 		.node = cpu_to_node(c->cpu),
 		.ix = c->vec_ix,
-		.db_ix = mlx5e_get_doorbell_index(c->mdev, c->ix),
+		.uar = c->bfreg->up,
 	};
 }
 
@@ -825,7 +811,7 @@ static void mlx5e_build_common_cq_param(struct mlx5_core_dev *mdev,
 {
 	void *cqc = param->cqc;
 
-	MLX5_SET(cqc, cqc, uar_page, mdev->priv.uar->index);
+	MLX5_SET(cqc, cqc, uar_page, mdev->priv.bfreg.up->index);
 	if (MLX5_CAP_GEN(mdev, cqe_128_always) && cache_line_size() >= 128)
 		MLX5_SET(cqc, cqc, cqe_sz, CQE_STRIDE_128_PAD);
 }
@@ -834,13 +820,12 @@ static u32 mlx5e_shampo_get_log_cq_size(struct mlx5_core_dev *mdev,
 					struct mlx5e_params *params,
 					struct mlx5e_xsk_param *xsk)
 {
-	int rsrv_size = BIT(mlx5e_shampo_get_log_rsrv_size(mdev, params)) *
-		MLX5E_SHAMPO_WQ_BASE_RESRV_SIZE;
 	u16 num_strides = BIT(mlx5e_mpwqe_get_log_num_strides(mdev, params, xsk));
-	int pkt_per_rsrv = BIT(mlx5e_shampo_get_log_pkt_per_rsrv(mdev, params));
 	u8 log_stride_sz = mlx5e_mpwqe_get_log_stride_size(mdev, params, xsk);
+	int pkt_per_rsrv = BIT(mlx5e_shampo_get_log_pkt_per_rsrv(params));
 	int wq_size = BIT(mlx5e_mpwqe_get_log_rq_size(mdev, params, xsk));
 	int wqe_size = BIT(log_stride_sz) * num_strides;
+	int rsrv_size = MLX5E_SHAMPO_WQ_RESRV_SIZE;
 
 	/* +1 is for the case that the pkt_per_rsrv dont consume the reservation
 	 * so we get a filler cqe for the rest of the reservation.
@@ -901,6 +886,7 @@ int mlx5e_build_rq_param(struct mlx5_core_dev *mdev,
 {
 	void *rqc = param->rqc;
 	void *wq = MLX5_ADDR_OF(rqc, rqc, wq);
+	u32 lro_timeout;
 	int ndsegs = 1;
 	int err;
 
@@ -926,22 +912,27 @@ int mlx5e_build_rq_param(struct mlx5_core_dev *mdev,
 		MLX5_SET(wq, wq, log_wqe_stride_size,
 			 log_wqe_stride_size - MLX5_MPWQE_LOG_STRIDE_SZ_BASE);
 		MLX5_SET(wq, wq, log_wq_sz, mlx5e_mpwqe_get_log_rq_size(mdev, params, xsk));
-		if (params->packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO) {
-			MLX5_SET(wq, wq, shampo_enable, true);
-			MLX5_SET(wq, wq, log_reservation_size,
-				 mlx5e_shampo_get_log_rsrv_size(mdev, params));
-			MLX5_SET(wq, wq,
-				 log_max_num_of_packets_per_reservation,
-				 mlx5e_shampo_get_log_pkt_per_rsrv(mdev, params));
-			MLX5_SET(wq, wq, log_headers_entry_size,
-				 mlx5e_shampo_get_log_hd_entry_size(mdev, params));
-			MLX5_SET(rqc, rqc, reservation_timeout,
-				 mlx5e_choose_lro_timeout(mdev, MLX5E_DEFAULT_SHAMPO_TIMEOUT));
-			MLX5_SET(rqc, rqc, shampo_match_criteria_type,
-				 params->packet_merge.shampo.match_criteria_type);
-			MLX5_SET(rqc, rqc, shampo_no_match_alignment_granularity,
-				 params->packet_merge.shampo.alignment_granularity);
-		}
+		if (params->packet_merge.type != MLX5E_PACKET_MERGE_SHAMPO)
+			break;
+
+		MLX5_SET(wq, wq, shampo_enable, true);
+		MLX5_SET(wq, wq, log_reservation_size,
+			 MLX5E_SHAMPO_WQ_LOG_RESRV_SIZE -
+			 MLX5E_SHAMPO_WQ_RESRV_SIZE_BASE_SHIFT);
+		MLX5_SET(wq, wq,
+			 log_max_num_of_packets_per_reservation,
+			 mlx5e_shampo_get_log_pkt_per_rsrv(params));
+		MLX5_SET(wq, wq, log_headers_entry_size,
+			 MLX5E_SHAMPO_LOG_HEADER_ENTRY_SIZE -
+			 MLX5E_SHAMPO_WQ_BASE_HEAD_ENTRY_SIZE_SHIFT);
+		lro_timeout =
+			mlx5e_choose_lro_timeout(mdev,
+						 MLX5E_DEFAULT_SHAMPO_TIMEOUT);
+		MLX5_SET(rqc, rqc, reservation_timeout, lro_timeout);
+		MLX5_SET(rqc, rqc, shampo_match_criteria_type,
+			 MLX5_RQC_SHAMPO_MATCH_CRITERIA_TYPE_EXTENDED);
+		MLX5_SET(rqc, rqc, shampo_no_match_alignment_granularity,
+			 MLX5_RQC_SHAMPO_NO_MATCH_ALIGNMENT_GRANULARITY_STRIDE);
 		break;
 	}
 	default: /* MLX5_WQ_TYPE_CYCLIC */
@@ -990,13 +981,14 @@ void mlx5e_build_tx_cq_param(struct mlx5_core_dev *mdev,
 	void *cqc = param->cqc;
 
 	MLX5_SET(cqc, cqc, log_cq_size, params->log_sq_size);
+	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_TX_CQE_COMPRESS))
+		MLX5_SET(cqc, cqc, cqe_comp_en, 1);
 
 	mlx5e_build_common_cq_param(mdev, param);
 	param->cq_period_mode = params->tx_cq_moderation.cq_period_mode;
 }
 
 void mlx5e_build_sq_param_common(struct mlx5_core_dev *mdev,
-				 unsigned int db_ix,
 				 struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
@@ -1006,11 +998,10 @@ void mlx5e_build_sq_param_common(struct mlx5_core_dev *mdev,
 	MLX5_SET(wq, wq, pd,            mdev->mlx5e_res.hw_objs.pdn);
 
 	param->wq.buf_numa_node = dev_to_node(mlx5_core_dma_dev(mdev));
-	param->db_ix = db_ix;
 }
 
 void mlx5e_build_sq_param(struct mlx5_core_dev *mdev,
-			  struct mlx5e_params *params, unsigned int db_ix,
+			  struct mlx5e_params *params,
 			  struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
@@ -1018,8 +1009,9 @@ void mlx5e_build_sq_param(struct mlx5_core_dev *mdev,
 	bool allow_swp;
 
 	allow_swp = mlx5_geneve_tx_allowed(mdev) ||
-		    (mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_CRYPTO);
-	mlx5e_build_sq_param_common(mdev, db_ix, param);
+		    (mlx5_ipsec_device_caps(mdev) & MLX5_IPSEC_CAP_CRYPTO) ||
+		    mlx5_is_psp_device(mdev);
+	mlx5e_build_sq_param_common(mdev, param);
 	MLX5_SET(wq, wq, log_wq_sz, params->log_sq_size);
 	MLX5_SET(sqc, sqc, allow_swp, allow_swp);
 	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_SKB_TX_MPWQE);
@@ -1049,18 +1041,17 @@ u32 mlx5e_shampo_hd_per_wqe(struct mlx5_core_dev *mdev,
 			    struct mlx5e_params *params,
 			    struct mlx5e_rq_param *rq_param)
 {
-	int resv_size = BIT(mlx5e_shampo_get_log_rsrv_size(mdev, params)) *
-		MLX5E_SHAMPO_WQ_BASE_RESRV_SIZE;
 	u16 num_strides = BIT(mlx5e_mpwqe_get_log_num_strides(mdev, params, NULL));
-	int pkt_per_resv = BIT(mlx5e_shampo_get_log_pkt_per_rsrv(mdev, params));
 	u8 log_stride_sz = mlx5e_mpwqe_get_log_stride_size(mdev, params, NULL);
+	int pkt_per_rsrv = BIT(mlx5e_shampo_get_log_pkt_per_rsrv(params));
 	int wqe_size = BIT(log_stride_sz) * num_strides;
+	int rsrv_size = MLX5E_SHAMPO_WQ_RESRV_SIZE;
 	u32 hd_per_wqe;
 
 	/* Assumption: hd_per_wqe % 8 == 0. */
-	hd_per_wqe = (wqe_size / resv_size) * pkt_per_resv;
-	mlx5_core_dbg(mdev, "%s hd_per_wqe = %d rsrv_size = %d wqe_size = %d pkt_per_resv = %d\n",
-		      __func__, hd_per_wqe, resv_size, wqe_size, pkt_per_resv);
+	hd_per_wqe = (wqe_size / rsrv_size) * pkt_per_rsrv;
+	mlx5_core_dbg(mdev, "%s hd_per_wqe = %d rsrv_size = %d wqe_size = %d pkt_per_rsrv = %d\n",
+		      __func__, hd_per_wqe, rsrv_size, wqe_size, pkt_per_rsrv);
 	return hd_per_wqe;
 }
 
@@ -1212,13 +1203,12 @@ static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
 
 static void mlx5e_build_icosq_param(struct mlx5_core_dev *mdev,
 				    u8 log_wq_size,
-				    unsigned int db_ix,
 				    struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, db_ix, param);
+	mlx5e_build_sq_param_common(mdev, param);
 
 	MLX5_SET(wq, wq, log_wq_sz, log_wq_size);
 	MLX5_SET(sqc, sqc, reg_umr, MLX5_CAP_ETH(mdev, reg_umr_sq));
@@ -1227,13 +1217,12 @@ static void mlx5e_build_icosq_param(struct mlx5_core_dev *mdev,
 
 static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
 					  u8 log_wq_size,
-					  unsigned int db_ix,
 					  struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, db_ix, param);
+	mlx5e_build_sq_param_common(mdev, param);
 	param->stop_room = mlx5e_stop_room_for_wqe(mdev, 1); /* for XSK NOP */
 	param->is_tls = mlx5e_is_ktls_rx(mdev);
 	if (param->is_tls)
@@ -1245,39 +1234,21 @@ static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
 
 void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
 			     struct mlx5e_params *params,
-			     unsigned int db_ix,
 			     struct mlx5e_sq_param *param)
 {
 	void *sqc = param->sqc;
 	void *wq = MLX5_ADDR_OF(sqc, sqc, wq);
 
-	mlx5e_build_sq_param_common(mdev, db_ix, param);
+	mlx5e_build_sq_param_common(mdev, param);
 	MLX5_SET(wq, wq, log_wq_sz, params->log_sq_size);
 	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
 	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
 }
 
-unsigned int mlx5e_get_doorbell_index(struct mlx5_core_dev *mdev,
-				      unsigned int ch_ix)
-{
-	unsigned int num_doorbells = mdev->mlx5e_res.hw_objs.num_bfregs;
-
-	if (num_doorbells == 1)
-		return MLX5_DEFAULT_DOORBELL_IX;
-
-	/* With more than one doorbell, round-robin between doorbells
-	 * [1..num_doorbells-1], leaving doorbell 0 for all SQs not associated
-	 * with channels.
-	 */
-	return 1 + ch_ix % (num_doorbells - 1);
-}
-
 int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
 			      struct mlx5e_params *params,
-			      unsigned int ch_ix,
 			      struct mlx5e_channel_param *cparam)
 {
-	unsigned int db_ix = mlx5e_get_doorbell_index(mdev, ch_ix);
 	u8 icosq_log_wq_sz, async_icosq_log_wq_sz;
 	int err;
 
@@ -1288,12 +1259,10 @@ int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
 	icosq_log_wq_sz = mlx5e_build_icosq_log_wq_sz(mdev, params, &cparam->rq);
 	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
 
-	mlx5e_build_sq_param(mdev, params, db_ix, &cparam->txq_sq);
-	mlx5e_build_xdpsq_param(mdev, params, db_ix, &cparam->xdp_sq);
-	mlx5e_build_icosq_param(mdev, icosq_log_wq_sz, db_ix,
-				&cparam->icosq);
-	mlx5e_build_async_icosq_param(mdev, async_icosq_log_wq_sz, db_ix,
-				      &cparam->async_icosq);
+	mlx5e_build_sq_param(mdev, params, &cparam->txq_sq);
+	mlx5e_build_xdpsq_param(mdev, params, &cparam->xdp_sq);
+	mlx5e_build_icosq_param(mdev, icosq_log_wq_sz, &cparam->icosq);
+	mlx5e_build_async_icosq_param(mdev, async_icosq_log_wq_sz, &cparam->async_icosq);
 
 	return 0;
 }

@@ -7,15 +7,6 @@
 #include <linux/version.h>
 #include "dr_types.h"
 
-#ifndef LINUX_VERSION_MAJOR
-#define LINUX_VERSION_MAJOR 0
-#endif
-#ifndef LINUX_VERSION_PATCHLEVEL
-#define LINUX_VERSION_PATCHLEVEL 0
-#endif
-#ifndef LINUX_VERSION_SUBLEVEL
-#define LINUX_VERSION_SUBLEVEL 0
-#endif
 #define DR_DBG_PTR_TO_ID(p) ((u64)(uintptr_t)(p) & 0xFFFFFFFFULL)
 
 enum dr_dump_rec_type {

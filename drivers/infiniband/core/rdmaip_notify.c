@@ -40,9 +40,6 @@
 MODULE_AUTHOR("Mohammad Kabat");
 MODULE_DESCRIPTION("rdmaip_notify dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init rdmaip_notify_init(void)

@@ -1,0 +1,45 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/uar.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/uar.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/uar.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
+@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars
+ 	int err = -ENOMEM;
+ 	phys_addr_t pfn;
+ 	int bfregs;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	int node;
++#endif
+ 	int i;
+ 
+ 	bfregs = uars_per_sys_page(mdev) * MLX5_BFREGS_PER_UAR;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	node = mdev->priv.numa_node;
+ 	up = kzalloc_node(sizeof(*up), GFP_KERNEL, node);
++#else
++	up = kzalloc(sizeof(*up), GFP_KERNEL);
++#endif
+ 	if (!up)
+ 		return ERR_PTR(err);
+ 
+ 	up->mdev = mdev;
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	up->reg_bitmap = bitmap_zalloc_node(bfregs, GFP_KERNEL, node);
++#else
++	up->reg_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
++#endif
+ 	if (!up->reg_bitmap)
+ 		goto error1;
+ 
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	up->fp_bitmap = bitmap_zalloc_node(bfregs, GFP_KERNEL, node);
++#else
++	up->fp_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
++#endif
+ 	if (!up->fp_bitmap)
+ 		goto error1;
+ 

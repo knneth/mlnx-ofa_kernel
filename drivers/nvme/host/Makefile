@@ -5,6 +5,7 @@ ifeq ($(CONFIG_GPU_DIRECT_STORAGE),y)
 ccflags-y				+= -DCONFIG_NVFS
 endif
 
+ccflags-y				+= -DCONFIG_NVFS
 obj-$(CONFIG_NVME_CORE)			+= nvme-core.o
 obj-$(CONFIG_BLK_DEV_NVME)		+= nvme.o
 obj-$(CONFIG_NVME_FABRICS)		+= nvme-fabrics.o
@@ -42,9 +43,11 @@ ifeq ($(CONFIG_COMPAT_NVME_SNAP_VFIO_PCI),m)
 nvme-y					+= passthru.o
 endif
 
+nvme-y					+= nvfs-dma.o
 nvme-fabrics-y				+= fabrics.o
 
 nvme-rdma-y				+= rdma.o
+nvme-rdma-y				+= nvfs-rdma.o
 ifeq ($(CONFIG_GPU_DIRECT_STORAGE),y)
 nvme-rdma-y				+= nvfs-rdma.o
 endif

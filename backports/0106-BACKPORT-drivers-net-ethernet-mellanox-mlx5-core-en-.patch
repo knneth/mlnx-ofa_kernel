@@ -1,69 +1,119 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
 
 ---
- .../mellanox/mlx5/core/en/tc/act_stats.c      | 30 ++++++++++++++++++-
- 1 file changed, 29 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en/tc/post_meter.c     | 46 +++++++++++++++++++
+ 1 file changed, 46 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
-@@ -3,6 +3,7 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+@@ -1,12 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  
- #include <linux/rhashtable.h>
- #include <net/flow_offload.h>
-+#include <net/act_api.h>
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
  #include "en/tc_priv.h"
- #include "act_stats.h"
- #include "en/fs.h"
-@@ -169,11 +170,18 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
- {
- 	struct rhashtable *ht = &handle->ht;
- 	struct mlx5e_tc_act_stats *item;
-+	struct mlx5e_tc_act_stats key;
- 	u64 pkts, bytes, lastused;
- 	int err = 0;
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ #include "post_meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
  
-+#if defined(HAVE_FLOW_ACTION_ENTRY_COOKIE)
-+	key.tc_act_cookie = fl_act->cookie;
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #define MLX5_PACKET_COLOR_BITS MLX5_REG_MAPPING_MBITS(PACKET_COLOR_TO_REG)
+ #define MLX5_PACKET_COLOR_MASK MLX5_REG_MAPPING_MASK(PACKET_COLOR_TO_REG)
++#endif
+ 
+ struct mlx5e_post_meter_rate_table {
+ 	struct mlx5_flow_table *ft;
+@@ -15,6 +23,9 @@ struct mlx5e_post_meter_rate_table {
+ 	struct mlx5_flow_attr *green_attr;
+ 	struct mlx5_flow_handle *red_rule;
+ 	struct mlx5_flow_attr *red_attr;
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	struct mlx5_flow_attr attr[2];
++#endif
+ };
+ 
+ struct mlx5e_post_meter_mtu_table {
+@@ -154,6 +165,10 @@ mlx5e_post_meter_rate_rules_create(struc
+ 	struct mlx5e_post_meter_rate_table *table = &post_meter->rate_steering_table;
+ 	struct mlx5_flow_handle *rule;
+ 	struct mlx5_flow_spec *spec;
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
++	struct mlx5_flow_destination dest[2] = {};
++	struct mlx5_flow_act flow_act = {};
++#endif
+ 	int err;
+ 
+ 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
+@@ -162,9 +177,20 @@ mlx5e_post_meter_rate_rules_create(struc
+ 
+ 	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
+ 				    MLX5_FLOW_METER_COLOR_RED, MLX5_PACKET_COLOR_MASK);
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	red_attr->ft = post_meter->rate_steering_table.ft;
+ 	rule = mlx5e_post_meter_add_rule(priv, post_meter, spec, red_attr,
+ 					 act_counter, drop_counter);
 +#else
++	(void) (mlx5e_post_meter_add_rule); /* supress unused */
++	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_DROP |
++			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
++	flow_act.flags |= FLOW_ACT_IGNORE_FLOW_LEVEL;
++	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
++	dest[0].counter = drop_counter;
++
++	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 1);
++#endif
+ 	if (IS_ERR(rule)) {
+ 		mlx5_core_warn(priv->mdev, "Failed to create post_meter exceed rule\n");
+ 		err = PTR_ERR(rule);
+@@ -175,9 +201,20 @@ mlx5e_post_meter_rate_rules_create(struc
+ 
+ 	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
+ 				    MLX5_FLOW_METER_COLOR_GREEN, MLX5_PACKET_COLOR_MASK);
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	green_attr->ft = post_meter->rate_steering_table.ft;
+ 	rule = mlx5e_post_meter_add_rule(priv, post_meter, spec, green_attr,
+ 					 act_counter, drop_counter);
++#else
++	flow_act.action = MLX5_FLOW_CONTEXT_ACTION_FWD_DEST |
++			  MLX5_FLOW_CONTEXT_ACTION_COUNT;
++	dest[0].type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
++	dest[0].ft = mlx5e_tc_post_act_get_ft(post_act);
++	dest[1].type = MLX5_FLOW_DESTINATION_TYPE_COUNTER;
++	dest[1].counter = act_counter;
++
++	rule = mlx5_add_flow_rules(post_meter->rate_steering_table.ft, spec, &flow_act, dest, 2);
++#endif
+ 	if (IS_ERR(rule)) {
+ 		mlx5_core_warn(priv->mdev, "Failed to create post_meter notexceed rule\n");
+ 		err = PTR_ERR(rule);
+@@ -202,8 +239,13 @@ mlx5e_post_meter_rate_rules_destroy(stru
+ {
+ 	struct mlx5e_post_meter_rate_table *rate_table = &post_meter->rate_steering_table;
+ 
++#ifdef HAVE_FLOW_ACTION_POLICE_EXCEED
+ 	mlx5_eswitch_del_offloaded_rule(esw, rate_table->red_rule, rate_table->red_attr);
+ 	mlx5_eswitch_del_offloaded_rule(esw, rate_table->green_rule, rate_table->green_attr);
++#else
++	mlx5_del_flow_rules(rate_table->red_rule);
++	mlx5_del_flow_rules(rate_table->green_rule);
++#endif
+ }
+ 
+ static void
+@@ -345,6 +387,10 @@ mlx5e_post_meter_mtu_create(struct mlx5e
+ 	struct mlx5_flow_handle *rule;
+ 	int err;
+ 
++#ifndef HAVE_FLOW_ACTION_POLICE_EXCEED
 +	return -EOPNOTSUPP;
 +#endif
 +
- 	rcu_read_lock();
--	item = rhashtable_lookup(ht, &fl_act->cookie, act_counters_ht_params);
-+	item = rhashtable_lookup(ht, &key, act_counters_ht_params);
- 	if (!item) {
- 		rcu_read_unlock();
- 		err = -ENOENT;
-@@ -183,10 +191,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
- 	mlx5_fc_query_cached_raw(item->counter,
- 				 &bytes, &pkts, &lastused);
+ 	post_meter->type = MLX5E_POST_METER_MTU;
  
-+#if defined(HAVE_FLOW_OFFLOAD_ACTION)
- 	flow_stats_update(&fl_act->stats,
- 			  bytes - item->lastbytes,
- 			  pkts - item->lastpackets,
- 			  0, lastused, FLOW_ACTION_HW_STATS_DELAYED);
-+#elif defined(HAVE_TCF_ACTION_STATS_UPDATE_5_PARAMS)
-+	tcf_action_stats_update((struct tc_action *) fl_act,
-+			  bytes - item->lastbytes,
-+			  pkts - item->lastpackets,
-+			  lastused, true);
-+#elif defined(HAVE_TCF_ACTION_STATS_UPDATE)
-+	tcf_action_stats_update((struct tc_action *) fl_act,
-+			  bytes - item->lastbytes,
-+			  pkts - item->lastpackets,
-+			  lastused);
-+#else
-+	{
-+		struct tc_action *a = (struct tc_action *) fl_act;
-+
-+		tcf_action_update_stats(a, bytes - item->lastbytes, pkts - item->lastpackets,
-+				        0, true);
-+		a->tcfa_tm.lastuse = max_t(u64, a->tcfa_tm.lastuse, lastused);
-+	}
-+#endif
- 
- 	item->lastpackets = pkts;
- 	item->lastbytes = bytes;
+ 	err = mlx5e_post_meter_create_mtu_table(priv, ns_type, &mtu_tables->green_table);

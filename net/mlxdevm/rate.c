@@ -34,7 +34,7 @@ mlxdevm_rate_leaf_get_from_info(struct mlxdevm *mlxdevm, struct genl_info *info)
 static struct mlxdevm_rate *
 mlxdevm_rate_node_get_by_name(struct mlxdevm *mlxdevm, const char *node_name)
 {
-	static struct mlxdevm_rate *mlxdevm_rate;
+	struct mlxdevm_rate *mlxdevm_rate;
 
 	list_for_each_entry(mlxdevm_rate, &mlxdevm->rate_list, list) {
 		if (mlxdevm_rate_is_node(mlxdevm_rate) &&
@@ -825,10 +825,10 @@ EXPORT_SYMBOL_GPL(devm_rate_leaf_destroy);
  * Unset parent for all rate objects and destroy all rate nodes
  * on specified device.
  */
-void devm_rate_nodes_destroy(struct mlxdevm *mlxdevm) //TODO: check where to add mlxdevm only callbacks
+void devm_rate_nodes_destroy(struct mlxdevm *mlxdevm)
 {
-	static struct mlxdevm_rate *mlxdevm_rate, *tmp;
 	const struct mlxdevm_ops *ops = mlxdevm->ops;
+	struct mlxdevm_rate *mlxdevm_rate, *tmp;
 
 	devm_assert_locked(mlxdevm);
 

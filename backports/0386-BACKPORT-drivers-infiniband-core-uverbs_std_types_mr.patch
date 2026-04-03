@@ -1,0 +1,25 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_std_types_mr.c
+
+Change-Id: Id134a0e394b130a11404b1f87e299ffc91d7174d
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/infiniband/core/uverbs_std_types_mr.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/infiniband/core/uverbs_std_types_mr.c
++++ b/drivers/infiniband/core/uverbs_std_types_mr.c
+@@ -363,8 +363,13 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+ 							iova, fd, access_flags,
+ 							dmah, attrs);
+ 	else
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++		mr = pd->device->ops.reg_user_mr(pd, addr, length, iova,
++						 access_flags, dmah, &attrs->driver_udata);
++#else
+ 		mr = pd->device->ops.reg_user_mr(pd, addr, length, iova,
+ 						 access_flags, dmah, NULL);
++#endif
+ 
+ 	if (IS_ERR(mr))
+ 		return PTR_ERR(mr);

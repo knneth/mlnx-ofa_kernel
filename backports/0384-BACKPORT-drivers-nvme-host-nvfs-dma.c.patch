@@ -1,0 +1,65 @@
+From: Israel Rukshin <israelr@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/nvfs-dma.c
+
+Change-Id: I879792c34af42dea64bef3266a40501847885487
+Signed-off-by: Israel Rukshin <israelr@nvidia.com>
+---
+ drivers/nvme/host/nvfs-dma.c | 38 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+
+--- a/drivers/nvme/host/nvfs-dma.c
++++ b/drivers/nvme/host/nvfs-dma.c
+@@ -12,10 +12,13 @@
+  * more details.
+  */
+ #ifdef CONFIG_NVFS
++#ifdef HAVE_BLK_MQ_DMA_H
+ #define NVFS_USE_DMA_ITER_API
++#endif
+ #define MODULE_PREFIX nvme_v2
+ #include "nvfs.h"
+ 
++#ifdef HAVE_BLK_MQ_DMA_H
+ struct nvfs_dma_rw_blk_iter_ops *nvfs_ops = NULL;
+ 
+ atomic_t nvfs_shutdown = ATOMIC_INIT(1);
+@@ -48,4 +51,39 @@ void UNREGISTER_FUNC(void)
+         nvfs_ops = NULL;
+ }
+ EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);
++#else /* !HAVE_BLK_MQ_DMA_H */
++struct nvfs_dma_rw_ops *nvfs_ops = NULL;
++
++atomic_t nvfs_shutdown = ATOMIC_INIT(1);
++
++DEFINE_PER_CPU(long, nvfs_n_ops);
++
++// must have for compatability
++#define NVIDIA_FS_COMPAT_FT(ops) \
++      (NVIDIA_FS_CHECK_FT_SGLIST_PREP(ops) && NVIDIA_FS_CHECK_FT_SGLIST_DMA(ops))
++
++// protected via nvfs_module_mutex
++int REGISTER_FUNC (struct nvfs_dma_rw_ops *ops)
++{
++       if (NVIDIA_FS_COMPAT_FT(ops)) {
++             nvfs_ops = ops;
++             atomic_set(&nvfs_shutdown, 0);
++             return 0;
++       } else
++             return -ENOTSUPP;
++
++}
++EXPORT_SYMBOL_GPL(REGISTER_FUNC);
++
++// protected via nvfs_module_mutex
++void UNREGISTER_FUNC (void)
++{
++        (void) atomic_cmpxchg(&nvfs_shutdown, 0, 1);
++        do{
++                msleep(NVFS_HOLD_TIME_MS);
++        } while (nvfs_count_ops());
++        nvfs_ops = NULL;
++}
++EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);
++#endif /* HAVE_BLK_MQ_DMA_H */
+ #endif

@@ -9,6 +9,8 @@ GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
 subdir-ccflags-y += -I$(src)
 subdir-ccflags-y += -I$(CWD)/net/mlxdevm
 
+ccflags-y += -Wframe-larger-than=2048
+
 obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
 
 #
@@ -20,8 +22,8 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		fs_counters.o fs_ft_pool.o rl.o lag/debugfs.o lag/lag.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o lib/fs_ttc.o diag/fs_tracepoint.o \
 		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o diag/reporter_vnic.o \
-		fw_reset.o qos.o lib/tout.o lib/aso.o wc.o fs_pool.o mst_dump.o en_diag.o \
-		sriov_sysfs.o crdump.o diag/diag_cnt.o eswitch_devlink_compat.o ecpf.o \
+		fw_reset.o qos.o lib/tout.o lib/aso.o wc.o fs_pool.o lib/nv_param.o mst_dump.o \
+		en_diag.o sriov_sysfs.o crdump.o diag/diag_cnt.o eswitch_devlink_compat.o ecpf.o \
 		auxiliary_sysfs_compat.o compat.o
 
 #
@@ -34,7 +36,7 @@ mlx5_core-$(CONFIG_MLX5_CORE_EN) += en/rqt.o en/tir.o en/rss.o en/rx_res.o \
 		en/reporter_tx.o en/reporter_rx.o en/params.o en/xsk/pool.o \
 		en/xsk/setup.o en/xsk/rx.o en/xsk/tx.o en/devlink.o en/ptp.o \
 		en/qos.o en/htb.o en/trap.o en/fs_tt_redirect.o en/selq.o \
-		lib/crypto.o lib/sd.o en_debugfs.o
+		lib/crypto.o lib/sd.o en/pcie_cong_event.o en_debugfs.o
 
 #
 # Netdev extra
@@ -92,7 +94,9 @@ mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o esw/bridge_mcast.o esw/bridge
 
 mlx5_core-$(CONFIG_HWMON)          += hwmon.o
 mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o
-mlx5_core-$(CONFIG_VXLAN)          += lib/vxlan.o
+ifneq ($(CONFIG_VXLAN),)
+	mlx5_core-y		   += lib/vxlan.o
+endif
 mlx5_core-$(CONFIG_PTP_1588_CLOCK) += lib/clock.o
 mlx5_core-$(CONFIG_PCI_HYPERV_INTERFACE) += lib/hv.o lib/hv_vhca.o
 mlx5_core-$(CONFIG_MLXDEVM) += mlx5_devm.o
@@ -117,6 +121,8 @@ mlx5_core-$(CONFIG_MLX5_EN_IPSEC) += en_accel/ipsec.o en_accel/ipsec_rxtx.o \
 mlx5_core-$(CONFIG_MLX5_EN_TLS) += en_accel/ktls_stats.o \
 				   en_accel/fs_tcp.o en_accel/ktls.o en_accel/ktls_txrx.o \
 				   en_accel/ktls_tx.o en_accel/ktls_rx.o
+
+mlx5_core-$(CONFIG_MLX5_EN_PSP) += en_accel/psp.o en_accel/psp_rxtx.o
 
 #
 # SW Steering
@@ -179,6 +185,11 @@ mlx5_core-$(CONFIG_MLX5_SF_MANAGER) += sf/cmd.o sf/hw_table.o sf/devlink.o
 ## SF cfg driver basic
 #
 mlx5_core-$(CONFIG_MLX5_SF_CFG) += sf/dev/cfg_driver.o
+
+#
+# TPH support
+#
+mlx5_core-$(CONFIG_PCIE_TPH) += lib/st.o
 
 obj-$(CONFIG_MLX5_DPLL) += mlx5_dpll.o
 mlx5_dpll-y :=	dpll.o

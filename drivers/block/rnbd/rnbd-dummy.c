@@ -40,9 +40,6 @@
 MODULE_AUTHOR("Tzafrir Cohen");
 MODULE_DESCRIPTION("rnbd-client dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init rnbd_client_init(void)

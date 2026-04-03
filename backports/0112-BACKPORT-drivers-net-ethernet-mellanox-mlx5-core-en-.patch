@@ -1,19 +1,18 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
+ 1 file changed, 1 insertion(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
-@@ -4,7 +4,7 @@
- #ifndef __MLX5_EN_TC_SAMPLE_H__
- #define __MLX5_EN_TC_SAMPLE_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+@@ -6,6 +6,7 @@
  
--#include "eswitch.h"
-+#include "../../eswitch.h"
+ #include "en_tc.h"
+ #include "en/tc/act/act.h"
++#include <uapi/linux/tc_act/tc_pedit.h>
  
- struct mlx5_flow_attr;
- struct mlx5e_tc_psample;
+ #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
+ 

@@ -21,8 +21,7 @@ drivers/base/auxiliary.c
 drivers/base/auxiliary_sysfs.c
 include/uapi/fwctl/mlx5.h
 include/uapi/fwctl/fwctl.h
-include/uapi/linux/mlxdevm.h
-include/net/mlxdevm.h
+include/linux/fwctl.h
 drivers/fwctl/main.c
 drivers/fwctl/Makefile
 drivers/fwctl/mlx5
@@ -41,7 +40,6 @@ include/linux/nvme-fc-driver.h
 include/linux/nvme-fc.h
 include/linux/sunrpc/svc_rdma.h
 include/linux/sunrpc/xprtrdma.h
-include/linux/nospec.h
 include/linux/indirect_call_wrapper.h
 include/trace/events/ib_umad.h
 include/trace/events/ib_mad.h
@@ -51,6 +49,7 @@ include/trace/misc/rdma.h
 include/trace/misc/sunrpc.h
 include/linux/sunrpc/rpc_rdma_cid.h
 include/linux/auxiliary_bus.h
+include/linux/pci-tph.h
 include/linux/mod_devicetable.h
 include/linux/bitfield.h
 include/linux/sunrpc/svc_rdma_pcl.h

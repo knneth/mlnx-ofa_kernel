@@ -1,0 +1,27 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/auth.c
+
+---
+ drivers/nvme/target/auth.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/nvme/target/auth.c
++++ b/drivers/nvme/target/auth.c
+@@ -4,6 +4,12 @@
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Software Solutions.
+  * All rights reserved.
+  */
++
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
++
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -607,3 +613,4 @@ out_free_digest:
+ out_free_psk:
+ 	kfree_sensitive(psk);
+ }
++#endif

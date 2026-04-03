@@ -39,9 +39,70 @@
 #include "ipoib/ipoib.h"
 #include "en_accel/en_accel.h"
 #include "en_accel/ipsec_rxtx.h"
+#include "en_accel/psp_rxtx.h"
 #include "en_accel/macsec.h"
 #include "en/ptp.h"
 #include <net/ipv6.h>
+
+static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
+				       u32 cqcc, void *data)
+{
+	u32 ci = mlx5_cqwq_ctr2ix(wq, cqcc);
+
+	memcpy(data, mlx5_cqwq_get_wqe(wq, ci), sizeof(struct mlx5_cqe64));
+}
+
+static inline void mlx5e_read_title_slot(struct mlx5e_txqsq *sq,
+					 struct mlx5_cqwq *wq,
+					 u32 cqcc)
+{
+	struct mlx5e_cq_decomp *cqd = &sq->cqd;
+	struct mlx5_cqe64 *title = &cqd->title;
+
+	mlx5e_read_cqe_slot(wq, cqcc, title);
+	cqd->left = be32_to_cpu(title->byte_cnt);
+	sq->stats->cqe_compress_blks++;
+	sq->stats->cqe_compress_pkts += cqd->left;
+}
+
+static inline void mlx5e_decompress_cqes(struct mlx5e_txqsq *sq,
+					 struct mlx5_cqwq *wq)
+{
+	struct mlx5e_cq_decomp *cqd = &sq->cqd;
+	struct mlx5_cqe64 *title = &cqd->title;
+	struct mlx5_mini_cqe8 *mini_cqe;
+	int iteration_sz;
+	u32 cc = wq->cc;
+
+	mlx5e_read_title_slot(sq, wq, cc);
+	mlx5e_read_cqe_slot(wq, cc + 1, cqd->mini_arr);
+	cqd->mini_arr_idx = 0;
+	do {
+		// Read 8 mini CQEs
+		iteration_sz = min_t(u16, cqd->left, 8);
+		// For each CQE update WQ
+		do {
+			struct mlx5_cqe64 cqe_tmp = *title;
+			struct mlx5_cqe64 *cqe;
+
+			mini_cqe = &cqd->mini_arr[cqd->mini_arr_idx++];
+			cqe_tmp.byte_cnt     = mini_cqe->byte_cnt;
+			cqe_tmp.op_own      &= 0xf0;
+			cqe_tmp.op_own      |= 0x01 & (cc >> wq->fbc.log_sz);
+			cqe_tmp.wqe_counter  = mini_cqe->s_wqe_info.wqe_counter;
+
+			cqe = mlx5_cqwq_get_wqe(wq, mlx5_cqwq_ctr2ix(wq, cc++));
+			*cqe = cqe_tmp;
+
+		} while (cqd->mini_arr_idx < iteration_sz);
+
+		cqd->left -= iteration_sz;
+		if (!cqd->left)
+			break;
+		mlx5e_read_cqe_slot(wq, cc, cqd->mini_arr);
+		cqd->mini_arr_idx = 0;
+	} while (1);
+}
 
 static void mlx5e_dma_unmap_wqe_err(struct mlx5e_txqsq *sq, u8 num_dma)
 {
@@ -120,6 +181,11 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 			    struct mlx5e_accel_tx_state *accel,
 			    struct mlx5_wqe_eth_seg *eseg)
 {
+#ifdef CONFIG_MLX5_EN_PSP
+	if (unlikely(mlx5e_psp_txwqe_build_eseg_csum(sq, skb, &accel->psp_st, eseg)))
+		return;
+#endif
+
 	if (unlikely(mlx5e_ipsec_txwqe_build_eseg_csum(sq, skb, eseg)))
 		return;
 
@@ -250,14 +316,13 @@ mlx5e_tx_wqe_inline_mode(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	u8 mode;
 
 #ifdef CONFIG_MLX5_EN_TLS
-	if (accel && accel->tls.tls_tisn)
+	if (accel->tls.tls_tisn)
 		return MLX5_INLINE_MODE_TCP_UDP;
 #endif
 
 	mode = sq->min_inline_mode;
 
-	if (skb_vlan_tag_present(skb) &&
-	    test_bit(MLX5E_SQ_STATE_VLAN_NEED_L2_INLINE, &sq->state))
+	if (skb_vlan_tag_present(skb))
 		mode = max_t(u8, MLX5_INLINE_MODE_L2, mode);
 
 	return mode;
@@ -298,7 +363,7 @@ static void mlx5e_sq_xmit_prepare(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		stats->packets++;
 	}
 
-	attr->insz = mlx5e_accel_tx_ids_len(sq, accel);
+	attr->insz = mlx5e_accel_tx_ids_len(sq, skb, accel);
 	stats->bytes += attr->num_bytes;
 }
 
@@ -337,10 +402,11 @@ static void mlx5e_sq_calc_wqe_attr(struct sk_buff *skb, const struct mlx5e_tx_at
 	};
 }
 
-static void mlx5e_tx_skb_update_hwts_flags(struct sk_buff *skb)
+static void mlx5e_tx_skb_update_ts_flags(struct sk_buff *skb)
 {
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+	skb_tx_timestamp(skb);
 }
 
 static void mlx5e_tx_check_stop(struct mlx5e_txqsq *sq)
@@ -392,7 +458,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	cseg->opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | attr->opcode);
 	cseg->qpn_ds           = cpu_to_be32((sq->sqn << 8) | wqe_attr->ds_cnt);
 
-	mlx5e_tx_skb_update_hwts_flags(skb);
+	mlx5e_tx_skb_update_ts_flags(skb);
 
 	sq->pc += wi->num_wqebbs;
 
@@ -482,12 +548,6 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		}
 		eseg->inline_hdr.sz |= cpu_to_be16(ihs);
 		dseg += wqe_attr->ds_cnt_inl;
-	} else if (skb_vlan_tag_present(skb)) {
-		eseg->insert.type = cpu_to_be16(MLX5_ETH_WQE_INSERT_VLAN);
-		if (skb->vlan_proto == cpu_to_be16(ETH_P_8021AD))
-			eseg->insert.type |= cpu_to_be16(MLX5_ETH_WQE_SVLAN);
-		eseg->insert.vlan_tci = cpu_to_be16(skb_vlan_tag_get(skb));
-		stats->added_vlan_packets++;
 	}
 
 	dseg += wqe_attr->ds_cnt_ids;
@@ -625,7 +685,7 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	mlx5e_dma_push_single(sq, txd.dma_addr, txd.len);
 	mlx5e_skb_fifo_push(&sq->db.skb_fifo, skb);
 	mlx5e_tx_mpwqe_add_dseg(sq, &txd);
-	mlx5e_tx_skb_update_hwts_flags(skb);
+	mlx5e_tx_skb_update_ts_flags(skb);
 
 	if (unlikely(mlx5e_tx_mpwqe_is_full(&sq->mpwqe))) {
 		/* Might stop the queue and affect the retval of __netdev_tx_sent_queue. */
@@ -659,7 +719,7 @@ static void mlx5e_cqe_ts_id_eseg(struct mlx5e_ptpsq *ptpsq, struct sk_buff *skb,
 				 struct mlx5_wqe_eth_seg *eseg)
 {
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
-		eseg->flow_table_metadata =
+		eseg->flow_table_metadata |=
 			cpu_to_be32(mlx5e_ptp_metadata_fifo_peek(&ptpsq->metadata_freelist));
 }
 
@@ -667,7 +727,7 @@ static void mlx5e_txwqe_build_eseg(struct mlx5e_priv *priv, struct mlx5e_txqsq *
 				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
 				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
 {
-	mlx5e_accel_tx_eseg(priv, skb, eseg, ihs);
+	mlx5e_accel_tx_eseg(priv, skb, accel, eseg, ihs);
 	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
 	if (unlikely(sq->ptpsq))
 		mlx5e_cqe_ts_id_eseg(sq->ptpsq, skb, eseg);
@@ -828,6 +888,9 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 		bool last_wqe;
 		u16 ci;
 
+		if (mlx5_get_cqe_format(cqe) == MLX5_COMPRESSED)
+			mlx5e_decompress_cqes(sq, &cq->wq);
+
 		mlx5_cqwq_pop(&cq->wq);
 
 		wqe_counter = be16_to_cpu(cqe->wqe_counter);
@@ -982,6 +1045,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	struct mlx5e_tx_attr attr;
 	struct mlx5i_tx_wqe *wqe;
 
+	struct mlx5e_accel_tx_state accel = {};
 	struct mlx5_wqe_datagram_seg *datagram;
 	struct mlx5_wqe_ctrl_seg *cseg;
 	struct mlx5_wqe_eth_seg  *eseg;
@@ -992,7 +1056,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 	int num_dma;
 	u16 pi;
 
-	mlx5e_sq_xmit_prepare(sq, skb, NULL, &attr);
+	mlx5e_sq_xmit_prepare(sq, skb, &accel, &attr);
 	mlx5i_sq_calc_wqe_attr(skb, &attr, &wqe_attr);
 
 	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
@@ -1009,7 +1073,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 
 	mlx5i_txwqe_build_datagram(av, dqpn, dqkey, datagram);
 
-	mlx5e_txwqe_build_eseg_csum(sq, skb, NULL, eseg);
+	mlx5e_txwqe_build_eseg_csum(sq, skb, &accel, eseg);
 
 	eseg->mss = attr.mss;
 

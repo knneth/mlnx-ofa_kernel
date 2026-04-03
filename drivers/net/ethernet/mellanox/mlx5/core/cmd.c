@@ -950,8 +950,7 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
 
 static void cb_timeout_handler(struct work_struct *work)
 {
-	struct delayed_work *dwork = container_of(work, struct delayed_work,
-						  work);
+	struct delayed_work *dwork = to_delayed_work(work);
 	struct mlx5_cmd_work_ent *ent = container_of(dwork,
 						     struct mlx5_cmd_work_ent,
 						     cb_timeout_work);
@@ -1095,8 +1094,7 @@ static void cmd_work_handler(struct work_struct *work)
 		/* make sure we read the descriptor after ownership is SW */
 		rmb();
 		mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, !!ent->ret ?
-				      MLX5_CMD_COMP_TYPE_FORCED : MLX5_CMD_COMP_TYPE_POLLING);
-
+					MLX5_CMD_COMP_TYPE_FORCED : MLX5_CMD_COMP_TYPE_POLLING);
 	}
 }
 

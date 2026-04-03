@@ -317,7 +317,7 @@ EXPORT_SYMBOL(__ib_alloc_cq_any);
  */
 void ib_free_cq(struct ib_cq *cq)
 {
-	int ret;
+	int ret = 0;
 
 	if (WARN_ON_ONCE(atomic_read(&cq->usecnt)))
 		return;
@@ -346,7 +346,7 @@ void ib_free_cq(struct ib_cq *cq)
 	rdma_dim_destroy(cq);
 	trace_cq_free(cq);
 	if (cq->device->ops.post_destroy_cq)
-		ret = cq->device->ops.post_destroy_cq(cq);
+		cq->device->ops.post_destroy_cq(cq);
 	else
 		ret = cq->device->ops.destroy_cq(cq, NULL);
 	WARN_ONCE(ret, "Destroy of kernel CQ shouldn't fail");

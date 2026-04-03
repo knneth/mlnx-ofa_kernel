@@ -1,0 +1,122 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
+
+Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
+---
+ .../mellanox/mlx5/core/en/pcie_cong_event.c   | 35 ++++++++++++++++---
+ 1 file changed, 31 insertions(+), 4 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
+@@ -43,6 +43,15 @@ struct mlx5e_pcie_cong_event {
+ 	struct mlx5e_pcie_cong_stats stats;
+ };
+ 
++#ifndef HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
++/* In units of 0.01 % */
++static const struct mlx5e_pcie_cong_thresh default_thresh_config = {
++       .inbound_high = 9000,
++       .inbound_low = 7500,
++       .outbound_high = 9000,
++       .outbound_low = 7500,
++};
++#endif
+ 
+ static const struct counter_desc mlx5e_pcie_cong_stats_desc[] = {
+ 	{ MLX5E_DECLARE_STAT(struct mlx5e_pcie_cong_stats,
+@@ -68,19 +77,23 @@ static MLX5E_DECLARE_STATS_GRP_OP_UPDATE
+ 
+ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(pcie_cong)
+ {
++	int i;
++
+ 	if (!priv->cong_event)
+ 		return;
+ 
+-	for (int i = 0; i < NUM_PCIE_CONG_COUNTERS; i++)
++	for (i = 0; i < NUM_PCIE_CONG_COUNTERS; i++)
+ 		ethtool_puts(data, mlx5e_pcie_cong_stats_desc[i].format);
+ }
+ 
+ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(pcie_cong)
+ {
++	int i;
++
+ 	if (!priv->cong_event)
+ 		return;
+ 
+-	for (int i = 0; i < NUM_PCIE_CONG_COUNTERS; i++) {
++	for (i = 0; i < NUM_PCIE_CONG_COUNTERS; i++) {
+ 		u32 ctr = MLX5E_READ_CTR32_CPU(&priv->cong_event->stats,
+ 					       mlx5e_pcie_cong_stats_desc,
+ 					       i);
+@@ -248,6 +261,7 @@ static int mlx5e_pcie_cong_event_handler
+ 	return NOTIFY_OK;
+ }
+ 
++#ifdef HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+ static int
+ mlx5e_pcie_cong_get_thresh_config(struct mlx5_core_dev *dev,
+ 				  struct mlx5e_pcie_cong_thresh *config)
+@@ -260,12 +274,16 @@ mlx5e_pcie_cong_get_thresh_config(struct
+ 	};
+ 	struct devlink *devlink = priv_to_devlink(dev);
+ 	union devlink_param_value val[4];
++	int i, err;
+ 
+-	for (int i = 0; i < 4; i++) {
++	for (i = 0; i < 4; i++) {
+ 		u32 id = ids[i];
+-		int err;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 		err = devl_param_driverinit_value_get(devlink, id, &val[i]);
++#else
++		err = devlink_param_driverinit_value_get(devlink, id, &val[i]);
++#endif
+ 		if (err)
+ 			return err;
+ 	}
+@@ -298,10 +316,13 @@ mlx5e_thresh_config_validate(struct mlx5
+ 
+ 	return err;
+ }
++#endif /* HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED */
+ 
+ int mlx5e_pcie_cong_event_init(struct mlx5e_priv *priv)
+ {
++#ifdef HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+ 	struct mlx5e_pcie_cong_thresh thresh_config = {};
++#endif
+ 	struct mlx5e_pcie_cong_event *cong_event;
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	int err;
+@@ -309,6 +330,7 @@ int mlx5e_pcie_cong_event_init(struct ml
+ 	if (!mlx5_pcie_cong_event_supported(mdev))
+ 		return 0;
+ 
++#ifdef HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+ 	err = mlx5e_pcie_cong_get_thresh_config(mdev, &thresh_config);
+ 	if (WARN_ON(err))
+ 		return err;
+@@ -318,6 +340,7 @@ int mlx5e_pcie_cong_event_init(struct ml
+ 		mlx5_core_err(mdev, "PCIe congestion event feature disabled\n");
+ 		return err;
+ 	}
++#endif
+ 
+ 	cong_event = kvzalloc_node(sizeof(*cong_event), GFP_KERNEL,
+ 				   mdev->priv.numa_node);
+@@ -330,7 +353,11 @@ int mlx5e_pcie_cong_event_init(struct ml
+ 
+ 	cong_event->priv = priv;
+ 
++#ifdef HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+ 	err = mlx5_cmd_pcie_cong_event_set(mdev, &thresh_config,
++#else
++	err = mlx5_cmd_pcie_cong_event_set(mdev, &default_thresh_config,
++#endif
+ 					   &cong_event->obj_id);
+ 	if (err) {
+ 		mlx5_core_warn(mdev, "Error creating a PCIe congestion event object\n");

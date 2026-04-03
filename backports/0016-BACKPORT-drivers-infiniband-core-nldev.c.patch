@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
 
 ---
- drivers/infiniband/core/nldev.c | 98 +++++++++++++++++++++++++++++++++
- 1 file changed, 98 insertions(+)
+ drivers/infiniband/core/nldev.c | 43 +++++++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
 
 --- a/drivers/infiniband/core/nldev.c
 +++ b/drivers/infiniband/core/nldev.c
@@ -32,21 +32,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  	if (!table_attr)
  		return -EMSGSIZE;
  
-@@ -1076,8 +1084,13 @@ static int nldev_get_doit(struct sk_buff
- 	u32 index;
- 	int err;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+ 				     nldev_policy, extack);
-+#endif
- 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
- 		return -EINVAL;
- 
-@@ -1138,8 +1151,13 @@ static int nldev_set_doit(struct sk_buff
+@@ -1138,8 +1146,13 @@ static int nldev_set_doit(struct sk_buff
  	if (tb[RDMA_NLDEV_ATTR_DEV_NAME]) {
  		char name[IB_DEVICE_NAME_MAX] = {};
  
@@ -60,77 +46,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  		if (strlen(name) == 0) {
  			err = -EINVAL;
  			goto done;
-@@ -1217,8 +1235,13 @@ static int nldev_port_get_doit(struct sk
- 	u32 port;
- 	int err;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+ 	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, extack);
-+#endif
- 	if (err ||
- 	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
- 	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
-@@ -1277,8 +1300,13 @@ static int nldev_port_get_dumpit(struct
- 	int err;
- 	unsigned int p;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
-+#else
-+	err = nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+ 			  nldev_policy, NULL);
-+#endif
- 	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
- 		return -EINVAL;
- 
-@@ -1333,8 +1361,13 @@ static int nldev_res_get_doit(struct sk_
- 	u32 index;
- 	int ret;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, extack);
-+#endif
- 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
- 		return -EINVAL;
- 
-@@ -1483,8 +1516,13 @@ static int res_get_common_doit(struct sk
- 	struct sk_buff *msg;
- 	int ret;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+		 	  nldev_policy, extack);
-+#endif
- 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] || !fe->id || !tb[fe->id])
- 		return -EINVAL;
- 
-@@ -1571,8 +1609,13 @@ static int res_get_common_dumpit(struct
- 	u32 index, port = 0;
- 	bool filled = false;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
-+#else
-+	err = nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+ 			  nldev_policy, NULL);
-+#endif
- 	/*
- 	 * Right now, we are expecting the device index to get res information,
- 	 * but it is possible to extend this code to return all devices in
-@@ -1613,7 +1656,11 @@ static int res_get_common_dumpit(struct
+@@ -1614,7 +1627,11 @@ static int res_get_common_dumpit(struct
  		goto err;
  	}
  
@@ -142,7 +58,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  	if (!table_attr) {
  		ret = -EMSGSIZE;
  		goto err;
-@@ -1639,7 +1686,11 @@ static int res_get_common_dumpit(struct
+@@ -1640,7 +1657,11 @@ static int res_get_common_dumpit(struct
  
  		filled = true;
  
@@ -154,7 +70,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  		if (!entry_attr) {
  			ret = -EMSGSIZE;
  			rdma_restrack_put(res);
-@@ -1770,14 +1821,25 @@ static int nldev_newlink(struct sk_buff
+@@ -1771,14 +1792,25 @@ static int nldev_newlink(struct sk_buff
  	    !tb[RDMA_NLDEV_ATTR_LINK_TYPE] || !tb[RDMA_NLDEV_ATTR_NDEV_NAME])
  		return -EINVAL;
  
@@ -180,17 +96,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  
  	ndev = dev_get_by_name(sock_net(skb->sk), ndev_name);
  	if (!ndev)
-@@ -1838,13 +1900,23 @@ static int nldev_get_chardev(struct sk_b
- 	u32 index;
- 	int err;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1, nldev_policy,
- 			    NL_VALIDATE_LIBERAL, extack);
-+#else
-+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1, nldev_policy,
-+		                          extack);
-+#endif
+@@ -1844,8 +1876,13 @@ static int nldev_get_chardev(struct sk_b
  	if (err || !tb[RDMA_NLDEV_ATTR_CHARDEV_TYPE])
  		return -EINVAL;
  
@@ -204,21 +110,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  
  	if (tb[RDMA_NLDEV_ATTR_DEV_INDEX]) {
  		index = nla_get_u32(tb[RDMA_NLDEV_ATTR_DEV_INDEX]);
-@@ -1922,8 +1994,13 @@ static int nldev_sys_get_doit(struct sk_
- 	struct sk_buff *msg;
- 	int err;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	err = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	err = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, extack);
-+#endif
- 	if (err)
- 		return err;
- 
-@@ -1959,6 +2036,7 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1960,6 +1997,7 @@ static int nldev_sys_get_doit(struct sk_
  		nlmsg_free(msg);
  		return err;
  	}
@@ -226,7 +118,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  	/*
  	 * Copy-on-fork is supported.
  	 * See commits:
-@@ -1970,6 +2048,7 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1971,6 +2009,7 @@ static int nldev_sys_get_doit(struct sk_
  	 * supported in case of failure.
  	 */
  	nla_put_u8(msg, RDMA_NLDEV_SYS_ATTR_COPY_ON_FORK, 1);
@@ -234,49 +126,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/nldev.c
  
  	nlmsg_end(msg, nlh);
  	return rdma_nl_unicast(sock_net(skb->sk), msg, NETLINK_CB(skb).portid);
-@@ -2441,8 +2520,13 @@ static int nldev_stat_get_doit(struct sk
- 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
- 	int ret;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, extack);
-+#endif
- 	if (ret)
- 		return -EINVAL;
- 
-@@ -2471,8 +2555,13 @@ static int nldev_stat_get_dumpit(struct
- 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
- 	int ret;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	ret = __nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, NULL);
-+#else
-+	ret = nlmsg_parse(cb->nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, NULL);
-+#endif
- 	if (ret || !tb[RDMA_NLDEV_ATTR_STAT_RES])
- 		return -EINVAL;
- 
-@@ -2503,8 +2592,13 @@ static int nldev_stat_get_counter_status
- 	u32 devid, port;
- 	int ret, i;
- 
-+#ifdef HAVE___NLMSG_PARSE
- 	ret = __nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
- 			    nldev_policy, NL_VALIDATE_LIBERAL, extack);
-+#else
-+	ret = nlmsg_parse(nlh, 0, tb, RDMA_NLDEV_ATTR_MAX - 1,
-+			  nldev_policy, extack);
-+#endif
- 	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
- 	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
- 		return -EINVAL;
-@@ -2601,7 +2695,11 @@ static int nldev_newdev(struct sk_buff *
+@@ -2603,7 +2642,11 @@ static int nldev_newdev(struct sk_buff *
  		!tb[RDMA_NLDEV_ATTR_DEV_NAME] || !tb[RDMA_NLDEV_ATTR_DEV_TYPE])
  		return -EINVAL;
  

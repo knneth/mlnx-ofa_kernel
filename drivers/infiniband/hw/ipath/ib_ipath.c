@@ -35,15 +35,12 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"ib_ipath"
-#define DRV_VERSION	"25.10-2.4.1"
-#define DRV_RELDATE	"19 Mar 2026"
+#define DRV_VERSION	"26.01-1.0.0"
+#define DRV_RELDATE	"17 Feb 2026"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("ib_ipath dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init ib_ipath_init(void)

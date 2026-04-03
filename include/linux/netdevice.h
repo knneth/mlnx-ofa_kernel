@@ -24,10 +24,6 @@
     ( (netdev)->ethtool_ops = (ops) )
 #endif
 
-#ifndef NETDEV_BONDING_INFO
-#define NETDEV_BONDING_INFO     0x0019
-#endif
-
 static inline int netdev_set_master(struct net_device *dev,
 				    struct net_device *master)
 {
@@ -43,61 +39,10 @@ static inline int netdev_set_master(struct net_device *dev,
 	return rc;
 }
 
-#ifndef NAPI_POLL_WEIGHT
-/* Default NAPI poll() weight
- * Device drivers are strongly advised to not use bigger value
- */
-#define NAPI_POLL_WEIGHT 64
-#endif
-
-#ifndef NETDEV_JOIN
-#define NETDEV_JOIN           0x0014
-#endif
-
 /* This is geared toward old kernels that have Bonding.h and don't have TX type.
  * It's tested on RHEL 6.9, 7.2 and 7.3 in addition to Ubuntu 16.04.
  */
 
-#ifndef NET_NAME_UNKNOWN
-#define NET_NAME_UNKNOWN        0       /*  unknown origin (not exposed to userspace) */
-#endif
-
-#ifndef netdev_WARN_ONCE
-
-#define netdev_level_once(level, dev, fmt, ...)			\
-do {								\
-	static bool __print_once __read_mostly;			\
-								\
-	if (!__print_once) {					\
-		__print_once = true;				\
-		netdev_printk(level, dev, fmt, ##__VA_ARGS__);	\
-	}							\
-} while (0)
-
-#define netdev_emerg_once(dev, fmt, ...) \
-	netdev_level_once(KERN_EMERG, dev, fmt, ##__VA_ARGS__)
-#define netdev_alert_once(dev, fmt, ...) \
-	netdev_level_once(KERN_ALERT, dev, fmt, ##__VA_ARGS__)
-#define netdev_crit_once(dev, fmt, ...) \
-	netdev_level_once(KERN_CRIT, dev, fmt, ##__VA_ARGS__)
-#define netdev_err_once(dev, fmt, ...) \
-	netdev_level_once(KERN_ERR, dev, fmt, ##__VA_ARGS__)
-#define netdev_warn_once(dev, fmt, ...) \
-	netdev_level_once(KERN_WARNING, dev, fmt, ##__VA_ARGS__)
-#define netdev_notice_once(dev, fmt, ...) \
-	netdev_level_once(KERN_NOTICE, dev, fmt, ##__VA_ARGS__)
-#define netdev_info_once(dev, fmt, ...) \
-	netdev_level_once(KERN_INFO, dev, fmt, ##__VA_ARGS__)
-
-#endif /* netdev_WARN_ONCE */
-
-/* WA for broken netdev_WARN_ONCE in some kernels */
-#ifdef netdev_WARN_ONCE
-#undef netdev_WARN_ONCE
-#endif
-#define netdev_WARN_ONCE(dev, format, args...)				\
-	WARN_ONCE(1, "netdevice: %s%s: " format, netdev_name(dev),	\
-		  netdev_reg_state(dev), ##args)
 
 #ifndef HAVE_NETDEV_NET_NOTIFIER
 struct netdev_net_notifier {
@@ -145,22 +90,6 @@ static inline void net_prefetchw(void *p)
 #endif
 }
 #endif /* HAVE_NET_PREFETCH */
-
-#ifndef HAVE___NETDEV_TX_SENT_QUEUE
-static inline bool __netdev_tx_sent_queue(struct netdev_queue *dev_queue,
-					  unsigned int bytes,
-					  bool xmit_more)
-{
-	if (xmit_more) {
-#ifdef CONFIG_BQL
-		dql_queued(&dev_queue->dql, bytes);
-#endif
-		return netif_tx_queue_stopped(dev_queue);
-	}
-	netdev_tx_sent_queue(dev_queue, bytes);
-	return true;
-}
-#endif /* HAVE___NETDEV_TX_SENT_QUEUE */
 
 #if !defined(HAVE_NETDEV_PUT_AND_HOLD)
 

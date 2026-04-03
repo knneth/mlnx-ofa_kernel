@@ -1,0 +1,55 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+
+Change-Id: I5ea602fc11854607817f74469599badfd6e703cd
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+@@ -142,6 +142,7 @@ err_close_tises:
+ 	return err;
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS
+ static unsigned int
+ mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
+ {
+@@ -153,6 +154,7 @@ mlx5e_get_devlink_param_num_doorbells(st
+ 	err = devl_param_driverinit_value_get(devlink, param_id, &val);
+ 	return err ? MLX5_DEFAULT_NUM_DOORBELLS : val.vu32;
+ }
++#endif
+ 
+ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
+ {
+@@ -178,8 +180,13 @@ int mlx5e_create_mdev_resources(struct m
+ 		goto err_dealloc_transport_domain;
+ 	}
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS
+ 	num_doorbells = min(mlx5e_get_devlink_param_num_doorbells(mdev),
+ 			    mlx5e_get_max_num_channels(mdev));
++#else
++	num_doorbells = min((unsigned int)MLX5_DEFAULT_NUM_DOORBELLS,
++			    mlx5e_get_max_num_channels(mdev));
++#endif
+ 	res->bfregs = kcalloc(num_doorbells, sizeof(*res->bfregs), GFP_KERNEL);
+ 	if (!res->bfregs) {
+ 		err = -ENOMEM;
+@@ -234,12 +241,13 @@ err_dealloc_pd:
+ void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
+ {
+ 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
++	unsigned int i;
+ 
+ 	mlx5_crypto_dek_cleanup(mdev->mlx5e_res.dek_priv);
+ 	mdev->mlx5e_res.dek_priv = NULL;
+ 	if (res->tisn_valid)
+ 		mlx5e_destroy_tises(mdev, res->tisn);
+-	for (unsigned int i = 0; i < res->num_bfregs; i++)
++	for (i = 0; i < res->num_bfregs; i++)
+ 		mlx5_free_bfreg(mdev, res->bfregs + i);
+ 	kfree(res->bfregs);
+ 	mlx5_core_destroy_mkey(mdev, res->mkey);

@@ -6,5 +6,3 @@
 #include_next <uapi/linux/net_tstamp.h>
 
 #endif /* _COMPAT_UAPI_LINUX_NET_TSTAMP_H */
-
-#include_next <linux/net_tstamp.h>

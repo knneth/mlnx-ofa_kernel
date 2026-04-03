@@ -135,10 +135,6 @@ struct tc_cls_flower_offload {
 };
 #endif /* !defined(HAVE_TC_FLOWER_OFFLOAD) && !defined(HAVE_FLOW_CLS_OFFLOAD) */
 
-#ifndef NETIF_F_HW_TC
-#define NETIF_F_HW_TC ((netdev_features_t)1 << ((NETDEV_FEATURE_COUNT + 1)))
-#endif
-
 #ifndef HAVE_FLOW_CLS_OFFLOAD
 #define flow_cls_offload tc_cls_flower_offload
 #endif

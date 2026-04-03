@@ -299,7 +299,7 @@ QUILT=${QUILT:-$(/usr/bin/which quilt  2> /dev/null)}
 GIT=${GIT:-$(/usr/bin/which git 2> /dev/null)}
 REJECT="--reject"
 
-if [[ ! -x "$GIT" || ! -e ".git" ]]; then
+if [[ ! -x "$GIT" || ! -d ".git" ]]; then
     WITH_GIT="no"
 fi
 

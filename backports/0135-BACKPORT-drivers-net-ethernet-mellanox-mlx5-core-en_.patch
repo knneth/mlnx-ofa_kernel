@@ -1,37 +1,78 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 6 ++++--
- 1 file changed, 4 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls.h        | 23 +++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
-@@ -132,6 +132,7 @@ enum mlx5_ipsec_cap {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+@@ -13,10 +13,16 @@
+ #include "lib/crypto.h"
+ #include "lib/mlx5.h"
  
- struct mlx5e_priv;
- 
-+#ifdef CONFIG_MLX5_EN_IPSEC
- struct mlx5e_ipsec_hw_stats {
- 	u64 ipsec_rx_pkts;
- 	u64 ipsec_rx_bytes;
-@@ -275,6 +276,9 @@ struct mlx5e_ipsec_limits {
- struct mlx5e_ipsec_sa_entry {
- 	struct mlx5e_ipsec_esn_state esn_state;
- 	struct xfrm_state *x;
-+#ifdef HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE
-+	struct net_device *dev;
++#ifndef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
++int mlx5_ktls_create_key(struct mlx5_core_dev *mdev,
++			 struct tls_crypto_info *crypto_info, u32 *p_key_id);
++void mlx5_ktls_destroy_key(struct mlx5_core_dev *mdev, u32 key_id);
++#else
+ struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_pool,
+ 					     struct tls_crypto_info *crypto_info);
+ void mlx5_ktls_destroy_key(struct mlx5_crypto_dek_pool *dek_pool,
+ 			   struct mlx5_crypto_dek *dek);
 +#endif
- 	struct mlx5e_ipsec *ipsec;
- 	struct mlx5_accel_esp_xfrm_attrs attrs;
- 	void (*set_iv_op)(struct sk_buff *skb, struct xfrm_state *x,
-@@ -305,8 +309,6 @@ struct mlx5e_ipsec_pol_entry {
- 	struct mlx5_accel_pol_xfrm_attrs attrs;
+ 
+ static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
+ {
+@@ -53,12 +59,19 @@ static inline bool mlx5e_ktls_type_check
+ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
+ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
++int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
++void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
+ int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
+ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
+ int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
+ struct mlx5e_ktls_resync_resp *
+ mlx5e_ktls_rx_resync_create_resp_list(void);
++#ifdef HAVE_KTLS_RX_SUPPORT
+ void mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list);
++#else
++static inline void
++mlx5e_ktls_rx_resync_destroy_resp_list(struct mlx5e_ktls_resync_resp *resp_list) {}
++#endif
+ 
+ static inline bool mlx5e_is_ktls_tx(struct mlx5_core_dev *mdev)
+ {
+@@ -87,7 +100,9 @@ struct mlx5e_tls {
+ 	struct mlx5e_tls_sw_stats sw_stats;
+ 	struct workqueue_struct *rx_wq;
+ 	struct mlx5e_tls_tx_pool *tx_pool;
++#ifdef HAVE_TLS_OFFLOAD_DESTRUCT_WORK
+ 	struct mlx5_crypto_dek_pool *dek_pool;
++#endif
+ 	struct mlx5e_tls_debugfs debugfs;
  };
  
--#ifdef CONFIG_MLX5_EN_IPSEC
--
- void mlx5e_ipsec_init(struct mlx5e_priv *priv);
- void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv);
- void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv);
+@@ -103,16 +118,16 @@ static inline void mlx5e_ktls_build_netd
+ {
+ }
+ 
+-static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
++static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
+ {
+-	return 0;
+ }
+ 
+-static inline void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
+ {
++	return 0;
+ }
+ 
+-static inline int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
++static inline int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
+ {
+ 	return 0;
+ }

@@ -4,6 +4,9 @@
 #ifndef __LIB_HV_VHCA_H__
 #define __LIB_HV_VHCA_H__
 
+#include "en.h"
+#include "lib/hv.h"
+
 struct mlx5_hv_vhca_agent;
 struct mlx5_hv_vhca;
 struct mlx5_hv_vhca_control_block;

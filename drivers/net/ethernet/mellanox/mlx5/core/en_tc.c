@@ -756,11 +756,11 @@ static int mlx5e_hairpin_create_indirect_rqt(struct mlx5e_hairpin *hp)
 	struct mlx5e_priv *priv = hp->func_priv;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_rss_params_indir indir;
+	u32 rqt_size;
 	int err;
 
-	err = mlx5e_rss_params_indir_init(&indir, mdev,
-					  mlx5e_rqt_size(mdev, hp->num_channels),
-					  mlx5e_rqt_size(mdev, hp->num_channels));
+	rqt_size = mlx5e_rqt_size(mdev, hp->num_channels);
+	err = mlx5e_rss_params_indir_init(&indir, rqt_size, rqt_size);
 	if (err)
 		return err;
 
@@ -836,6 +836,9 @@ static void mlx5e_hairpin_set_ttc_params(struct mlx5e_hairpin *hp,
 
 	ttc_params->ns_type = MLX5_FLOW_NAMESPACE_KERNEL;
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
+		if (mlx5_ttc_is_decrypted_esp_tt(tt))
+			continue;
+
 		ttc_params->dests[tt].type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 		ttc_params->dests[tt].tir_num =
 			tt == MLX5_TT_ANY ?
@@ -3477,12 +3480,11 @@ static int parse_tunnel_attr(struct mlx5e_priv *priv,
 
 		err = mlx5e_tc_tun_parse(filter_dev, priv, tmp_spec, f, match_level);
 		if (err) {
-			kvfree(tmp_spec);
 			NL_SET_ERR_MSG_MOD(extack, "Failed to parse tunnel attributes");
 			netdev_warn(priv->netdev, "Failed to parse tunnel attributes");
-			return err;
+		} else {
+			err = mlx5e_tc_set_attr_rx_tun(flow, tmp_spec);
 		}
-		err = mlx5e_tc_set_attr_rx_tun(flow, tmp_spec);
 		if (mlx5_flow_has_geneve_opt(tmp_spec))
 			mlx5_geneve_tlv_option_del(priv->mdev->geneve);
 		kvfree(tmp_spec);
@@ -6365,7 +6367,7 @@ int mlx5e_tc_esw_init(struct mlx5_rep_uplink_priv *uplink_priv)
 		goto err_action_counter;
 	}
 
-	err = dev_get_port_parent_id(priv->netdev, &ppid, false);
+	err = netif_get_port_parent_id(priv->netdev, &ppid, false);
 	if (!err) {
 		memcpy(&attr.key.buf, &ppid.id, ppid.id_len);
 		attr.flags = MLX5_DEVCOM_MATCH_FLAGS_NS;

@@ -424,9 +424,7 @@ set_modules_to_load() {
     UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
     UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
     UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa mlx5_vfio_pci"
-    if check_mlnx_ofed_module fwctl >/dev/null; then
     UNLOAD_MODULES="$UNLOAD_MODULES fwctl"
-    fi
     UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
 
     STATUS_MODULES="rdma_ucm ib_srp ib_sdp rdma_cm ib_ipoib mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core mlxfw"
@@ -1455,7 +1453,7 @@ check_if_ok_to_stop() {
     # Lookup for remaining applications using infiniband devices
     local entries
     if [ -d /dev/infiniband ]; then
-        entries=$(lsof +c 0 -a +d /dev/infiniband 2>/dev/null | grep -v "^COMMAND" | \
+        entries=$(lsof -nP -b +c 0 2> /dev/null | grep '/dev/infiniband' | \
         awk '{print $1 " " $2 " " $3 " " $NF}' | sort -u)
     fi
     if [ -n "$entries" ]; then

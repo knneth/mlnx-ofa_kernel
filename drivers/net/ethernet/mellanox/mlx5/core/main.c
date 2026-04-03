@@ -80,7 +80,7 @@ MODULE_AUTHOR("Eli Cohen <eli@mellanox.com>");
 MODULE_DESCRIPTION("Mellanox 5th generation network adapters (ConnectX series) core driver");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRIVER_VERSION);
-MODULE_INFO(basedon, "Korg 6.15-rc4");
+MODULE_INFO(basedon, "Korg 6.18-rc4");
 MODULE_INFO(supported, "external");
 
 unsigned int mlx5_core_debug_mask;
@@ -1149,9 +1149,8 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 	struct mlxdevm *devm;
 
 	dev->priv.devc = mlx5_devcom_register_device(dev);
-	if (IS_ERR(dev->priv.devc))
-		mlx5_core_warn(dev, "failed to register devcom device %ld\n",
-			       PTR_ERR(dev->priv.devc));
+	if (!dev->priv.devc)
+		mlx5_core_warn(dev, "failed to register devcom device\n");
 
 	err = mlx5_query_board_id(dev);
 	if (err) {
@@ -1270,9 +1269,7 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 	}
 
 	dev->dm = mlx5_dm_create(dev);
-	if (IS_ERR(dev->dm))
-		mlx5_core_warn(dev, "Failed to init device memory %ld\n", PTR_ERR(dev->dm));
-
+	dev->st = mlx5_st_create(dev);
 	dev->tracer = mlx5_fw_tracer_create(dev);
 	dev->hv_vhca = mlx5_hv_vhca_create(dev);
 	dev->rsc_dump = mlx5_rsc_dump_create(dev);
@@ -1327,6 +1324,7 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_rsc_dump_destroy(dev);
 	mlx5_hv_vhca_destroy(dev->hv_vhca);
 	mlx5_fw_tracer_destroy(dev->tracer);
+	mlx5_st_destroy(dev);
 	mlx5_dm_cleanup(dev);
 	mlx5_regex_sysfs_cleanup(dev);
 	mlx5_fs_core_free(dev);
@@ -1518,10 +1516,9 @@ static int mlx5_load(struct mlx5_core_dev *dev)
 {
 	int err;
 
-	dev->priv.uar = mlx5_get_uars_page(dev);
-	if (IS_ERR(dev->priv.uar)) {
-		mlx5_core_err(dev, "Failed allocating uar, aborting\n");
-		err = PTR_ERR(dev->priv.uar);
+	err = mlx5_alloc_bfreg(dev, &dev->priv.bfreg, false, false);
+	if (err) {
+		mlx5_core_err(dev, "Failed allocating bfreg, %d\n", err);
 		return err;
 	}
 
@@ -1648,7 +1645,7 @@ err_eq_table:
 err_irq_table:
 	mlx5_pagealloc_stop(dev);
 	mlx5_events_stop(dev);
-	mlx5_put_uars_page(dev, dev->priv.uar);
+	mlx5_free_bfreg(dev, &dev->priv.bfreg);
 	return err;
 }
 
@@ -1677,7 +1674,7 @@ static void mlx5_unload(struct mlx5_core_dev *dev)
 	mlx5_irq_table_destroy(dev);
 	mlx5_pagealloc_stop(dev);
 	mlx5_events_stop(dev);
-	mlx5_put_uars_page(dev, dev->priv.uar);
+	mlx5_free_bfreg(dev, &dev->priv.bfreg);
 }
 
 int mlx5_init_one_devl_locked(struct mlx5_core_dev *dev)
@@ -1816,12 +1813,6 @@ int mlx5_load_one_devl_locked(struct mlx5_core_dev *dev, bool recovery)
 	}
 	/* remove any previous indication of internal error */
 	dev->state = MLX5_DEVICE_STATE_UP;
-
-	if (test_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state)) {
-		mlx5_core_warn(dev, "device is being removed, stop load\n");
-		err = -ENODEV;
-		goto out;
-	}
 
 	if (recovery)
 		timeout = mlx5_tout_ms(dev, FW_PRE_INIT_ON_RECOVERY_TIMEOUT);
@@ -2025,6 +2016,7 @@ static const int types[] = {
 	MLX5_CAP_VDPA_EMULATION,
 	MLX5_CAP_IPSEC,
 	MLX5_CAP_PORT_SELECTION,
+	MLX5_CAP_PSP,
 	MLX5_CAP_MACSEC,
 	MLX5_CAP_ADV_VIRTUALIZATION,
 	MLX5_CAP_CRYPTO,
@@ -2462,6 +2454,7 @@ static void shutdown(struct pci_dev *pdev)
 
 	mlx5_core_info(dev, "Shutdown was called\n");
 	set_bit(MLX5_BREAK_FW_WAIT, &dev->intf_state);
+	mlx5_drain_fw_reset(dev);
 	mlx5_drain_health_wq(dev);
 	err = mlx5_try_fast_unload(dev);
 	if (err)

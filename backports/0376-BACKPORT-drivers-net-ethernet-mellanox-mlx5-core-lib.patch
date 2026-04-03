@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
+
+Change-Id: Id856bcf5890d39786197dba63ff1204d92943a72
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
+@@ -52,7 +52,11 @@ static inline struct net_device *mlx5_up
+ 
+ 	mutex_lock(&mlx5e_res->uplink_netdev_lock);
+ 	netdev = mlx5e_res->uplink_netdev;
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 	netdev_hold(netdev, &mlx5e_res->tracker, GFP_KERNEL);
++#else
++	dev_hold(netdev);
++#endif
+ 	mutex_unlock(&mlx5e_res->uplink_netdev_lock);
+ 	return netdev;
+ }
+@@ -60,7 +64,11 @@ static inline struct net_device *mlx5_up
+ static inline void mlx5_uplink_netdev_put(struct mlx5_core_dev *mdev,
+ 					  struct net_device *netdev)
+ {
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 	netdev_put(netdev, &mdev->mlx5e_res.tracker);
++#else
++	dev_put(netdev);
++#endif
+ }
+ 
+ struct mlx5_sd;

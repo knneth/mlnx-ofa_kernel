@@ -1,0 +1,48 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib.h
+
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib.h
++++ b/drivers/infiniband/ulp/ipoib/ipoib.h
+@@ -42,6 +42,9 @@
+ #include <linux/kref.h>
+ #include <linux/if_infiniband.h>
+ #include <linux/mutex.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/ratelimit.h>
++#endif
+ 
+ #include <net/neighbour.h>
+ #include <net/sch_generic.h>
+@@ -401,9 +404,21 @@ struct ipoib_dev_priv {
+ 	struct ib_event_handler event_handler;
+ 
+ 	struct net_device *parent;
++#ifndef HAVE_NETDEVICE_NETDEV_LOCK
++	/* For kernels <=v6.12 that do not include upstream commit:
++	 * 463e51769697 (IB/IPoIB: Replace vlan_rwsem with the netdev instance lock)
++	 * This protects access to the child_intfs list.
++	 * To READ from child_intfs the RTNL or vlan_rwsem read side must be
++	 * held.  To WRITE RTNL and the vlan_rwsem write side must be held (in
++	 * that order) This lock exists because we have a few contexts where
++	 * we need the child_intfs, but do not want to grab the RTNL.
++	 */
++	struct rw_semaphore vlan_rwsem;
++#else
+ 	/* 'child_intfs' and 'list' membership of all child devices are
+ 	 * protected by the netdev instance lock of 'dev'.
+ 	 */
++#endif
+ 	struct list_head child_intfs;
+ 	struct list_head list;
+ 	int    child_type;
+@@ -856,5 +871,6 @@ extern int ipoib_debug_level;
+ #endif /* CONFIG_INFINIBAND_IPOIB_DEBUG_DATA */
+ 
+ #define IPOIB_QPN(ha) (be32_to_cpup((__be32 *) ha) & 0xffffff)
++extern int ipoib_enhanced_enabled;
+ 
+ #endif /* _IPOIB_H */

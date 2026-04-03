@@ -32,9 +32,6 @@
 #include <linux/etherdevice.h>
 
 MODULE_LICENSE("GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_AUTHOR("Jan-Bernd Themann <themann@de.ibm.com>");
 MODULE_DESCRIPTION("Large Receive Offload (ipv4 / tcp)");
 

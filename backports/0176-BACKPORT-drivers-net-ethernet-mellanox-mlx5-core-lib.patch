@@ -1,31 +1,32 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/lib/tout.c   | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
-@@ -131,8 +131,10 @@ mlx5_devcom_comp_alloc(u64 id, const str
- 		write_pnet(&comp->key.net, attr->net);
- 	comp->handler = handler;
- 	init_rwsem(&comp->sem);
-+#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
- 	lockdep_register_key(&comp->lock_key);
- 	lockdep_set_class(&comp->sem, &comp->lock_key);
-+#endif
- 	kref_init(&comp->ref);
- 	INIT_LIST_HEAD(&comp->comp_dev_list_head);
- 
-@@ -147,7 +149,9 @@ mlx5_devcom_comp_release(struct kref *re
- 	mutex_lock(&comp_list_lock);
- 	list_del(&comp->comp_list);
- 	mutex_unlock(&comp_list_lock);
-+#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
- 	lockdep_unregister_key(&comp->lock_key);
-+#endif
- 	kfree(comp);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
+@@ -52,6 +52,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
+ 	kfree(dev->timeouts);
  }
  
++#ifndef HAVE_INT_POW
++static u64 int_pow(u64 base, unsigned int exp)
++{
++	u64 result = 1;
++
++	while (exp) {
++		if (exp & 1)
++			result *= base;
++		exp >>= 1;
++		base *= base;
++	}
++
++	return result;
++}
++#endif
++
+ /* Time register consists of two fields to_multiplier(time out multiplier)
+  * and to_value(time out value). to_value is the quantity of the time units and
+  * to_multiplier is the type and should be one off these four values.

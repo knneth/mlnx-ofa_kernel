@@ -1,59 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en/qos.c   | 18 +++++++++++++++---
- 1 file changed, 15 insertions(+), 3 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
-@@ -386,6 +386,7 @@ void mlx5e_reset_qdisc(struct net_device
- 	spin_unlock_bh(qdisc_lock(qdisc));
- }
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+@@ -3,8 +3,10 @@
  
-+#ifdef HAVE_ENUM_TC_HTB_COMMAND
- int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
- {
- 	struct mlx5e_htb *htb = priv->htb;
-@@ -393,12 +394,17 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
- 
- 	if (!htb && htb_qopt->command != TC_HTB_CREATE)
- 		return -EINVAL;
+ #include <linux/netdevice.h>
+ #include <linux/list.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/bonding.h>
++#endif
+ #include <net/lag.h>
 -
--	if (htb_qopt->prio || htb_qopt->quantum) {
-+#if defined(HAVE_TC_HTB_OPT_PRIO)
-+if (htb_qopt->prio
-+#if defined(HAVE_TC_HTB_OPT_QUANTUM)
-+	|| htb_qopt->quantum
-+#endif
-+	) {
- 		NL_SET_ERR_MSG_MOD(htb_qopt->extack,
--				   "prio and quantum parameters are not supported by device with HTB offload enabled.");
-+				"prio and quantum parameters are not supported by device with HTB offload enabled.");
- 		return -EOPNOTSUPP;
- 	}
-+#endif
- 
- 	switch (htb_qopt->command) {
- 	case TC_HTB_CREATE:
-@@ -433,7 +439,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
- 		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
- 					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
- 	case TC_HTB_LEAF_DEL:
-+#ifndef HAVE_TC_HTB_COMMAND_HAS_MOVED_QID 
- 		return mlx5e_htb_leaf_del(htb, &htb_qopt->classid, htb_qopt->extack);
-+#else
-+		return mlx5e_htb_leaf_del(htb, htb_qopt->classid, &htb_qopt->moved_qid, &htb_qopt->qid,
-+					  htb_qopt->extack);
-+#endif
- 	case TC_HTB_LEAF_DEL_LAST:
- 	case TC_HTB_LEAF_DEL_LAST_FORCE:
- 		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
-@@ -452,6 +463,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
- 		return -EOPNOTSUPP;
- 	}
- }
-+#endif
- 
- struct mlx5e_mqprio_rl {
- 	struct mlx5_core_dev *mdev;
+ #include "mlx5_core.h"
+ #include "eswitch.h"
+ #include "esw/acl/ofld.h"

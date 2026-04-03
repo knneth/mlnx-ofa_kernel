@@ -1,0 +1,94 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/fcloop.c
+
+Change-Id: Ieca03455c5140895a2bd7e4dd6e28ba408d0abb0
+---
+ drivers/nvme/target/fcloop.c | 36 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/fcloop.c
++++ b/drivers/nvme/target/fcloop.c
+@@ -2,6 +2,7 @@
+ /*
+  * Copyright (c) 2016 Avago Technologies.  All rights reserved.
+  */
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -1685,9 +1686,13 @@ static const struct attribute_group *fcl
+ 	NULL,
+ };
+ 
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ static const struct class fcloop_class = {
+ 	.name = "fcloop",
+ };
++#else
++static struct class *fcloop_class;
++#endif
+ static struct device *fcloop_device;
+ 
+ static int __init fcloop_init(void)
+@@ -1700,15 +1705,33 @@ static int __init fcloop_init(void)
+ 	if (!lsreq_cache)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	ret = class_register(&fcloop_class);
+ 	if (ret) {
+ 		pr_err("couldn't register class fcloop\n");
+ 		goto out_destroy_cache;
+ 	}
++#else
++#ifdef HAVE_CLASS_CREATE_GET_1_PARAM
++	fcloop_class = class_create("fcloop");
++#else
++	fcloop_class = class_create(THIS_MODULE, "fcloop");
++#endif
++	if (IS_ERR(fcloop_class)) {
++		pr_err("couldn't register class fcloop\n");
++		ret = PTR_ERR(fcloop_class);
++		goto out_destroy_cache;
++	}
++#endif
+ 
+ 	fcloop_device = device_create_with_groups(
+-				&fcloop_class, NULL, MKDEV(0, 0), NULL,
+-				fcloop_dev_attr_groups, "ctl");
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
++		&fcloop_class,
++#else
++		fcloop_class,
++#endif
++		NULL, MKDEV(0, 0), NULL,
++		fcloop_dev_attr_groups, "ctl");
+ 	if (IS_ERR(fcloop_device)) {
+ 		pr_err("couldn't create ctl device!\n");
+ 		ret = PTR_ERR(fcloop_device);
+@@ -1720,7 +1743,11 @@ static int __init fcloop_init(void)
+ 	return 0;
+ 
+ out_destroy_class:
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	class_unregister(&fcloop_class);
++#else
++	class_unregister(fcloop_class);
++#endif
+ out_destroy_cache:
+ 	kmem_cache_destroy(lsreq_cache);
+ 	return ret;
+@@ -1788,8 +1815,13 @@ static void __exit fcloop_exit(void)
+ 
+ 	put_device(fcloop_device);
+ 
++#ifdef HAVE_CLASS_REGISTER_GET_CONST
+ 	device_destroy(&fcloop_class, MKDEV(0, 0));
+ 	class_unregister(&fcloop_class);
++#else
++	device_destroy(fcloop_class, MKDEV(0, 0));
++	class_unregister(fcloop_class);
++#endif
+ 	kmem_cache_destroy(lsreq_cache);
+ }
+ 

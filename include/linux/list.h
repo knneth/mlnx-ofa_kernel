@@ -29,24 +29,9 @@ static inline int list_is_first(const struct list_head *list, const struct list_
 }
 #endif
 
-#ifndef list_entry_is_head
-#define list_entry_is_head(pos, head, member)				\
-		(&pos->member == (head))
-#endif
-
-#ifndef list_prev_entry
-#define list_prev_entry(pos, member) \
-	list_entry((pos)->member.prev, typeof(*(pos)), member)
-#endif
-
-#ifndef list_next_entry
-#define list_next_entry(pos, member) \
-	list_entry((pos)->member.next, typeof(*(pos)), member)
-#endif
-
-#ifndef list_first_entry_or_null
-#define list_first_entry_or_null(ptr, type, member) \
-	(!list_empty(ptr) ? list_first_entry(ptr, type, member) : NULL)
+#ifndef HAVE_LIST_ENTRY_IS_HEAD
+#define list_entry_is_head(pos, head, member)                          \
+               (&pos->member == (head))
 #endif
 
 #endif /* _COMPAT_LINUX_LIST_H */

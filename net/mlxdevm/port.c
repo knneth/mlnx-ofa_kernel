@@ -1449,8 +1449,8 @@ int devlink_port_netdevice_event(struct notifier_block *nb,
 }
 #endif
 
-static int __mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
-				    enum mlxdevm_port_flavour flavour)
+static void __mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
+				     enum mlxdevm_port_flavour flavour)
 {
 	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
 
@@ -1463,7 +1463,6 @@ static int __mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
 	} else {
 		mlxdevm_port->switch_port = false;
 	}
-	return 0;
 }
 
 /**
@@ -1473,17 +1472,13 @@ static int __mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
  *	@attrs: mlxdevm port attrs
  */
 void mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
-			    struct mlxdevm_port_attrs *attrs)
+			    const struct mlxdevm_port_attrs *attrs)
 {
-	int ret;
-
 	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
+	WARN_ON(attrs->splittable && attrs->split);
 
 	mlxdevm_port->attrs = *attrs;
-	ret = __mlxdevm_port_attrs_set(mlxdevm_port, attrs->flavour);
-	if (ret)
-		return;
-	WARN_ON(attrs->splittable && attrs->split);
+	__mlxdevm_port_attrs_set(mlxdevm_port, attrs->flavour);
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_set);
 
@@ -1499,14 +1494,10 @@ void mlxdevm_port_attrs_pci_pf_set(struct mlxdevm_port *mlxdevm_port, u32 contro
 				   u16 pf, bool external)
 {
 	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
-	int ret;
 
 	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
-				       MLXDEVM_PORT_FLAVOUR_PCI_PF);
-	if (ret)
-		return;
+	__mlxdevm_port_attrs_set(mlxdevm_port, MLXDEVM_PORT_FLAVOUR_PCI_PF);
 	attrs->pci_pf.controller = controller;
 	attrs->pci_pf.pf = pf;
 	attrs->pci_pf.external = external;
@@ -1527,14 +1518,10 @@ void mlxdevm_port_attrs_pci_vf_set(struct mlxdevm_port *mlxdevm_port, u32 contro
 				   u16 pf, u16 vf, bool external)
 {
 	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
-	int ret;
 
 	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
-				       MLXDEVM_PORT_FLAVOUR_PCI_VF);
-	if (ret)
-		return;
+	__mlxdevm_port_attrs_set(mlxdevm_port, MLXDEVM_PORT_FLAVOUR_PCI_VF);
 	attrs->pci_vf.controller = controller;
 	attrs->pci_vf.pf = pf;
 	attrs->pci_vf.vf = vf;
@@ -1555,14 +1542,10 @@ void mlxdevm_port_attrs_pci_sf_set(struct mlxdevm_port *mlxdevm_port, u32 contro
 				   u16 pf, u32 sf, bool external)
 {
 	struct mlxdevm_port_attrs *attrs = &mlxdevm_port->attrs;
-	int ret;
 
 	ASSERT_MLXDEVM_PORT_NOT_REGISTERED(mlxdevm_port);
 
-	ret = __mlxdevm_port_attrs_set(mlxdevm_port,
-				       MLXDEVM_PORT_FLAVOUR_PCI_SF);
-	if (ret)
-		return;
+	__mlxdevm_port_attrs_set(mlxdevm_port, MLXDEVM_PORT_FLAVOUR_PCI_SF);
 	attrs->pci_sf.controller = controller;
 	attrs->pci_sf.pf = pf;
 	attrs->pci_sf.sf = sf;
@@ -1636,7 +1619,7 @@ static int __devlink_port_phys_port_name_get(struct devlink_port *devlink_port,
 	struct devlink_port_attrs *attrs = &devlink_port->attrs;
 	int n = 0;
 
-	if (!devlink_port->attrs_set)
+	if (!devlink_port->attrs_set || devlink_port->attrs.no_phys_port_name)
 		return -EOPNOTSUPP;
 
 	switch (attrs->flavour) {

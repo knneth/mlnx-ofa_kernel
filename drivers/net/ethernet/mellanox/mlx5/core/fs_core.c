@@ -115,16 +115,16 @@
 #define ETHTOOL_NUM_PRIOS 11
 #define ETHTOOL_MIN_LEVEL (KERNEL_MIN_LEVEL + ETHTOOL_NUM_PRIOS)
 /* Vlan, mac, ttc, inner ttc, {UDP/ANY/aRFS/accel/{esp, esp_err}}, IPsec policy,
- * {IPsec RoCE MPV,Alias table},IPsec RoCE policy
+ * IPsec policy miss, {IPsec RoCE MPV,Alias table},IPsec RoCE policy
  */
 #define KERNEL_NIC_PRIO_NUM_LEVELS 11
 #define KERNEL_NIC_NUM_PRIOS 1
-
 /* One more level for tc, and one more for promisc */
 #define KERNEL_MIN_LEVEL (KERNEL_NIC_PRIO_NUM_LEVELS + 2)
 
 #define KERNEL_NIC_PROMISC_NUM_PRIOS 1
 #define KERNEL_NIC_PROMISC_NUM_LEVELS 1
+
 #define KERNEL_NIC_TC_NUM_PRIOS  1
 #define KERNEL_NIC_TC_NUM_LEVELS 4
 
@@ -1556,7 +1556,7 @@ static struct mlx5_flow_rule *alloc_rule(struct mlx5_flow_destination *dest)
 	return rule;
 }
 
-static struct mlx5_flow_handle *alloc_handle(int num_rules)
+static struct mlx5_flow_handle *alloc_handle(unsigned int num_rules)
 {
 	struct mlx5_flow_handle *handle;
 
@@ -2821,7 +2821,6 @@ mlx5_get_flow_vport_namespace(struct mlx5_core_dev *dev,
 		return NULL;
 
 	switch (type) {
-
 	case MLX5_FLOW_NAMESPACE_ESW_EGRESS:
 		vport_ns = xa_load(&steering->esw_egress_root_ns, vport_idx);
 		if (vport_ns)
@@ -3705,7 +3704,7 @@ mlx5_fs_add_vport_acl_root_ns(struct mlx5_flow_steering *steering,
 	vport_ns->root_ns = create_root_ns(steering, table_type);
 	if (!vport_ns->root_ns) {
 		err = -ENOMEM;
-		goto create_root_ns_err;
+		goto kfree_vport_ns;
 	}
 
 	/* create 5 prios, and the first 4 are for vf metering */
@@ -3713,7 +3712,7 @@ mlx5_fs_add_vport_acl_root_ns(struct mlx5_flow_steering *steering,
 		prio = fs_create_prio(&vport_ns->root_ns->ns, i, 1);
 		if (IS_ERR(prio)) {
 			err = PTR_ERR(prio);
-			goto fs_create_prio_err;
+			goto kfree_vport_ns;
 		}
 	}
 	set_prio_attrs(vport_ns->root_ns);
@@ -3721,12 +3720,12 @@ mlx5_fs_add_vport_acl_root_ns(struct mlx5_flow_steering *steering,
 	vport_ns->vport_idx = vport_idx;
 	err = xa_insert(esw_acl_root_ns, vport_idx, vport_ns, GFP_KERNEL);
 	if (err)
-		goto fs_create_prio_err;
+		goto cleanup_root_ns;
 	return 0;
 
-fs_create_prio_err:
+cleanup_root_ns:
 	cleanup_root_ns(vport_ns->root_ns);
-create_root_ns_err:
+kfree_vport_ns:
 	kfree(vport_ns);
 	return err;
 }

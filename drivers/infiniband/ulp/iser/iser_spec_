@@ -29,7 +29,6 @@
 %{!?_name: %global _name iser}
 %{!?_version: %global _version 4.0}
 %{!?_release: %global _release 0}
-%global dkms_version %{version}-%{_release}
 
 %bcond_with building_kmods
 
@@ -92,7 +91,7 @@ Obsoletes: iser-kmp < %{version}-%{release}, iser-kmp-default < %{version}-%{rel
 Provides:  kmod-iser = %{version}-%{release}, iser-modules = %{version}-%{release}
 Obsoletes: kmod-iser < %{version}-%{release}, iser-modules < %{version}-%{release}
 %endif
-Requires: mlnx-ofa_kernel-dkms = %{version}-%{release}
+Requires: mlnx-ofa_kernel-dkms
 Requires: dkms >= 3.2
 %description dkms
 DKMS package for %{name}
@@ -187,9 +186,7 @@ export INSTALL_MOD_PATH=%{buildroot}
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export PREFIX=%{_prefix}
 mkdir -p %{buildroot}%{_usrsrc}
-cp -a source %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/
-sed -i -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
-	%{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
+cp -a source %{buildroot}%{_usrsrc}/%{name}-%{version}/
 %if %{with building_kmods}
 for flavor in %flavors_to_build; do
 	export K_BUILD=%{kernel_source $flavor}
@@ -200,12 +197,12 @@ for flavor in %flavors_to_build; do
 	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 	cd -
 done
-sed -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
+sed -e '/^PACKAGE_VERSION=/s/=.*/="%{version}"/' \
 	-e 's/AUTOINSTALL=.*/AUTOINSTALL="yes"/' \
 	-e '$aBUILD_DEPENDS="mlnx-ofa_kernel"' \
 	-e '$aBUILD_DEPENDS_REBUILD="yes"' \
 	<source/dkms.conf \
-	> %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
+	> %{buildroot}%{_usrsrc}/%{name}-%{version}/dkms.conf
 
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
@@ -254,19 +251,18 @@ fi # 1 : closed
 %endif
 
 %post dkms
+# Clean up broken old DKMS registrations before installing new version.
 for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ -L "${ver_dir}/source" ] || continue
 	old_ver="${ver_dir%/}"
 	old_ver="${old_ver##*/}"
-	[ "${old_ver}" != "%{dkms_version}" ] || continue
+	[ "${old_ver}" != "%{version}" ] || continue
 	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms install %{name}/%{dkms_version} || :
+/usr/sbin/dkms install %{name}/%{version}
 
 %preun dkms
-if [ $1 -eq 0 ]; then
-	/usr/sbin/dkms remove %{name}/%{dkms_version} --all || :
-fi
+/usr/sbin/dkms remove  %{name}/%{version} --all || :
 
 %if %{with building_kmods}
 %if "%{KMP}" != "1"
@@ -278,7 +274,7 @@ fi
 %endif
 
 %files dkms
-%{_usrsrc}/%{name}-%{dkms_version}
+%{_usrsrc}/%{name}-%{version}
 %dir %{_datadir}/dkms/modules_to_force_install
 %{_datadir}/dkms/modules_to_force_install/%{name}.force
 

@@ -1,0 +1,63 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
+
+---
+ fs/fuse/fuse_i.h | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+--- a/fs/fuse/fuse_i.h
++++ b/fs/fuse/fuse_i.h
+@@ -67,6 +67,10 @@ extern struct kmem_cache *fuse_inode_cac
+ extern unsigned max_user_bgreq;
+ extern unsigned max_user_congthresh;
+ 
++#ifndef HAVE_FUSE_PASSTHROUGH
++struct fuse_backing_map;
++#endif
++
+ /* One forget request */
+ struct fuse_forget_link {
+ 	struct fuse_forget_one forget_one;
+@@ -1241,7 +1245,11 @@ ssize_t __fuse_simple_request(struct mnt
+ 
+ static inline ssize_t fuse_simple_request(struct fuse_mount *fm, struct fuse_args *args)
+ {
++#ifdef HAVE_INVALID_MNT_IDMAP
+ 	return __fuse_simple_request(&invalid_mnt_idmap, fm, args);
++#else
++	return __fuse_simple_request(NULL, fm, args);
++#endif
+ }
+ 
+ static inline ssize_t fuse_simple_idmap_request(struct mnt_idmap *idmap,
+@@ -1449,7 +1457,11 @@ ssize_t fuse_getxattr(struct inode *inod
+ 		      size_t size);
+ ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size);
+ int fuse_removexattr(struct inode *inode, const char *name);
+-extern const struct xattr_handler * const fuse_xattr_handlers[];
++extern const struct xattr_handler *
++#ifdef HAVE_CONST_XATTR_HANDLER
++const
++#endif
++fuse_xattr_handlers[];
+ 
+ struct posix_acl;
+ struct posix_acl *fuse_get_inode_acl(struct inode *inode, int type, bool rcu);
+@@ -1499,9 +1511,17 @@ void fuse_dax_cancel_work(struct fuse_co
+ long fuse_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+ long fuse_file_compat_ioctl(struct file *file, unsigned int cmd,
+ 			    unsigned long arg);
++#ifdef HAVE_STRUCT_FILE_KATTR
++/* Newer kernels (v6.17-rc1+): struct fileattr renamed to struct file_kattr */
+ int fuse_fileattr_get(struct dentry *dentry, struct file_kattr *fa);
+ int fuse_fileattr_set(struct mnt_idmap *idmap,
+ 		      struct dentry *dentry, struct file_kattr *fa);
++#else
++/* Older kernels: use original struct fileattr */
++int fuse_fileattr_get(struct dentry *dentry, struct fileattr *fa);
++int fuse_fileattr_set(struct mnt_idmap *idmap,
++		      struct dentry *dentry, struct fileattr *fa);
++#endif
+ 
+ /* iomode.c */
+ int fuse_file_cached_io_open(struct inode *inode, struct fuse_file *ff);

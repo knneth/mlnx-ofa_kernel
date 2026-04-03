@@ -98,8 +98,7 @@ void esw_acl_egress_vlan_destroy(struct mlx5_vport *vport)
 	}
 }
 
-int esw_acl_egress_vlan_grp_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-				   u32 start_index, u32 end_index)
+int esw_acl_egress_vlan_grp_create(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 	int inlen = MLX5_ST_SZ_BYTES(create_flow_group_in);
 	struct mlx5_flow_group *vlan_grp;
@@ -118,8 +117,8 @@ int esw_acl_egress_vlan_grp_create(struct mlx5_eswitch *esw, struct mlx5_vport *
 	MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.cvlan_tag);
 	MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.svlan_tag);
 	MLX5_SET_TO_ONES(fte_match_param, match_criteria, outer_headers.first_vid);
-	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, start_index);
-	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, end_index);
+	MLX5_SET(create_flow_group_in, flow_group_in, start_flow_index, 0);
+	MLX5_SET(create_flow_group_in, flow_group_in, end_flow_index, 0);
 
 	vlan_grp = mlx5_create_flow_group(vport->egress.acl, flow_group_in);
 	if (IS_ERR(vlan_grp)) {

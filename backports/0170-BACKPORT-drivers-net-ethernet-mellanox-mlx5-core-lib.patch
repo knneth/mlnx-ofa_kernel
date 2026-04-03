@@ -1,0 +1,17 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+@@ -101,7 +101,6 @@ static inline ktime_t mlx5_timecounter_c
+ 	struct mlx5_timer *timer = &clock->timer;
+ 	unsigned int seq;
+ 	u64 nsec;
+-
+ #if defined(CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE)
+ 	do {
+ 		seq = read_seqbegin(&clock->lock);

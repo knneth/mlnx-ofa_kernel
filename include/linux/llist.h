@@ -5,9 +5,18 @@
 
 #include_next <linux/llist.h>
 
-#ifndef member_address_is_nonnull
-#define member_address_is_nonnull(ptr, member)  \
-	((uintptr_t)(ptr) + offsetof(typeof(*(ptr)), member) != 0)
+#ifndef HAVE_INIT_LLIST_NODE
+static inline void init_llist_node(struct llist_node *node)
+{
+	node->next = node;
+}
+#endif
+
+#ifndef HAVE_LLIST_ON_LIST
+static inline bool llist_on_list(struct llist_node *node)
+{
+	return node->next != node;
+}
 #endif
 
 #endif /* _COMPAT_LINUX_LLIST_H */

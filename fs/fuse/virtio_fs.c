@@ -9,7 +9,6 @@
 #include <linux/pci.h>
 #include <linux/interrupt.h>
 #include <linux/group_cpus.h>
-#include <linux/pfn_t.h>
 #include <linux/memremap.h>
 #include <linux/module.h>
 #include <linux/virtio.h>
@@ -940,12 +939,27 @@ static struct virtio_fs_req *virtio_fs_req_get(struct virtio_fs_vq *fsvq,
 	struct virtio_fs_req *fs_req;
 
 	spin_lock(&fsvq->lock);
-	if (!force && !fsvq->initialized) {
-		reinit_completion(&fsvq->init_comp);
-		spin_unlock(&fsvq->lock);
-		wait_for_completion(&fsvq->init_comp);
-		spin_lock(&fsvq->lock);
+	if (!force) {
+		if (!fsvq->initialized) {
+			reinit_completion(&fsvq->init_comp);
+			spin_unlock(&fsvq->lock);
+			wait_for_completion(&fsvq->init_comp);
+			spin_lock(&fsvq->lock);
+		}
+		/* Matches smp_wmb() in fuse_set_initialized() */
+		smp_rmb();
+		if (fm && fm->fc) {
+			if (!fm->fc->connected) {
+				spin_unlock(&fsvq->lock);
+				return ERR_PTR(-ENOTCONN);
+			}
+			if (fm->fc->conn_error) {
+				spin_unlock(&fsvq->lock);
+				return ERR_PTR(-ECONNREFUSED);
+			}
+		}
 	}
+
 	fs_req = list_first_entry_or_null(&fsvq->free_reqs,
 					  struct virtio_fs_req, entry);
 	if (likely(fs_req)) {
@@ -1400,7 +1414,7 @@ static void virtio_fs_requests_done_work(struct work_struct *work)
 static void virtio_fs_map_queues(struct virtio_device *vdev, struct virtio_fs *fs)
 {
 	const struct cpumask *mask, *masks;
-	unsigned int q, cpu;
+	unsigned int q, cpu, nr_masks;
 
 	/* First attempt to map using existing transport layer affinities
 	 * e.g. PCIe MSI-X
@@ -1420,7 +1434,7 @@ static void virtio_fs_map_queues(struct virtio_device *vdev, struct virtio_fs *f
 	return;
 fallback:
 	/* Attempt to map evenly in groups over the CPUs */
-	masks = group_cpus_evenly(fs->num_request_queues);
+	masks = group_cpus_evenly(fs->num_request_queues, &nr_masks);
 	/* If even this fails we default to all CPUs use first request queue */
 	if (!masks) {
 		for_each_possible_cpu(cpu)
@@ -1429,7 +1443,7 @@ fallback:
 	}
 
 	for (q = 0; q < fs->num_request_queues; q++) {
-		for_each_cpu(cpu, &masks[q])
+		for_each_cpu(cpu, &masks[q % nr_masks])
 			fs->mq_map[cpu] = q + VQ_REQUEST;
 	}
 	kfree(masks);
@@ -1625,7 +1639,7 @@ err:
  */
 static long virtio_fs_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 				    long nr_pages, enum dax_access_mode mode,
-				    void **kaddr, pfn_t *pfn)
+				    void **kaddr, unsigned long *pfn)
 {
 	struct virtio_fs *fs = dax_get_private(dax_dev);
 	phys_addr_t offset = PFN_PHYS(pgoff);
@@ -1634,8 +1648,8 @@ static long virtio_fs_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 	if (kaddr)
 		*kaddr = fs->window_kaddr + offset;
 	if (pfn)
-		*pfn = phys_to_pfn_t(fs->window_phys_addr + offset,
-					PFN_DEV | PFN_MAP);
+		*pfn = PHYS_PFN(fs->window_phys_addr + offset);
+
 	return nr_pages > max_nr_pages ? max_nr_pages : nr_pages;
 }
 
@@ -2284,8 +2298,8 @@ static void virtio_fs_notify_send_req(struct virtio_fs *fs)
 	struct virtio_fs_req *fs_req;
 
 	fs_req = virtio_fs_req_get(&fs->vqs[VQ_NOTIFY], NULL, GFP_KERNEL, true);
-	if (!fs_req) {
-		pr_err("virtio-fs: cannot get notify request\n");
+	if (IS_ERR_OR_NULL(fs_req)) {
+		pr_err("virtio-fs: cannot get notify request: %ld\n", PTR_ERR(fs_req));
 		return;
 	}
 	if (fs_req->allocated) {
@@ -2464,8 +2478,8 @@ static int virtio_fs_simple_background(struct fuse_mount *fm,
 	fsvq = &fs->vqs[queue_id];
 
 	fs_req = virtio_fs_req_get(fsvq, fm, gfp_flags, args->force);
-	if (!fs_req)
-		return -ENOMEM;
+	if (IS_ERR_OR_NULL(fs_req))
+		return fs_req ? PTR_ERR(fs_req) : -ENOMEM;
 
 	req = &fs_req->req;
 	if (args->force) {
@@ -2509,8 +2523,8 @@ static ssize_t virtio_fs_simple_request(struct fuse_mount *fm,
 		gfp_flags |= __GFP_NOFAIL;
 
 	fs_req = virtio_fs_req_get(fsvq, fm, gfp_flags, args->force);
-	if (!fs_req)
-		return -ENOMEM;
+	if (IS_ERR_OR_NULL(fs_req))
+		return fs_req ? PTR_ERR(fs_req) : -ENOMEM;
 
 	req = &fs_req->req;
 	if (args->force) {
@@ -2555,8 +2569,8 @@ static int __virtio_fs_simple_notify_reply(struct virtio_fs *fs, struct fuse_mou
 	fsvq = &fs->vqs[queue_id];
 
 	fs_req = virtio_fs_req_get(fsvq, fm, GFP_KERNEL, args->force);
-	if (!fs_req)
-		return -ENOMEM;
+	if (IS_ERR_OR_NULL(fs_req))
+		return fs_req ? PTR_ERR(fs_req) : -ENOMEM;
 
 	req = &fs_req->req;
 	if (!args->nocreds) {

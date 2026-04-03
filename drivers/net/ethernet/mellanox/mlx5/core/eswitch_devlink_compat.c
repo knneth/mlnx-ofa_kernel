@@ -60,17 +60,10 @@ static char *lag_port_select_mode_to_str[] = {
 };
 
 struct devlink_compat_op {
-#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
 	int (*write_enum)(struct devlink *devlink, enum devlink_eswitch_encap_mode set, struct netlink_ext_ack *extack);
 	int (*write_enum_ipsec)(struct devlink *devlink, enum devlink_eswitch_ipsec_mode ipsec, struct netlink_ext_ack *extack);
 	int (*write_u8)(struct devlink *devlink, u8 set, struct netlink_ext_ack *extack);
 	int (*write_u16)(struct devlink *devlink, u16 set, struct netlink_ext_ack *extack);
-#else
-	int (*write_enum_ipsec)(struct devlink *devlink, enum devlink_eswitch_ipsec_mode ipsec);
-	int (*write_enum)(struct devlink *devlink, enum devlink_eswitch_encap_mode set);
-	int (*write_u8)(struct devlink *devlink, u8 set);
-	int (*write_u16)(struct devlink *devlink, u16 set);
-#endif
 	int (*read_enum)(struct devlink *devlink, enum devlink_eswitch_encap_mode *read);
 	int (*read_enum_ipsec)(struct devlink *devlink, enum devlink_eswitch_ipsec_mode *ipsec);
 	int (*read_u8)(struct devlink *devlink, u8 *read);
@@ -130,13 +123,8 @@ static struct devlink_compat_op devlink_compat_ops[] =  {
 		.compat_name = "inline",
 	},
 	{
-#ifdef HAVE_DEVLINK_HAS_ESWITCH_ENCAP_MODE_SET_GET_WITH_ENUM
 		.read_enum = mlx5_devlink_eswitch_encap_mode_get,
 		.write_enum = mlx5_devlink_eswitch_encap_mode_set,
-#else
-		.read_u8 = mlx5_devlink_eswitch_encap_mode_get,
-		.write_u8 = mlx5_devlink_eswitch_encap_mode_set,
-#endif
 		.map = encap_to_str,
 		.map_size = ARRAY_SIZE(encap_to_str),
 		.compat_name = "encap",
@@ -314,23 +302,11 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	}
 
 	if (op->write_u16)
-		ret = op->write_u16(devlink, set
-#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-				    , &ack
-#endif
-				    );
+		ret = op->write_u16(devlink, set, &ack);
 	else if (op->write_u8)
-		ret = op->write_u8(devlink, set
-#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-				   , &ack
-#endif
-				   );
+		ret = op->write_u8(devlink, set, &ack);
 	else if (op->write_enum)
-		ret = op->write_enum(devlink, set
-#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-				   , &ack
-#endif
-				   );
+		ret = op->write_enum(devlink, set, &ack);
 	else if (op->write_steering_mode)
 		ret = op->write_steering_mode(devlink, set);
 	else if (op->write_lag_port_select_mode)
@@ -343,11 +319,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 	} else if (op->write_vport_match_mode)
 		ret = op->write_vport_match_mode(devlink, set);
 	else if (op->write_enum_ipsec)
-		ret = op->write_enum_ipsec(devlink, set
-#ifdef HAVE_DEVLINK_ESWITCH_MODE_SET_EXTACK
-				   , &ack
-#endif
-				   );
+		ret = op->write_enum_ipsec(devlink, set, &ack);
 	else
 		ret = -EINVAL;
 

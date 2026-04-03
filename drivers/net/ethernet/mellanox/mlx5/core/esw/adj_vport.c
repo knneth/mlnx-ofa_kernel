@@ -72,7 +72,7 @@ static int mlx5_esw_adj_vport_create(struct mlx5_eswitch *esw, u16 vhca_id,
 
 	err = mlx5_esw_vport_alloc(esw, esw->last_vport_idx++, vport_num);
 	if (err)
-		goto err_destroy;
+		goto destroy_esw_vport;
 
 	xa_set_mark(&esw->vports, vport_num, MLX5_ESW_VPT_VF);
 	vport = mlx5_eswitch_get_vport(esw, vport_num);
@@ -89,17 +89,17 @@ static int mlx5_esw_adj_vport_create(struct mlx5_eswitch *esw, u16 vhca_id,
 	mlx5_fs_vport_ingress_acl_ns_add(esw->dev->priv.steering, vport->index);
 	err = mlx5_esw_offloads_rep_add(esw, vport);
 	if (err)
-		goto err_free;
+		goto acl_ns_remove;
 
 	return 0;
 
-err_free:
+acl_ns_remove:
 	mlx5_fs_vport_ingress_acl_ns_remove(esw->dev->priv.steering,
 					    vport->index);
 	mlx5_fs_vport_egress_acl_ns_remove(esw->dev->priv.steering,
 					   vport->index);
 	mlx5_esw_vport_free(esw, vport);
-err_destroy:
+destroy_esw_vport:
 	mlx5_esw_destroy_esw_vport(esw->dev, vport_num);
 	return err;
 }

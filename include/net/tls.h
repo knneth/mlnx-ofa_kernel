@@ -9,7 +9,7 @@
 #define TLS_DRIVER_STATE_SIZE_TX	16
 #endif
 
-#if defined(HAVE_KTLS_STRUCTS) && !defined(HAVE_TLS_DRIVER_CTX)
+#ifndef HAVE_TLS_DRIVER_CTX
 static inline void *__tls_driver_ctx(struct tls_context *tls_ctx,
 				     enum tls_offload_ctx_dir direction)
 {

@@ -92,6 +92,26 @@ static const struct mlxdevm_param mlxdevm_param_generic[] = {
 		.name = MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_NAME,
 		.type = MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_TYPE,
 	},
+	{
+		.id = MLXDEVM_PARAM_GENERIC_ID_ENABLE_PHC,
+		.name = MLXDEVM_PARAM_GENERIC_ENABLE_PHC_NAME,
+		.type = MLXDEVM_PARAM_GENERIC_ENABLE_PHC_TYPE,
+	},
+	{
+		.id = MLXDEVM_PARAM_GENERIC_ID_CLOCK_ID,
+		.name = MLXDEVM_PARAM_GENERIC_CLOCK_ID_NAME,
+		.type = MLXDEVM_PARAM_GENERIC_CLOCK_ID_TYPE,
+	},
+	{
+		.id = MLXDEVM_PARAM_GENERIC_ID_TOTAL_VFS,
+		.name = MLXDEVM_PARAM_GENERIC_TOTAL_VFS_NAME,
+		.type = MLXDEVM_PARAM_GENERIC_TOTAL_VFS_TYPE,
+	},
+	{
+		.id = MLXDEVM_PARAM_GENERIC_ID_NUM_DOORBELLS,
+		.name = MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_NAME,
+		.type = MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_TYPE,
+	},
 };
 
 static int mlxdevm_param_generic_verify(const struct mlxdevm_param *param)
@@ -167,27 +187,6 @@ static int mlxdevm_param_set(struct mlxdevm *mlxdevm,
 }
 
 static int
-mlxdevm_param_type_to_nla_type(enum mlxdevm_param_type param_type)
-{
-	switch (param_type) {
-	case MLXDEVM_PARAM_TYPE_U8:
-		return NLA_U8;
-	case MLXDEVM_PARAM_TYPE_U16:
-		return NLA_U16;
-	case MLXDEVM_PARAM_TYPE_U32:
-		return NLA_U32;
-	case MLXDEVM_PARAM_TYPE_STRING:
-		return NLA_STRING;
-	case MLXDEVM_PARAM_TYPE_BOOL:
-		return NLA_FLAG;
-	case MLXDEVM_PARAM_TYPE_ARRAY_U16:
-		return NLA_NESTED;
-	default:
-		return -EINVAL;
-	}
-}
-
-static int
 mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
 				enum mlxdevm_param_type type,
 				enum mlxdevm_param_cmode cmode,
@@ -216,6 +215,11 @@ mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
 		if (nla_put_u32(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA, val.vu32))
 			goto value_nest_cancel;
 		break;
+	case MLXDEVM_PARAM_TYPE_U64:
+		if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA,
+				       val.vu64))
+			goto value_nest_cancel;
+		break;
 	case MLXDEVM_PARAM_TYPE_STRING:
 		if (nla_put_string(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA,
 				   val.vstr))
@@ -226,7 +230,7 @@ mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
 		    nla_put_flag(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA))
 			goto value_nest_cancel;
 		break;
-	case MLXDEVM_PARAM_TYPE_ARRAY_U16:
+	case MLXDEVM_PARAM_TYPE_NESTED:
 		if (nla_put_u8(msg, MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE,
 			       sizeof(u16)))
 			goto value_nest_cancel;
@@ -258,7 +262,6 @@ static int mlxdevm_nl_param_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 	struct mlxdevm_param_gset_ctx ctx;
 	struct nlattr *param_values_list;
 	struct nlattr *param_attr;
-	int nla_type;
 	void *hdr;
 	int err;
 	int i;
@@ -304,11 +307,7 @@ static int mlxdevm_nl_param_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 		goto param_nest_cancel;
 	if (param->generic && nla_put_flag(msg, MLXDEVM_ATTR_PARAM_GENERIC))
 		goto param_nest_cancel;
-
-	nla_type = mlxdevm_param_type_to_nla_type(param->type);
-	if (nla_type < 0)
-		goto param_nest_cancel;
-	if (nla_put_u8(msg, MLXDEVM_ATTR_PARAM_TYPE, nla_type))
+	if (nla_put_u8(msg, MLXDEVM_ATTR_PARAM_TYPE, param->type))
 		goto param_nest_cancel;
 
 	param_values_list = nla_nest_start_noflag(msg,
@@ -432,37 +431,7 @@ mlxdevm_param_type_get_from_info(struct genl_info *info,
 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_TYPE))
 		return -EINVAL;
 
-	switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE])) {
-	case NLA_U8:
-		*param_type = MLXDEVM_PARAM_TYPE_U8;
-		break;
-	case NLA_U16:
-		*param_type = MLXDEVM_PARAM_TYPE_U16;
-		break;
-	case NLA_U32:
-		*param_type = MLXDEVM_PARAM_TYPE_U32;
-		break;
-	case NLA_STRING:
-		*param_type = MLXDEVM_PARAM_TYPE_STRING;
-		break;
-	case NLA_FLAG:
-		*param_type = MLXDEVM_PARAM_TYPE_BOOL;
-		break;
-	case NLA_NESTED:
-		if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE))
-			return -EINVAL;
-
-		switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE])) {
-		case sizeof(u16):
-			*param_type = MLXDEVM_PARAM_TYPE_ARRAY_U16;
-			break;
-		default:
-			return -EINVAL;
-		}
-		break;
-	default:
-		return -EINVAL;
-	}
+	*param_type = nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE]);
 
 	return 0;
 }
@@ -496,6 +465,11 @@ mlxdevm_param_value_get_from_info(const struct mlxdevm_param *param,
 			return -EINVAL;
 		value->vu32 = nla_get_u32(param_data);
 		break;
+	case MLXDEVM_PARAM_TYPE_U64:
+		if (nla_len(param_data) != sizeof(u64))
+			return -EINVAL;
+		value->vu64 = nla_get_u64(param_data);
+		break;
 	case MLXDEVM_PARAM_TYPE_STRING:
 		len = strnlen(nla_data(param_data), nla_len(param_data));
 		if (len == nla_len(param_data) ||
@@ -508,7 +482,7 @@ mlxdevm_param_value_get_from_info(const struct mlxdevm_param *param,
 			return -EINVAL;
 		value->vbool = nla_get_flag(param_data);
 		break;
-	case MLXDEVM_PARAM_TYPE_ARRAY_U16:
+	case MLXDEVM_PARAM_TYPE_NESTED:
 		if (nla_len(param_data) > sizeof(value->vu16arr.data))
 			return -EINVAL;
 		if (nla_len(param_data) % sizeof(u16))

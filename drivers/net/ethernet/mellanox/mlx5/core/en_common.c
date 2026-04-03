@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include "devlink.h"
 #include "en.h"
 #include "lib/crypto.h"
 
@@ -141,11 +142,23 @@ err_close_tises:
 	return err;
 }
 
+static unsigned int
+mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
+{
+	const u32 param_id = DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS;
+	struct devlink *devlink = priv_to_devlink(dev);
+	union devlink_param_value val;
+	int err;
+
+	err = devl_param_driverinit_value_get(devlink, param_id, &val);
+	return err ? MLX5_DEFAULT_NUM_DOORBELLS : val.vu32;
+}
+
 int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 {
 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
-	unsigned int num_doorbells;
-	int i, err;
+	unsigned int num_doorbells, i;
+	int err;
 
 	err = mlx5_core_alloc_pd(mdev, &res->pdn);
 	if (err) {
@@ -165,10 +178,9 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 		goto err_dealloc_transport_domain;
 	}
 
-	num_doorbells = 1 + min(MLX5_DEFAULT_NUM_DOORBELLS,
-				mlx5e_get_max_num_channels(mdev));
-	res->bfregs = kcalloc(num_doorbells, sizeof(struct mlx5_sq_bfreg),
-			      GFP_KERNEL);
+	num_doorbells = min(mlx5e_get_devlink_param_num_doorbells(mdev),
+			    mlx5e_get_max_num_channels(mdev));
+	res->bfregs = kcalloc(num_doorbells, sizeof(*res->bfregs), GFP_KERNEL);
 	if (!res->bfregs) {
 		err = -ENOMEM;
 		goto err_destroy_mkey;
@@ -177,15 +189,9 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 	for (i = 0; i < num_doorbells; i++) {
 		err = mlx5_alloc_bfreg(mdev, res->bfregs + i, false, false);
 		if (err) {
-			/* Continue with at least a doorbell, with a warning. */
-			if (i == 0) {
-				mlx5_core_err(mdev, "alloc bfreg 0 failed, %d\n",
-					      err);
-				goto err_free_bfregs;
-			}
 			mlx5_core_warn(mdev,
-				       "err %d, could only allocate %d/%d doorbells, performance might be affected.\n",
-				       err, i, num_doorbells);
+				       "could only allocate %d/%d doorbells, err %d.\n",
+				       i, num_doorbells, err);
 			break;
 		}
 	}
@@ -205,8 +211,8 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 
 	mdev->mlx5e_res.dek_priv = mlx5_crypto_dek_init(mdev);
 	if (IS_ERR(mdev->mlx5e_res.dek_priv)) {
-		mlx5_core_err(mdev, "crypto dek init failed, %ld\n",
-			      PTR_ERR(mdev->mlx5e_res.dek_priv));
+		mlx5_core_err(mdev, "crypto dek init failed, %pe\n",
+			      mdev->mlx5e_res.dek_priv);
 		mdev->mlx5e_res.dek_priv = NULL;
 	}
 
@@ -215,7 +221,6 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
 err_destroy_bfregs:
 	for (i = 0; i < res->num_bfregs; i++)
 		mlx5_free_bfreg(mdev, res->bfregs + i);
-err_free_bfregs:
 	kfree(res->bfregs);
 err_destroy_mkey:
 	mlx5_core_destroy_mkey(mdev, res->mkey);
@@ -234,7 +239,7 @@ void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
 	mdev->mlx5e_res.dek_priv = NULL;
 	if (res->tisn_valid)
 		mlx5e_destroy_tises(mdev, res->tisn);
-	for (int i = 0; i < res->num_bfregs; i++)
+	for (unsigned int i = 0; i < res->num_bfregs; i++)
 		mlx5_free_bfreg(mdev, res->bfregs + i);
 	kfree(res->bfregs);
 	mlx5_core_destroy_mkey(mdev, res->mkey);

@@ -1,0 +1,130 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/base/auxiliary_main.c
+
+Change-Id: I03b34442994713d823d2d722526c952736afb112
+---
+ drivers/base/auxiliary_main.c | 57 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 53 insertions(+), 4 deletions(-)
+
+--- a/drivers/base/auxiliary_main.c
++++ b/drivers/base/auxiliary_main.c
+@@ -18,7 +18,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/string.h>
+ #include <linux/auxiliary_bus.h>
+-#include "base.h"
++#include <linux/acpi.h>
+ 
+ /**
+  * DOC: PURPOSE
+@@ -191,7 +191,11 @@ static const struct auxiliary_device_id
+ 	return NULL;
+ }
+ 
++#ifdef HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE
+ static int auxiliary_match(struct device *dev, const struct device_driver *drv)
++#else
++static int auxiliary_match(struct device *dev, struct device_driver *drv)
++#endif
+ {
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(drv);
+@@ -199,7 +203,7 @@ static int auxiliary_match(struct device
+ 	return !!auxiliary_match_id(auxdrv->id_table, auxdev);
+ }
+ 
+-static int auxiliary_uevent(const struct device *dev, struct kobj_uevent_env *env)
++static int auxiliary_uevent(struct device *dev, struct kobj_uevent_env *env)
+ {
+ 	const char *name, *p;
+ 
+@@ -232,18 +236,38 @@ static int auxiliary_bus_probe(struct de
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+ 	int ret;
+ 
++#ifdef HAVE_PD_FLAG_POWER_ON_OFF
++	/* Newer kernels (5.9+): flags control power on/off behavior */
+ 	ret = dev_pm_domain_attach(dev, PD_FLAG_ATTACH_POWER_ON |
+ 					PD_FLAG_DETACH_POWER_OFF);
++#else
++	/* Older kernels: bool parameter for power on */
++	ret = dev_pm_domain_attach(dev, true);
++#endif
+ 	if (ret) {
+ 		dev_warn(dev, "Failed to attach to PM Domain : %d\n", ret);
+ 		return ret;
+ 	}
+ 
+ 	auxiliary_bus_sysfs_probe(auxdev);
++#ifdef HAVE_PD_FLAG_POWER_ON_OFF
++	/* Newer kernels (5.9+): no explicit detach in probe */
+ 	return auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
++#else
++	/* Older kernels: explicit detach on probe error */
++	ret = auxdrv->probe(auxdev, auxiliary_match_id(auxdrv->id_table, auxdev));
++	if (ret)
++		dev_pm_domain_detach(dev, true);
++
++	return ret;
++#endif
+ }
+ 
++#ifdef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
+ static void auxiliary_bus_remove(struct device *dev)
++#else
++static int auxiliary_bus_remove(struct device *dev)
++#endif
+ {
+ 	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
+ 	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+@@ -251,7 +275,14 @@ static void auxiliary_bus_remove(struct
+ 	if (auxdrv->remove)
+ 		auxdrv->remove(auxdev);
+ 
++#ifndef HAVE_PD_FLAG_POWER_ON_OFF
++	/* Older kernels: explicit detach needed */
++	dev_pm_domain_detach(dev, true);
++#endif
+ 	auxiliary_bus_sysfs_remove(auxdev);
++#ifndef HAVE_BUS_TYPE_REMOVE_RETURN_VOID
++	return 0;
++#endif
+ }
+ 
+ static void auxiliary_bus_shutdown(struct device *dev)
+@@ -268,7 +299,11 @@ static void auxiliary_bus_shutdown(struc
+ 		auxdrv->shutdown(auxdev);
+ }
+ 
++#ifdef HAVE_CONST_BUS_TYPE_FOR_STRUCT_DEVICE
+ static const struct bus_type auxiliary_bus_type = {
++#else
++static struct bus_type auxiliary_bus_type = {
++#endif
+ 	.name = "auxiliary",
+ 	.probe = auxiliary_bus_probe,
+ 	.remove = auxiliary_bus_remove,
+@@ -519,7 +554,21 @@ struct auxiliary_device *__devm_auxiliar
+ }
+ EXPORT_SYMBOL_GPL(__devm_auxiliary_device_create);
+ 
+-void __init auxiliary_bus_init(void)
++static int __init auxiliary_bus_init(void)
+ {
+-	WARN_ON(bus_register(&auxiliary_bus_type));
++	return bus_register(&auxiliary_bus_type);
+ }
++
++static void __exit auxiliary_bus_exit(void)
++{
++	bus_unregister(&auxiliary_bus_type);
++}
++
++module_init(auxiliary_bus_init);
++module_exit(auxiliary_bus_exit);
++
++MODULE_LICENSE("GPL v2");
++MODULE_DESCRIPTION("Auxiliary Bus");
++MODULE_INFO(supported, "external");
++MODULE_AUTHOR("David Ertman <david.m.ertman@intel.com>");
++MODULE_AUTHOR("Kiran Patil <kiran.patil@intel.com>");

@@ -1,0 +1,229 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
+
+Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
+---
+ .../mellanox/mlx5/core/lib/nv_param.c         | 99 ++++++++++++++++---
+ 1 file changed, 88 insertions(+), 11 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
+@@ -200,7 +200,12 @@ static const char *const
+ 
+ static int
+ mlx5_nv_param_devlink_cqe_compress_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++				       struct devlink_param_gset_ctx *ctx,
++				       struct netlink_ext_ack *extack)
++#else
+ 				       struct devlink_param_gset_ctx *ctx)
++#endif
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
+@@ -241,8 +246,12 @@ mlx5_nv_param_devlink_cqe_compress_valid
+ 
+ static int
+ mlx5_nv_param_devlink_cqe_compress_set(struct devlink *devlink, u32 id,
+-				       struct devlink_param_gset_ctx *ctx,
+-				       struct netlink_ext_ack *extack)
++				       struct devlink_param_gset_ctx *ctx
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				       , struct netlink_ext_ack *extack
++#endif
++				       )
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
+@@ -257,7 +266,13 @@ mlx5_nv_param_devlink_cqe_compress_set(s
+ 
+ 	err = mlx5_nv_param_read_sw_offload_conf(dev, mnvda, sizeof(mnvda));
+ 	if (err) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "Failed to read sw_offload_conf mnvda reg");
+ 		return err;
+ 	}
+@@ -302,7 +317,12 @@ static int mlx5_nv_param_read_per_host_p
+ }
+ 
+ static int mlx5_devlink_enable_sriov_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++					 struct devlink_param_gset_ctx *ctx,
++					 struct netlink_ext_ack *extack)
++#else
+ 					 struct devlink_param_gset_ctx *ctx)
++#endif
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
+@@ -345,8 +365,12 @@ static int mlx5_devlink_enable_sriov_get
+ }
+ 
+ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
+-					 struct devlink_param_gset_ctx *ctx,
+-					 struct netlink_ext_ack *extack)
++					 struct devlink_param_gset_ctx *ctx
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++					 , struct netlink_ext_ack *extack
++#endif
++					 )
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
+@@ -356,7 +380,13 @@ static int mlx5_devlink_enable_sriov_set
+ 
+ 	err = mlx5_nv_param_read_global_pci_cap(dev, mnvda, sizeof(mnvda));
+ 	if (err) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "Failed to read global PCI capability");
+ 		return err;
+ 	}
+@@ -366,14 +396,26 @@ static int mlx5_devlink_enable_sriov_set
+ 				  per_pf_total_vf_supported);
+ 
+ 	if (!MLX5_GET(nv_global_pci_cap, cap, sriov_support)) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "SRIOV is not supported on this device");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (!per_pf_support) {
+ 		/* We don't allow global SRIOV setting on per PF devlink */
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "SRIOV is not per PF on this device");
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -381,7 +423,13 @@ static int mlx5_devlink_enable_sriov_set
+ 	memset(mnvda, 0, sizeof(mnvda));
+ 	err = mlx5_nv_param_read_global_pci_conf(dev, mnvda, sizeof(mnvda));
+ 	if (err) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "Unable to read global PCI configuration");
+ 		return err;
+ 	}
+@@ -395,7 +443,13 @@ static int mlx5_devlink_enable_sriov_set
+ 
+ 	err = mlx5_nv_param_write(dev, mnvda, sizeof(mnvda));
+ 	if (err) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "Unable to write global PCI configuration");
+ 		return err;
+ 	}
+@@ -404,7 +458,13 @@ static int mlx5_devlink_enable_sriov_set
+ 	memset(mnvda, 0, sizeof(mnvda));
+ 	err = mlx5_nv_param_read_per_host_pf_conf(dev, mnvda, sizeof(mnvda));
+ 	if (err) {
+-		NL_SET_ERR_MSG_MOD(extack,
++		NL_SET_ERR_MSG_MOD(
++#ifdef HAVE_DEVLINK_PARAM_SET_FUNCTION_POINTER_HAS_EXTACK
++/* Newer kernels (6.10+): extack parameter added for better error reporting */
++				extack,
++#else
++				NULL,
++#endif
+ 				   "Unable to read per host PF configuration");
+ 		return err;
+ 	}
+@@ -412,8 +472,14 @@ static int mlx5_devlink_enable_sriov_set
+ 	return mlx5_nv_param_write(dev, mnvda, sizeof(mnvda));
+ }
+ 
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_TOTAL_VFS
+ static int mlx5_devlink_total_vfs_get(struct devlink *devlink, u32 id,
++#ifdef HAVE_DEVLINK_PARAM_GET_FUNCTION_POINTER_HAS_EXTACK
++				      struct devlink_param_gset_ctx *ctx,
++				      struct netlink_ext_ack *extack)
++#else
+ 				      struct devlink_param_gset_ctx *ctx)
++#endif
+ {
+ 	struct mlx5_core_dev *dev = devlink_priv(devlink);
+ 	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
+@@ -530,15 +596,18 @@ static int mlx5_devlink_total_vfs_valida
+ 
+ 	return 0;
+ }
++#endif /* HAVE_DEVLINK_PARAM_GENERIC_ID_TOTAL_VFS */
+ 
+ static const struct devlink_param mlx5_nv_param_devlink_params[] = {
+ 	DEVLINK_PARAM_GENERIC(ENABLE_SRIOV, BIT(DEVLINK_PARAM_CMODE_PERMANENT),
+ 			      mlx5_devlink_enable_sriov_get,
+ 			      mlx5_devlink_enable_sriov_set, NULL),
++#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_TOTAL_VFS
+ 	DEVLINK_PARAM_GENERIC(TOTAL_VFS, BIT(DEVLINK_PARAM_CMODE_PERMANENT),
+ 			      mlx5_devlink_total_vfs_get,
+ 			      mlx5_devlink_total_vfs_set,
+ 			      mlx5_devlink_total_vfs_validate),
++#endif
+ 	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CQE_COMPRESSION_TYPE,
+ 			     "cqe_compress_type", DEVLINK_PARAM_TYPE_STRING,
+ 			     BIT(DEVLINK_PARAM_CMODE_PERMANENT),
+@@ -552,7 +621,11 @@ int mlx5_nv_param_register_dl_params(str
+ 	if (!mlx5_core_is_pf(devlink_priv(devlink)))
+ 		return 0;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	return devl_params_register(devlink, mlx5_nv_param_devlink_params,
++#else
++	return devlink_params_register(devlink, mlx5_nv_param_devlink_params,
++#endif
+ 				    ARRAY_SIZE(mlx5_nv_param_devlink_params));
+ }
+ 
+@@ -561,7 +634,11 @@ void mlx5_nv_param_unregister_dl_params(
+ 	if (!mlx5_core_is_pf(devlink_priv(devlink)))
+ 		return;
+ 
++#ifdef HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET
+ 	devl_params_unregister(devlink, mlx5_nv_param_devlink_params,
++#else
++	devlink_params_unregister(devlink, mlx5_nv_param_devlink_params,
++#endif
+ 			       ARRAY_SIZE(mlx5_nv_param_devlink_params));
+ }
+ 

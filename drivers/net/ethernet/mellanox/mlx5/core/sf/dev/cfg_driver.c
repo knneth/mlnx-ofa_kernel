@@ -15,6 +15,8 @@ struct mlx5_sf_cfg_devm {
 	struct mlx5_sf_dev *sf_dev;
 };
 
+static const struct mlxdevm_ops mlx5_devm_cfg_ops = {};
+
 static struct mlx5_sf_dev *mlxdevm_to_sf_dev(struct mlxdevm *devm)
 {
 	struct mlx5_sf_cfg_devm *sf_cfg_dev;
@@ -174,6 +176,7 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 
 	devm = &sf_cfg_dev->device;
 	devm->dev = &sf_dev->adev.dev;
+	devm->ops = &mlx5_devm_cfg_ops;
 	sf_cfg_dev->sf_dev = sf_dev;
 	mutex_init(&devm->lock);
 

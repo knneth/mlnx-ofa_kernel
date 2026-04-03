@@ -1,68 +1,53 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 
 ---
- .../mellanox/mlx5/core/en_accel/macsec.c       | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
+ 1 file changed, 20 insertions(+), 4 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct
- 		goto out;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+@@ -96,14 +96,26 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	skb_reserve(skb, NET_IP_ALIGN);
  
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
+ 	/*  Reserve for ethernet and IP header  */
+-	ethh = skb_push(skb, ETH_HLEN);
++	ethh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct ethhdr *)
 +#endif
- 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
- 			   assoc_num);
- 		err = -EINVAL;
-@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct
++		skb_push(skb, ETH_HLEN);
+ 	skb_reset_mac_header(skb);
  
- 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
- 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(tx_sa);
-+#else
-+	kfree_rcu(tx_sa, rcu_head);
+ 	skb_set_network_header(skb, skb->len);
+-	iph = skb_put(skb, sizeof(struct iphdr));
++	iph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct iphdr *)
 +#endif
- 	macsec_device->tx_sa[assoc_num] = NULL;
++		skb_put(skb, sizeof(struct iphdr));
  
- out:
-@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct m
- 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
- 	metadata_dst_free(rx_sc->md_dst);
- 	kfree(rx_sc->sc_xarray_element);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(rx_sc);
-+#else
-+	kfree_rcu(rx_sc, rcu_head);
+ 	skb_set_transport_header(skb, skb->len);
+-	udph = skb_put(skb, sizeof(struct udphdr));
++	udph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct udphdr *)
 +#endif
- }
++		skb_put(skb, sizeof(struct udphdr));
  
- static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
-@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct
- 		goto out;
- 	}
+ 	/* Fill ETH header */
+ 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
+@@ -132,7 +144,11 @@ static struct sk_buff *mlx5e_test_get_ud
+ 	ip_send_check(iph);
  
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
+ 	/* Fill test header and data */
+-	mlxh = skb_put(skb, sizeof(*mlxh));
++	mlxh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct mlx5ehdr *)
 +#endif
- 		netdev_err(ctx->netdev,
- 			   "MACsec offload update RX sa %d PN isn't supported\n",
- 			   assoc_num);
-@@ -1644,7 +1660,9 @@ static const struct macsec_ops macsec_of
- 	.mdo_add_secy = mlx5e_macsec_add_secy,
- 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
- 	.mdo_del_secy = mlx5e_macsec_del_secy,
-+#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
- 	.rx_uses_md_dst = true,
-+#endif
- };
++		skb_put(skb, sizeof(*mlxh));
+ 	mlxh->version = 0;
+ 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
  
- bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)

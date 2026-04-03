@@ -291,7 +291,8 @@ static void mlx5_sync_reset_reload_work(struct work_struct *work)
 #define MLX5_RESET_POLL_INTERVAL	(HZ / 10)
 static void poll_sync_reset(struct timer_list *t)
 {
-	struct mlx5_fw_reset *fw_reset = from_timer(fw_reset, t, timer);
+	struct mlx5_fw_reset *fw_reset = timer_container_of(fw_reset, t,
+							    timer);
 	struct mlx5_core_dev *dev = fw_reset->dev;
 	u32 fatal_error;
 
@@ -342,9 +343,10 @@ static int mlx5_sync_reset_set_reset_requested(struct mlx5_core_dev *dev)
 	mlx5_stop_health_poll(dev, true);
 	mlx5_start_sync_reset_poll(dev);
 
-	if (!test_bit(MLX5_FW_RESET_FLAGS_DROP_NEW_REQUESTS, &fw_reset->reset_flags))
+	if (!test_bit(MLX5_FW_RESET_FLAGS_DROP_NEW_REQUESTS,
+		      &fw_reset->reset_flags))
 		schedule_delayed_work(&fw_reset->reset_timeout_work,
-				      msecs_to_jiffies(mlx5_tout_ms(dev, PCI_SYNC_UPDATE)));
+			msecs_to_jiffies(mlx5_tout_ms(dev, PCI_SYNC_UPDATE)));
 	return 0;
 }
 
@@ -799,8 +801,8 @@ static void mlx5_sync_reset_timeout_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = container_of(work, struct delayed_work,
 						  work);
-	struct mlx5_fw_reset *fw_reset = container_of(dwork, struct mlx5_fw_reset,
-						      reset_timeout_work);
+	struct mlx5_fw_reset *fw_reset =
+		container_of(dwork, struct mlx5_fw_reset, reset_timeout_work);
 	struct mlx5_core_dev *dev = fw_reset->dev;
 
 	if (mlx5_sync_reset_clear_reset_requested(dev, true))
@@ -892,7 +894,8 @@ void mlx5_drain_fw_reset(struct mlx5_core_dev *dev)
 	cancel_work_sync(&fw_reset->reset_reload_work);
 	cancel_work_sync(&fw_reset->reset_now_work);
 	cancel_work_sync(&fw_reset->reset_abort_work);
-	cancel_delayed_work(&fw_reset->reset_timeout_work);
+	if (test_bit(MLX5_FW_RESET_FLAGS_RESET_REQUESTED, &fw_reset->reset_flags))
+		mlx5_sync_reset_clear_reset_requested(dev, true);
 }
 
 static const struct devlink_param mlx5_fw_reset_devlink_params[] = {
@@ -974,7 +977,8 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 	INIT_WORK(&fw_reset->reset_reload_work, mlx5_sync_reset_reload_work);
 	INIT_WORK(&fw_reset->reset_now_work, mlx5_sync_reset_now_event);
 	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
-	INIT_DELAYED_WORK(&fw_reset->reset_timeout_work, mlx5_sync_reset_timeout_work);
+	INIT_DELAYED_WORK(&fw_reset->reset_timeout_work,
+			  mlx5_sync_reset_timeout_work);
 
 	init_completion(&fw_reset->done);
 	return 0;

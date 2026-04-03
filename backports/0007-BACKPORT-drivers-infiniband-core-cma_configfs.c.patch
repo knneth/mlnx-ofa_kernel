@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
+
+---
+ drivers/infiniband/core/cma_configfs.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+--- a/drivers/infiniband/core/cma_configfs.c
++++ b/drivers/infiniband/core/cma_configfs.c
+@@ -70,6 +70,7 @@ static bool filter_by_name(struct ib_dev
+ 	return !strcmp(dev_name(&ib_dev->dev), cookie);
+ }
+ 
++
+ static int cma_configfs_params_get(struct config_item *item,
+ 				   struct cma_device **pcma_dev,
+ 				   struct cma_dev_port_group **pgroup)
+@@ -191,7 +192,11 @@ static struct configfs_attribute *cma_co
+ 	NULL,
+ };
+ 
+-static const struct config_item_type cma_port_group_type = {
++static struct configfs_item_operations cma_item_ops = {
++};
++
++static struct config_item_type cma_port_group_type = {
++	.ct_item_ops	= &cma_item_ops,
+ 	.ct_attrs	= cma_configfs_attributes,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -260,7 +265,7 @@ static struct configfs_item_operations c
+ 	.release = release_cma_ports_group
+ };
+ 
+-static const struct config_item_type cma_ports_group_type = {
++static struct config_item_type cma_ports_group_type = {
+ 	.ct_item_ops	= &cma_ports_item_ops,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -269,7 +274,7 @@ static struct configfs_item_operations c
+ 	.release = release_cma_dev
+ };
+ 
+-static const struct config_item_type cma_device_group_type = {
++static struct config_item_type cma_device_group_type = {
+ 	.ct_item_ops	= &cma_device_item_ops,
+ 	.ct_owner	= THIS_MODULE
+ };
+@@ -303,8 +308,8 @@ static struct config_group *make_cma_dev
+ 
+ 	config_group_init_type_name(&cma_dev_group->device_group, name,
+ 				    &cma_device_group_type);
+-	configfs_add_default_group(&cma_dev_group->ports_group,
+-			&cma_dev_group->device_group);
++       configfs_add_default_group(&cma_dev_group->ports_group,
++       		&cma_dev_group->device_group);
+ 
+ 	cma_dev_put(cma_dev);
+ 	return &cma_dev_group->device_group;
+@@ -333,7 +338,7 @@ static struct configfs_group_operations
+ 	.drop_item	= drop_cma_dev,
+ };
+ 
+-static const struct config_item_type cma_subsys_type = {
++static struct config_item_type cma_subsys_type = {
+ 	.ct_group_ops	= &cma_subsys_group_ops,
+ 	.ct_owner	= THIS_MODULE,
+ };

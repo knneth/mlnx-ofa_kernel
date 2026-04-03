@@ -428,7 +428,7 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
 	bool has_err = false;
 	int ret;
 
-	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
+	ida_free(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
 	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
 
 	if (be_ctrl->ibns) {
@@ -693,8 +693,8 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	be_ctrl->offload_ctx.ctx = be_ctrl;
 	be_ctrl->offload_ctx.port = xrq->port;
 	be_ctrl->offload_ctx.ns = ns;
-	be_ctrl->offload_ctx.id = ida_simple_get(&nvmet_rdma_bectrl_ida, 0, 0,
-						 GFP_KERNEL);
+	be_ctrl->offload_ctx.id = ida_alloc(&nvmet_rdma_bectrl_ida,
+					    GFP_KERNEL);
 	if (be_ctrl->offload_ctx.id < 0) {
 		err = -ENOMEM;
 		goto out_detach_ns;
@@ -712,7 +712,7 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
 	return be_ctrl;
 
 out_ida_remove:
-	ida_simple_remove(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
+	ida_free(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
 out_detach_ns:
 	ib_detach_nvmf_ns(be_ctrl->ibns);
 out_destroy_be_ctrl:

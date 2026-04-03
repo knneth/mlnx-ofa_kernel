@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm_trace.h
+
+Change-Id: I8f6d271197201320c50f893786403f8451d36cb2
+---
+ drivers/infiniband/core/cm_trace.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/infiniband/core/cm_trace.h
++++ b/drivers/infiniband/core/cm_trace.h
+@@ -231,6 +231,9 @@ DEFINE_CM_ERR_EVENT(send_unknown_rej);
+ DEFINE_CM_ERR_EVENT(rej_unknown);
+ DEFINE_CM_ERR_EVENT(prepare_mra_unknown);
+ DEFINE_CM_ERR_EVENT(mra_unknown);
++#ifdef HAVE_BASECODE_EXTRAS
++DEFINE_CM_ERR_EVENT(send_mra_unknown);
++#endif
+ DEFINE_CM_ERR_EVENT(qp_init);
+ DEFINE_CM_ERR_EVENT(qp_rtr);
+ DEFINE_CM_ERR_EVENT(qp_rts);

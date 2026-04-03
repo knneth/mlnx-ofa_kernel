@@ -1,0 +1,176 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
+
+---
+ drivers/nvme/common/auth.c | 101 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 101 insertions(+)
+
+--- a/drivers/nvme/common/auth.c
++++ b/drivers/nvme/common/auth.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Linux
+  */
+ 
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
+ #include <linux/module.h>
+ #include <linux/crc32.h>
+ #include <linux/base64.h>
+@@ -11,7 +12,9 @@
+ #include <linux/unaligned.h>
+ #include <crypto/hash.h>
+ #include <crypto/dh.h>
++#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
+ #include <crypto/hkdf.h>
++#endif
+ #include <linux/nvme.h>
+ #include <linux/nvme-auth.h>
+ 
+@@ -20,6 +23,87 @@
+ static u32 nvme_dhchap_seqnum;
+ static DEFINE_MUTEX(nvme_dhchap_mutex);
+ 
++#if !defined(HAVE_HKDF_EXPAND)
++#include <crypto/internal/hash.h>
++#include <crypto/sha2.h>
++
++/**
++ * hkdf_expand - HKDF-Expand (RFC 5869 section 2.3)
++ * @hmac_tfm: hash context keyed with pseudorandom key
++ * @info: application-specific information
++ * @infolen: length of @info
++ * @okm: output keying material
++ * @okmlen: length of @okm
++ *
++ * This expands the pseudorandom key, which was already keyed into @hmac_tfm,
++ * into @okmlen bytes of output keying material parameterized by the
++ * application-specific @info of length @infolen bytes.
++ * This is thread-safe and may be called by multiple threads in parallel.
++ *
++ * Returns 0 on success with output keying material stored in @okm,
++ * or a negative errno value otherwise.
++ */
++#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
++static
++int hkdf_expand(struct crypto_shash *hmac_tfm,
++		const u8 *info, unsigned int infolen,
++		u8 *okm, unsigned int okmlen)
++{
++	SHASH_DESC_ON_STACK(desc, hmac_tfm);
++	unsigned int i, hashlen = crypto_shash_digestsize(hmac_tfm);
++	int err;
++	const u8 *prev = NULL;
++	u8 counter = 1;
++	u8 tmp[HASH_MAX_DIGESTSIZE] = {};
++
++	if (WARN_ON(okmlen > 255 * hashlen))
++		return -EINVAL;
++
++	desc->tfm = hmac_tfm;
++
++	for (i = 0; i < okmlen; i += hashlen) {
++		err = crypto_shash_init(desc);
++		if (err)
++			goto out;
++
++		if (prev) {
++			err = crypto_shash_update(desc, prev, hashlen);
++			if (err)
++				goto out;
++		}
++
++		if (infolen) {
++			err = crypto_shash_update(desc, info, infolen);
++			if (err)
++				goto out;
++		}
++
++		BUILD_BUG_ON(sizeof(counter) != 1);
++		if (okmlen - i < hashlen) {
++			err = crypto_shash_finup(desc, &counter, 1, tmp);
++			if (err)
++				goto out;
++			memcpy(&okm[i], tmp, okmlen - i);
++			memzero_explicit(tmp, sizeof(tmp));
++		} else {
++			err = crypto_shash_finup(desc, &counter, 1, &okm[i]);
++			if (err)
++				goto out;
++		}
++		counter++;
++		prev = &okm[i];
++	}
++	err = 0;
++out:
++	if (unlikely(err))
++		memzero_explicit(okm, okmlen); /* so caller doesn't need to */
++	shash_desc_zero(desc);
++	memzero_explicit(tmp, HASH_MAX_DIGESTSIZE);
++	return err;
++}
++#endif /* HAVE_NVME_AUTH_DERIVE_TLS_PSK */
++#endif
++
+ u32 nvme_auth_get_seqnum(void)
+ {
+ 	u32 seqnum;
+@@ -178,7 +262,13 @@ struct nvme_dhchap_key *nvme_auth_extrac
+ 	if (!key)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++/* Newer kernels (6.19-rc6+): padding and variant parameters */
++	key_len = base64_decode(secret, allocated_len, key->key, true, BASE64_STD);
++#else
++/* Older kernels: 3 parameters */
+ 	key_len = base64_decode(secret, allocated_len, key->key);
++#endif
+ 	if (key_len < 0) {
+ 		pr_debug("base64 key decoding error %d\n",
+ 			 key_len);
+@@ -663,7 +753,13 @@ int nvme_auth_generate_digest(u8 hmac_id
+ 	if (ret)
+ 		goto out_free_digest;
+ 
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++/* Newer kernels (6.19-rc6+): padding and variant parameters */
++	ret = base64_encode(digest, digest_len, enc, true, BASE64_STD);
++#else
++/* Older kernels: 3 parameters */
+ 	ret = base64_encode(digest, digest_len, enc);
++#endif
+ 	if (ret < hmac_len) {
+ 		ret = -ENOKEY;
+ 		goto out_free_digest;
+@@ -698,6 +794,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_dig
+  * Returns 0 on success with output keying material stored in @okm,
+  * or a negative errno value otherwise.
+  */
++#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
+ static int hkdf_expand_label(struct crypto_shash *hmac_tfm,
+ 		const u8 *label, unsigned int labellen,
+ 		const u8 *context, unsigned int contextlen,
+@@ -735,6 +832,7 @@ static int hkdf_expand_label(struct cryp
+ 	kfree_sensitive(info);
+ 	return err;
+ }
++#endif
+ 
+ /**
+  * nvme_auth_derive_tls_psk - Derive TLS PSK
+@@ -763,6 +861,7 @@ static int hkdf_expand_label(struct cryp
+  * Returns 0 on success with a valid psk pointer in @ret_psk or a negative
+  * error number otherwise.
+  */
++#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
+ int nvme_auth_derive_tls_psk(int hmac_id, u8 *psk, size_t psk_len,
+ 		u8 *psk_digest, u8 **ret_psk)
+ {
+@@ -842,6 +941,8 @@ out_free_shash:
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_derive_tls_psk);
++#endif
+ 
++#endif /* HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP */
+ MODULE_DESCRIPTION("NVMe Authentication framework");
+ MODULE_LICENSE("GPL v2");

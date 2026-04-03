@@ -33,6 +33,7 @@
 #include <linux/dim.h>
 #include <linux/debugfs.h>
 #include <linux/mlx5/fs.h>
+#include <net/netdev_lock.h>
 #include <net/switchdev.h>
 #include <net/pkt_cls.h>
 #include <net/act_api.h>
@@ -914,6 +915,8 @@ static void mlx5e_build_rep_netdev(struct net_device *netdev,
 	else
 		netdev->netdev_ops = &mlx5e_netdev_ops_rep;
 
+	netdev->request_ops_lock = true;
+	netdev_lockdep_set_classes(netdev);
 	eth_hw_addr_random(netdev);
 	netdev->ethtool_ops = &mlx5e_rep_ethtool_ops;
 
@@ -999,7 +1002,7 @@ static int mlx5e_create_rep_ttc_table(struct mlx5e_priv *priv)
 						MLX5_FLOW_NAMESPACE_KERNEL), false);
 
 	/* The inner_ttc in the ttc params is intentionally not set */
-	mlx5e_set_ttc_params(priv->fs, priv->rx_res, &ttc_params, false);
+	mlx5e_set_ttc_params(priv->fs, priv->rx_res, &ttc_params, false, false);
 
 	if (rep->vport != MLX5_VPORT_UPLINK)
 		/* To give uplik rep TTC a lower level for chaining from root ft */
@@ -1372,9 +1375,11 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	netdev->wanted_features |= NETIF_F_HW_TC;
 
 	rtnl_lock();
+	netdev_lock(netdev);
 	if (netif_running(netdev))
 		mlx5e_open(netdev);
 	udp_tunnel_nic_reset_ntf(priv->netdev);
+	netdev_unlock(netdev);
 	netif_device_attach(netdev);
 	rtnl_unlock();
 
@@ -1391,9 +1396,11 @@ static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 
 	rtnl_lock();
+	netdev_lock(priv->netdev);
 	if (netif_running(priv->netdev))
 		mlx5e_close(priv->netdev);
 	netif_device_detach(priv->netdev);
+	netdev_unlock(priv->netdev);
 	rtnl_unlock();
 
 	mlx5e_uplink_rep_set_rx_mode(priv);
@@ -1476,11 +1483,11 @@ static void mlx5e_rep_vnic_reporter_create(struct mlx5e_priv *priv,
 
 	reporter = devl_port_health_reporter_create(dl_port,
 						    &mlx5_rep_vnic_reporter_ops,
-						    0, rpriv);
+						    rpriv);
 	if (IS_ERR(reporter)) {
 		mlx5_core_err(priv->mdev,
-			      "Failed to create representor vnic reporter, err = %ld\n",
-			      PTR_ERR(reporter));
+			      "Failed to create representor vnic reporter, err = %pe\n",
+			      reporter);
 		return;
 	}
 
@@ -1535,21 +1542,29 @@ static const struct mlx5e_profile mlx5e_uplink_rep_profile = {
 static int
 mlx5e_vport_uplink_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 {
-	struct mlx5e_priv *priv = netdev_priv(mlx5_uplink_netdev_get(dev));
 	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
+	struct net_device *netdev;
+	struct mlx5e_priv *priv;
 	int err;
 
-	rpriv->netdev = priv->netdev;
-	err =  mlx5e_netdev_change_profile(priv, &mlx5e_uplink_rep_profile,
-					   rpriv);
-	if (err)
+	netdev = mlx5_uplink_netdev_get(dev);
+	if (!netdev)
+		return 0;
+	/* Keeping priv for mlx5e_ipsec_build_netdev*/
+	priv = netdev_priv(netdev);
+
+	/* must not use netdev_priv(netdev), it might not be initialized yet */
+	rpriv->netdev = netdev;
+	err = mlx5e_netdev_change_profile(netdev, dev,
+		        		  &mlx5e_uplink_rep_profile, rpriv);
+	if (err)   
 		return err;
 
 	mlx5_smartnic_sysfs_init(rpriv->netdev);
 	mlx5_rep_sysfs_init(rpriv);
 	mlx5e_ipsec_build_netdev(priv);
-
-	return 0;
+	mlx5_uplink_netdev_put(dev, netdev);
+	return err;
 }
 
 static void
@@ -1578,7 +1593,7 @@ mlx5e_vport_uplink_rep_unload(struct mlx5e_rep_priv *rpriv)
 		unregister_netdev(netdev);
 	}
 
-	mlx5e_netdev_attach_nic_profile(priv);
+	mlx5e_netdev_attach_nic_profile(netdev, priv->mdev);
 }
 
 static int
@@ -1650,7 +1665,7 @@ err_cleanup_profile:
 	priv->profile->cleanup(priv);
 
 err_destroy_netdev:
-	mlx5e_destroy_netdev(netdev_priv(netdev));
+	mlx5e_destroy_netdev(netdev);
 	return err;
 }
 
@@ -1685,10 +1700,19 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 {
 	struct mlx5_vport *vport = mlx5_eswitch_get_vport(rep->esw, rep->vport);
 	struct mlx5e_rep_priv *rpriv = mlx5e_rep_to_rep_priv(rep);
+	struct mlx5_core_dev *dev;
 	struct net_device *netdev = rpriv->netdev;
-	struct mlx5e_priv *priv = netdev_priv(netdev);
-	struct mlx5_core_dev *dev = priv->mdev;
-	void *ppriv = priv->ppriv;
+	struct mlx5e_priv *priv;
+	void *ppriv;
+
+	if (!netdev) {
+		ppriv = rpriv;
+		goto free_ppriv;
+	}
+
+	priv = netdev_priv(netdev);
+	ppriv = priv->ppriv;
+	dev = priv->mdev;
 
 	mlx5_rep_destroy_miss_meter(dev, rpriv);
 	mlx5_rep_sysfs_cleanup(rpriv);
@@ -1703,7 +1727,7 @@ mlx5e_vport_rep_unload(struct mlx5_eswitch_rep *rep)
 	mlxdevm_port_type_clear(vport->devm_port);
 	mlx5e_detach_netdev(priv);
 	priv->profile->cleanup(priv);
-	mlx5e_destroy_netdev(priv);
+	mlx5e_destroy_netdev(netdev);
 free_ppriv:
 	kvfree(ppriv); /* mlx5e_rep_priv */
 }

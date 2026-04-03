@@ -1,0 +1,48 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+
+Change-Id: I86ef7093908103c9985eb6c0fed59f150cb01d40
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+@@ -132,6 +132,7 @@ enum mlx5_ipsec_cap {
+ 
+ struct mlx5e_priv;
+ 
++#ifdef CONFIG_MLX5_EN_IPSEC
+ struct mlx5e_ipsec_hw_stats {
+ 	u64 ipsec_rx_pkts;
+ 	u64 ipsec_rx_bytes;
+@@ -275,7 +276,9 @@ struct mlx5e_ipsec_limits {
+ struct mlx5e_ipsec_sa_entry {
+ 	struct mlx5e_ipsec_esn_state esn_state;
+ 	struct xfrm_state *x;
++#ifdef HAVE_XDO_DEV_STATE_DELETE_GET_NET_DEVICE
+ 	struct net_device *dev;
++#endif
+ 	struct mlx5e_ipsec *ipsec;
+ 	struct mlx5_accel_esp_xfrm_attrs attrs;
+ 	void (*set_iv_op)(struct sk_buff *skb, struct xfrm_state *x,
+@@ -306,8 +309,6 @@ struct mlx5e_ipsec_pol_entry {
+ 	struct mlx5_accel_pol_xfrm_attrs attrs;
+ };
+ 
+-#ifdef CONFIG_MLX5_EN_IPSEC
+-
+ void mlx5e_ipsec_init(struct mlx5e_priv *priv);
+ void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv);
+ void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv);
+@@ -319,7 +320,9 @@ void mlx5e_accel_ipsec_fs_del_rule(struc
+ int mlx5e_accel_ipsec_fs_add_pol(struct mlx5e_ipsec_pol_entry *pol_entry);
+ void mlx5e_accel_ipsec_fs_del_pol(struct mlx5e_ipsec_pol_entry *pol_entry);
+ void mlx5e_accel_ipsec_fs_modify(struct mlx5e_ipsec_sa_entry *sa_entry);
++#ifdef HAVE_XFRM_DEV_TYPE
+ bool mlx5e_ipsec_fs_tunnel_allowed(struct mlx5e_ipsec_sa_entry *sa_entry);
++#endif
+ 
+ int mlx5_ipsec_create_sa_ctx(struct mlx5e_ipsec_sa_entry *sa_entry);
+ void mlx5_ipsec_free_sa_ctx(struct mlx5e_ipsec_sa_entry *sa_entry);

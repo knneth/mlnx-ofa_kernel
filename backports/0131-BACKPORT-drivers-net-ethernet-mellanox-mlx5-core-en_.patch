@@ -1,0 +1,34 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
+@@ -2768,6 +2768,7 @@ int mlx5e_accel_ipsec_fs_init(struct mlx
+ 	struct mlx5_flow_namespace *ns, *ns_esw;
+ 	int err = -ENOMEM;
+ 
++	ns_esw = NULL;
+ 	ns = mlx5_get_flow_namespace(ipsec->mdev,
+ 				     MLX5_FLOW_NAMESPACE_EGRESS_IPSEC);
+ 	if (!ns)
+@@ -2850,6 +2851,7 @@ void mlx5e_accel_ipsec_fs_modify(struct
+ 	memcpy(sa_entry, &sa_entry_shadow, sizeof(*sa_entry));
+ }
+ 
++#ifdef HAVE_XFRM_DEV_TYPE
+ bool mlx5e_ipsec_fs_tunnel_allowed(struct mlx5e_ipsec_sa_entry *sa_entry)
+ {
+ 	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
+@@ -2869,6 +2871,7 @@ bool mlx5e_ipsec_fs_tunnel_allowed(struc
+ 
+ 	return mlx5_eswitch_block_encap(ipsec->mdev, from_fdb);
+ }
++#endif
+ 
+ void mlx5e_ipsec_handle_mpv_event(int event, struct mlx5e_priv *slave_priv,
+ 				  struct mlx5e_priv *master_priv)

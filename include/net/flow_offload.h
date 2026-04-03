@@ -321,11 +321,6 @@ void flow_rule_match_meta(const struct flow_rule *rule,
 #define FLOW_ACTION_VLAN_POP_ETH (FLOW_ACTION_UNDEFINED_IN_KERNEL + 10)
 #endif
 
-#ifndef HAVE_FLOW_ACTION_POLICE
-#define FLOW_ACTION_SAMPLE (FLOW_ACTION_UNDEFINED_IN_KERNEL + 11)
-#define FLOW_ACTION_POLICE (FLOW_ACTION_UNDEFINED_IN_KERNEL + 12)
-#endif
-
 /* Update this if defining other actions above previous max */
 #define NUM_FLOW_ACTIONS 200
 
@@ -349,9 +344,6 @@ enum tc_setup_type;
 typedef int flow_setup_cb_t(enum tc_setup_type type, void *type_data,
 					    void *cb_priv);
 #endif
-
-#define flow_cls_offload1 flow_cls_offload
-#define flow_cls_offload_flow_rule1 flow_cls_offload_flow_rule
 
 #ifndef HAVE_FLOW_INDR_BLOCK_CB_ALLOC
 #define flow_indr_block_cb_remove flow_block_cb_remove

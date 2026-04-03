@@ -98,7 +98,22 @@ mlx5_devm_affinity_get_weight(struct mlx5_core_dev *dev)
 	return 0;
 }
 
-static inline void mlx5_devm_params_publish(struct mlx5_core_dev *dev)
+static void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev)
+{
+}
+
+static int mlx5_pf_vf_devm_port_init(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
+{
+	return 0;
+}
+
+int mlx5_sf_devm_port_init(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
+			   u32 controller, u32 sfnum)
+{
+	return 0;
+}
+
+static void mlx5_devm_port_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 }
 
@@ -117,7 +132,7 @@ int mlx5_sf_devm_port_init(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
 	return 0;
 }
 
-static void mlx5_devm_port_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport);
+static void mlx5_devm_port_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 {
 }
 #endif

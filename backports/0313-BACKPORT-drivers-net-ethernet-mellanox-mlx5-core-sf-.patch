@@ -1,0 +1,39 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
+
+Change-Id: Ife7594eac22eef80ac6873fc893ab39786916653
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.h
+@@ -16,11 +16,13 @@ struct mlx5_sf_dev {
+ 	 * 4097699 fix is accepted upstream.
+ 	 * Needed to build base code w/o backports.
+ 	 */
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
+ 	struct {
+ 		struct xarray irqs;
+ 		struct mutex lock; /* Synchronize irq sysfs creation */
+ 		bool irq_dir_exists;
+ 	} sysfs;
++#endif
+ 
+ 	struct mlx5_core_dev *parent_mdev;
+ 	struct mlx5_core_dev *mdev;
+@@ -37,11 +39,13 @@ struct mlx5_sf_dev {
+ #endif
+ };
+ 
++#ifdef HAVE_DEVLINK_INSTANCES_RELATIONSHIPS_EXPOSURE
+ struct mlx5_sf_peer_devlink_event_ctx {
+ 	u16 fn_id;
+ 	struct devlink *devlink;
+ 	int err;
+ };
++#endif
+ 
+ void mlx5_sf_dev_table_create(struct mlx5_core_dev *dev);
+ void mlx5_sf_dev_table_destroy(struct mlx5_core_dev *dev);

@@ -39,7 +39,7 @@ Subject: [PATCH] BACKPORT:
  
  		do_div(size, port_buff_cell_sz);
  		new_headroom_cells += size;
-@@ -589,3 +593,4 @@ int mlx5e_port_manual_buffer_config(stru
+@@ -590,3 +594,4 @@ int mlx5e_port_manual_buffer_config(stru
  
  	return err;
  }

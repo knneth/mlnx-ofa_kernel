@@ -1,0 +1,240 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+
+Change-Id: Iab42c0865691bb20bb4607ead740c4c288e09924
+---
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 83 +++++++++++++++----
+ 1 file changed, 68 insertions(+), 15 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+@@ -8,6 +8,9 @@
+ #include "mlx5_devm.h"
+ #define CREATE_TRACE_POINTS
+ #include "diag/qos_tracepoint.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
++#endif
+ 
+ /* Minimum supported BW share value by the HW is 1 Mbit/sec */
+ #define MLX5_MIN_BW_SHARE 1
+@@ -524,7 +527,10 @@ static void __esw_qos_free_node(struct m
+ 	kfree(node);
+ }
+ 
+-static void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++static
++#endif
++void esw_qos_destroy_node(struct mlx5_esw_sched_node *node, struct netlink_ext_ack *extack)
+ {
+ 	esw_qos_node_destroy_sched_element(node, extack);
+ 	__esw_qos_free_node(node);
+@@ -965,9 +971,14 @@ esw_qos_vport_tc_enable(struct mlx5_vpor
+ 		max_level = 1 << MLX5_CAP_QOS(vport_node->esw->dev,
+ 					      log_esw_max_sched_depth);
+ 		if (new_level > max_level) {
++#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
+ 			NL_SET_ERR_MSG_FMT_MOD(extack,
+ 					       "TC arbitration on leafs is not supported beyond max depth %d",
+ 					       max_level);
++#else
++			NL_SET_ERR_MSG_MOD(extack,
++					   "TC arbitration on leafs is not supported beyond max scheduling depth");
++#endif
+ 			return -EOPNOTSUPP;
+ 		}
+ 	}
+@@ -1443,9 +1454,14 @@ static int esw_qos_node_enable_tc_arbitr
+ 	new_level = node->level + 1;
+ 	max_level = 1 << MLX5_CAP_QOS(node->esw->dev, log_esw_max_sched_depth);
+ 	if (new_level > max_level) {
++#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT_MOD(extack,
+ 				       "TC arbitration on nodes is not supported beyond max depth %d",
+ 				       max_level);
++#else
++		NL_SET_ERR_MSG_MOD(extack,
++				       "TC arbitration on nodes is not supported beyond max depth");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -1519,8 +1535,8 @@ out:
+ 	return speed;
+ }
+ 
+-static int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
+-					   bool hold_rtnl_lock, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_max_link_speed_get(struct mlx5_core_dev *mdev, u32 *link_speed_max,
++				    bool hold_rtnl_lock, struct netlink_ext_ack *extack)
+ {
+ 	int err;
+ 
+@@ -1546,9 +1562,9 @@ skip_lag:
+ 	return err;
+ }
+ 
+-static int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
+-					  const char *name, u32 link_speed_max,
+-					  u64 value, struct netlink_ext_ack *extack)
++int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
++				  const char *name, u32 link_speed_max,
++				  u64 value, struct netlink_ext_ack *extack)
+ {
+ 	if (value > link_speed_max) {
+ 		pr_err("%s rate value %lluMbps exceed link maximum speed %u.\n",
+@@ -1728,8 +1744,8 @@ unlock:
+  * second, rewriting last. If converted rate exceed link speed or is not a
+  * fraction of Mbps - returns error.
+  */
+-static int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
+-					u64 *rate, struct netlink_ext_ack *extack)
++int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
++				 u64 *rate, struct netlink_ext_ack *extack)
+ {
+ 	u32 link_speed_max, remainder;
+ 	u64 value;
+@@ -1870,7 +1886,11 @@ void mlx5_esw_qos_cleanup(struct mlx5_es
+ 
+ /* Eswitch devlink rate API */
+ 
+-int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
++int mlx5_esw_devlink_rate_leaf_tx_share_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					    struct devlink_rate *rate_leaf,
++#endif
++					    void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_vport *vport = priv;
+@@ -1895,7 +1915,11 @@ out:
+ 	return err;
+ }
+ 
+-int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *priv,
++int mlx5_esw_devlink_rate_leaf_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_leaf,
++#endif
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_vport *vport = priv;
+@@ -1920,7 +1944,10 @@ out:
+ 	return err;
+ }
+ 
+-int mlx5_esw_devlink_rate_leaf_tc_bw_set(struct devlink_rate *rate_leaf,
++int mlx5_esw_devlink_rate_leaf_tc_bw_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
++					 struct devlink_rate *rate_leaf,
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack)
+@@ -1974,7 +2001,10 @@ unlock:
+ 	return err;
+ }
+ 
+-int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
++int mlx5_esw_devlink_rate_node_tc_bw_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
++					 struct devlink_rate *rate_node,
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack)
+@@ -2005,7 +2035,11 @@ unlock:
+ 	return err;
+ }
+ 
+-int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_share_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					    struct devlink_rate *rate_node,
++#endif
++					    void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_esw_sched_node *node = priv;
+@@ -2022,7 +2056,11 @@ int mlx5_esw_devlink_rate_node_tx_share_
+ 	return err;
+ }
+ 
+-int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_node,
++#endif
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_esw_sched_node *node = priv;
+@@ -2039,6 +2077,7 @@ int mlx5_esw_devlink_rate_node_tx_max_se
+ 	return err;
+ }
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
+ 				   struct netlink_ext_ack *extack)
+ {
+@@ -2050,8 +2089,13 @@ int mlx5_esw_devlink_rate_node_new(struc
+ 	
+ 	return mlx5_esw_common_rate_node_new(esw, priv, extack);
+ }
++#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
+ 
+-int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_del(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++				   struct devlink_rate *rate_node,
++#endif
++				   void *priv,
+ 				   struct netlink_ext_ack *extack)
+ {
+ 	struct mlx5_esw_sched_node *node = priv;
+@@ -2145,6 +2189,7 @@ mlx5_esw_qos_pre_cleanup(struct mlx5_cor
+ 	esw_qos_unlock(esw);
+ }
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+ 					  void *priv, void *parent_priv,
+@@ -2155,6 +2200,7 @@ int mlx5_esw_devlink_rate_leaf_parent_se
+ 
+ 	return mlx5_esw_common_rate_leaf_parent_set(node, vport, extack);
+ }
++#endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
+ 
+ static bool esw_qos_is_node_empty(struct mlx5_esw_sched_node *node)
+ {
+@@ -2205,9 +2251,14 @@ mlx5_esw_qos_node_validate_set_parent(st
+ 
+ 	max_level = 1 << MLX5_CAP_QOS(node->esw->dev, log_esw_max_sched_depth);
+ 	if (new_level > max_level) {
++#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
+ 		NL_SET_ERR_MSG_FMT_MOD(extack,
+ 				       "Node hierarchy depth %d exceeds the maximum supported level %d",
+ 				       new_level, max_level);
++#else
++		NL_SET_ERR_MSG_MOD(extack,
++				       "Node hierarchy depth exceeds the maximum supported level");
++#endif
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -2305,6 +2356,7 @@ out:
+ 	return err;
+ }
+ 
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+ 					  void *priv, void *parent_priv,
+@@ -2318,3 +2370,4 @@ int mlx5_esw_devlink_rate_node_parent_se
+ 	parent_node = parent_priv;
+ 	return mlx5_esw_qos_node_update_parent(node, parent_node, extack);
+ }
++#endif

@@ -1,22 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
+ drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h  | 4 ++++
- 1 file changed, 4 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c    | 3 +++
+ 1 file changed, 3 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
-@@ -25,7 +25,11 @@ TRACE_EVENT(mlx5e_rep_neigh_update,
- 			struct in6_addr *pin6;
- 			__be32 *p32;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
  
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 			__assign_str(devname);
-+#else
-+ 			__assign_str(devname, nhe->neigh_dev->name);
++#ifndef MLX_DISABLE_TRACEPOINTS
+ #define CREATE_TRACE_POINTS
+ #include "en_tc_tracepoint.h"
+ 
+@@ -56,3 +57,5 @@ const char *parse_action(struct trace_se
+ 	trace_seq_putc(p, 0);
+ 	return ret;
+ }
++
 +#endif
- 			__entry->neigh_connected = neigh_connected;
- 			memcpy(__entry->ha, ha, ETH_ALEN);
- 

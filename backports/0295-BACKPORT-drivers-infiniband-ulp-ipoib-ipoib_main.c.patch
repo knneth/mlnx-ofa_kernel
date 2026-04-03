@@ -1,0 +1,698 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_main.c
+
+Change-Id: If20c1c87f85e2d39d377ae91f71c0a38309599e9
+---
+ drivers/infiniband/ulp/ipoib/ipoib_main.c | 288 ++++++++++++++++++++--
+ 1 file changed, 262 insertions(+), 26 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_main.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_main.c
+@@ -54,6 +54,9 @@
+ #include <linux/inetdevice.h>
+ #include <rdma/ib_cache.h>
+ #include <linux/inet.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <net/net_trackers.h>
++#endif
+ 
+ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
+@@ -162,9 +165,17 @@ static void ipoib_ifupdown_task(struct w
+ 		flags &= ~IFF_UP;
+ 
+ 	if (dev->flags != flags)
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 		dev_change_flags(dev, flags, NULL);
++#else
++		dev_change_flags(dev, flags);
++#endif
+ 	rtnl_unlock();
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 	netdev_put(dev, &pwork->dev_tracker);
++#else
++	dev_put(dev);
++#endif
+ 	kfree(pwork);
+ }
+ 
+@@ -180,7 +191,11 @@ static void ipoib_schedule_ifupdown_task
+ 	if (!work)
+ 		return;
+ 	work->dev = dev;
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 	netdev_hold(dev, &work->dev_tracker, GFP_KERNEL);
++#else
++	dev_hold(dev);
++#endif
+ 	work->up = up;
+ 	INIT_WORK(&work->work, ipoib_ifupdown_task);
+ 	queue_work(ipoib_workqueue, &work->work);
+@@ -208,10 +223,27 @@ int ipoib_open(struct net_device *dev)
+ 		struct ipoib_dev_priv *cpriv;
+ 
+ 		/* Bring up any child interfaces too */
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
++		/* Newer kernels (6.15+): netdev instance locking API */
+ 		netdev_lock_ops_to_full(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_lock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		down_read(&priv->vlan_rwsem);
++#endif
+ 		list_for_each_entry(cpriv, &priv->child_intfs, list)
+ 			ipoib_schedule_ifupdown_task(cpriv->dev, true);
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
+ 		netdev_unlock_full_to_ops(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_unlock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		up_read(&priv->vlan_rwsem);
++#endif
+ 	} else if (priv->parent) {
+ 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
+ 
+@@ -246,10 +278,27 @@ static int ipoib_stop(struct net_device
+ 		struct ipoib_dev_priv *cpriv;
+ 
+ 		/* Bring down any child interfaces too */
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
++		/* Newer kernels (6.15+): netdev instance locking API */
+ 		netdev_lock_ops_to_full(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_lock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		down_read(&priv->vlan_rwsem);
++#endif
+ 		list_for_each_entry(cpriv, &priv->child_intfs, list)
+ 			ipoib_schedule_ifupdown_task(cpriv->dev, false);
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
+ 		netdev_unlock_full_to_ops(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_unlock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		up_read(&priv->vlan_rwsem);
++#endif
+ 	}
+ 
+ 	return 0;
+@@ -294,7 +343,6 @@ static int ipoib_change_mtu(struct net_d
+ 				"link layer MTU - 4 (%u)\n", priv->mcast_mtu);
+ 
+ 	new_mtu = min(priv->mcast_mtu, priv->admin_mtu);
+-
+ 	if (priv->rn_ops->ndo_change_mtu) {
+ 		bool carrier_status = netif_carrier_ok(dev);
+ 
+@@ -302,7 +350,6 @@ static int ipoib_change_mtu(struct net_d
+ 
+ 		/* notify lower level on the real mtu */
+ 		ret = priv->rn_ops->ndo_change_mtu(dev, new_mtu);
+-
+ 		if (carrier_status)
+ 			netif_carrier_on(dev);
+ 	} else {
+@@ -339,9 +386,15 @@ static bool ipoib_is_dev_match_addr_rcu(
+ 		if (!in_dev)
+ 			return false;
+ 
++#ifdef HAVE_INET_CONFIRM_ADDR_EXPORTED
+ 		ret_addr = inet_confirm_addr(net, in_dev, 0,
+ 					     addr_in->sin_addr.s_addr,
+ 					     RT_SCOPE_HOST);
++#else
++		ret_addr = confirm_addr_indev(in_dev, 0,
++					      addr_in->sin_addr.s_addr,
++					      RT_SCOPE_HOST);
++#endif
+ 		in_dev_put(in_dev);
+ 		if (ret_addr)
+ 			return true;
+@@ -387,9 +440,17 @@ struct ipoib_walk_data {
+ };
+ 
+ static int ipoib_upper_walk(struct net_device *upper,
+-			    struct netdev_nested_priv *priv)
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++				struct netdev_nested_priv *priv)
++#else
++				void *_data)
++#endif
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct ipoib_walk_data *data = (struct ipoib_walk_data *)priv->data;
++#else
++	struct ipoib_walk_data *data = _data;
++#endif
+ 	int ret = 0;
+ 
+ 	if (ipoib_is_dev_match_addr_rcu(data->addr, upper)) {
+@@ -414,12 +475,16 @@ static int ipoib_upper_walk(struct net_d
+ static struct net_device *ipoib_get_net_dev_match_addr(
+ 		const struct sockaddr *addr, struct net_device *dev)
+ {
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	struct netdev_nested_priv priv;
++#endif
+ 	struct ipoib_walk_data data = {
+ 		.addr = addr,
+ 	};
+ 
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
+ 	priv.data = (void *)&data;
++#endif
+ 	rcu_read_lock();
+ 	if (ipoib_is_dev_match_addr_rcu(addr, dev)) {
+ 		dev_hold(dev);
+@@ -427,7 +492,13 @@ static struct net_device *ipoib_get_net_
+ 		goto out;
+ 	}
+ 
+-	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk, &priv);
++	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk,
++#ifdef HAVE_NETDEV_NESTED_PRIV_STRUCT
++					&priv);
++#else
++					&data);
++#endif
++
+ out:
+ 	rcu_read_unlock();
+ 	return data.result;
+@@ -471,7 +542,13 @@ static int ipoib_match_gid_pkey_addr(str
+ 		return matches;
+ 
+ 	/* Check child interfaces */
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 	netdev_lock(priv->dev);
++#else
++	/* Before commit 463e51769697: used vlan_rwsem with nesting parameter */
++	down_read_nested(&priv->vlan_rwsem, nesting);
++#endif
+ 	list_for_each_entry(child_priv, &priv->child_intfs, list) {
+ 		matches += ipoib_match_gid_pkey_addr(child_priv, gid,
+ 						     pkey_index, addr,
+@@ -480,7 +557,13 @@ static int ipoib_match_gid_pkey_addr(str
+ 		if (matches > 1)
+ 			break;
+ 	}
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 	netdev_unlock(priv->dev);
++#else
++	/* Before commit 463e51769697: used vlan_rwsem with nesting parameter */
++	up_read(&priv->vlan_rwsem);
++#endif
+ 
+ 	return matches;
+ }
+@@ -578,11 +661,19 @@ int ipoib_set_mode(struct net_device *de
+ 
+ 	if (!strcmp(buf, "datagram\n")) {
+ 		clear_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 		netdev_lock_ops(dev);
++#endif
+ 		netdev_update_features(dev);
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 		netif_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
++#else
++		dev_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
++#endif
+ 		netif_set_real_num_tx_queues(dev, dev->num_tx_queues);
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 		netdev_unlock_ops(dev);
++#endif
+ 		rtnl_unlock();
+ 		ipoib_flush_paths(dev);
+ 		return (!rtnl_trylock()) ? -EBUSY : 0;
+@@ -746,7 +837,11 @@ static void push_pseudo_header(struct sk
+ {
+ 	struct ipoib_pseudo_header *phdr;
+ 
+-	phdr = skb_push(skb, sizeof(*phdr));
++	phdr =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct ipoib_pseudo_header *)
++#endif
++		skb_push(skb, sizeof(*phdr));
+ 	memcpy(phdr->hwaddr, daddr, INFINIBAND_ALEN);
+ }
+ 
+@@ -1303,15 +1398,21 @@ unref:
+ 	return NETDEV_TX_OK;
+ }
+ 
+-static void ipoib_timeout(struct net_device *dev, unsigned int txqueue)
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
++	static void ipoib_timeout(struct net_device *dev, unsigned int txqueue)
++#else
++	static void ipoib_timeout(struct net_device *dev)
++#endif
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++#ifdef HAVE_NDO_TX_TIMEOUT_GET_2_PARAMS
+ 	struct rdma_netdev *rn = netdev_priv(dev);
+ 
+ 	if (rn->tx_timeout) {
+ 		rn->tx_timeout(dev, txqueue);
+ 		return;
+ 	}
++#endif
+ 	ipoib_warn(priv, "transmit timeout: latency %d msecs\n",
+ 		   jiffies_to_msecs(jiffies - dev_trans_start(dev)));
+ 	ipoib_warn(priv,
+@@ -1331,7 +1432,9 @@ void ipoib_ib_tx_timeout_work(struct wor
+ 	int err;
+ 
+ 	rtnl_lock();
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 	netdev_lock_ops(priv->dev);
++#endif
+ 
+ 	if (!test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
+ 		goto unlock;
+@@ -1346,7 +1449,9 @@ void ipoib_ib_tx_timeout_work(struct wor
+ 
+ 	netif_tx_wake_all_queues(priv->dev);
+ unlock:
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 	netdev_unlock_ops(priv->dev);
++#endif
+ 	rtnl_unlock();
+ 
+ }
+@@ -1360,7 +1465,19 @@ static int ipoib_hard_header(struct sk_b
+ {
+ 	struct ipoib_header *header;
+ 
+-	header = skb_push(skb, sizeof(*header));
++#ifdef HAVE_BASECODE_EXTRAS
++	if (unlikely(dev->hard_header_len != IPOIB_HARD_LEN)) {
++		printk_once(KERN_DEBUG "%s: dropping packet, incorrect header length %u\n",
++			    dev->name, dev->hard_header_len);
++		return -EINVAL;
++	}
++#endif
++
++	header =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct ipoib_header *)
++#endif
++		skb_push(skb, sizeof *header);
+ 
+ 	header->proto = htons(type);
+ 	header->reserved = 0;
+@@ -1515,7 +1632,7 @@ static void ipoib_reap_neigh(struct work
+ 	gc_time = arp_tbl.gc_interval;
+ 	gc_time = min(gc_time, IPOIB_MAX_NEIGH_TIME);
+ 	gc_time = max(gc_time, IPOIB_MIN_NEIGH_TIME);
+-	
++
+ 	__ipoib_reap_neigh(priv);
+ 
+ 	queue_delayed_work(priv->wq, &priv->neigh_reap_task,
+@@ -1818,11 +1935,15 @@ static void ipoib_neigh_hash_uninit(stru
+ static void ipoib_napi_add(struct net_device *dev)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+-
++#ifdef HAVE_NETIF_NAPI_ADD_WEIGHT
+ 	netif_napi_add_weight(dev, &priv->recv_napi, ipoib_rx_poll,
+ 			      IPOIB_NUM_WC);
+ 	netif_napi_add_weight(dev, &priv->send_napi, ipoib_tx_poll,
+ 			      MAX_SEND_CQE);
++#else
++	 netif_napi_add(dev, &priv->recv_napi, ipoib_rx_poll, IPOIB_NUM_WC);
++	 netif_napi_add(dev, &priv->send_napi, ipoib_tx_poll, MAX_SEND_CQE);
++#endif
+ }
+ 
+ static void ipoib_napi_del(struct net_device *dev)
+@@ -1853,7 +1974,9 @@ static void ipoib_dev_uninit_default(str
+ static int ipoib_dev_init_default(struct net_device *dev)
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
++#ifdef HAVE_DEV_ADDR_MOD
+ 	u8 addr_mod[3];
++#endif
+ 
+ 	ipoib_napi_add(dev);
+ 
+@@ -1881,10 +2004,16 @@ static int ipoib_dev_init_default(struct
+ 	}
+ 
+ 	/* after qp created set dev address */
++#ifdef HAVE_DEV_ADDR_MOD
+ 	addr_mod[0] = (priv->qp->qp_num >> 16) & 0xff;
+ 	addr_mod[1] = (priv->qp->qp_num >>  8) & 0xff;
+ 	addr_mod[2] = (priv->qp->qp_num) & 0xff;
+ 	dev_addr_mod(priv->dev, 1, addr_mod, sizeof(addr_mod));
++#else
++	priv->dev->dev_addr[1] = (priv->qp->qp_num >> 16) & 0xff;
++	priv->dev->dev_addr[2] = (priv->qp->qp_num >>  8) & 0xff;
++	priv->dev->dev_addr[3] = (priv->qp->qp_num) & 0xff;
++#endif
+ 
+ 	return 0;
+ 
+@@ -1904,10 +2033,17 @@ static int ipoib_ioctl(struct net_device
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 
++#ifdef HAVE_NDO_ETH_IOCTL
+ 	if (!priv->rn_ops->ndo_eth_ioctl)
+ 		return -EOPNOTSUPP;
+ 
+ 	return priv->rn_ops->ndo_eth_ioctl(dev, ifr, cmd);
++#else
++	if (!priv->rn_ops->ndo_do_ioctl)
++		return -EOPNOTSUPP;
++
++	return priv->rn_ops->ndo_do_ioctl(dev, ifr, cmd);
++#endif
+ }
+ 
+ static int ipoib_dev_init(struct net_device *dev)
+@@ -1991,7 +2127,11 @@ static void ipoib_parent_unregister_pre(
+ 	 * running ensures the it will not add more work.
+ 	 */
+ 	rtnl_lock();
++#ifdef HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS
+ 	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP, NULL);
++#else
++	dev_change_flags(priv->dev, priv->dev->flags & ~IFF_UP);
++#endif
+ 	rtnl_unlock();
+ 
+ 	/* ipoib_event() cannot be running once this returns */
+@@ -2046,13 +2186,19 @@ static int ipoib_parent_init(struct net_
+ 			priv->ca->name, priv->port, result);
+ 		return result;
+ 	}
++#ifdef HAVE_DEV_ADDR_MOD
+ 	dev_addr_mod(priv->dev, 4, priv->local_gid.raw, sizeof(union ib_gid));
++#else
++	memcpy(priv->dev->dev_addr + 4, priv->local_gid.raw,
++	       sizeof(union ib_gid));
++#endif
+ 
+ 	SET_NETDEV_DEV(priv->dev, priv->ca->dev.parent);
+ 	priv->dev->dev_port = priv->port - 1;
+ 	/* Let's set this one too for backwards compatibility. */
+ 	priv->dev->dev_id = priv->port - 1;
+ 
++
+ 	return 0;
+ }
+ 
+@@ -2067,8 +2213,13 @@ static void ipoib_child_init(struct net_
+ 		memcpy(&priv->local_gid, priv->dev->dev_addr + 4,
+ 		       sizeof(priv->local_gid));
+ 	else {
++#ifdef HAVE_DEV_ADDR_MOD
+ 		__dev_addr_set(priv->dev, ppriv->dev->dev_addr,
+ 			       INFINIBAND_ALEN);
++#else
++		memcpy(priv->dev->dev_addr, ppriv->dev->dev_addr,
++		       INFINIBAND_ALEN);
++#endif
+ 		memcpy(&priv->local_gid, &ppriv->local_gid,
+ 		       sizeof(priv->local_gid));
+ 	}
+@@ -2092,7 +2243,7 @@ static int ipoib_ndo_init(struct net_dev
+ 	ndev->mtu = IPOIB_UD_MTU(priv->max_ib_mtu);
+ 	priv->mcast_mtu = priv->admin_mtu = ndev->mtu;
+ 	rn->mtu = priv->mcast_mtu;
+-	ndev->max_mtu = IPOIB_CM_MTU;
++       ndev->max_mtu = IPOIB_CM_MTU;
+ 
+ 	ndev->neigh_priv_len = sizeof(struct ipoib_neigh);
+ 
+@@ -2120,9 +2271,21 @@ static int ipoib_ndo_init(struct net_dev
+ 
+ 		dev_hold(priv->parent);
+ 
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 		netdev_lock(priv->parent);
++#else
++		/* Before commit 463e51769697: used vlan_rwsem write lock for list modification */
++		down_write(&ppriv->vlan_rwsem);
++#endif
+ 		list_add_tail(&priv->list, &ppriv->child_intfs);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 		netdev_unlock(priv->parent);
++#else
++		/* Before commit 463e51769697: used vlan_rwsem write lock for list modification */
++		up_write(&ppriv->vlan_rwsem);
++#endif
+ 	}
+ 
+ 	return 0;
+@@ -2141,9 +2304,21 @@ static void ipoib_ndo_uninit(struct net_
+ 	if (priv->parent) {
+ 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
+ 
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 		netdev_lock(ppriv->dev);
++#else
++		/* Before commit 463e51769697: used vlan_rwsem */
++		down_write(&ppriv->vlan_rwsem);
++#endif
+ 		list_del(&priv->list);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock */
+ 		netdev_unlock(ppriv->dev);
++#else
++		/* Before commit 463e51769697: used vlan_rwsem */
++		up_write(&ppriv->vlan_rwsem);
++#endif
+ 	}
+ 
+ 	ipoib_neigh_hash_uninit(dev);
+@@ -2194,6 +2369,7 @@ static int ipoib_set_vf_guid(struct net_
+ 	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
+ }
+ 
++#ifdef HAVE_NDO_GET_VF_GUID
+ static int ipoib_get_vf_guid(struct net_device *dev, int vf,
+ 			     struct ifla_vf_guid *node_guid,
+ 			     struct ifla_vf_guid *port_guid)
+@@ -2202,6 +2378,7 @@ static int ipoib_get_vf_guid(struct net_
+ 
+ 	return ib_get_vf_guid(priv->ca, vf, priv->port, node_guid, port_guid);
+ }
++#endif
+ 
+ static int ipoib_get_vf_stats(struct net_device *dev, int vf,
+ 			      struct ifla_vf_stats *vf_stats)
+@@ -2235,20 +2412,28 @@ static const struct net_device_ops ipoib
+ 	.ndo_uninit		 = ipoib_ndo_uninit,
+ 	.ndo_open		 = ipoib_open,
+ 	.ndo_stop		 = ipoib_stop,
+-	.ndo_change_mtu		 = ipoib_change_mtu,
++       .ndo_change_mtu		 = ipoib_change_mtu,
+ 	.ndo_fix_features	 = ipoib_fix_features,
+ 	.ndo_start_xmit		 = ipoib_start_xmit,
+ 	.ndo_tx_timeout		 = ipoib_timeout,
+ 	.ndo_set_rx_mode	 = ipoib_set_mcast_list,
+-	.ndo_get_iflink		 = ipoib_get_iflink,
+-	.ndo_set_vf_link_state	 = ipoib_set_vf_link_state,
+-	.ndo_get_vf_config	 = ipoib_get_vf_config,
+-	.ndo_get_vf_stats	 = ipoib_get_vf_stats,
+-	.ndo_get_vf_guid	 = ipoib_get_vf_guid,
+-	.ndo_set_vf_guid	 = ipoib_set_vf_guid,
+-	.ndo_set_mac_address	 = ipoib_set_mac,
+-	.ndo_get_stats64	 = ipoib_get_stats,
+-	.ndo_eth_ioctl		 = ipoib_ioctl,
++       .ndo_get_iflink		 = ipoib_get_iflink,
++       .ndo_set_vf_link_state	 = ipoib_set_vf_link_state,
++       .ndo_get_vf_config	 = ipoib_get_vf_config,
++       .ndo_get_vf_stats	 = ipoib_get_vf_stats,
++#ifdef HAVE_NDO_GET_VF_GUID
++       .ndo_get_vf_guid         = ipoib_get_vf_guid,
++#endif
++       .ndo_set_vf_guid	 = ipoib_set_vf_guid,
++       .ndo_set_mac_address	 = ipoib_set_mac,
++       .ndo_get_stats64	 = ipoib_get_stats,
++
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = ipoib_ioctl,
++#else
++	.ndo_do_ioctl		  = ipoib_ioctl,
++#endif
++
+ };
+ 
+ static const struct net_device_ops ipoib_netdev_ops_vf = {
+@@ -2264,7 +2449,13 @@ static const struct net_device_ops ipoib
+ 	.ndo_get_iflink		 = ipoib_get_iflink,
+ 	.ndo_set_mac_address	 = ipoib_set_vf_local_mac,
+ 	.ndo_get_stats64	 = ipoib_get_stats,
+-	.ndo_eth_ioctl		 = ipoib_ioctl,
++
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = ipoib_ioctl,
++#else
++	.ndo_do_ioctl		  = ipoib_ioctl,
++#endif
++
+ };
+ 
+ static const struct net_device_ops ipoib_netdev_default_pf = {
+@@ -2309,6 +2500,10 @@ static void ipoib_build_priv(struct net_
+ 
+ 	priv->dev = dev;
+ 	spin_lock_init(&priv->lock);
++#ifndef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Older kernels (<=v6.12) that do not include upstream commit 463e51769697 should still initialize vlan_rwsem */
++	init_rwsem(&priv->vlan_rwsem);
++#endif
+ 	mutex_init(&priv->mcast_mutex);
+ 
+ 	INIT_LIST_HEAD(&priv->path_list);
+@@ -2397,7 +2592,6 @@ int ipoib_intf_init(struct ib_device *hc
+ 	 */
+ 	priv->next_priv_destructor = dev->priv_destructor;
+ 	dev->priv_destructor = NULL;
+-
+ 	ipoib_build_priv(dev);
+ 
+ 	return 0;
+@@ -2435,7 +2629,6 @@ void ipoib_intf_free(struct net_device *
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	struct rdma_netdev *rn = netdev_priv(dev);
+-
+ 	dev->priv_destructor = priv->next_priv_destructor;
+ 	if (dev->priv_destructor)
+ 		dev->priv_destructor(dev);
+@@ -2445,7 +2638,6 @@ void ipoib_intf_free(struct net_device *
+ 	 * attempt to call priv_destructor twice, prevent that from happening.
+ 	 */
+ 	dev->priv_destructor = NULL;
+-
+ 	/* unregister/destroy is very complicated. Make bugs more obvious. */
+ 	rn->clnt_priv = NULL;
+ 
+@@ -2510,16 +2702,37 @@ static void set_base_guid(struct ipoib_d
+ 	memcpy(&priv->local_gid.global.interface_id,
+ 	       &gid->global.interface_id,
+ 	       sizeof(gid->global.interface_id));
++#ifdef HAVE_DEV_ADDR_MOD
+ 	dev_addr_mod(netdev, 4, (u8 *)&priv->local_gid, sizeof(priv->local_gid));
++#else
++	memcpy(netdev->dev_addr + 4, &priv->local_gid, sizeof(priv->local_gid));
++#endif
+ 	clear_bit(IPOIB_FLAG_DEV_ADDR_SET, &priv->flags);
+ 
+ 	netif_addr_unlock_bh(netdev);
+ 
+ 	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags)) {
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
++		/* Newer kernels (6.15+): netdev instance locking API */
+ 		netdev_lock_ops_to_full(priv->dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (v6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_lock(priv->dev);
++#else
++		/* Before commit 463e5176969 (<=v6.12): used vlan_rwsem */
++		down_read(&priv->vlan_rwsem);
++#endif
+ 		list_for_each_entry(child_priv, &priv->child_intfs, list)
+ 			set_base_guid(child_priv, gid);
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
+ 		netdev_unlock_full_to_ops(priv->dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (v6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_unlock(priv->dev);
++#else
++		/* Before commit 463e5176969 (<=v6.12): used vlan_rwsem */
++		up_read(&priv->vlan_rwsem);
++#endif
+ 	}
+ }
+ 
+@@ -2548,7 +2761,7 @@ static int ipoib_set_mac(struct net_devi
+ {
+ 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+ 	struct sockaddr_storage *ss = addr;
+-	int ret;
++	int ret = 0;
+ 
+ 	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
+ 		return -EBUSY;
+@@ -2562,10 +2775,27 @@ static int ipoib_set_mac(struct net_devi
+ 	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags)) {
+ 		struct ipoib_dev_priv *cpriv;
+ 
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
++		/* Newer kernels (6.15+): netdev instance locking API */
+ 		netdev_lock_ops_to_full(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (v6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_lock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		down_read(&priv->vlan_rwsem);
++#endif
+ 		list_for_each_entry(cpriv, &priv->child_intfs, list)
+ 			queue_work(ipoib_workqueue, &cpriv->flush_light);
++#ifdef HAVE_NETDEV_LOCK_OPS_TO_FULL
+ 		netdev_unlock_full_to_ops(dev);
++#elif defined(HAVE_NETDEVICE_NETDEV_LOCK)
++		/* Upstream commit 463e51769697 (v6.12+): replaced vlan_rwsem with netdev lock */
++		netdev_unlock(dev);
++#else
++		/* Before commit 463e51769697 (<=v6.12): used vlan_rwsem */
++		up_read(&priv->vlan_rwsem);
++#endif
+ 	}
+ 	queue_work(ipoib_workqueue, &priv->flush_light);
+ 
+@@ -2721,6 +2951,7 @@ static struct net_device *ipoib_add_port
+ 		if (!rc && ops->priv_size < params.sizeof_priv)
+ 			ops->priv_size = params.sizeof_priv;
+ 	}
++
+ 	/*
+ 	 * We cannot set priv_destructor before register_netdev because we
+ 	 * need priv to be always valid during the error flow to execute
+@@ -2728,7 +2959,6 @@ static struct net_device *ipoib_add_port
+ 	 * enter priv_destructor mode once we are completely registered.
+ 	 */
+ 	ndev->priv_destructor = ipoib_intf_free;
+-
+ 	if (ipoib_intercept_dev_id_attr(ndev))
+ 		goto sysfs_failed;
+ 	if (ipoib_cm_add_mode_attr(ndev))
+@@ -2797,11 +3027,17 @@ static void ipoib_remove_one(struct ib_d
+ 
+ 		rtnl_lock();
+ 
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: added lock (no lock before) */
+ 		netdev_lock(priv->dev);
++#endif
+ 		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
+ 					 list)
+ 			unregister_netdevice_queue(cpriv->dev, &head);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 463e51769697: added unlock (no lock before) */
+ 		netdev_unlock(priv->dev);
++#endif
+ 		unregister_netdevice_queue(priv->dev, &head);
+ 		unregister_netdevice_many(&head);
+ 

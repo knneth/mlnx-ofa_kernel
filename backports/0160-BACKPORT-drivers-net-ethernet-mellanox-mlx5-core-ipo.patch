@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
+@@ -149,7 +149,14 @@ static const struct net_device_ops mlx5i
+ 	.ndo_get_stats64         = mlx5i_get_stats,
+ 	.ndo_uninit              = mlx5i_pkey_dev_cleanup,
+ 	.ndo_change_mtu          = mlx5i_pkey_change_mtu,
++	.ndo_do_ioctl            = mlx5i_pkey_ioctl,
++
++#ifdef HAVE_NDO_ETH_IOCTL
+ 	.ndo_eth_ioctl            = mlx5i_pkey_ioctl,
++#else
++	.ndo_do_ioctl		  = mlx5i_pkey_ioctl,
++#endif
++
+ };
+ 
+ /* Child NDOs */

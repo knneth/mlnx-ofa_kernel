@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
 /*
  * Copyright (c) 2014-2020,  Mellanox Technologies. All rights reserved.
+ * Copyright (C) 2020-2021, NVIDIA CORPORATION & AFFILIATES. All Rights Reserved.
  */
 #ifndef RDMA_IB_PEER_MEM_H
 #define RDMA_IB_PEER_MEM_H
@@ -21,7 +22,6 @@ struct ib_peer_memory_statistics {
 };
 
 struct ib_peer_memory_client {
-	struct kobject kobj;
 	refcount_t usecnt;
 	struct completion usecnt_zero;
 	const struct peer_memory_client *peer_mem;

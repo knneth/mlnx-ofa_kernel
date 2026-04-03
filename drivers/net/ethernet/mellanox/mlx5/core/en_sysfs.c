@@ -32,6 +32,7 @@
 
 #include <linux/device.h>
 #include <linux/netdevice.h>
+#include <linux/units.h>
 #include "en.h"
 #include "en_tc.h"
 #include "eswitch.h"
@@ -89,7 +90,7 @@ static  ssize_t mlx5e_show_maxrate(struct device *device,
 				   char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u8 max_bw_value[MLX5_MAX_NUM_TC];
+	u16 max_bw_value[MLX5_MAX_NUM_TC];
 	u8 max_bw_unit[MLX5_MAX_NUM_TC];
 	int len = 0;
 	int ret;
@@ -103,31 +104,45 @@ static  ssize_t mlx5e_show_maxrate(struct device *device,
 	}
 
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
-		u64 maxrate = 0;
 		if (max_bw_unit[i] == MLX5_100_MBPS_UNIT)
-			maxrate = max_bw_value[i] * MLX5E_100MBPS_TO_KBPS;
+			len += sprintf(buf + len, "%u00000 ", max_bw_value[i]);
 		else if (max_bw_unit[i] == MLX5_GBPS_UNIT)
-			maxrate = max_bw_value[i] * MLX5E_GBPS_TO_KBPS;
-		len += sprintf(buf + len, "%lld ", maxrate);
+			len += sprintf(buf + len, "%u000000 ", max_bw_value[i]);
+		else
+			len += sprintf(buf + len, "%u ", max_bw_value[i]);
+
 	}
 	len += sprintf(buf + len, "\n");
 
 	return len;
 }
 
+#define MLX5E_100MB_TO_KB (100 * MEGA / KILO)
+#define MLX5E_1GB_TO_KB   (GIGA / KILO)
+
 static ssize_t mlx5e_store_maxrate(struct device *device,
 				   struct device_attribute *attr,
 				   const char *buf, size_t count)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	u64 upper_limit_mbps = 255 * MLX5E_100MBPS_TO_KBPS;
-	u64 upper_limit_gbps = 255 * MLX5E_GBPS_TO_KBPS;
-	u8 max_bw_value[MLX5_MAX_NUM_TC];
-	u8 max_bw_unit[MLX5_MAX_NUM_TC];
+	struct mlx5_core_dev *mdev = priv->mdev;
 	u64 tc_maxrate[IEEE_8021QAZ_MAX_TCS];
-	int i = 0;
+	u16 max_bw_value[MLX5_MAX_NUM_TC];
+	u8 max_bw_unit[MLX5_MAX_NUM_TC];
+	u64 upper_limit_100mbps;
+	u64 upper_limit_gbps;
 	char delimiter;
+	u16 type_max;
+	int i = 0;
 	int ret;
+
+	memset(max_bw_value, 0, sizeof(max_bw_value));
+	memset(max_bw_unit, 0, sizeof(max_bw_unit));
+
+	type_max = MLX5_CAP_QCAM_FEATURE(mdev, qetcr_qshr_max_bw_val_msb) ?
+		   U16_MAX : U8_MAX;
+	upper_limit_100mbps = type_max * MLX5E_100MB_TO_KB;
+	upper_limit_gbps = type_max * MLX5E_1GB_TO_KB;
 
 	do {
 		int len;
@@ -158,32 +173,32 @@ static ssize_t mlx5e_store_maxrate(struct device *device,
 		goto bad_elem_count;
 
 	for (i = 0; i < IEEE_8021QAZ_MAX_TCS; i++) {
+		u64 rate = tc_maxrate[i];
+
 		if (!tc_maxrate[i]) {
 			max_bw_unit[i]  = MLX5_BW_NO_LIMIT;
 			continue;
 		}
-		if (tc_maxrate[i] <= upper_limit_mbps) {
-			max_bw_value[i] = div_u64(tc_maxrate[i],
-						MLX5E_100MBPS_TO_KBPS);
+
+		if (rate <= upper_limit_100mbps) {
+			max_bw_value[i] = div_u64(rate, MLX5E_100MB_TO_KB);
 			max_bw_value[i] = max_bw_value[i] ? max_bw_value[i] : 1;
 			max_bw_unit[i]  = MLX5_100_MBPS_UNIT;
-		} else if (tc_maxrate[i] <= upper_limit_gbps) {
-			max_bw_value[i] = div_u64(tc_maxrate[i],
-						MLX5E_GBPS_TO_KBPS);
+		} else if (rate <= upper_limit_gbps) {
+			max_bw_value[i] = div_u64(rate, MLX5E_1GB_TO_KB);
 			max_bw_unit[i]  = MLX5_GBPS_UNIT;
 		} else {
 			netdev_err(priv->netdev,
 				   "tc_%d maxrate %llu Kbps exceeds limit %llu\n",
-				   i, tc_maxrate[i], upper_limit_gbps);
+				   i, rate, upper_limit_gbps);
 			return -EINVAL;
 		}
 	}
 
-	ret = mlx5_modify_port_ets_rate_limit(priv->mdev,
-					      max_bw_value, max_bw_unit);
+	ret = mlx5_modify_port_ets_rate_limit(priv->mdev, max_bw_value, max_bw_unit);
 	if (ret) {
-		netdev_err(priv->netdev, "Failed to modify port ets rate limit, err = %d\n"
-				, ret);
+		netdev_err(priv->netdev,
+			   "Failed to modify port ets rate limit, err = %d\n", ret);
 		return ret;
 	}
 	return count;
@@ -304,7 +319,7 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 
 	rtnl_unlock();
 
-	return len;
+	return  len;
 }
 
 static ssize_t mlx5e_store_hfunc(struct device *device,
@@ -337,13 +352,10 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 		if (ch_count > mlx5e_rqt_max_num_channels_allowed_for_xor8())
 			goto unlock;
 	}
-	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
+	mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
 					&ethtool_hfunc, NULL);
 	mutex_unlock(&priv->state_lock);
 	rtnl_unlock();
-
-	if (err)
-		return err;
 
 	return count;
 
@@ -363,8 +375,8 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
 			       char *buf)
 {
 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	bool symmetric = false;
 	int len = 0;
+	bool symmetric;
 
 	rtnl_lock();
 	mutex_lock(&priv->state_lock);
@@ -417,83 +429,6 @@ static DEVICE_ATTR(xfrm, S_IRUGO | S_IWUSR,
 		  mlx5e_show_xfrm, mlx5e_store_xfrm);
 
 
-
-#define MLX5E_PFC_PREVEN_CRITICAL_AUTO_MSEC	100
-#define MLX5E_PFC_PREVEN_MINOR_AUTO_MSEC	85
-#define MLX5E_PFC_PREVEN_CRITICAL_DEFAULT_MSEC	8000
-#define MLX5E_PFC_PREVEN_MINOR_DEFAULT_MSEC	6800
-
-static ssize_t mlx5e_get_pfc_prevention_mode(struct device *device,
-					     struct device_attribute *attr,
-					     char *buf)
-{
-	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct mlx5_core_dev *mdev = priv->mdev;
-	u16 pfc_prevention_critical;
-	char *str_critical;
-	int len = 0;
-	int err;
-
-	if (!MLX5_CAP_PCAM_FEATURE(mdev, pfcc_mask))
-		return -EOPNOTSUPP;
-
-	err = mlx5_query_port_pfc_prevention(mdev, &pfc_prevention_critical);
-	if (err)
-		return err;
-
-	str_critical = (pfc_prevention_critical ==
-			MLX5E_PFC_PREVEN_CRITICAL_DEFAULT_MSEC) ?
-			"default" : "auto";
-	len += sprintf(buf, "%s\n", str_critical);
-
-	return len;
-}
-
-static ssize_t mlx5e_set_pfc_prevention_mode(struct device *device,
-					     struct device_attribute *attr,
-					     const char *buf, size_t count)
-{
-	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
-	struct net_device *netdev = priv->netdev;
-	struct mlx5_core_dev *mdev = priv->mdev;
-	char pfc_stall_prevention[ETH_GSTRING_LEN];
-	u16 pfc_prevention_critical;
-	u16 pfc_prevention_minor;
-	int err;
-
-	if (!MLX5_CAP_PCAM_FEATURE(mdev, pfcc_mask))
-		return -EOPNOTSUPP;
-
-	err = sscanf(buf, "%31s", pfc_stall_prevention);
-
-	if (!strcmp(pfc_stall_prevention, "default")) {
-		pfc_prevention_critical = MLX5E_PFC_PREVEN_CRITICAL_DEFAULT_MSEC;
-		pfc_prevention_minor = MLX5E_PFC_PREVEN_MINOR_DEFAULT_MSEC;
-	} else if (!strcmp(pfc_stall_prevention, "auto")) {
-		pfc_prevention_critical = MLX5E_PFC_PREVEN_CRITICAL_AUTO_MSEC;
-		pfc_prevention_minor = MLX5E_PFC_PREVEN_MINOR_AUTO_MSEC;
-	} else {
-		goto bad_input;
-	}
-
-	rtnl_lock();
-
-	err = mlx5_set_port_pfc_prevention(mdev, pfc_prevention_critical,
-					   pfc_prevention_minor);
-
-	rtnl_unlock();
-	if (err)
-		return err;
-
-	return count;
-
-bad_input:
-	netdev_err(netdev, "Bad Input\n");
-	return -EINVAL;
-}
-
-static DEVICE_ATTR(pfc_stall_prevention, S_IRUGO | S_IWUSR,
-		   mlx5e_get_pfc_prevention_mode, mlx5e_set_pfc_prevention_mode);
 
 static const char *mlx5e_get_cong_protocol(int protocol)
 {
@@ -885,7 +820,6 @@ static ssize_t mlx5e_store_prio2buffer(struct device *device,
 		}
 	}
 
-	priv->dcbx.manual_buffer = true;
 	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, NULL, prio2buffer);
 	if (err)
 		return err;
@@ -957,7 +891,6 @@ static ssize_t mlx5e_store_buffer_size(struct device *device,
 		}
 	}
 
-	priv->dcbx.manual_buffer = true;
 	err = mlx5e_port_manual_buffer_config(priv, changed, dev->mtu, NULL, buffer_size, NULL);
 	if (err)
 		return err;
@@ -1027,7 +960,6 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
 static struct attribute *mlx5e_settings_attrs[] = {
 	&dev_attr_hfunc.attr,
 	&dev_attr_xfrm.attr,
-	&dev_attr_pfc_stall_prevention.attr,
 	NULL,
 };
 
@@ -1055,41 +987,6 @@ static struct attribute_group qos_group = {
 static struct attribute_group debug_group = {
 	.name = "debug",
 	.attrs = mlx5e_debug_group_attrs,
-};
-
-#define PHY_STAT_ENTRY(name, cnt)					\
-static ssize_t name##_show(struct device *d,				\
-			   struct device_attribute *attr, char *buf)	\
-{									\
-	struct net_device *dev = to_net_dev(d);				\
-	struct mlx5e_priv *priv = netdev_priv(dev);			\
-	struct mlx5e_pport_stats *pstats;				\
-									\
-	mutex_lock(&priv->state_lock);					\
-	mlx5e_stats_update(priv);					\
-	mutex_unlock(&priv->state_lock);				\
-	pstats = &priv->stats.pport;					\
-	return sprintf(buf, "%llu\n",					\
-			PPORT_802_3_GET(pstats, cnt));			\
-}									\
-static DEVICE_ATTR(name, S_IRUGO, name##_show, NULL)
-
-PHY_STAT_ENTRY(rx_packets, a_frames_received_ok);
-PHY_STAT_ENTRY(tx_packets, a_frames_transmitted_ok);
-PHY_STAT_ENTRY(rx_bytes, a_octets_received_ok);
-PHY_STAT_ENTRY(tx_bytes, a_octets_transmitted_ok);
-
-static struct attribute *mlx5e_phy_stat_attrs[] = {
-	&dev_attr_rx_packets.attr,
-	&dev_attr_tx_packets.attr,
-	&dev_attr_rx_bytes.attr,
-	&dev_attr_tx_bytes.attr,
-	NULL,
-};
-
-static struct attribute_group phy_stat_group = {
-	.name = "phy_stats",
-	.attrs = mlx5e_phy_stat_attrs,
 };
 
 static int update_qos_sysfs(struct net_device *dev,
@@ -1558,16 +1455,13 @@ int mlx5e_sysfs_create(struct net_device *dev)
 		goto remove_qos_group;
 
 	err = sysfs_create_group(&dev->dev.kobj, &debug_group);
+
 	if (err)
 		goto remove_qos_group;
 
-	err = sysfs_create_group(&dev->dev.kobj, &phy_stat_group);
-	if (err)
-		goto remove_debug_group;
-
 	err = hp_sysfs_init(priv);
 	if (err)
-		goto remove_phy_stat_group;
+		goto remove_debug_group;
 
 	mlx5_eswitch_compat_sysfs_init(dev);
 
@@ -1585,8 +1479,6 @@ int mlx5e_sysfs_create(struct net_device *dev)
 
 	return 0;
 
-remove_phy_stat_group:
-	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 remove_debug_group:
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 remove_qos_group:
@@ -1611,7 +1503,6 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
-	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
 	hp_sysfs_cleanup(priv);
 
 	if (mlx5_core_is_vf(priv->mdev))

@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/mlxdevm.h
+
+Change-Id: Id60923ebd27cebaae0392c1fe4a8f2f567239065
+---
+ include/net/mlxdevm.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+--- a/include/net/mlxdevm.h
++++ b/include/net/mlxdevm.h
+@@ -697,6 +697,9 @@ struct mlxdevm_flash_update_params {
+ 	const struct firmware *fw;
+ 	const char *component;
+ 	u32 overwrite_mask;
++#ifndef HAVE_FLASH_UPDATE_GET_3_PARAMS
++	const char* file_name;
++#endif
+ };
+ 
+ #define MLXDEVM_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK	BIT(0)

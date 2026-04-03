@@ -484,7 +484,9 @@ static int mlx5e_vlan_rx_add_svid(struct mlx5e_flow_steering *fs,
 	}
 
 	/* Need to fix some features.. */
+	netdev_lock(netdev);
 	netdev_update_features(netdev);
+	netdev_unlock(netdev);
 	return err;
 }
 
@@ -521,7 +523,9 @@ int mlx5e_fs_vlan_rx_kill_vid(struct mlx5e_flow_steering *fs,
 	} else if (be16_to_cpu(proto) == ETH_P_8021AD) {
 		clear_bit(vid, fs->vlan->active_svlans);
 		mlx5e_fs_del_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_MATCH_STAG_VID, vid);
+		netdev_lock(netdev);
 		netdev_update_features(netdev);
+		netdev_unlock(netdev);
 	}
 
 	return 0;
@@ -909,6 +913,9 @@ static void mlx5e_set_inner_ttc_params(struct mlx5e_flow_steering *fs,
 	ft_attr->prio = MLX5E_NIC_PRIO;
 
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
+		if (mlx5_ttc_is_decrypted_esp_tt(tt))
+			continue;
+
 		ttc_params->dests[tt].type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 		ttc_params->dests[tt].tir_num =
 			tt == MLX5_TT_ANY ?
@@ -918,9 +925,18 @@ static void mlx5e_set_inner_ttc_params(struct mlx5e_flow_steering *fs,
 	}
 }
 
+static bool mlx5e_ipsec_rss_supported(struct mlx5_core_dev *mdev)
+{
+	/* Disable ipsec rss in ofed 26.01 for a performance degradation:
+	 * https://redmine.mellanox.com/issues/4856715
+	 */
+	return false;
+}
+
 void mlx5e_set_ttc_params(struct mlx5e_flow_steering *fs,
 			  struct mlx5e_rx_res *rx_res,
-			  struct ttc_params *ttc_params, bool tunnel)
+			  struct ttc_params *ttc_params, bool tunnel,
+			  bool ipsec_rss)
 
 {
 	struct mlx5_flow_table_attr *ft_attr = &ttc_params->ft_attr;
@@ -931,7 +947,13 @@ void mlx5e_set_ttc_params(struct mlx5e_flow_steering *fs,
 	ft_attr->level = MLX5E_TTC_FT_LEVEL;
 	ft_attr->prio = MLX5E_NIC_PRIO;
 
+	ttc_params->ipsec_rss = ipsec_rss &&
+				mlx5e_ipsec_rss_supported(fs->mdev);
+
 	for (tt = 0; tt < MLX5_NUM_TT; tt++) {
+		if (mlx5_ttc_is_decrypted_esp_tt(tt))
+			continue;
+
 		ttc_params->dests[tt].type = MLX5_FLOW_DESTINATION_TYPE_TIR;
 		ttc_params->dests[tt].tir_num =
 			tt == MLX5_TT_ANY ?
@@ -1300,7 +1322,7 @@ int mlx5e_create_ttc_table(struct mlx5e_flow_steering *fs,
 {
 	struct ttc_params ttc_params = {};
 
-	mlx5e_set_ttc_params(fs, rx_res, &ttc_params, true);
+	mlx5e_set_ttc_params(fs, rx_res, &ttc_params, true, true);
 	fs->ttc = mlx5_create_ttc_table(fs->mdev, &ttc_params);
 	return PTR_ERR_OR_ZERO(fs->ttc);
 }

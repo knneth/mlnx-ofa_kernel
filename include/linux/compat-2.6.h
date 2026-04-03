@@ -26,6 +26,15 @@
  */
 void mlx_backport_dependency_symbol(void);
 
+/* Keep till RH 8.10 supported */
+#ifndef __copy
+#if __has_attribute(__copy__)
+# define __copy(symbol)                 __attribute__((__copy__(symbol)))
+#else
+# define __copy(symbol)
+#endif
+#endif /* __copy__ */
+
 #undef module_init
 #define module_init(initfn)                                             \
 	static int __init __init_backport(void)                         \

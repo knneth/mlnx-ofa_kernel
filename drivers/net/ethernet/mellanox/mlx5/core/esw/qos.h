@@ -9,17 +9,6 @@
 
 #ifdef CONFIG_MLX5_ESWITCH
 
-#define MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID 255
-#define MLX5_ESW_QOS_NON_SYSFS_GROUP (MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID + 1)
-
-/* Holds rate nodes associated with an E-Switch. */
-struct mlx5_qos_domain {
-	/* Serializes access to all qos changes in the qos domain. */
-	struct mutex lock;
-	/* List of all mlx5_esw_sched_nodes. */
-	struct list_head nodes;
-};
-
 enum sched_node_type {
 	SCHED_NODE_TYPE_VPORTS_TSAR,
 	SCHED_NODE_TYPE_VPORT,
@@ -29,9 +18,11 @@ enum sched_node_type {
 	SCHED_NODE_TYPE_VPORTS_TC_TSAR,
 };
 
+#define MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID 255
+#define MLX5_ESW_QOS_NON_SYSFS_GROUP (MLX5_ESW_QOS_SYSFS_GROUP_MAX_ID + 1)
+
 struct mlx5_esw_sched_node {
 	u32 ix;
-	struct mlxdevm_rate_node devm;
 	/* Bandwidth parameters. */
 	u32 max_rate;
 	u32 min_rate;
@@ -67,30 +58,13 @@ int mlx5_esw_qos_init(struct mlx5_eswitch *esw);
 void mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw);
 
-int
-mlx5_esw_get_esw_and_vport(struct devlink *devlink, struct devlink_port *port,
-			   struct mlx5_eswitch **esw, struct mlx5_vport **vport,
-			   struct netlink_ext_ack *extack);
+void esw_qos_lock(struct mlx5_eswitch *esw);
+void esw_qos_unlock(struct mlx5_eswitch *esw);
 
-void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
 int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
 				    struct netlink_ext_ack *extack);
 int mlx5_esw_qos_set_vport_max_rate(struct mlx5_vport *vport, u32 max_rate,
 				    struct netlink_ext_ack *extack);
-int esw_qos_set_node_min_rate(struct mlx5_esw_sched_node *node,
-			      u32 min_rate, struct netlink_ext_ack *extack);
-int esw_qos_sched_elem_config(struct mlx5_esw_sched_node *node, u32 max_rate, u32 bw_share,
-			      struct netlink_ext_ack *extack);
-void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
-				struct netlink_ext_ack *extack);
-
-void esw_qos_lock(struct mlx5_eswitch *esw);
-void esw_qos_unlock(struct mlx5_eswitch *esw);
-
-static inline void esw_assert_qos_lock_held(struct mlx5_eswitch *esw)
-{
-	lockdep_assert_held(&esw->qos.domain->lock);
-}
 
 struct mlx5_esw_sched_node *
 esw_qos_create_vports_sched_node(struct mlx5_eswitch *esw, u32 node_id,

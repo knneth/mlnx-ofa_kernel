@@ -1,29 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
+ drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
 
 ---
- .../net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h | 8 ++++++++
- 1 file changed, 8 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h  | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
-@@ -22,10 +22,18 @@ TRACE_EVENT(mlx5_cmd,
- 			    __field(u32, syndrome)
- 			    __field(int, err)
- 			    ),
+--- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
+@@ -25,7 +25,11 @@ TRACE_EVENT(mlx5e_rep_neigh_update,
+ 			struct in6_addr *pin6;
+ 			__be32 *p32;
+ 
 +#ifdef HAVE_ASSIGN_STR_1_PARAM
- 	    TP_fast_assign(__assign_str(command_str);
+ 			__assign_str(devname);
 +#else
-+ 	    TP_fast_assign(__assign_str(command_str, command_str);
++ 			__assign_str(devname, nhe->neigh_dev->name);
 +#endif
- 			__entry->opcode = opcode;
- 			__entry->op_mod = op_mod;
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 			__assign_str(status_str);
-+#else
-+ 			__assign_str(status_str, status_str);
-+#endif
- 			__entry->status = status;
- 			__entry->syndrome = syndrome;
- 			__entry->err = err;
+ 			__entry->neigh_connected = neigh_connected;
+ 			memcpy(__entry->ha, ha, ETH_ALEN);
+ 

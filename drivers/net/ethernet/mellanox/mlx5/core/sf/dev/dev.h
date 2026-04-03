@@ -21,6 +21,7 @@ struct mlx5_sf_dev {
 		struct mutex lock; /* Synchronize irq sysfs creation */
 		bool irq_dir_exists;
 	} sysfs;
+
 	struct mlx5_core_dev *parent_mdev;
 	struct mlx5_core_dev *mdev;
 	phys_addr_t bar_base_addr;

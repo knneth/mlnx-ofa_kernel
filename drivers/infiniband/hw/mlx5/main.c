@@ -50,6 +50,7 @@
 #include <rdma/ib_ucaps.h>
 #include "macsec.h"
 #include "data_direct.h"
+#include "dmah.h"
 
 #define UVERBS_MODULE_NAME mlx5_ib
 #include <rdma/uverbs_named_ioctl.h>
@@ -514,6 +515,10 @@ static int translate_eth_ext_proto_oper(u32 eth_proto_oper, u16 *active_speed,
 		*active_width = IB_WIDTH_4X;
 		*active_speed = IB_SPEED_XDR;
 		break;
+	case MLX5E_PROT_MASK(MLX5E_1600GAUI_8_1600GBASE_CR8_KR8):
+		*active_width = IB_WIDTH_8X;
+		*active_speed = IB_SPEED_XDR;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -560,12 +565,23 @@ static int mlx5_query_port_roce(struct ib_device *device, u32 port_num,
 	 * of an error it will still be zeroed out.
 	 * Use native port in case of reps
 	 */
-	if (dev->is_rep)
-		err = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_EN,
-					   1, 0);
-	else
-		err = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_EN,
-					   mdev_port_num, 0);
+	if (dev->is_rep) {
+		struct mlx5_eswitch_rep *rep;
+		struct mlx5_core_dev *esw_mdev;
+
+		rep = dev->port[port_num - 1].rep;
+		if (rep) {
+			esw_mdev = mlx5_eswitch_get_core_dev(rep->esw);
+			if (esw_mdev)
+				mdev = esw_mdev;
+		}
+
+		mdev_port_num = 1;
+	}
+
+	err = mlx5_query_port_ptys(mdev, out, sizeof(out), MLX5_PTYS_EN,
+				   mdev_port_num, 0);
+
 	if (err)
 		goto out;
 	ext = !!MLX5_GET_ETH_PROTO(ptys_reg, out, true, eth_proto_capability);
@@ -1442,7 +1458,6 @@ static int mlx5_query_hca_port(struct ib_device *ibdev, u32 port,
 	props->lid		= rep->lid;
 	props->lmc		= rep->lmc;
 	props->sm_lid		= rep->sm_lid;
-	props->has_smi		= rep->has_smi;
 	props->sm_sl		= rep->sm_sl;
 	props->state		= rep->vport_state;
 	props->phys_state	= rep->port_physical_state;
@@ -1550,6 +1565,129 @@ static int mlx5_ib_rep_query_pkey(struct ib_device *ibdev, u32 port, u16 index,
 	 */
 	*pkey = 0xffff;
 	return 0;
+}
+
+static int mlx5_ib_query_port_speed_from_port(struct mlx5_ib_dev *dev,
+					      u32 port_num, u64 *speed)
+{
+	struct ib_port_speed_info speed_info;
+	struct ib_port_attr attr = {};
+	int err;
+
+	err = mlx5_ib_query_port(&dev->ib_dev, port_num, &attr);
+	if (err)
+		return err;
+
+	if (attr.state == IB_PORT_DOWN) {
+		*speed = 0;
+		return 0;
+	}
+
+	err = ib_port_attr_to_speed_info(&attr, &speed_info);
+	if (err)
+		return err;
+
+	*speed = speed_info.rate;
+	return 0;
+}
+
+static int mlx5_ib_query_port_speed_from_vport(struct mlx5_core_dev *mdev,
+					       u8 op_mod, u16 vport,
+					       u8 other_vport, u64 *speed,
+					       struct mlx5_ib_dev *dev,
+					       u32 port_num)
+{
+	u32 max_tx_speed;
+	int err;
+
+	err = mlx5_query_vport_max_tx_speed(mdev, op_mod, vport, other_vport,
+					    &max_tx_speed);
+	if (err)
+		return err;
+
+	if (max_tx_speed == 0)
+		/* Value 0 indicates field not supported, fallback */
+		return mlx5_ib_query_port_speed_from_port(dev, port_num,
+							  speed);
+
+	*speed = max_tx_speed;
+	return 0;
+}
+
+static int mlx5_ib_query_port_speed_from_bond(struct mlx5_ib_dev *dev,
+					      u32 port_num, u64 *speed)
+{
+	struct mlx5_core_dev *mdev = dev->mdev;
+	u32 bond_speed;
+	int err;
+
+	err = mlx5_lag_query_bond_speed(mdev, &bond_speed);
+	if (err)
+		return err;
+
+	*speed = bond_speed / MLX5_MAX_TX_SPEED_UNIT;
+
+	return 0;
+}
+
+static int mlx5_ib_query_port_speed_non_rep(struct mlx5_ib_dev *dev,
+					    u32 port_num, u64 *speed)
+{
+	u16 op_mod = MLX5_VPORT_STATE_OP_MOD_VNIC_VPORT;
+
+	if (mlx5_lag_is_roce(dev->mdev))
+		return mlx5_ib_query_port_speed_from_bond(dev, port_num,
+							  speed);
+
+	return mlx5_ib_query_port_speed_from_vport(dev->mdev, op_mod, 0, false,
+						   speed, dev, port_num);
+}
+
+static int mlx5_ib_query_port_speed_rep(struct mlx5_ib_dev *dev, u32 port_num,
+					u64 *speed)
+{
+	struct mlx5_eswitch_rep *rep;
+	struct mlx5_core_dev *mdev;
+	u16 op_mod;
+
+	if (!dev->port[port_num - 1].rep) {
+		mlx5_ib_warn(dev, "Representor doesn't exist for port %u\n",
+			     port_num);
+		return -EINVAL;
+	}
+
+	rep = dev->port[port_num - 1].rep;
+	mdev = mlx5_eswitch_get_core_dev(rep->esw);
+	if (!mdev)
+		return -ENODEV;
+
+	if (rep->vport == MLX5_VPORT_UPLINK) {
+		if (mlx5_lag_is_sriov(mdev))
+			return mlx5_ib_query_port_speed_from_bond(dev,
+								  port_num,
+								  speed);
+
+		return mlx5_ib_query_port_speed_from_port(dev, port_num,
+							  speed);
+	}
+
+	op_mod = MLX5_VPORT_STATE_OP_MOD_ESW_VPORT;
+	return mlx5_ib_query_port_speed_from_vport(dev->mdev, op_mod,
+						   rep->vport, true, speed, dev,
+						   port_num);
+}
+
+int mlx5_ib_query_port_speed(struct ib_device *ibdev, u32 port_num, u64 *speed)
+{
+	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+
+	if (mlx5_ib_port_link_layer(ibdev, port_num) ==
+	    IB_LINK_LAYER_INFINIBAND || mlx5_core_mp_enabled(dev->mdev))
+		return mlx5_ib_query_port_speed_from_port(dev, port_num, speed);
+	else if (!dev->is_rep)
+		return mlx5_ib_query_port_speed_non_rep(dev, port_num, speed);
+	else
+		return mlx5_ib_query_port_speed_rep(dev, port_num, speed);
 }
 
 static int mlx5_ib_query_gid(struct ib_device *ibdev, u32 port, int index,
@@ -2809,6 +2947,14 @@ static int handle_port_change(struct mlx5_ib_dev *ibdev, struct mlx5_eqe *eqe,
 	case MLX5_PORT_CHANGE_SUBTYPE_ACTIVE:
 	case MLX5_PORT_CHANGE_SUBTYPE_DOWN:
 	case MLX5_PORT_CHANGE_SUBTYPE_INITIALIZED:
+		if (ibdev->ib_active) {
+			struct ib_event speed_event = {};
+
+			speed_event.device = &ibdev->ib_dev;
+			speed_event.event = IB_EVENT_DEVICE_SPEED_CHANGE;
+			ib_dispatch_event(&speed_event);
+		}
+
 		/* In RoCE, port up/down events are handled in
 		 * mlx5_netdev_event().
 		 */
@@ -3077,14 +3223,16 @@ int mlx5_ib_dev_res_cq_init(struct mlx5_ib_dev *dev)
 	pd = ib_alloc_pd(ibdev, 0);
 	if (IS_ERR(pd)) {
 		ret = PTR_ERR(pd);
-		mlx5_ib_err(dev, "Couldn't allocate PD for res init, err=%d\n", ret);
+		mlx5_ib_err(dev, "Couldn't allocate PD for res init, err=%pe\n",
+			    pd);
 		goto unlock;
 	}
 
 	cq = ib_create_cq(ibdev, NULL, NULL, NULL, &cq_attr);
 	if (IS_ERR(cq)) {
 		ret = PTR_ERR(cq);
-		mlx5_ib_err(dev, "Couldn't create CQ for res init, err=%d\n", ret);
+		mlx5_ib_err(dev, "Couldn't create CQ for res init, err=%pe\n",
+			    cq);
 		ib_dealloc_pd(pd);
 		goto unlock;
 	}
@@ -3128,7 +3276,9 @@ int mlx5_ib_dev_res_srq_init(struct mlx5_ib_dev *dev)
 	s0 = ib_create_srq(devr->p0, &attr);
 	if (IS_ERR(s0)) {
 		ret = PTR_ERR(s0);
-		mlx5_ib_err(dev, "Couldn't create SRQ 0 for res init, err=%d\n", ret);
+		mlx5_ib_err(dev,
+			    "Couldn't create SRQ 0 for res init, err=%pe\n",
+			    s0);
 		goto unlock;
 	}
 
@@ -3140,7 +3290,9 @@ int mlx5_ib_dev_res_srq_init(struct mlx5_ib_dev *dev)
 	s1 = ib_create_srq(devr->p0, &attr);
 	if (IS_ERR(s1)) {
 		ret = PTR_ERR(s1);
-		mlx5_ib_err(dev, "Couldn't create SRQ 1 for res init, err=%d\n", ret);
+		mlx5_ib_err(dev,
+			    "Couldn't create SRQ 1 for res init, err=%pe\n",
+			    s1);
 		ib_destroy_srq(s0);
 	}
 
@@ -4315,6 +4467,7 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
 	.query_device = mlx5_ib_query_device,
 	.query_gid = mlx5_ib_query_gid,
 	.query_pkey = mlx5_ib_query_pkey,
+	.query_port_speed = mlx5_ib_query_port_speed,
 	.query_qp = mlx5_ib_query_qp,
 	.query_srq = mlx5_ib_query_srq,
 	.query_ucontext = mlx5_ib_query_ucontext,
@@ -4328,6 +4481,7 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
 	INIT_RDMA_OBJ_SIZE(ib_ah, mlx5_ib_ah, ibah),
 	INIT_RDMA_OBJ_SIZE(ib_counters, mlx5_ib_mcounters, ibcntrs),
 	INIT_RDMA_OBJ_SIZE(ib_cq, mlx5_ib_cq, ibcq),
+	INIT_RDMA_OBJ_SIZE(ib_dmah, mlx5_ib_dmah, ibdmah),
 	INIT_RDMA_OBJ_SIZE(ib_pd, mlx5_ib_pd, ibpd),
 	INIT_RDMA_OBJ_SIZE(ib_qp, mlx5_ib_qp, ibqp),
 	INIT_RDMA_OBJ_SIZE(ib_srq, mlx5_ib_srq, ibsrq),
@@ -4473,6 +4627,9 @@ static int mlx5_ib_stage_caps_init(struct mlx5_ib_dev *dev)
 	    MLX5_CAP_GEN_64(dev->mdev, general_obj_types) &
 	    MLX5_GENERAL_OBJ_TYPES_CAP_SW_ICM)
 		ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_dm_ops);
+
+	if (mdev->st)
+		ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_dmah_ops);
 
 	ib_set_device_ops(&dev->ib_dev, &mlx5_ib_dev_ops);
 

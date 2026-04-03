@@ -82,6 +82,7 @@ static const char * const ib_events[] = {
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR] = "XRQ NVMF backend ctrl PCI error",
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR] = "XRQ NVMF backend ctrl timeout error",
 	[IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED] = "XRQ QP last NVMe CQE reached",
+	[IB_EVENT_DEVICE_SPEED_CHANGE]  = "device speed change"
 };
 
 const char *__attribute_const__ ib_event_msg(enum ib_event_type event)
@@ -153,6 +154,7 @@ __attribute_const__ int ib_rate_to_mult(enum ib_rate rate)
 	case IB_RATE_400_GBPS: return 160;
 	case IB_RATE_600_GBPS: return 240;
 	case IB_RATE_800_GBPS: return 320;
+	case IB_RATE_1600_GBPS: return 640;
 	default:	       return  -1;
 	}
 }
@@ -183,6 +185,7 @@ __attribute_const__ enum ib_rate mult_to_ib_rate(int mult)
 	case 160: return IB_RATE_400_GBPS;
 	case 240: return IB_RATE_600_GBPS;
 	case 320: return IB_RATE_800_GBPS;
+	case 640: return IB_RATE_1600_GBPS;
 	default:  return IB_RATE_PORT_CURRENT;
 	}
 }
@@ -213,10 +216,62 @@ __attribute_const__ int ib_rate_to_mbps(enum ib_rate rate)
 	case IB_RATE_400_GBPS: return 425000;
 	case IB_RATE_600_GBPS: return 637500;
 	case IB_RATE_800_GBPS: return 850000;
+	case IB_RATE_1600_GBPS: return 1700000;
 	default:	       return -1;
 	}
 }
 EXPORT_SYMBOL(ib_rate_to_mbps);
+
+struct ib_speed_attr {
+	const char *str;
+	int speed;
+};
+
+#define IB_SPEED_ATTR(speed_type, _str, _speed) \
+	[speed_type] = {.str = _str, .speed = _speed}
+
+static const struct ib_speed_attr ib_speed_attrs[] = {
+	IB_SPEED_ATTR(IB_SPEED_SDR, " SDR", 25),
+	IB_SPEED_ATTR(IB_SPEED_DDR, " DDR", 50),
+	IB_SPEED_ATTR(IB_SPEED_QDR, " QDR", 100),
+	IB_SPEED_ATTR(IB_SPEED_FDR10, " FDR10", 100),
+	IB_SPEED_ATTR(IB_SPEED_FDR, " FDR", 140),
+	IB_SPEED_ATTR(IB_SPEED_EDR, " EDR", 250),
+	IB_SPEED_ATTR(IB_SPEED_HDR, " HDR", 500),
+	IB_SPEED_ATTR(IB_SPEED_NDR, " NDR", 1000),
+	IB_SPEED_ATTR(IB_SPEED_XDR, " XDR", 2000),
+};
+
+int ib_port_attr_to_speed_info(struct ib_port_attr *attr,
+			       struct ib_port_speed_info *speed_info)
+{
+	int speed_idx = attr->active_speed;
+
+	switch (attr->active_speed) {
+	case IB_SPEED_DDR:
+	case IB_SPEED_QDR:
+	case IB_SPEED_FDR10:
+	case IB_SPEED_FDR:
+	case IB_SPEED_EDR:
+	case IB_SPEED_HDR:
+	case IB_SPEED_NDR:
+	case IB_SPEED_XDR:
+	case IB_SPEED_SDR:
+		break;
+	default:
+		speed_idx = IB_SPEED_SDR; /* Default to SDR for invalid rates */
+		break;
+	}
+
+	speed_info->str = ib_speed_attrs[speed_idx].str;
+	speed_info->rate = ib_speed_attrs[speed_idx].speed;
+	speed_info->rate *= ib_width_enum_to_int(attr->active_width);
+	if (speed_info->rate < 0)
+		return -EINVAL;
+
+	return 0;
+}
+EXPORT_SYMBOL(ib_port_attr_to_speed_info);
 
 __attribute_const__ enum rdma_transport_type
 rdma_node_get_transport(unsigned int node_type)
@@ -577,7 +632,7 @@ struct ib_ah *rdma_create_ah(struct ib_pd *pd, struct rdma_ah_attr *ah_attr,
 					   GFP_KERNEL : GFP_ATOMIC);
 	if (IS_ERR(slave)) {
 		rdma_unfill_sgid_attr(ah_attr, old_sgid_attr);
-		return (void *)slave;
+		return ERR_CAST(slave);
 	}
 	ah = _rdma_create_ah(pd, ah_attr, flags, NULL, slave);
 	rdma_lag_put_ah_roce_slave(slave);
@@ -740,7 +795,7 @@ int ib_get_gids_from_rdma_hdr(const union rdma_network_hdr *hdr,
 				       (struct in6_addr *)dgid);
 		return 0;
 	} else if (net_type == RDMA_NETWORK_IPV6 ||
-		   net_type == RDMA_NETWORK_IB || RDMA_NETWORK_ROCE_V1) {
+		   net_type == RDMA_NETWORK_IB || net_type == RDMA_NETWORK_ROCE_V1) {
 		*dgid = hdr->ibgrh.dgid;
 		*sgid = hdr->ibgrh.sgid;
 		return 0;
@@ -2234,7 +2289,7 @@ struct ib_mr *ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	}
 
 	mr = pd->device->ops.reg_user_mr(pd, start, length, virt_addr,
-					 access_flags, NULL);
+					 access_flags, NULL, NULL);
 
 	if (IS_ERR(mr))
 		return mr;
@@ -2273,6 +2328,7 @@ int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 {
 	struct ib_pd *pd = mr->pd;
 	struct ib_dm *dm = mr->dm;
+	struct ib_dmah *dmah = mr->dmah;
 	struct ib_sig_attrs *sig_attrs = mr->sig_attrs;
 	int ret;
 
@@ -2283,6 +2339,8 @@ int ib_dereg_mr_user(struct ib_mr *mr, struct ib_udata *udata)
 		atomic_dec(&pd->usecnt);
 		if (dm)
 			atomic_dec(&dm->usecnt);
+		if (dmah)
+			atomic_dec(&dmah->usecnt);
 		kfree(sig_attrs);
 	}
 
@@ -3150,7 +3208,7 @@ EXPORT_SYMBOL(__rdma_block_iter_next);
  * @lifespan: milliseconds between updates
  */
 struct rdma_hw_stats *rdma_alloc_hw_stats_struct(
-	const struct rdma_stat_desc *descs, int num_counters,
+	const struct rdma_stat_desc *descs, unsigned int num_counters,
 	unsigned long lifespan)
 {
 	struct rdma_hw_stats *stats;

@@ -1,31 +1,65 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/selq.c | 24 ++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
- void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
- 				  struct mlx5e_encap_entry *e);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.c
+@@ -190,8 +190,18 @@ static int mlx5e_select_htb_queue(struct
+ 	return mlx5e_htb_get_txq_by_classid(priv->htb, classid);
+ }
  
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
- 		       void *type_data);
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 		       struct net_device *sb_dev)
++#else
++u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
++#ifdef HAVE_SELECT_QUEUE_NET_DEVICE
++		       struct net_device *sb_dev,
++#else
++		       void *accel_priv,
++#endif /* HAVE_SELECT_QUEUE_NET_DEVICE */
++		       select_queue_fallback_t fallback)
++#endif
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(dev);
+ 	struct mlx5e_selq_params *selq;
+@@ -209,7 +219,11 @@ u16 mlx5e_select_queue(struct net_device
+ 	if (likely(!selq->is_special_queues)) {
+ 		/* No special queues, netdev_pick_tx returns one of the regular ones. */
+ 
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
 +#endif
  
- void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
- 			  struct sk_buff *skb);
+ 		if (selq->num_tcs <= 1)
+ 			return txq_ix;
+@@ -234,7 +248,11 @@ u16 mlx5e_select_queue(struct net_device
+ 		if (unlikely(selq->is_ptp && mlx5e_use_ptpsq(skb)))
+ 			return selq->num_channels;
  
-+#ifdef HAVE_BASECODE_EXTRAS
-+void mlx5e_rep_indr_clean_block_privs(struct mlx5e_rep_priv *rpriv);
-+
-+int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
-+				void *cb_priv);
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
+ 		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
 +#endif
-+
- #else /* CONFIG_MLX5_CLS_ACT */
  
- struct mlx5e_rep_priv;
+ 		/* Fix netdev_pick_tx() not to choose ptp_channel and HTB txqs.
+ 		 * If they are selected, switch to regular queues.
+@@ -249,7 +267,11 @@ u16 mlx5e_select_queue(struct net_device
+ 	if (mlx5e_use_ptpsq(skb))
+ 		return mlx5e_select_ptpsq(dev, skb, selq);
+ 
+-	txq_ix = netdev_pick_tx(dev, skb, NULL);
++#ifdef HAVE_NDO_SELECT_QUEUE_HAS_3_PARMS_NO_FALLBACK
++		txq_ix = netdev_pick_tx(dev, skb, NULL);
++#else
++		txq_ix = fallback(dev, skb, NULL);
++#endif
+ 
+ 	/* Normalize any picked txq_ix to [0, num_channels). Queues in range
+ 	 * [0, num_regular_queues) will be mapped to the corresponding channel

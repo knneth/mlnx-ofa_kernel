@@ -1,0 +1,68 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
+
+Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
+---
+ drivers/nvme/target/core.c | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+--- a/drivers/nvme/target/core.c
++++ b/drivers/nvme/target/core.c
+@@ -678,7 +678,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+ 		nvmet_bdev_ns_revalidate(ns);
+ 	else
+ 		nvmet_file_ns_revalidate(ns);
+-
+ 	return oldsize != ns->size;
+ }
+ 
+@@ -740,7 +739,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+ 
+ 	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
+ 		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
+-	
++
+ 	if (subsys->offloadble) {
+ 		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
+ 		if (!ns->pdev) {
+@@ -926,10 +925,20 @@ static void nvmet_update_sq_head(struct
+ 	if (req->sq->size) {
+ 		u32 old_sqhd, new_sqhd;
+ 
++#ifdef HAVE_TRY_CMPXCHG
+ 		old_sqhd = READ_ONCE(req->sq->sqhd);
++#endif
+ 		do {
++#ifndef HAVE_TRY_CMPXCHG
++		old_sqhd = req->sq->sqhd;
++#endif
+ 			new_sqhd = (old_sqhd + 1) % req->sq->size;
++#ifndef HAVE_TRY_CMPXCHG
++		} while (cmpxchg(&req->sq->sqhd, old_sqhd, new_sqhd) !=
++						       old_sqhd);
++#else
+ 		} while (!try_cmpxchg(&req->sq->sqhd, &old_sqhd, new_sqhd));
++#endif
+ 	}
+ 	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
+ }
+@@ -1317,9 +1326,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+ 			ret = nvmet_bdev_parse_io_cmd(req);
+ 		break;
+ 	case NVME_CSI_ZNS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED))
+ 			ret = nvmet_bdev_zns_parse_io_cmd(req);
+ 		else
++#endif
+ 			ret = NVME_SC_INVALID_IO_CMD_SET;
+ 		break;
+ 	default:
+@@ -1914,6 +1925,7 @@ init_pr_fail:
+ 	mutex_unlock(&subsys->lock);
+ 	nvmet_stop_keep_alive_timer(ctrl);
+ 	ida_free(&cntlid_ida, ctrl->cntlid);
++
+ out_free_cqs:
+ 	kfree(ctrl->cqs);
+ out_free_sqs:

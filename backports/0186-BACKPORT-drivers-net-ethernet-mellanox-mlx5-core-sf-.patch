@@ -1,35 +1,94 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+ drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ .../mlx5/core/sf/diag/sf_tracepoint.h         | 28 +++++++++++++++++++
+ 1 file changed, 28 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
-@@ -83,6 +83,9 @@ static void mlx5_sf_dev_remove_aux(struc
- 	trace_mlx5_sf_dev_del(dev, sf_dev, id);
- 
- 	auxiliary_device_delete(&sf_dev->adev);
-+#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
-+	mutex_destroy(&sf_dev->sysfs.lock);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
+@@ -24,7 +24,11 @@ TRACE_EVENT(mlx5_sf_add,
+ 			     __field(u16, hw_fn_id)
+ 			     __field(u32, sfnum)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
 +#endif
- 	auxiliary_device_uninit(&sf_dev->adev);
- }
- 
-@@ -127,8 +130,14 @@ static void mlx5_sf_dev_add(struct mlx5_
- 		goto add_err;
- 	}
- 
-+#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
-+	mutex_init(&sf_dev->sysfs.lock);
+ 		    __entry->port_index = port_index;
+ 		    __entry->controller = controller;
+ 		    __entry->hw_fn_id = hw_fn_id;
+@@ -46,7 +50,11 @@ TRACE_EVENT(mlx5_sf_free,
+ 			     __field(u32, controller)
+ 			     __field(u16, hw_fn_id)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
 +#endif
- 	err = auxiliary_device_add(&sf_dev->adev);
- 	if (err) {
-+#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
-+		mutex_destroy(&sf_dev->sysfs.lock);
+ 		    __entry->port_index = port_index;
+ 		    __entry->controller = controller;
+ 		    __entry->hw_fn_id = hw_fn_id;
+@@ -67,7 +75,11 @@ TRACE_EVENT(mlx5_sf_hwc_alloc,
+ 			     __field(u16, hw_fn_id)
+ 			     __field(u32, sfnum)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
 +#endif
- 		auxiliary_device_uninit(&sf_dev->adev);
- 		goto add_err;
- 	}
+ 		    __entry->controller = controller;
+ 		    __entry->hw_fn_id = hw_fn_id;
+ 		    __entry->sfnum = sfnum;
+@@ -84,7 +96,11 @@ TRACE_EVENT(mlx5_sf_hwc_free,
+ 	    TP_STRUCT__entry(__string(devname, dev_name(dev->device))
+ 			     __field(u16, hw_fn_id)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++ 	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#endif
+ 		    __entry->hw_fn_id = hw_fn_id;
+ 	    ),
+ 	    TP_printk("(%s) hw_id=0x%x\n", __get_str(devname), __entry->hw_fn_id)
+@@ -97,7 +113,11 @@ TRACE_EVENT(mlx5_sf_hwc_deferred_free,
+ 	    TP_STRUCT__entry(__string(devname, dev_name(dev->device))
+ 			     __field(u16, hw_fn_id)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#endif
+ 		    __entry->hw_fn_id = hw_fn_id;
+ 	    ),
+ 	    TP_printk("(%s) hw_id=0x%x\n", __get_str(devname), __entry->hw_fn_id)
+@@ -113,7 +133,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_state_templa
+ 				     __field(unsigned int, port_index)
+ 				     __field(u32, controller)
+ 				     __field(u16, hw_fn_id)),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		    TP_fast_assign(__assign_str(devname);
++#else
++		    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#endif
+ 				   __entry->port_index = port_index;
+ 				   __entry->controller = controller;
+ 				   __entry->hw_fn_id = hw_fn_id;
+@@ -152,7 +176,11 @@ TRACE_EVENT(mlx5_sf_update_state,
+ 			     __field(u16, hw_fn_id)
+ 			     __field(u8, state)
+ 			    ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#endif
+ 		    __entry->port_index = port_index;
+ 		    __entry->controller = controller;
+ 		    __entry->hw_fn_id = hw_fn_id;

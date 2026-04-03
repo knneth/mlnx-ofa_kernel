@@ -343,21 +343,10 @@ done < <(cat $path)
 all_metadata_files=$(find metadata/ -name '*.csv' ! -name 'features_metadata_db.csv')
 
 for file in $all_metadata_files; do
-    lines=$(grep -v 'sep=' "$file")
-    missing_upstream_issues=""
-    while read -r line; do
-        upstream_status=$(echo "$line" | sed -n -E 's/.*;[[:space:]]*upstream_status=([a-zA-Z_]+);.*/\1/p')
-        upstream_issue=$(echo "$line" | sed -n -E 's/.*;[[:space:]]*upstream_issue=([^;]*);.*/\1/p')
-        change_id=$(echo "$line" | sed -n -E 's/.*Change-Id=([^;]+);.*/\1/p')
-
-        if [ "$upstream_status" = "in_progress" ] && [ -z "$upstream_issue" ]; then
-            missing_upstream_issues+="\n$line"
-            RC=$((RC + 1))
-        fi
-    done <<< "$lines"
-
+    missing_upstream_issues=$(awk '!/sep=/ && /upstream_status=in_progress;/ && /upstream_issue=;/' "$file")
     if [ -n "$missing_upstream_issues" ]; then
-        echo -e "-E- In file '$file': entries with upstream_status=in_progress but missing or empty upstream_issue: $missing_upstream_issue\n"
+        echo -e "-E- In file '$file': entries with upstream_status=in_progress but missing or empty upstream_issue:\n$missing_upstream_issues\n"
+        RC=$((RC + $(echo "$missing_upstream_issues" | wc -l)))
     fi
 
 done

@@ -1,109 +1,67 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
 
 ---
- .../mellanox/mlx5/core/en_accel/ktls_txrx.h   | 67 +++++++++++++++++--
- 1 file changed, 62 insertions(+), 5 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.h
-@@ -14,21 +14,42 @@ struct mlx5e_accel_tx_tls_state {
- 	u32 tls_tisn;
- };
- 
-+#ifdef HAVE_KTLS_STRUCTS
- u16 mlx5e_ktls_get_stop_room(struct mlx5_core_dev *mdev, struct mlx5e_params *params);
--
- bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
--			      struct sk_buff *skb,
--			      struct mlx5e_accel_tx_tls_state *state);
-+		struct sk_buff *skb,
-+		struct mlx5e_accel_tx_tls_state *state);
-+#else
-+static inline bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
-+		struct sk_buff *skb,
-+		struct mlx5e_accel_tx_tls_state *state)
-+{
-+	return false;
-+}
-+
-+static inline u16 mlx5e_ktls_get_stop_room(struct mlx5_core_dev *mdev,
-+		struct mlx5e_params *params)
-+{
-+	return 0;
-+}
-+#endif
-+#ifdef HAVE_KTLS_RX_SUPPORT
- void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
- 			      struct mlx5_cqe64 *cqe, u32 *cqe_bcnt);
--
-+#endif
- void mlx5e_ktls_handle_ctx_completion(struct mlx5e_icosq_wqe_info *wi);
- void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
- 					  struct mlx5e_icosq *sq);
- 
-+#ifdef HAVE_KTLS_STRUCTS
- void mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
- 					   struct mlx5e_tx_wqe_info *wi,
- 					   u32 *dma_fifo_cc);
-+#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
-+void
-+mlx5e_ktls_rx_resync_async_request_cancel(struct mlx5e_icosq_wqe_info *wi);
-+#endif
-+
- static inline bool
- mlx5e_ktls_tx_try_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
- 					  struct mlx5e_tx_wqe_info *wi,
-@@ -40,7 +61,16 @@ mlx5e_ktls_tx_try_handle_resync_dump_com
- 	}
- 	return false;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+@@ -364,6 +364,7 @@ static int mlx5e_fs_add_any_vid_rules(st
+ 	return mlx5e_add_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_ANY_STAG_VID, 0);
  }
--
-+#else
-+static inline bool
-+mlx5e_ktls_tx_try_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
-+					  struct mlx5e_tx_wqe_info *wi,
-+					  u32 *dma_fifo_cc)
-+{
-+	return false;
-+}
-+#endif
-+#ifdef HAVE_KTLS_RX_SUPPORT
- bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget);
  
- static inline bool
-@@ -48,6 +78,33 @@ mlx5e_ktls_rx_pending_resync_list(struct
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ static struct mlx5_flow_handle *
+ mlx5e_add_trap_rule(struct mlx5_flow_table *ft, int trap_id, int tir_num)
  {
- 	return budget && test_bit(MLX5E_SQ_STATE_PENDING_TLS_RX_RESYNC, &c->async_icosq.state);
+@@ -434,6 +435,7 @@ void mlx5e_remove_mac_trap(struct mlx5e_
+ 		fs->l2.trap_rule = NULL;
+ 	}
  }
-+#else
-+static inline bool
-+mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget)
-+{
-+	return false;
-+}
-+
-+static inline bool
-+mlx5e_ktls_rx_pending_resync_list(struct mlx5e_channel *c, int budget)
-+{
-+	return false;
-+}
-+
-+static inline void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq,
-+					    struct sk_buff *skb,
-+					    struct mlx5_cqe64 *cqe,
-+					    u32 *cqe_bcnt)
-+{
-+}
-+#endif
-+
-+#ifndef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
-+static inline bool mlx5e_ktls_skb_offloaded(struct sk_buff *skb)
-+{
-+	        return skb->sk && tls_is_sk_tx_device_offloaded(skb->sk);
-+}
-+#endif
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
  
- static inline void
- mlx5e_ktls_handle_tx_wqe(struct mlx5_wqe_ctrl_seg *cseg,
+ void mlx5e_enable_cvlan_filter(struct mlx5e_flow_steering *fs, bool promisc)
+ {
+@@ -484,9 +486,15 @@ static int mlx5e_vlan_rx_add_svid(struct
+ 	}
+ 
+ 	/* Need to fix some features.. */
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 8f7b00307bf1: added lock (no lock before) */
+ 	netdev_lock(netdev);
++#endif
+ 	netdev_update_features(netdev);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 8f7b00307bf1: added unlock (no lock before) */
+ 	netdev_unlock(netdev);
++#endif
+ 	return err;
+ }
+ 
+@@ -523,9 +531,15 @@ int mlx5e_fs_vlan_rx_kill_vid(struct mlx
+ 	} else if (be16_to_cpu(proto) == ETH_P_8021AD) {
+ 		clear_bit(vid, fs->vlan->active_svlans);
+ 		mlx5e_fs_del_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_MATCH_STAG_VID, vid);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 8f7b00307bf1: added lock (no lock before) */
+ 		netdev_lock(netdev);
++#endif
+ 		netdev_update_features(netdev);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++		/* Upstream commit 8f7b00307bf1: added unlock (no lock before) */
+ 		netdev_unlock(netdev);
++#endif
+ 	}
+ 
+ 	return 0;
+@@ -563,7 +577,9 @@ static void mlx5e_del_vlan_rules(struct
+ 
+ 	WARN_ON_ONCE(fs->state_destroy);
+ 
++#ifdef HAVE_DEVLINK_TRAP_SUPPORT
+ 	mlx5e_remove_vlan_trap(fs);
++#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
+ 
+ 	/* must be called after DESTROY bit is set and
+ 	 * set_rx_mode is called and flushed

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
 /*
  * Copyright (c) 2014-2020,  Mellanox Technologies. All rights reserved.
+ * Copyright (C) 2020-2021 NVIDIA CORPORATION & AFFILIATES. All Rights Reserved.
  */
 #ifndef RDMA_PEER_MEM_H
 #define RDMA_PEER_MEM_H

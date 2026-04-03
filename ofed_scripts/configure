@@ -93,13 +93,6 @@ Usage:  `basename $0` [options]
     --with-mlx5-mod         make CONFIG_MLX5_CORE=y CONFIG_MLX5_INFINIBAND=y [no]
     --without-mlx5-mod      [yes]
 
-    Options for MLX5 development usage:
-        --with-mlx5-core-only-mod         Build MLX5 Core, without EN, without IB, without IPoIB
-        --with-mlx5-core-and-ib-mod       Build MLX5 Core, with EN, with IB, without IPoIB)
-        --with-mlx5-core-and-en-mod       Build MLX5 Core, with EN, without IB, without IPoIB)
-        --with-mlx5-core-and-ib-and-en-mod  Build MLX5 Core, with EN, with IB, without IPoIB)
-        --with-mlx5-core-and-ipoib-mod    Build MLX5 Core, without EN, without IB, with IPoIB)
-
     --with-mlx5_core-mod         make CONFIG_MLX5_CORE=y [no]
     --without-mlx5_core-mod      [yes]
 
@@ -211,21 +204,6 @@ ex()
         fi
 }
 
-check_kerver_list()
-{
-	local kver=$1
-	shift
-	local kverlist=$@
-
-	for i in $kverlist; do
-		if echo $kver | grep -q "\b$i" ; then
-			return 0
-		fi
-	done
-
-	return 1
-}
-
 # Compare 2 kernel versions
 check_kerver()
 {
@@ -248,11 +226,6 @@ check_kerver()
         fi
 
         return 0
-}
-
-support_only_base()
-{
-	[ "X$OFED_BASE_KVERSION" == "X$1" ]
 }
 
 check_compat_config_h_var()
@@ -293,15 +266,6 @@ unset_config_mk_kernel()
 	echo "Complex config: Unset $1 in ${AUTOCONF_H}"
 	echo "$1=" >> ${CWD}/${CONFIG}
 	echo "#undef $1" >> ${AUTOCONF_H}
-}
-
-check_config_comapt_tcf_pedit_mod()
-{
-	RHEL_MAJOR=$(grep ^RHEL_MAJOR ${KSRC_OBJ}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
-	RHEL_MINOR=$(grep ^RHEL_MINOR ${KSRC_OBJ}/Makefile | sed -n 's/.*= *\(.*\)/\1/p')
-	RHEL7_4_JD=$(echo ${KVERSION} | grep 3.10.0-693.21.3)
-
-	[[ ${RHEL_MAJOR} -eq "7" && ${RHEL_MINOR} -le "4" && ! $RHEL7_4_JD ]]
 }
 
 # We are resolving some features availability
@@ -393,9 +357,8 @@ check_complex_defines()
 	fi
 
 # Define HAVE_DEVLINK_HEALTH_REPORT_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_DEVLINK_HEALTH_REPORT_BASE_SUPPORT &&
-	   (check_compat_config_h_var HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS ||
-	   check_compat_config_h_var HAVE_DEVL_PORT_HEALTH_REPORTER_CREATE_3_ARGS ||
+	if (check_compat_config_h_var HAVE_DEVLINK_HEALTH_REPORTER_CREATE_4_ARGS ||
+	   check_compat_config_h_var HAVE_DEVLINK_HEALTH_REPORTER_CREATE_3_ARGS ||
 	   check_compat_config_h_var HAVE_DEVLINK_HEALTH_REPORTER_CREATE_5_ARGS)
 	then
 		set_complex_define_to_config_h HAVE_DEVLINK_HEALTH_REPORT_SUPPORT
@@ -404,8 +367,7 @@ check_complex_defines()
 	fi
 
 # Define HAVE_KTLS_RX_SUPPORT from other flags
-	if (check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST ||
-		check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START) &&
+	if (check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START) &&
 	       	[ "X${CONFIG_MLX5_EN_TLS}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
@@ -453,8 +415,7 @@ check_complex_defines()
 
 # Define HAVE_GET_USER_PAGES_GUP_FLAGS from other flags
 	if check_compat_config_h_var HAVE_GET_USER_PAGES_4_PARAMS ||
-	   check_compat_config_h_var HAVE_GET_USER_PAGES_5_PARAMS ||
-	   check_compat_config_h_var HAVE_GET_USER_PAGES_7_PARAMS
+	   check_compat_config_h_var HAVE_GET_USER_PAGES_5_PARAMS
 	then
 		set_complex_define_to_config_h HAVE_GET_USER_PAGES_GUP_FLAGS
 	else
@@ -462,8 +423,7 @@ check_complex_defines()
 	fi
 
 # Define HAVE_XDP_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_XDP_REDIRECT &&
-				[ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
+	if [ "X${CONFIG_ENABLE_XDP}" == "Xy" ]
 	then
 		set_complex_define_to_config_h HAVE_XDP_SUPPORT
 	else
@@ -585,18 +545,8 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
 	fi
 
-# define HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD from other flags
-	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
-	   check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD_FIX
-	then
-		set_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
-	else
-		unset_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_HAS_STATS_FIELD
-	fi
-
 # define HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON from other flags
-	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD ||
-	   check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON_FIX
+	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD
 	then
 		set_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
 	else
@@ -621,18 +571,8 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_TC_INDR_API
 	fi
 
-# Define HAVE_DEVICE_ADD_DISK_3_ARGS from other flags
-       if check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_AND_RETURN ||
-	       check_compat_config_h_var HAVE_DEVICE_ADD_DISK_3_ARGS_NO_RETURN
-       then
-	       set_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
-       else
-	       unset_complex_define_to_config_h HAVE_DEVICE_ADD_DISK_3_ARGS
-       fi
-
 # define HAVE_TCF_PEDIT_TCFP_KEYS_EX from other flags
-	if check_compat_config_h_var HAVE_TCF_PEDIT_TCFP_KEYS_EX_FIX ||
-	   check_config_comapt_tcf_pedit_mod
+	if check_compat_config_h_var HAVE_TCF_PEDIT_TCFP_KEYS_EX_FIX
 	then
 		set_complex_define_to_config_h HAVE_TCF_PEDIT_TCFP_KEYS_EX
 	else
@@ -675,6 +615,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_PAGE_POOL_PARAM_HAS_NAPI
 	fi
 
+# define HAVE_ETHTOOL_RXFH_PARAM_CONTEXT_API
+	if ! check_compat_config_h_var HAVE_GET_RXFH_CONTEXT &&
+	   check_compat_config_h_var HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT
+	then
+		set_complex_define_to_config_h HAVE_ETHTOOL_RXFH_PARAM_CONTEXT_API
+	else
+		unset_complex_define_to_config_h HAVE_ETHTOOL_RXFH_PARAM_CONTEXT_API
+	fi
+
 # define HAVE_PAGE_POOL_DEFRAG_PAGE from other flags
 	if check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_H ||
 	   check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE_IN_PAGE_POOL_TYPES_H ||
@@ -683,6 +632,34 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
 	else
 		unset_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
+	fi
+# Define HAVE_NETMEM_SUPPORT from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_UNREF_NETMEM &&
+	   check_compat_config_h_var HAVE_NETMEM_DMA_UNMAP_ADDR_SET &&
+	   check_compat_config_h_var HAVE_PAGE_POOL_DEV_ALLOC_NETMEMS
+	then
+		set_complex_define_to_config_h HAVE_NETMEM_SUPPORT
+	else
+		unset_complex_define_to_config_h HAVE_NETMEM_SUPPORT
+	fi
+# Define HAVE_PAGE_POOL_DEFRAG_PAGE_OR_UNREF_NETMEM from other flags
+	if check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE ||
+	   check_compat_config_h_var HAVE_PAGE_POOL_PUT_UNREFED_PAGE ||
+	   check_compat_config_h_var HAVE_NETMEM_SUPPORT
+	then
+		set_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE_OR_UNREF_NETMEM
+	else
+		unset_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE_OR_UNREF_NETMEM
+	fi
+
+# Define HAVE_NO_PAGE_POOL_DEFRAG_PAGE_AND_UNREF_NETMEM from other flags (negative check)
+	if ! check_compat_config_h_var HAVE_PAGE_POOL_DEFRAG_PAGE &&
+	   ! check_compat_config_h_var HAVE_PAGE_POOL_PUT_UNREFED_PAGE &&
+	   ! check_compat_config_h_var HAVE_NETMEM_SUPPORT
+	then
+		set_complex_define_to_config_h HAVE_NO_PAGE_POOL_DEFRAG_PAGE_AND_UNREF_NETMEM
+	else
+		unset_complex_define_to_config_h HAVE_NO_PAGE_POOL_DEFRAG_PAGE_AND_UNREF_NETMEM
 	fi
 
 # Define HAVE_PAGE_POOL_RELEASE_PAGE from other flags
@@ -797,57 +774,17 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_DEV_GET_PORT_PARENT_ID
 	fi
 
-}
+# Define HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED from other flag
+       if (check_compat_config_h_var HAVE_DEVLINK_PARAM_REGISTER ||
+               check_compat_config_h_var HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET) &&
+          (check_compat_config_h_var HAVE_DEVLINK_PARAMS_PUBLISHED ||
+               check_compat_config_h_var HAVE_DEVLINK_REGISTER_GET_1_PARAMS)
+       then
+               set_complex_define_to_config_h HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+       else
+               unset_complex_define_to_config_h HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
+       fi
 
-check_kerver_rh_cls()
-{
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 693 ? 0 : 1)'
-}
-
-check_kerver_rh_bridge()
-{
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "4.18.0" && $r >= 147 ? 0 : 1)'
-}
-
-
-#NVMF HOST supports RHEL7.2 and above, all kernels from 4.8 and above
-check_kerver_rh_nvmf_host()
-{
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 327 ? 0 : 1)'
-}
-
-#NVMF TARGET supports RHEL7.4 and above, all kernels from 4.8 and above
-check_kerver_rh_nvmf_target()
-{
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 693 ? 0 : 1)'
-}
-
-#NFS RDMA supports RHEL7.5 and above, all kernels from 4.12 and above
-check_kerver_rh_nfs_rdma()
-{
-	perl -e '($v, $r) = split "-", "'$1'"; exit($v eq "3.10.0" && $r >= 862 ? 0 : 1)'
-}
-
-# Return true if $1 this is a RHEL8 kernel, above revision $2
-check_kerver_rh8()
-{
-	local kernel="$1"
-	local minimal="$2"
-
-	case "$kernel" in
-	*.el8.*) :;;
-	*) return 1;;
-	esac
-
-	perl -e '($v, $r) = split "-", "'$kernel'"; exit($v eq "4.18.0" && $r >= '$minimal' ? 0 : 1)'
-}
-
-check_kerver_rh7()
-{
-	local kernel="$1"
-	local minimal="$2"
-
-	perl -e '($v, $r) = split "-", "'$kernel'"; exit($v =~ /^(3\.10\.0|4\.1[14]\.0)$/ && $r =~/el7/ && $r >= '$minimal' ? 0 : 1)'
 }
 
 # Check if the kernel we build with has an auxiliary bus module
@@ -861,6 +798,27 @@ check_inbox_auxiliary() {
 check_inbox_fwctl() {
 	check_autofconf CONFIG_FWCTL
 	[ "$CONFIG_FWCTL" != '' ]
+}
+
+# Check if this is a supported RHEL 8 kernel (4.18.0-540+)
+is_rhel8_10_kernel()
+{
+	local kernel="$1"
+
+	case "$kernel" in
+		4.18.0-*.el8*)
+			local release=${kernel#4.18.0-}
+			release=${release%%.*}
+			[ "$release" -ge 540 ] && return 0
+			;;
+	esac
+	return 1
+}
+
+# Check if this is a supported ky10 kernel
+is_ky10_kernel()
+{
+	[[ $1 == *.ky10* ]]
 }
 
 function check_autofconf {
@@ -1017,55 +975,24 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.15"
-MIN_KVERSION="4.18"
+OFED_BASE_KVERSION="6.18"
+MIN_KVERSION="5.4"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
 REBASE_STAGE="BACKPORTS"
 
-# nfs-rdma
-NFSRDMA_SUPPORTED_KVERSION="4.18"
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
+# Non-supported version thresholds (features disabled at these versions and above)
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
 
-# nvmf
-NVMF_SUPPORTED_KVERSION="4.18"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-# iser/isert/srp/gds
-ISER_SUPPORTED_KVERSION="4.18.0"
-ISERT_SUPPORTED_KVERSION="4.18.0"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-SRP_SUPPORTED_KVERSION="4.18.0"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-GDS_SUPPORTED_KVERSION="4.18.0"
-
+# VIRTIOFS version requirements
 VIRTIOFS_SUPPORTED_KVERSION="6.6.0"
-VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-# eswitch
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-# auxbux
-AUXBUS_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-# cls_act
-CLS_ACT_SUPPORTED_KVERSION="4.18.0"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-# bridge offload
-BRIDGE_SUPPORTED_KVERSION="5.0"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="7.1"
-
-#ODP
-ODP_SUPPORTED_KVERSION="4.18.0"
-
-#IPSEC
-IPSEC_SUPPORTED_KVERSION="4.18.0"
-
-#mlxdevm
-MLXDEVM_SUPPORTED_KVERSION="4.18.0"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
 
 KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
@@ -1482,121 +1409,6 @@ main()
 			CONFIG_MLX5_EN_TLS="y"
 			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
 			;;
-		--with-mlx5-core-only-mod)
-			CONFIG_MLX5_CORE="m"
-			CONFIG_MLX5_CORE_EN=
-			CONFIG_MLX5_CORE_EN_DCB=
-			CONFIG_MLX5_EN_ARFS=
-			CONFIG_MLX5_EN_RXNFC=
-			CONFIG_MLX5_EN_TLS=
-			CONFIG_MLX5_MPFS=
-			CONFIG_MLX5_ESWITCH=
-			CONFIG_MLX5_CLS_ACT=
-			CONFIG_MLX5_BRIDGE=
-			CONFIG_MLX5_TC_CT=
-			CONFIG_MLX5_SF=
-			CONFIG_MLX5_SF_MANAGER=
-			CONFIG_MLX5_TC_SAMPLE=
-			CONFIG_MLX5_SW_STEERING=
-			CONFIG_MLX5_CORE_IPOIB=
-			CONFIG_MLX5_INFINIBAND=
-			CONFIG_BACKPORT_LRO="m"
-			CONFIG_MLX5_DEBUG="y"
-			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
-			;;
-		--with-mlx5-core-and-ib-mod)
-			CONFIG_MLX5_CORE="m"
-			CONFIG_MLX5_CORE_EN=
-			CONFIG_MLX5_CORE_EN_DCB=
-			CONFIG_MLX5_EN_ARFS=
-			CONFIG_MLX5_EN_RXNFC=
-			CONFIG_MLX5_EN_TLS=
-			CONFIG_MLX5_MPFS=
-			CONFIG_MLX5_ESWITCH=
-			CONFIG_MLX5_CLS_ACT=
-			CONFIG_MLX5_BRIDGE=
-			CONFIG_MLX5_TC_CT=
-			CONFIG_MLX5_SF=
-			CONFIG_MLX5_SF_MANAGER=
-			CONFIG_MLX5_TC_SAMPLE=
-			CONFIG_MLX5_SW_STEERING=
-			CONFIG_MLX5_CORE_IPOIB=
-			CONFIG_MLX5_INFINIBAND="m"
-			CONFIG_BACKPORT_LRO="m"
-			CONFIG_MLX5_DEBUG="y"
-			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
-			;;
-		--with-mlx5-core-and-en-mod)
-			CONFIG_MLX5_CORE="m"
-			CONFIG_MLX5_CORE_EN="y"
-			CONFIG_MLX5_CORE_EN_DCB="y"
-			CONFIG_MLX5_EN_ARFS="y"
-			CONFIG_MLX5_EN_RXNFC="y"
-			CONFIG_MLX5_MPFS="y"
-			CONFIG_MLX5_ESWITCH="y"
-			CONFIG_MLX5_CLS_ACT="y"
-			CONFIG_MLX5_BRIDGE="y"
-			CONFIG_MLX5_TC_CT="y"
-			CONFIG_MLX5_SF='y'
-			CONFIG_MLX5_SF_MANAGER='y'
-			CONFIG_MLX5_TC_SAMPLE="y"
-			CONFIG_MLX5_SW_STEERING=
-			CONFIG_MLX5_CORE_IPOIB=
-			CONFIG_MLX5_EN_SPECIAL_SQ="y"
-			CONFIG_MLX5_INFINIBAND=
-			CONFIG_BACKPORT_LRO="m"
-			CONFIG_MLX5_DEBUG="y"
-			CONFIG_MLX5_ACCEL="y"
-			CONFIG_MLX5_TLS="y"
-			CONFIG_MLX5_EN_TLS="y"
-			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
-			;;
-		--with-mlx5-core-and-ib-and-en-mod)
-			CONFIG_MLX5_CORE="m"
-			CONFIG_MLX5_CORE_EN="y"
-			CONFIG_MLX5_CORE_EN_DCB="y"
-			CONFIG_MLX5_EN_ARFS="y"
-			CONFIG_MLX5_EN_RXNFC="y"
-			CONFIG_MLX5_MPFS="y"
-			CONFIG_MLX5_ESWITCH="y"
-			CONFIG_MLX5_CLS_ACT="y"
-			CONFIG_MLX5_BRIDGE="y"
-			CONFIG_MLX5_TC_CT="y"
-			CONFIG_MLX5_SF='y'
-			CONFIG_MLX5_SF_MANAGER='y'
-			CONFIG_MLX5_TC_SAMPLE="y"
-			CONFIG_MLX5_SW_STEERING="y"
-			CONFIG_MLX5_CORE_IPOIB=
-			CONFIG_MLX5_INFINIBAND="m"
-			CONFIG_BACKPORT_LRO="m"
-			CONFIG_MLX5_DEBUG="y"
-			CONFIG_MLX5_ACCEL="y"
-			CONFIG_MLX5_TLS="y"
-			CONFIG_MLX5_EN_TLS="y"
-			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
-			;;
-		--with-mlx5-core-and-ipoib-mod)
-			CONFIG_MLX5_CORE="m"
-			CONFIG_MLX5_CORE_EN=
-			CONFIG_MLX5_CORE_EN_DCB=
-			CONFIG_MLX5_EN_ARFS=
-			CONFIG_MLX5_EN_RXNFC=
-			CONFIG_MLX5_EN_TLS=
-			CONFIG_MLX5_MPFS=
-			CONFIG_MLX5_ESWITCH=
-			CONFIG_MLX5_CLS_ACT=
-			CONFIG_MLX5_BRIDGE=
-			CONFIG_MLX5_TC_CT=
-			CONFIG_MLX5_SF=
-			CONFIG_MLX5_SF_MANAGER=
-			CONFIG_MLX5_TC_SAMPLE=
-			CONFIG_MLX5_SW_STEERING=
-			CONFIG_MLX5_CORE_IPOIB="y"
-			CONFIG_MLX5_INFINIBAND="m"
-			CONFIG_BACKPORT_LRO="m"
-			CONFIG_MLX5_DEBUG="y"
-			add_conf "# Load MLX5 modules" "MLX5_LOAD=yes"
-			;;
 		--with-mlx5_core-mod)
 			CONFIG_MLX5_CORE="m"
 			CONFIG_MLX5_CORE_EN="y"
@@ -1988,24 +1800,7 @@ if  check_kerver ${KVERSION} ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 	echo "Warning: CONFIG_MLX5_ESWITCH not support kernel version ${SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
 
-if ! check_kerver ${KVERSION} ${CLS_ACT_SUPPORTED_KVERSION}; then
-		if (! check_kerver_rh_cls ${KVERSION}) || support_only_base ${CLS_ACT_SUPPORTED_KVERSION}; then
-			CONFIG_MLX5_CLS_ACT=
-			CONFIG_MLX5_TC_CT=
-			CONFIG_MLX5_TC_SAMPLE=
-			CONFIG_MLX5_SW_STEERING=
-			echo "Warning: CONFIG_MLX5_CLS_ACT requires kernel version ${CLS_ACT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-		fi
-fi
-
-if ! check_kerver ${KVERSION} ${BRIDGE_SUPPORTED_KVERSION}; then
-	if (! check_kerver_rh_bridge ${KVERSION}) || support_only_base ${BRIDGE_SUPPORTED_KVERSION}; then
-                        CONFIG_MLX5_BRIDGE=
-			echo "Warning: CONFIG_MLX5_BRIDGE requires kernel version ${BRIDGE_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-	fi
-fi
-
-if  check_kerver ${KVERSION} ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
+if  check_kerver ${KVERSION} ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE} || is_ky10_kernel ${KVERSION}; then
         CONFIG_MLX5_BRIDGE=
 	echo "Warning: CONFIG_MLX5_BRIDGE not support kernel version ${BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
@@ -2019,45 +1814,9 @@ if  check_kerver ${KVERSION} ${CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 	echo "Warning: CONFIG_MLX5_CLS_ACT not support kernel version ${CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
 
-if ! check_kerver ${KVERSION} ${NFSRDMA_SUPPORTED_KVERSION}; then
-	if (! check_kerver_rh_nfs_rdma ${KVERSION}) || support_only_base ${NFSRDMA_SUPPORTED_KVERSION}; then
-		CONFIG_SUNRPC_XPRT_RDMA=
-		echo "Warning: NFS-RMDA requires RHEL7.5 and above or kernel version ${NFSORDMA_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-	fi
-fi
-
 if  check_kerver ${KVERSION} ${NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 	CONFIG_SUNRPC_XPRT_RDMA=
 	echo "Warning: CONFIG_SUNRPC_XPRT_RDMA not support kernel version ${NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
-fi
-
-if ! check_kerver ${KVERSION} ${NVMF_SUPPORTED_KVERSION}; then
-	if (! check_kerver_rh_nvmf_host ${KVERSION}) || support_only_base ${NVMF_SUPPORTED_KVERSION}; then
-		CONFIG_NVME_CORE=
-		CONFIG_BLK_DEV_NVME=
-		CONFIG_NVME_FABRICS=
-		CONFIG_NVME_FC=
-		CONFIG_NVME_RDMA=
-		CONFIG_NVME_TCP=
-		CONFIG_NVME_APPLE=
-		CONFIG_NVME_HOST_AUTH=
-		CONFIG_NVME_AUTH=
-		CONFIG_NVME_KEYRING=
-		CONFIG_NVME_MULTIPATH=
-		CONFIG_NVME_HOST_WITHOUT_FC=
-		echo "Warning: NVMF HOST requires RHEL7.2 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-
-	fi
-	if (! check_kerver_rh_nvmf_target ${KVERSION}) || support_only_base ${NVMF_SUPPORTED_KVERSION}; then
-		CONFIG_NVME_TARGET=
-		CONFIG_NVME_TARGET_LOOP=
-		CONFIG_NVME_TARGET_RDMA=
-		CONFIG_NVME_TARGET_TCP=
-		CONFIG_NVME_TARGET_PCI_EPF=
-		CONFIG_NVME_TARGET_FC=
-		CONFIG_NVME_TARGET_FCLOOP=
-		echo "Warning: NVMF TARGET requires RHEL7.4 and above or kernel version ${NVMF_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-	fi
 fi
 
 if  check_kerver ${KVERSION} ${NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
@@ -2092,28 +1851,10 @@ if  check_kerver ${KVERSION} ${ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE}; the
 	echo "Warning: ISER/ISERT not support kernel version ${ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
 fi
 
-if ! check_kerver ${KVERSION} ${ISER_SUPPORTED_KVERSION}; then
-	CONFIG_INFINIBAND_ISER=
-	CONFIG_SCSI_ISCSI_ATTRS=
-	CONFIG_ISCSI_TCP=
-	echo "Warning: ISER requires kernel version ${ISER_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-fi
-
-if ! check_kerver ${KVERSION} ${ISERT_SUPPORTED_KVERSION}; then
-	CONFIG_INFINIBAND_ISERT=
-	echo "Warning: ISERT requires kernel version ${ISERT_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
-fi
-
 if  check_kerver ${KVERSION} ${SRP_NON_SUPPORTED_KVERSION_AND_ABOVE}; then
 	CONFIG_INFINIBAND_SRP=
 	CONFIG_SCSI_SRP_ATTRS=
 	echo "Warning: SRP not support kernel version ${SRP_NON_SUPPORTED_KVERSION_AND_ABOVE} or higher (current: ${KVERSION})."
-fi
-
-if ! check_kerver ${KVERSION} $SRP_SUPPORTED_KVERSION; then
-	CONFIG_INFINIBAND_SRP=
-	CONFIG_SCSI_SRP_ATTRS=
-	echo "Warning: SRP requires kernel version ${SRP_SUPPORTED_KVERSION} or higher (current: ${KVERSION})."
 fi
 
 prefix=${prefix:-/usr}
@@ -2148,28 +1889,12 @@ COMPAT_CONFIG_H="compat/config.h"
 mkdir -p ${CWD}/include/generated
 AUTOCONF_H="${CWD}/include/generated/autoconf.h"
 
-case $KVERSION in
-	2.6.16*)
-	BACKPORT_INCLUDES="-I$CWD/backport_includes/2.6.16_sles10_sp3/include"
-	CONFIG_COMPAT_VERSION="-2.6.16"
-	CONFIG_IPOIB_VERSION="_1.5.3"
-	CONFIG_COMPAT_KOBJECT_BACKPORT=y
-	;;
-	2.6.18*)
-	BACKPORT_INCLUDES="-I$CWD/backport_includes/2.6.18-EL5.2/include"
-	CONFIG_COMPAT_VERSION="-2.6.18"
-	CONFIG_COMPAT_KOBJECT_BACKPORT=y
-	;;
-	*)
-	;;
-esac
-
 #
 ################### disable/enable features/modules  ###########################
 #
 
 check_autofconf CONFIG_MMU_NOTIFIER
-if ! check_kerver ${KVERSION} ${ODP_SUPPORTED_KVERSION} || [ "X${CONFIG_MMU_NOTIFIER}" != "X1" ]; then
+if [ "X${CONFIG_MMU_NOTIFIER}" != "X1" ]; then
 	CONFIG_INFINIBAND_ON_DEMAND_PAGING=
 fi
 
@@ -2263,11 +1988,6 @@ if [ "X${CONFIG_NVME_TARGET_PCI_EPF}" == "Xm" ]; then
     fi
 fi
 
-# Enable GDS only for supported kernels
-if ! check_kerver ${KVERSION} ${GDS_SUPPORTED_KVERSION}; then
-	CONFIG_GPU_DIRECT_STORAGE=
-fi
-
 # Enable VIRTIOFS only for supported kernels
 if ! check_kerver ${KVERSION} ${VIRTIOFS_SUPPORTED_KVERSION}; then
 	CONFIG_VIRTIO_FS=
@@ -2282,13 +2002,6 @@ if [ $ENABLE_CONTAINER_BUILD -eq 0 ]; then
     if [ -e "/.dockerenv" ] || (grep -q docker /proc/self/cgroup &>/dev/null); then
         CONFIG_MLNX_BLOCK_REQUEST_MODULE=y
     fi
-fi
-
-# Enable mlxdevm only for supported kernels
-if ! check_kerver ${KVERSION} ${MLXDEVM_SUPPORTED_KVERSION}; then
-	CONFIG_MLXDEVM=
-	CONFIG_MLX5_SF_CFG=
-	CONFIG_MLX5_SF=
 fi
 
 # if SF driver is not configured disable its configuration driver as well
@@ -2442,9 +2155,12 @@ fi
 #
 
 # Check for minimal supported kernel version
+# Exception: Allow RHEL 8.10 kernels even though MIN_KVERSION is 5.4
 if ! check_kerver ${KVERSION} ${MIN_KVERSION}; then
-    echo "Kernel version ${KVERSION} is less then supported kernel ${MIN_KVERSION}. Exiting..."
-    exit 1
+    if ! is_rhel8_10_kernel ${KVERSION} && ! is_ky10_kernel ${KVERSION}; then
+        echo "Kernel version ${KVERSION} is less then supported kernel ${MIN_KVERSION}. Exiting..."
+        exit 1
+    fi
 fi
 
 if [ ! -e backports_applied ]; then

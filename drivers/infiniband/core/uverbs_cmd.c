@@ -193,7 +193,7 @@ _ib_uverbs_lookup_comp_file(s32 fd, struct uverbs_attr_bundle *attrs)
 					       fd, attrs);
 
 	if (IS_ERR(uobj))
-		return (void *)uobj;
+		return ERR_CAST(uobj);
 
 	uverbs_uobject_get(uobj);
 	uobj_put_read(uobj);
@@ -741,7 +741,7 @@ static int ib_uverbs_reg_mr(struct uverbs_attr_bundle *attrs)
 	}
 
 	mr = pd->device->ops.reg_user_mr(pd, cmd.start, cmd.length, cmd.hca_va,
-					 cmd.access_flags,
+					 cmd.access_flags, NULL,
 					 &attrs->driver_udata);
 	if (IS_ERR(mr)) {
 		ret = PTR_ERR(mr);

@@ -125,7 +125,6 @@ static int hws_pool_buddy_init(struct mlx5hws_pool *pool)
 			    pool->type, pool->alloc_log_sz);
 		mlx5hws_buddy_cleanup(buddy);
 		kfree(buddy);
-		pool->db.buddy = NULL;
 		return -ENOMEM;
 	}
 

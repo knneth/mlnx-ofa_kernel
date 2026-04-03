@@ -251,16 +251,9 @@ static int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
 {
 	enum devlink_port_fn_opstate dl_opstate;
 	enum devlink_port_fn_state dl_state;
-	struct devlink_port devport;
-	struct devlink *devlink;
 	int ret;
 
-	devlink = mlxdevm_to_devlink(port->mlxdevm);
-	memset(&devport, 0, sizeof(devport));
-	devport.devlink = devlink;
-	devport.index = port->index;
-
-	ret = mlx5_devlink_sf_port_fn_state_get(&devport, &dl_state, &dl_opstate, extack);
+	ret = mlx5_devlink_sf_port_fn_state_get(port->dl_port, &dl_state, &dl_opstate, extack);
 	if (!ret) {
 		*state = devlink_to_mlxdevm_state(dl_state);
 		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
@@ -482,21 +475,13 @@ static int mlx5_devm_port_fn_ipsec_packet_set(struct mlxdevm_port *port, bool en
 static int mlx5_devm_rate_leaf_tx_max_set(struct mlxdevm_rate *rate_leaf, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_leaf_tx_max_set(NULL, priv, tx_max, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_leaf_tx_share_set(struct mlxdevm_rate *rate_leaf, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_leaf_tx_share_set(NULL, priv, tx_share, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_leaf_parent_set(struct mlxdevm_rate *mlxdevm_rate,
@@ -527,21 +512,13 @@ static int mlx5_devm_rate_node_parent_set(struct mlxdevm_rate *mlxdevm_rate,
 static int mlx5_devm_rate_node_tx_share_set(struct mlxdevm_rate *rate_node, void *priv,
 					    u64 tx_share, struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_tx_share_set(NULL, priv, tx_share, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_node_tx_max_set(struct mlxdevm_rate *rate_node, void *priv,
 					  u64 tx_max, struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_tx_max_set(NULL, priv, tx_max, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
@@ -549,11 +526,7 @@ static int mlx5_devm_rate_leaf_tc_bw_set(struct mlxdevm_rate *rate_leaf,
 					 u32 *tc_bw,
 					 struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
 	return mlx5_esw_devlink_rate_leaf_tc_bw_set(NULL, priv, tc_bw, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm_rate *rate_node,
@@ -561,11 +534,7 @@ static int mlx5_devm_rate_node_tc_bw_set(struct mlxdevm_rate *rate_node,
 					 u32 *tc_bw,
 					 struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
 	return mlx5_esw_devlink_rate_node_tc_bw_set(NULL, priv, tc_bw, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_rate_node_new(struct mlxdevm_rate *rate_node, void **priv,
@@ -586,11 +555,7 @@ static int mlx5_devm_rate_node_new(struct mlxdevm_rate *rate_node, void **priv,
 static int mlx5_devm_rate_node_del(struct mlxdevm_rate *rate_node, void *priv,
 				   struct netlink_ext_ack *extack)
 {
-#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
 	return mlx5_esw_devlink_rate_node_del(NULL, priv, extack);
-#else
-	return -ENOTSUPP;
-#endif
 }
 
 static int mlx5_devm_info_get(struct mlxdevm *mlxdevm, struct mlxdevm_info_req *req,
@@ -904,7 +869,7 @@ static const struct mlxdevm_param mlx5_devm_params[] = {
 	MLXDEVM_PARAM_GENERIC(EVENT_EQ_SIZE, BIT(MLXDEVM_PARAM_CMODE_DRIVERINIT),
 			      NULL, NULL, mlx5_devm_eq_depth_validate),
 	MLXDEVM_PARAM_DRIVER(MLX5_DEVM_PARAM_ID_CPU_AFFINITY, "cpu_affinity",
-			     MLXDEVM_PARAM_TYPE_ARRAY_U16,
+			     MLXDEVM_PARAM_TYPE_NESTED,
 			     BIT(MLXDEVM_PARAM_CMODE_DRIVERINIT), NULL, NULL,
 			     mlx5_devm_cpu_affinity_validate),
 };

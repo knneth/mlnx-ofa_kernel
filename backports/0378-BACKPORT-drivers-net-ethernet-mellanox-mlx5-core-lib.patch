@@ -1,0 +1,19 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
+
+Change-Id: Ibb2c3fc1550f6de36c9f0e27c6484397d051283f
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
+@@ -46,7 +46,7 @@ struct l2addr_node {
+ };
+ 
+ #define mlx5_mpfs_foreach(hs, tmp, mpfs) \
+-	for (int j = 0; j < MLX5_L2_ADDR_HASH_SIZE; j++) \
++	for (j = 0; j < MLX5_L2_ADDR_HASH_SIZE; j++) \
+ 		hlist_for_each_entry_safe(hs, tmp, &(mpfs)->hash[j], node.hlist)
+ 
+ #define for_each_l2hash_node(hn, tmp, hash, i) \

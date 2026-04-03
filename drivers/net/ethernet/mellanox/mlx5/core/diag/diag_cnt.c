@@ -181,11 +181,6 @@ static ssize_t params_write(struct file *filp, const char __user *buf,
 			if (sscanf(p, "%d", &temp) != 1)
 				goto out_err;
 
-			if (temp > MLX5_CAP_DEBUG(dev, log_max_samples)) {
-				mlx5_core_warn(dev, "invalid log_num_of_samples %d which is bigger than log_max_samples %d\n",
-					       temp, MLX5_CAP_DEBUG(dev, log_max_samples));
-				goto out_err;
-			}
 			if ((1 << (MLX5_CAP_DEBUG(dev, log_max_samples) - temp)) <
 			     diag_cnt->num_cnt_id) {
 				mlx5_core_warn(dev, "log_num_of_samples is too big for num_cnt_id=%d\n",

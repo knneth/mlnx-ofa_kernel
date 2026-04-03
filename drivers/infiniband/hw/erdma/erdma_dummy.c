@@ -41,9 +41,6 @@
 MODULE_AUTHOR("Roy Novich");
 MODULE_DESCRIPTION("erdma dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init erdma_init(void)

@@ -1,0 +1,23 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_std_types_dmah.c
+
+Change-Id: Iaaeb33aa1de373a8e6cba5e4f28b14e2b2f33e5f
+---
+ drivers/infiniband/core/uverbs_std_types_dmah.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+--- a/drivers/infiniband/core/uverbs_std_types_dmah.c
++++ b/drivers/infiniband/core/uverbs_std_types_dmah.c
+@@ -46,8 +46,11 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+ 				       UVERBS_ATTR_ALLOC_DMAH_CPU_ID);
+ 		if (ret)
+ 			goto err;
+-
++#ifdef HAVE_TASK_STRUCT_CPUS_PTR
+ 		if (!cpumask_test_cpu(dmah->cpu_id, current->cpus_ptr)) {
++#else
++		if (!cpumask_test_cpu(dmah->cpu_id, &current->cpus_allowed)) {
++#endif
+ 			ret = -EPERM;
+ 			goto err;
+ 		}

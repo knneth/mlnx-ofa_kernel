@@ -63,7 +63,7 @@ if [ $is_bf -eq 1 ]; then
 	fi
 fi
 
-if [ $ECVF -ne 1]; then
+if [ $ECVF -ne 1 ]; then
 	# Ditch use stderr as new stdout:
 	if udevadm test-builtin path_id "/sys$DEVPATH" 2>&1 1>/dev/null \
 		| grep -q 'Network interface NamePolicy= disabled'
@@ -74,7 +74,7 @@ if [ $ECVF -ne 1]; then
 fi
 
 # for pf and uplink rep fall to slot or path.
-udevversion=`/sbin/udevadm --version`
+udevversion=`udevadm --version`
 skip=0
 if [ "$ID_NET_DRIVER" == "mlx5e_rep" ]; then
     if [ "$udevversion" == "219" ] || [ "$udevversion" == "229" ]; then

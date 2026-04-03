@@ -10,8 +10,8 @@
  * (at your option) any later version.
  */
 
-#ifndef _UAPI_LINUX_MLXDEVM_H_
-#define _UAPI_LINUX_MLXDEVM_H_
+#ifndef _COMPAT_UAPI_LINUX_MLXDEVM_H_
+#define _COMPAT_UAPI_LINUX_MLXDEVM_H_
 
 #include "../../../compat/config.h"
 
@@ -184,6 +184,7 @@ enum mlxdevm_sb_threshold_type {
 enum devlink_eswitch_mode {
 	DEVLINK_ESWITCH_MODE_LEGACY,
 	DEVLINK_ESWITCH_MODE_SWITCHDEV,
+	DEVLINK_ESWITCH_MODE_SWITCHDEV_INACTIVE,
 };
 
 enum devlink_eswitch_inline_mode {
@@ -400,11 +401,27 @@ enum mlxdevm_linecard_state {
 	MLXDEVM_LINECARD_STATE_MAX = __MLXDEVM_LINECARD_STATE_MAX - 1
 };
 
+/* Variable attribute type. */
+enum mlxdevm_var_attr_type {
+	/* Following values relate to the internal NLA_* values */
+	MLXDEVM_VAR_ATTR_TYPE_U8 = 1,
+	MLXDEVM_VAR_ATTR_TYPE_U16,
+	MLXDEVM_VAR_ATTR_TYPE_U32,
+	MLXDEVM_VAR_ATTR_TYPE_U64,
+	MLXDEVM_VAR_ATTR_TYPE_STRING,
+	MLXDEVM_VAR_ATTR_TYPE_FLAG,
+	MLXDEVM_VAR_ATTR_TYPE_NESTED = 8,
+	MLXDEVM_VAR_ATTR_TYPE_NUL_STRING = 10,
+	MLXDEVM_VAR_ATTR_TYPE_BINARY,
+	__MLXDEVM_VAR_ATTR_TYPE_CUSTOM_BASE = 0x80,
+	/* Any possible custom types, unrelated to NLA_* values go below */
+};
+
 enum mlxdevm_attr {
 	/* don't change the order or add anything between, this is ABI! */
 	MLXDEVM_ATTR_UNSPEC,
 
-	/* bus name + dev name together are a handle for devlink entity */
+	/* bus name + dev name together are a handle for mlxdevm entity */
 	MLXDEVM_ATTR_BUS_NAME,			/* string */
 	MLXDEVM_ATTR_DEV_NAME,			/* string */
 
@@ -557,9 +574,9 @@ enum mlxdevm_attr {
 	MLXDEVM_ATTR_STATS,				/* nested */
 
 	MLXDEVM_ATTR_TRAP_NAME,				/* string */
-	/* enum devlink_trap_action */
+	/* enum mlxdevm_trap_action */
 	MLXDEVM_ATTR_TRAP_ACTION,			/* u8 */
-	/* enum devlink_trap_type */
+	/* enum mlxdevm_trap_type */
 	MLXDEVM_ATTR_TRAP_TYPE,				/* u8 */
 	MLXDEVM_ATTR_TRAP_GENERIC,			/* flag */
 	MLXDEVM_ATTR_TRAP_METADATA,			/* nested */
@@ -631,9 +648,11 @@ enum mlxdevm_attr {
 
 	MLXDEVM_ATTR_RATE_TC_BWS,		/* nested */
 
+	MLXDEVM_ATTR_HEALTH_REPORTER_BURST_PERIOD,	/* u64 */
+
 	/* Add new attributes above here, update the spec in
-	 * Documentation/netlink/specs/devlink.yaml and re-generate
-	 * net/devlink/netlink_gen.c.
+	 * Documentation/netlink/specs/mlxdevm.yaml and re-generate
+	 * net/mlxdevm/netlink_gen.c.
 	 */
 
 	MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE = 8192,	/* u8 */
@@ -742,4 +761,4 @@ enum mlxdevm_port_fn_opstate {
 	MLXDEVM_PORT_FN_OPSTATE_ATTACHED,
 };
 
-#endif /* _UAPI_LINUX_DEVLINK_H_ */
+#endif /* _COMPAT_UAPI_LINUX_MLXDEVM_H_ */

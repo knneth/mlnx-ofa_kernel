@@ -1,0 +1,95 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+
+---
+ drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 27 ++++++++++++++++++++---
+ 1 file changed, 24 insertions(+), 3 deletions(-)
+
+--- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+@@ -72,7 +72,10 @@ static bool is_child_unique(struct ipoib
+ 	if (ppriv->pkey == priv->pkey)
+ 		return false;
+ 
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 463e51769697: added lock (no lock before) */
+ 	netdev_lock(ppriv->dev);
++#endif
+ 	list_for_each_entry(tpriv, &ppriv->child_intfs, list) {
+ 		if (tpriv->pkey == priv->pkey &&
+ 		    tpriv->child_type == IPOIB_LEGACY_CHILD) {
+@@ -80,7 +83,10 @@ static bool is_child_unique(struct ipoib
+ 			break;
+ 		}
+ 	}
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 463e51769697: added unlock (no lock before) */
+ 	netdev_unlock(ppriv->dev);
++#endif
+ 
+ 	return result;
+ }
+@@ -106,7 +112,6 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
+ 	 * always use this flow.
+ 	 */
+ 	ndev->priv_destructor = ipoib_intf_free;
+-
+ 	/*
+ 	 * Racing with unregister of the parent must be prevented by the
+ 	 * caller.
+@@ -232,13 +237,15 @@ static void ipoib_vlan_delete_task(struc
+ 	struct ipoib_vlan_delete_work *pwork =
+ 		container_of(work, struct ipoib_vlan_delete_work, work);
+ 	struct net_device *dev = pwork->dev;
++	struct ipoib_dev_priv *priv = NULL;
++	struct ipoib_dev_priv *ppriv = NULL;
+ 
+ 	rtnl_lock();
+ 
+ 	/* Unregistering tasks can race with another task or parent removal */
+ 	if (dev->reg_state == NETREG_REGISTERED) {
+-		struct ipoib_dev_priv *priv = ipoib_priv(dev);
+-		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
++		priv = ipoib_priv(dev);
++		ppriv = ipoib_priv(priv->parent);
+ 
+ 		ipoib_dbg(ppriv, "delete child vlan %s\n", dev->name);
+ 		unregister_netdevice(dev);
+@@ -268,7 +275,10 @@ int ipoib_vlan_delete(struct net_device
+ 	ppriv = ipoib_priv(pdev);
+ 
+ 	rc = -ENODEV;
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock and moved lock outside loop*/
+ 	netdev_lock(ppriv->dev);
++#endif
+ 	list_for_each_entry_safe(priv, tpriv, &ppriv->child_intfs, list) {
+ 		if (priv->pkey == pkey &&
+ 		    priv->child_type == IPOIB_LEGACY_CHILD) {
+@@ -280,7 +290,15 @@ int ipoib_vlan_delete(struct net_device
+ 				goto out;
+ 			}
+ 
++#ifndef HAVE_NETDEVICE_NETDEV_LOCK
++			/* Before commit 463e51769697: used vlan_rwsem inside loop */
++			down_write(&ppriv->vlan_rwsem);
++#endif
+ 			list_del_init(&priv->list);
++#ifndef HAVE_NETDEVICE_NETDEV_LOCK
++			/* Before commit 463e51769697: used vlan_rwsem inside loop */
++			up_write(&ppriv->vlan_rwsem);
++#endif
+ 			work->dev = priv->dev;
+ 			INIT_WORK(&work->work, ipoib_vlan_delete_task);
+ 			queue_work(ipoib_workqueue, &work->work);
+@@ -291,7 +309,10 @@ int ipoib_vlan_delete(struct net_device
+ 	}
+ 
+ out:
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
++	/* Upstream commit 463e51769697: replaced vlan_rwsem with netdev lock and moved unlock outside loop*/
+ 	netdev_unlock(ppriv->dev);
++#endif
+ 	rtnl_unlock();
+ 
+ 	return rc;

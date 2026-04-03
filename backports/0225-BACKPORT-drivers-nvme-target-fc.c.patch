@@ -1,0 +1,63 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
+
+---
+ drivers/nvme/target/fc.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+--- a/drivers/nvme/target/fc.c
++++ b/drivers/nvme/target/fc.c
+@@ -2,6 +2,7 @@
+ /*
+  * Copyright (c) 2016 Avago Technologies.  All rights reserved.
+  */
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -1158,7 +1159,7 @@ nvmet_fc_alloc_target_assoc(struct nvmet
+ 	return assoc;
+ 
+ out_ida:
+-	ida_free(&tgtport->assoc_cnt, idx);
++ 	ida_free(&tgtport->assoc_cnt, idx);
+ out_free_assoc:
+ 	kfree(assoc);
+ 	return NULL;
+@@ -1605,7 +1606,11 @@ nvmet_fc_free_pending_reqs(struct nvmet_
+ 
+ 	iod = tgtport->iod;
+ 	for (i = 0; i < NVMET_LS_CTX_COUNT; iod++, i++)
++#ifdef HAVE_CANCEL_WORK
+ 		cancel_work(&iod->work);
++#else
++		cancel_work_sync(&iod->work);
++#endif
+ 
+ 	/*
+ 	 * After this point the connection is lost and thus any pending
+@@ -2104,11 +2109,9 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+ {
+ 	struct scatterlist *sg;
+ 	unsigned int nent;
+-
+ 	sg = sgl_alloc(fod->req.transfer_len, GFP_KERNEL, &nent);
+ 	if (!sg)
+ 		goto out;
+-
+ 	fod->data_sg = sg;
+ 	fod->data_sg_cnt = nent;
+ 	fod->data_sg_cnt = fc_dma_map_sg(fod->tgtport->dev, sg, nent,
+@@ -2118,7 +2121,6 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+ 	fod->next_sg = fod->data_sg;
+ 
+ 	return 0;
+-
+ out:
+ 	return NVME_SC_INTERNAL;
+ }
+@@ -3034,3 +3036,4 @@ module_exit(nvmet_fc_exit_module);
+ 
+ MODULE_DESCRIPTION("NVMe target FC transport driver");
+ MODULE_LICENSE("GPL v2");
++

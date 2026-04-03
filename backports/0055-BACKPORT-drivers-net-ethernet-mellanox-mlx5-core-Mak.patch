@@ -1,0 +1,20 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/Makefile
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/Makefile | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
++++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
+@@ -11,6 +11,10 @@ subdir-ccflags-y += -I$(CWD)/net/mlxdevm
+ 
+ ccflags-y += -Wframe-larger-than=2048
+ 
++ifeq ($(CONFIG_IS_AZURELINUX), y)
++ccflags-y += -fno-exceptions
++endif
++
+ obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
+ 
+ #

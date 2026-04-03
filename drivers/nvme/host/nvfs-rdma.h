@@ -1,6 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2021 NVIDIA Corporation.
+ * Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #ifndef NVFS_RDMA_H
@@ -64,7 +73,6 @@ static int nvme_rdma_nvfs_map_data(struct ib_device *ibdev, struct request *rq, 
 
 		if (unlikely(*count == NVFS_CPU_REQ)) {
 			nvfs_put_ops();
-			BUG();
 			return -EIO;
 		}
 

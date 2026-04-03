@@ -1,52 +1,18 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 12 ++++++++++++
- 1 file changed, 12 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h | 1 +
+ 1 file changed, 1 insertion(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
-@@ -30,8 +30,12 @@ struct mlx5e_tc_int_port_priv {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
+@@ -4,6 +4,7 @@
+ #ifndef __MLX5_EN_POST_METER_H__
+ #define __MLX5_EN_POST_METER_H__
  
- bool mlx5e_tc_int_port_supported(const struct mlx5_eswitch *esw)
- {
-+#ifdef HAVE_FLOW_BLOCK_OFFLOAD
- 	return mlx5_eswitch_vport_match_metadata_enabled(esw) &&
- 	       MLX5_CAP_GEN(esw->dev, reg_c_preserve);
-+#else
-+	return false;
-+#endif
- }
- 
- u32 mlx5e_tc_int_port_get_metadata(struct mlx5e_tc_int_port *int_port)
-@@ -242,7 +246,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
- 		mlx5_del_flow_rules(int_port->rx_rule);
- 	mapping_remove(ctx, int_port->mapping);
- 	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(int_port);
-+#else
-+	kfree_rcu(int_port, rcu_head);
-+#endif
- 	priv->num_ports--;
- }
- 
-@@ -446,12 +454,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
- 
- 	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
- 		skb->pkt_type = PACKET_HOST;
-+#ifdef HAVE_SKB_SET_REDIRECTED
- 		skb_set_redirected(skb, true);
-+#endif
- 		*forward_tx = false;
- 	} else {
- 		skb_reset_network_header(skb);
- 		skb_push_rcsum(skb, skb->mac_len);
-+#ifdef HAVE_SKB_SET_REDIRECTED
- 		skb_set_redirected(skb, false);
-+#endif
- 		*forward_tx = true;
- 	}
- 
++
+ #define packet_color_to_reg { \
+ 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
+ 	.moffset = 0, \

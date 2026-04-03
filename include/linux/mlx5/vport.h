@@ -41,6 +41,8 @@
 	 (MLX5_CAP_GEN(mdev, port_type) == MLX5_CAP_PORT_TYPE_ETH) &&	\
 	 mlx5_core_is_pf(mdev))
 
+#define MLX5_MAX_TX_SPEED_UNIT 100
+
 enum {
 	MLX5_CAP_INLINE_MODE_L2,
 	MLX5_CAP_INLINE_MODE_VPORT_CONTEXT,
@@ -61,6 +63,10 @@ bool mlx5_vhca_icm_ctrl_supported(struct mlx5_core_dev *mdev);
 u8 mlx5_query_vport_state(struct mlx5_core_dev *mdev, u8 opmod, u16 vport);
 int mlx5_modify_vport_admin_state(struct mlx5_core_dev *mdev, u8 opmod,
 				  u16 vport, u8 other_vport, u8 state);
+int mlx5_query_vport_max_tx_speed(struct mlx5_core_dev *mdev, u8 op_mod,
+				  u16 vport, u8 other_vport, u32 *max_tx_speed);
+int mlx5_modify_vport_max_tx_speed(struct mlx5_core_dev *mdev, u8 opmod,
+				   u16 vport, u8 other_vport, u16 max_tx_speed);
 int mlx5_query_nic_vport_mac_address(struct mlx5_core_dev *mdev,
 				     u16 vport, bool other, u8 *addr);
 int mlx5_query_mac_address(struct mlx5_core_dev *mdev, u8 *addr);
@@ -114,8 +120,6 @@ int mlx5_modify_nic_vport_promisc(struct mlx5_core_dev *mdev,
 				  int promisc_uc,
 				  int promisc_mc,
 				  int promisc_all);
-int mlx5_query_nic_vport_vlans(struct mlx5_core_dev *dev, u32 vport,
-			       unsigned long *vlans);
 int mlx5_modify_nic_vport_vlans(struct mlx5_core_dev *dev,
 				u16 vlans[],
 				int list_size);

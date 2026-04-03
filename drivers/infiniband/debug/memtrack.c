@@ -174,9 +174,6 @@
 MODULE_AUTHOR("Mellanox Technologies LTD.");
 MODULE_DESCRIPTION("Memory allocations tracking");
 MODULE_LICENSE("GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 
 #define MEMTRACK_HASH_SZ ((1<<15)-19)   /* prime: http://www.utm.edu/research/primes/lists/2small/0bit.html */
 #define MAX_FILENAME_LEN 31
@@ -777,7 +774,6 @@ int is_non_trackable_alloc_func(const char *func_name)
 		/* kTLS resync dump */
 		"tx_sync_info_get",
 		"mlx5e_ktls_tx_handle_resync_dump_comp",
-		"mlxdevm_nl_rate_new_doit",
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);
@@ -809,11 +805,8 @@ EXPORT_SYMBOL(is_non_trackable_alloc_func);
 int is_non_trackable_free_func(const char *func_name)
 {
 	static const char * const str_cmp_arr[] = {
-		/* functions in mlxdevm.c uses memory allocated by nla_strdup */
-		"mlxdevm_nl_rate_new_doit",
-		"mlxdevm_nl_rate_del_doit",
-		"devm_rate_nodes_destroy",
 	};
+
 	size_t str_cmp_arr_size = sizeof(str_cmp_arr)/sizeof(char *);
 	int i;
 

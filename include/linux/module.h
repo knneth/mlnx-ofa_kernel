@@ -5,7 +5,7 @@
 
 #include_next <linux/module.h>
 
-#ifdef MODULE_IMPORT_NS
+/* MODULE_IMPORT_NS is defind on all supported OS */
 #undef MODULE_IMPORT_NS
 
 #ifdef HAVE___EXPORT_SYMBOL_NS // 5.4 only
@@ -13,9 +13,5 @@
 #else /* HAVE___EXPORT_SYMBOL_NS */
 #define MODULE_IMPORT_NS(ns) MODULE_INFO(import_ns, ns)
 #endif /* HAVE___EXPORT_SYMBOL_NS */
-
-#else
-#define MODULE_IMPORT_NS(ns)
-#endif
 
 #endif /* _COMPAT_LINUX_MODULE_H */

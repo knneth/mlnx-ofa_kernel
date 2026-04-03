@@ -1,28 +1,49 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 5 +++++
- 1 file changed, 5 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-@@ -15,6 +15,9 @@ struct mlx5e_tc_mod_hdr_acts;
- struct mlx5_rep_uplink_priv;
- struct mlx5e_tc_flow;
- struct mlx5e_priv;
-+#ifdef HAVE_BASECODE_EXTRAS
-+struct mlx5e_post_act;
-+#endif
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun.h
+@@ -8,8 +8,9 @@
+ #include <linux/mlx5/fs.h>
+ #include <net/pkt_cls.h>
+ #include <linux/netlink.h>
+-#include "en.h"
+-#include "en_rep.h"
++#include "../en.h"
++#include "../en_rep.h"
++#include "../eswitch.h"
  
- struct mlx5_fs_chains;
- struct mlx5_tc_ct_priv;
-@@ -143,6 +146,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(cons
+ #ifdef CONFIG_MLX5_ESWITCH
  
- #else /* CONFIG_MLX5_TC_CT */
- 
-+#include <net/flow_offload.h>
+@@ -36,6 +37,7 @@ struct mlx5e_tc_tunnel {
+ 			       struct mlx5e_priv *priv,
+ 			       struct mlx5e_encap_entry *e,
+ 			       struct netlink_ext_ack *extack);
 +
- static inline struct mlx5_tc_ct_priv *
- mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
- 		struct mod_hdr_tbl *mod_hdr,
+ 	int (*generate_ip_tun_hdr)(char buf[],
+ 				   __u8 *ip_proto,
+ 				   struct mlx5e_encap_entry *e);
+@@ -44,6 +46,7 @@ struct mlx5e_tc_tunnel {
+ 			       struct flow_cls_offload *f,
+ 			       void *headers_c,
+ 			       void *headers_v);
++
+ 	int (*parse_tunnel)(struct mlx5e_priv *priv,
+ 			    struct mlx5_flow_spec *spec,
+ 			    struct flow_cls_offload *f,
+@@ -117,7 +120,11 @@ bool mlx5e_tc_tun_encap_info_equal_gener
+ 
+ bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
+ 					   struct mlx5e_encap_key *b,
++#ifdef HAVE_CONVERT_BE16_TUNNEL_FLAGS_TO_BITMAPS
+ 					   u32 tun_type);
++#else
++					   __be16 tun_flags);
++#endif
+ #endif /* CONFIG_MLX5_ESWITCH */
+ 
+ #endif //__MLX5_EN_TC_TUNNEL_H__

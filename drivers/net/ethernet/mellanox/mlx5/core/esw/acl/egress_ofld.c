@@ -126,7 +126,7 @@ static int esw_acl_egress_ofld_groups_create(struct mlx5_eswitch *esw,
 	int ret = 0;
 
 	if (MLX5_CAP_GEN(esw->dev, prio_tag_required)) {
-		ret = esw_acl_egress_vlan_grp_create(esw, vport, 0, 0);
+		ret = esw_acl_egress_vlan_grp_create(esw, vport);
 		if (ret)
 			return ret;
 

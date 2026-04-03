@@ -334,8 +334,7 @@ mlx5e_dma_push_netmem(struct mlx5e_txqsq *sq, netmem_ref netmem,
 {
 	struct mlx5e_sq_dma *dma = mlx5e_dma_get(sq, sq->dma_fifo_pc++);
 
-	//Forward port -reopen in backports
-	//netmem_dma_unmap_addr_set(netmem, dma, addr, addr);
+	netmem_dma_unmap_addr_set(netmem, dma, addr, addr);
 	dma->size = size;
 	dma->type = MLX5E_DMA_MAP_PAGE;
 }
@@ -370,7 +369,8 @@ mlx5e_tx_dma_unmap(struct device *pdev, struct mlx5e_sq_dma *dma)
 		dma_unmap_single(pdev, dma->addr, dma->size, DMA_TO_DEVICE);
 		break;
 	case MLX5E_DMA_MAP_PAGE:
-		dma_unmap_page(pdev, dma->addr, dma->size, DMA_TO_DEVICE);
+		netmem_dma_unmap_page_attrs(pdev, dma->addr, dma->size,
+					    DMA_TO_DEVICE, 0);
 		break;
 	default:
 		WARN_ONCE(true, "mlx5e_tx_dma_unmap unknown DMA type!\n");

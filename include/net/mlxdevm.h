@@ -4,8 +4,8 @@
  * Copyright (c) 2016 Mellanox Technologies. All rights reserved.
  * Copyright (c) 2016 Jiri Pirko <jiri@mellanox.com>
  */
-#ifndef _NET_MLXDEVM_H_
-#define _NET_MLXDEVM_H_
+#ifndef _COMPAT_NET_MLXDEVM_H_
+#define _COMPAT_NET_MLXDEVM_H_
 
 #include "../../compat/config.h"
 
@@ -82,6 +82,9 @@ struct mlxdevm_port_pci_sf_attrs {
  * @flavour: flavour of the port
  * @split: indicates if this is split port
  * @splittable: indicates if the port can be split.
+ * @no_phys_port_name: skip automatic phys_port_name generation; for
+ *		       compatibility only, newly added driver/port instance
+ *		       should never set this.
  * @lanes: maximum number of lanes the port supports. 0 value is not passed to netlink.
  * @switch_id: if the port is part of switch, this is buffer with ID, otherwise this is NULL
  * @phys: physical port attributes
@@ -91,7 +94,8 @@ struct mlxdevm_port_pci_sf_attrs {
  */
 struct mlxdevm_port_attrs {
 	u8 split:1,
-	   splittable:1;
+	   splittable:1,
+	   no_phys_port_name:1;
 	u32 lanes;
 	enum mlxdevm_port_flavour flavour;
 	struct netdev_phys_item_id switch_id;
@@ -428,20 +432,21 @@ mlxdevm_resource_size_params_init(struct mlxdevm_resource_size_params *size_para
 typedef u64 mlxdevm_resource_occ_get_t(void *priv);
 
 #define MLXDEVM_RESOURCE_ID_PARENT_TOP 0
+
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
-
-#define DEVLINK_RESOURCE_GENERIC_NAME_PORTS "physical_ports"
-
+#define MLXDEVM_RESOURCE_GENERIC_NAME_PORTS "physical_ports"
 #endif
+
 #define __MLXDEVM_PARAM_MAX_STRING_VALUE 32
 #define __MLXDEVM_PARAM_ARRAY_MAX_DATA 64
 enum mlxdevm_param_type {
-	MLXDEVM_PARAM_TYPE_U8,
-	MLXDEVM_PARAM_TYPE_U16,
-	MLXDEVM_PARAM_TYPE_U32,
-	MLXDEVM_PARAM_TYPE_STRING,
-	MLXDEVM_PARAM_TYPE_BOOL,
-	MLXDEVM_PARAM_TYPE_ARRAY_U16,
+	MLXDEVM_PARAM_TYPE_U8 = MLXDEVM_VAR_ATTR_TYPE_U8,
+	MLXDEVM_PARAM_TYPE_U16 = MLXDEVM_VAR_ATTR_TYPE_U16,
+	MLXDEVM_PARAM_TYPE_U32 = MLXDEVM_VAR_ATTR_TYPE_U32,
+	MLXDEVM_PARAM_TYPE_U64 = MLXDEVM_VAR_ATTR_TYPE_U64,
+	MLXDEVM_PARAM_TYPE_STRING = MLXDEVM_VAR_ATTR_TYPE_STRING,
+	MLXDEVM_PARAM_TYPE_BOOL = MLXDEVM_VAR_ATTR_TYPE_FLAG,
+	MLXDEVM_PARAM_TYPE_NESTED = MLXDEVM_VAR_ATTR_TYPE_NESTED,
 };
 
 struct mlxdevm_param_array_entry {
@@ -454,6 +459,7 @@ union mlxdevm_param_value {
 	u8 vu8;
 	u16 vu16;
 	u32 vu32;
+	u64 vu64;
 	char vstr[__MLXDEVM_PARAM_MAX_STRING_VALUE];
 	bool vbool;
 	struct mlxdevm_param_array_entry vu16arr;
@@ -544,6 +550,10 @@ enum mlxdevm_param_generic_id {
 	MLXDEVM_PARAM_GENERIC_ID_ENABLE_IWARP,
 	MLXDEVM_PARAM_GENERIC_ID_IO_EQ_SIZE,
 	MLXDEVM_PARAM_GENERIC_ID_EVENT_EQ_SIZE,
+	MLXDEVM_PARAM_GENERIC_ID_ENABLE_PHC,
+	MLXDEVM_PARAM_GENERIC_ID_CLOCK_ID,
+	MLXDEVM_PARAM_GENERIC_ID_TOTAL_VFS,
+	MLXDEVM_PARAM_GENERIC_ID_NUM_DOORBELLS,
 
 	/* add new param generic ids above here*/
 	__MLXDEVM_PARAM_GENERIC_ID_MAX,
@@ -601,6 +611,18 @@ enum mlxdevm_param_generic_id {
 
 #define MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_NAME "event_eq_size"
 #define MLXDEVM_PARAM_GENERIC_EVENT_EQ_SIZE_TYPE MLXDEVM_PARAM_TYPE_U32
+
+#define MLXDEVM_PARAM_GENERIC_ENABLE_PHC_NAME "enable_phc"
+#define MLXDEVM_PARAM_GENERIC_ENABLE_PHC_TYPE MLXDEVM_PARAM_TYPE_BOOL
+
+#define MLXDEVM_PARAM_GENERIC_CLOCK_ID_NAME "clock_id"
+#define MLXDEVM_PARAM_GENERIC_CLOCK_ID_TYPE MLXDEVM_PARAM_TYPE_U64
+
+#define MLXDEVM_PARAM_GENERIC_TOTAL_VFS_NAME "total_vfs"
+#define MLXDEVM_PARAM_GENERIC_TOTAL_VFS_TYPE MLXDEVM_PARAM_TYPE_U32
+
+#define MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_NAME "num_doorbells"
+#define MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_TYPE MLXDEVM_PARAM_TYPE_U32
 
 #define MLXDEVM_PARAM_GENERIC(_id, _cmodes, _get, _set, _validate)	\
 {									\
@@ -758,6 +780,10 @@ enum devlink_health_reporter_state {
  *        if priv_ctx is NULL, run a full dump
  * @diagnose: callback to diagnose the current status
  * @test: callback to trigger a test event
+ * @default_graceful_period: default min time (in msec)
+ *	between recovery attempts
+ * @default_burst_period: default time (in msec) for
+ *	error recoveries before starting the grace period
  */
 
 struct devlink_health_reporter_ops {
@@ -772,6 +798,8 @@ struct devlink_health_reporter_ops {
 			struct netlink_ext_ack *extack);
 	int (*test)(struct devlink_health_reporter *reporter,
 		    struct netlink_ext_ack *extack);
+	u64 default_graceful_period;
+	u64 default_burst_period;
 };
 
 /**
@@ -1618,64 +1646,64 @@ void devlink_free(struct devlink *devlink);
  * @port_type_set: Callback used to set a type of a port.
  * @port_del: Callback used to delete selected port along with related function.
  *	      Devlink core calls this upon user request to delete
- *	      a port previously created by devlink_ops->port_new().
+ *	      a port previously created by mlxdevm_ops->port_new().
  * @port_fn_hw_addr_get: Callback used to set port function's hardware address.
  *			 Should be used by device drivers to report
  *			 the hardware address of a function managed
- *			 by the devlink port.
+ *			 by the mlxdevm port.
  * @port_fn_hw_addr_set: Callback used to set port function's hardware address.
  *			 Should be used by device drivers to set the hardware
- *			 address of a function managed by the devlink port.
+ *			 address of a function managed by the mlxdevm port.
  * @port_fn_roce_get: Callback used to get port function's RoCE capability.
  *		      Should be used by device drivers to report
  *		      the current state of RoCE capability of a function
- *		      managed by the devlink port.
+ *		      managed by the mlxdevm port.
  * @port_fn_roce_set: Callback used to set port function's RoCE capability.
  *		      Should be used by device drivers to enable/disable
  *		      RoCE capability of a function managed
- *		      by the devlink port.
+ *		      by the mlxdevm port.
  * @port_fn_migratable_get: Callback used to get port function's migratable
  *			    capability. Should be used by device drivers
  *			    to report the current state of migratable capability
- *			    of a function managed by the devlink port.
+ *			    of a function managed by the mlxdevm port.
  * @port_fn_migratable_set: Callback used to set port function's migratable
  *			    capability. Should be used by device drivers
  *			    to enable/disable migratable capability of
- *			    a function managed by the devlink port.
+ *			    a function managed by the mlxdevm port.
  * @port_fn_state_get: Callback used to get port function's state.
  *		       Should be used by device drivers to report
  *		       the current admin and operational state of a
- *		       function managed by the devlink port.
+ *		       function managed by the mlxdevm port.
  * @port_fn_state_set: Callback used to get port function's state.
  *		       Should be used by device drivers set
  *		       the admin state of a function managed
- *		       by the devlink port.
+ *		       by the mlxdevm port.
  * @port_fn_ipsec_crypto_get: Callback used to get port function's ipsec_crypto
  *			      capability. Should be used by device drivers
  *			      to report the current state of ipsec_crypto
- *			      capability of a function managed by the devlink
+ *			      capability of a function managed by the mlxdevm
  *			      port.
  * @port_fn_ipsec_crypto_set: Callback used to set port function's ipsec_crypto
  *			      capability. Should be used by device drivers to
  *			      enable/disable ipsec_crypto capability of a
- *			      function managed by the devlink port.
+ *			      function managed by the mlxdevm port.
  * @port_fn_ipsec_packet_get: Callback used to get port function's ipsec_packet
  *			      capability. Should be used by device drivers
  *			      to report the current state of ipsec_packet
- *			      capability of a function managed by the devlink
+ *			      capability of a function managed by the mlxdevm
  *			      port.
  * @port_fn_ipsec_packet_set: Callback used to set port function's ipsec_packet
  *			      capability. Should be used by device drivers to
  *			      enable/disable ipsec_packet capability of a
- *			      function managed by the devlink port.
+ *			      function managed by the mlxdevm port.
  * @port_fn_max_io_eqs_get: Callback used to get port function's maximum number
  *			    of event queues. Should be used by device drivers to
  *			    report the maximum event queues of a function
- *			    managed by the devlink port.
+ *			    managed by the mlxdevm port.
  * @port_fn_max_io_eqs_set: Callback used to set port function's maximum number
  *			    of event queues. Should be used by device drivers to
  *			    configure maximum number of event queues
- *			    of a function managed by the devlink port.
+ *			    of a function managed by the mlxdevm port.
  *@port_fn_trust_get: Callback used to get port funciton's trust state.
  *		      Should be used by device driver to report the trust mode
  *		      of a function managed by the mlxdevm port.
@@ -1793,7 +1821,7 @@ void devlink_port_type_ib_set(struct devlink_port *devlink_port,
 #endif
 void mlxdevm_port_type_clear(struct mlxdevm_port *mlxdevm_port);
 void mlxdevm_port_attrs_set(struct mlxdevm_port *mlxdevm_port,
-			    struct mlxdevm_port_attrs *mlxdevm_port_attrs);
+			    const struct mlxdevm_port_attrs *attrs);
 void mlxdevm_port_attrs_pci_pf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
 				   u16 pf, bool external);
 void mlxdevm_port_attrs_pci_vf_set(struct mlxdevm_port *mlxdevm_port, u32 controller,
@@ -1987,22 +2015,22 @@ void devlink_fmsg_binary_pair_put(struct devlink_fmsg *fmsg, const char *name,
 struct devlink_health_reporter *
 devl_port_health_reporter_create(struct devlink_port *port,
 				 const struct devlink_health_reporter_ops *ops,
-				 u64 graceful_period, void *priv);
+				 void *priv);
 
 struct devlink_health_reporter *
 devlink_port_health_reporter_create(struct devlink_port *port,
 				    const struct devlink_health_reporter_ops *ops,
-				    u64 graceful_period, void *priv);
+				    void *priv);
 
 struct devlink_health_reporter *
 devl_health_reporter_create(struct devlink *devlink,
 			    const struct devlink_health_reporter_ops *ops,
-			    u64 graceful_period, void *priv);
+			    void *priv);
 
 struct devlink_health_reporter *
 devlink_health_reporter_create(struct devlink *devlink,
 			       const struct devlink_health_reporter_ops *ops,
-			       u64 graceful_period, void *priv);
+			       void *priv);
 
 void
 devl_health_reporter_destroy(struct devlink_health_reporter *reporter);
@@ -2099,4 +2127,4 @@ size_t devlink_nl_port_handle_size(struct devlink_port *devlink_port);
 void devlink_fmsg_dump_skb(struct devlink_fmsg *fmsg, const struct sk_buff *skb);
 #endif
 
-#endif /* _NET_DEVLINK_H_ */
+#endif /* _COMPAT_NET_MLXDEVM_H_ */

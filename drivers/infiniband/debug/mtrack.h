@@ -18,17 +18,14 @@
 #include <linux/export.h>
 #include <linux/module.h>
 #include <linux/pci.h>		/* for pci_vpd_alloc */
+#include <net/netlink.h>	/* for nla_strdup */
 
 #define MEMTRACK_ERROR_INJECTION_MESSAGE(module, file, line, call_func, func) ({ \
 	printk(KERN_ERR "%s::%s::%s failure injected at %s:%d\n", module->name, call_func, func, file, line);\
 	dump_stack();								\
 })
 
-#ifdef ZERO_OR_NULL_PTR
 #define IS_VALID_ADDR(addr) (!ZERO_OR_NULL_PTR(addr))
-#else
-#define IS_VALID_ADDR(addr) (addr)
-#endif
 
 static inline void *mlx5_mtrack_ioremap(phys_addr_t phys_addr, size_t size)
 {
@@ -380,15 +377,16 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 })
 
 #undef kvzalloc_node
-#define kvzalloc_node(sz, flgs, node) ({						\
+#define kvzalloc_node(sz, flgs, node) ({					\
 	void *__memtrack_addr = NULL;						\
+	size_t __memtrack_size = sz;						\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kvzalloc_node", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kvzalloc_node"); \
 	else									\
-		__memtrack_addr = mlx5_mtrack_kvzalloc_node(sz, flgs, node);	\
+		__memtrack_addr = mlx5_mtrack_kvzalloc_node(__memtrack_size, flgs, node);	\
 	if (IS_VALID_ADDR(__memtrack_addr)) {					\
-		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+		memtrack_alloc(MEMTRACK_KVMALLOC, 0UL, (unsigned long)(__memtrack_addr), __memtrack_size, 0UL, 0, __FILE__, __LINE__, flgs); \
 	}									\
 	__memtrack_addr;							\
 })
@@ -450,6 +448,34 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 	__memtrack_addr;							\
 })
 #endif
+
+#define kstrndup(src, max, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+	size_t sz = strlen(src) + 1;						\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kstrndup", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kstrndup");\
+	else									\
+		__memtrack_addr = kstrndup(src, max, flgs);			\
+	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), sz, 0UL, 0, __FILE__, __LINE__, flgs); \
+	}									\
+	__memtrack_addr;							\
+})
+
+#define nla_strdup(nla, flgs) ({						\
+	void *__memtrack_addr = NULL;						\
+	size_t __memtrack_size = nla_len(nla) + 1;				\
+										\
+	if (memtrack_inject_error(THIS_MODULE, __FILE__, "nla_strdup", __func__, __LINE__)) \
+		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "nla_strdup"); \
+	else									\
+		__memtrack_addr = nla_strdup(nla, flgs);			\
+	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), __memtrack_size, 0UL, 0, __FILE__, __LINE__, flgs); \
+	}									\
+	__memtrack_addr;							\
+})
 
 #define kfree(addr) ({								\
 	void *__memtrack_addr = (void *)addr;					\

@@ -1,0 +1,30 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
+@@ -7,8 +7,9 @@
+ #include <net/geneve.h>
+ #include <linux/mlx5/driver.h>
+ 
++#ifdef HAVE_BASECODE_EXTRAS
+ struct mlx5_geneve;
+-
++#endif
+ #ifdef CONFIG_MLX5_ESWITCH
+ 
+ struct mlx5_geneve *mlx5_geneve_create(struct mlx5_core_dev *mdev);
+@@ -18,7 +19,7 @@ int mlx5_geneve_tlv_option_add(struct ml
+ void mlx5_geneve_tlv_option_del(struct mlx5_geneve *geneve);
+ 
+ #else /* CONFIG_MLX5_ESWITCH */
+-
++struct geneve_opt;
+ static inline struct mlx5_geneve
+ *mlx5_geneve_create(struct mlx5_core_dev *mdev) { return NULL; }
+ static inline void

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
 /*
  * Copyright (c) 2014-2020,  Mellanox Technologies. All rights reserved.
+ * Copyright (C) 2020-2021, NVIDIA CORPORATION & AFFILIATES. All Rights Reserved.
  */
 
 #include <rdma/ib_verbs.h>
@@ -13,18 +14,6 @@ static LIST_HEAD(peer_memory_list);
 #define PEER_NO_INVALIDATION_ID U32_MAX
 
 static int ib_invalidate_peer_memory(void *reg_handle, u64 core_context);
-
-static void ib_peer_memory_client_release(struct kobject *kobj)
-{
-	struct ib_peer_memory_client *ib_peer_client =
-		container_of(kobj, struct ib_peer_memory_client, kobj);
-
-	kfree(ib_peer_client);
-}
-
-static struct kobj_type peer_mem_type = {
-	.release = ib_peer_memory_client_release,
-};
 
 static int ib_memory_peer_check_mandatory(const struct peer_memory_client
 						     *peer_client)
@@ -66,7 +55,6 @@ ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
 	ib_peer_client = kzalloc(sizeof(*ib_peer_client), GFP_KERNEL);
 	if (!ib_peer_client)
 		return NULL;
-	kobject_init(&ib_peer_client->kobj, &peer_mem_type);
 	refcount_set(&ib_peer_client->usecnt, 1);
 	init_completion(&ib_peer_client->usecnt_zero);
 	ib_peer_client->peer_mem = peer_client;
@@ -104,8 +92,6 @@ void ib_unregister_peer_memory_client(void *reg_handle)
 	if (refcount_dec_and_test(&ib_peer_client->usecnt))
 		complete(&ib_peer_client->usecnt_zero);
 	wait_for_completion(&ib_peer_client->usecnt_zero);
-
-	kobject_put(&ib_peer_client->kobj);
 }
 EXPORT_SYMBOL(ib_unregister_peer_memory_client);
 
@@ -454,10 +440,10 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
 	if (ret)
 		goto err_xa;
 
-	ret = ib_peer_client->peer_mem->dma_map(&umem_p->umem.sgt_append.sgt,
-						peer_client_context,
-						umem_p->umem.ibdev->dma_device,
-						0, &umem_p->umem.sgt_append.sgt.nents);
+	ret = ib_peer_client->peer_mem->dma_map(
+		&umem_p->umem.sgt_append.sgt, peer_client_context,
+		umem_p->umem.ibdev->dma_device, 0,
+		&umem_p->umem.sgt_append.sgt.nents);
 	if (ret)
 		goto err_pages;
 
@@ -467,7 +453,8 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
 		fix_peer_sgls(umem_p, peer_page_size);
 
 	umem_p->mapped_state = UMEM_PEER_MAPPED;
-	atomic64_add(umem_p->umem.sgt_append.sgt.nents, &ib_peer_client->stats.num_reg_pages);
+	atomic64_add(umem_p->umem.sgt_append.sgt.nents,
+		     &ib_peer_client->stats.num_reg_pages);
 	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
 	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
 

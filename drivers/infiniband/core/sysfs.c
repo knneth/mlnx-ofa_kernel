@@ -263,19 +263,6 @@ static ssize_t sm_lid_show(struct ib_device *ibdev, u32 port_num,
 	return sysfs_emit(buf, "0x%x\n", attr.sm_lid);
 }
 
-static ssize_t has_smi_show(struct ib_device *ibdev, u32 port_num,
-			    struct ib_port_attribute *unused, char *buf)
-{
-	struct ib_port_attr attr;
-	ssize_t ret;
-
-	ret = ib_query_port(ibdev, port_num, &attr);
-	if (ret)
-		return ret;
-
-	return sprintf(buf, "%d\n", attr.has_smi);
-}
-
 static ssize_t sm_sl_show(struct ib_device *ibdev, u32 port_num,
 			  struct ib_port_attribute *unused, char *buf)
 {
@@ -305,62 +292,22 @@ static ssize_t cap_mask_show(struct ib_device *ibdev, u32 port_num,
 static ssize_t rate_show(struct ib_device *ibdev, u32 port_num,
 			 struct ib_port_attribute *unused, char *buf)
 {
+	struct ib_port_speed_info speed_info;
 	struct ib_port_attr attr;
-	char *speed = "";
-	int rate;		/* in deci-Gb/sec */
 	ssize_t ret;
 
 	ret = ib_query_port(ibdev, port_num, &attr);
 	if (ret)
 		return ret;
 
-	switch (attr.active_speed) {
-	case IB_SPEED_DDR:
-		speed = " DDR";
-		rate = 50;
-		break;
-	case IB_SPEED_QDR:
-		speed = " QDR";
-		rate = 100;
-		break;
-	case IB_SPEED_FDR10:
-		speed = " FDR10";
-		rate = 100;
-		break;
-	case IB_SPEED_FDR:
-		speed = " FDR";
-		rate = 140;
-		break;
-	case IB_SPEED_EDR:
-		speed = " EDR";
-		rate = 250;
-		break;
-	case IB_SPEED_HDR:
-		speed = " HDR";
-		rate = 500;
-		break;
-	case IB_SPEED_NDR:
-		speed = " NDR";
-		rate = 1000;
-		break;
-	case IB_SPEED_XDR:
-		speed = " XDR";
-		rate = 2000;
-		break;
-	case IB_SPEED_SDR:
-	default:		/* default to SDR for invalid rates */
-		speed = " SDR";
-		rate = 25;
-		break;
-	}
+	ret = ib_port_attr_to_speed_info(&attr, &speed_info);
+	if (ret)
+		return ret;
 
-	rate *= ib_width_enum_to_int(attr.active_width);
-	if (rate < 0)
-		return -EINVAL;
-
-	return sysfs_emit(buf, "%d%s Gb/sec (%dX%s)\n", rate / 10,
-			  rate % 10 ? ".5" : "",
-			  ib_width_enum_to_int(attr.active_width), speed);
+	return sysfs_emit(buf, "%d%s Gb/sec (%dX%s)\n", speed_info.rate / 10,
+			  speed_info.rate % 10 ? ".5" : "",
+			  ib_width_enum_to_int(attr.active_width),
+			  speed_info.str);
 }
 
 static const char *phys_state_to_str(enum ib_port_phys_state phys_state)
@@ -425,14 +372,12 @@ static IB_PORT_ATTR_RO(cap_mask);
 static IB_PORT_ATTR_RO(rate);
 static IB_PORT_ATTR_RO(phys_state);
 static IB_PORT_ATTR_RO(link_layer);
-static IB_PORT_ATTR_RO(has_smi);
 
 static struct attribute *port_default_attrs[] = {
 	&ib_port_attr_state.attr,
 	&ib_port_attr_lid.attr,
 	&ib_port_attr_lid_mask_count.attr,
 	&ib_port_attr_sm_lid.attr,
-	&ib_port_attr_has_smi.attr,
 	&ib_port_attr_sm_sl.attr,
 	&ib_port_attr_cap_mask.attr,
 	&ib_port_attr_rate.attr,

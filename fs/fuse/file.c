@@ -485,7 +485,7 @@ static inline bool fuse_folio_is_writeback(struct inode *inode,
 					   struct folio *folio)
 {
 	pgoff_t last = folio_next_index(folio) - 1;
-	return fuse_range_is_writeback(inode, folio_index(folio), last);
+	return fuse_range_is_writeback(inode, folio->index, last);
 }
 
 static void fuse_wait_on_folio_writeback(struct inode *inode,
@@ -1855,8 +1855,6 @@ static void fuse_writepage_finish_stat(struct inode *inode, struct folio *folio)
 {
 	struct backing_dev_info *bdi = inode_to_bdi(inode);
 
-	dec_wb_stat(&bdi->wb, WB_WRITEBACK);
-	node_stat_sub_folio(folio, NR_WRITEBACK_TEMP);
 	wb_writeout_inc(&bdi->wb);
 }
 
@@ -2080,17 +2078,6 @@ int fuse_write_inode(struct inode *inode, struct writeback_control *wbc)
 	struct fuse_file *ff;
 	int err;
 
-	/*
-	 * Inode is always written before the last reference is dropped and
-	 * hence this should not be reached from reclaim.
-	 *
-	 * Writing back the inode from reclaim can deadlock if the request
-	 * processing itself needs an allocation.  Allocations triggering
-	 * reclaim while serving a request can't be prevented, because it can
-	 * involve any number of unrelated userspace processes.
-	 */
-	WARN_ON(wbc->for_reclaim);
-
 	ff = __fuse_write_file_get(fi);
 	err = fuse_flush_times(inode, ff);
 	if (ff)
@@ -2135,7 +2122,6 @@ static void fuse_writepage_add_to_bucket(struct fuse_conn *fc,
 static void fuse_writepage_args_page_fill(struct fuse_writepage_args *wpa, struct folio *folio,
 					  struct folio *tmp_folio, uint32_t folio_index)
 {
-	struct inode *inode = folio->mapping->host;
 	struct fuse_args_pages *ap = &wpa->ia.ap;
 
 	folio_copy(tmp_folio, folio);
@@ -2144,8 +2130,6 @@ static void fuse_writepage_args_page_fill(struct fuse_writepage_args *wpa, struc
 	ap->descs[folio_index].offset = 0;
 	ap->descs[folio_index].length = PAGE_SIZE;
 
-	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
-	node_stat_add_folio(tmp_folio, NR_WRITEBACK_TEMP);
 }
 
 static struct fuse_writepage_args *fuse_writepage_args_setup(struct folio *folio,
@@ -2351,7 +2335,7 @@ static bool fuse_writepage_need_send(struct fuse_conn *fc, struct folio *folio,
 		return true;
 
 	/* Discontinuity */
-	if (data->orig_folios[ap->num_folios - 1]->index + 1 != folio_index(folio))
+	if (data->orig_folios[ap->num_folios - 1]->index + 1 != folio->index)
 		return true;
 
 	/* Need to grow the pages array?  If so, did the expansion fail? */
@@ -2439,6 +2423,37 @@ out_unlock:
 	return err;
 }
 
+/**
+ * write_cache_pages - walk the list of dirty pages of the given address space and write all of them.
+ * @mapping: address space structure to write
+ * @wbc: subtract the number of written pages from *@wbc->nr_to_write
+ * @writepage: function called for each page
+ * @data: data passed to writepage function
+ *
+ * Return: %0 on success, negative error code otherwise
+ *
+ * Note: please use writeback_iter() instead.
+ */
+typedef int (*writepage_t)(struct folio *folio, struct writeback_control *wbc,
+                               void *data);
+static int write_cache_pages(struct address_space *mapping,
+			     struct writeback_control *wbc, writepage_t writepage,
+			     void *data)
+{
+       struct folio *folio = NULL;
+       int error;
+
+       while ((folio = writeback_iter(mapping, wbc, folio, &error))) {
+               error = writepage(folio, wbc, data);
+               if (error == AOP_WRITEPAGE_ACTIVATE) {
+                       folio_unlock(folio);
+                       error = 0;
+               }
+       }
+
+       return error;
+}
+
 static int fuse_writepages(struct address_space *mapping,
 			   struct writeback_control *wbc)
 {
@@ -2483,10 +2498,12 @@ out:
  * It's worthy to make sure that space is reserved on disk for the write,
  * but how to implement it without killing performance need more thinking.
  */
-static int fuse_write_begin(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
+static int fuse_write_begin(const struct kiocb *iocb,
+			    struct address_space *mapping,
+			    loff_t pos, unsigned len, struct folio **foliop, void **fsdata)
 {
 	pgoff_t index = pos >> PAGE_SHIFT;
+	struct file *file = iocb->ki_filp;
 	struct fuse_conn *fc = get_fuse_conn(file_inode(file));
 	struct folio *folio;
 	loff_t fsize;
@@ -2528,9 +2545,10 @@ error:
 	return err;
 }
 
-static int fuse_write_end(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned len, unsigned copied,
-		struct folio *folio, void *fsdata)
+static int fuse_write_end(const struct kiocb *iocb,
+			  struct address_space *mapping,
+			  loff_t pos, unsigned len, unsigned copied,
+			  struct folio *folio, void *fsdata)
 {
 	struct inode *inode = folio->mapping->host;
 

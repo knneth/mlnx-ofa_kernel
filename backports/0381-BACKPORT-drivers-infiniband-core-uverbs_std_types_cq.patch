@@ -1,0 +1,56 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_std_types_cq.c
+
+Change-Id: I85f4ce1ffce0d4b06d92e2b61ed497035eaee1a4
+---
+ drivers/infiniband/core/uverbs_std_types_cq.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/core/uverbs_std_types_cq.c
++++ b/drivers/infiniband/core/uverbs_std_types_cq.c
+@@ -66,16 +66,18 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+ 		typeof(*obj), uevent.uobject);
+ 	struct ib_uverbs_completion_event_file *ev_file = NULL;
+ 	struct ib_device *ib_dev = attrs->context->device;
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	struct ib_umem_dmabuf *umem_dmabuf;
++	u64 buffer_offset;
++	int buffer_fd;
++#endif
+ 	struct ib_cq_init_attr attr = {};
+ 	struct ib_uobject *ev_file_uobj;
+ 	struct ib_umem *umem = NULL;
+ 	u64 buffer_length;
+-	u64 buffer_offset;
+ 	struct ib_cq *cq;
+ 	u64 user_handle;
+ 	u64 buffer_va;
+-	int buffer_fd;
+ 	int ret;
+ 
+ 	if ((!ib_dev->ops.create_cq && !ib_dev->ops.create_cq_umem) || !ib_dev->ops.destroy_cq)
+@@ -135,11 +137,16 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+ 			goto err_event_file;
+ 		}
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 		umem = ib_umem_get(ib_dev, buffer_va, buffer_length, IB_ACCESS_LOCAL_WRITE);
++#else
++		umem = ib_umem_get(&attrs->driver_udata, buffer_va, buffer_length, IB_ACCESS_LOCAL_WRITE);
++#endif
+ 		if (IS_ERR(umem)) {
+ 			ret = PTR_ERR(umem);
+ 			goto err_event_file;
+ 		}
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	} else if (uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_FD)) {
+ 
+ 		ret = uverbs_get_raw_fd(&buffer_fd, attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_FD);
+@@ -167,6 +174,7 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+ 			goto err_event_file;
+ 		}
+ 		umem = &umem_dmabuf->umem;
++#endif
+ 	} else if (uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_OFFSET) ||
+ 		   uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_LENGTH) ||
+ 		   !ib_dev->ops.create_cq) {

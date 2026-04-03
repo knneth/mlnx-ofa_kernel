@@ -49,6 +49,7 @@
 #include <linux/jhash.h>
 #include <net/arp.h>
 #include <net/addrconf.h>
+#include <net/netdev_lock.h>
 #include <net/pkt_sched.h>
 #include <linux/inetdevice.h>
 #include <rdma/ib_cache.h>
@@ -139,6 +140,52 @@ static int ipoib_netdev_event(struct notifier_block *this,
 }
 #endif
 
+struct ipoib_ifupdown_work {
+	struct work_struct work;
+	struct net_device *dev;
+	netdevice_tracker dev_tracker;
+	bool up;
+};
+
+static void ipoib_ifupdown_task(struct work_struct *work)
+{
+	struct ipoib_ifupdown_work *pwork =
+		container_of(work, struct ipoib_ifupdown_work, work);
+	struct net_device *dev = pwork->dev;
+	unsigned int flags;
+
+	rtnl_lock();
+	flags = dev->flags;
+	if (pwork->up)
+		flags |= IFF_UP;
+	else
+		flags &= ~IFF_UP;
+
+	if (dev->flags != flags)
+		dev_change_flags(dev, flags, NULL);
+	rtnl_unlock();
+	netdev_put(dev, &pwork->dev_tracker);
+	kfree(pwork);
+}
+
+static void ipoib_schedule_ifupdown_task(struct net_device *dev, bool up)
+{
+	struct ipoib_ifupdown_work *work;
+
+	if ((up && (dev->flags & IFF_UP)) ||
+	    (!up && !(dev->flags & IFF_UP)))
+		return;
+
+	work = kmalloc(sizeof(*work), GFP_KERNEL);
+	if (!work)
+		return;
+	work->dev = dev;
+	netdev_hold(dev, &work->dev_tracker, GFP_KERNEL);
+	work->up = up;
+	INIT_WORK(&work->work, ipoib_ifupdown_task);
+	queue_work(ipoib_workqueue, &work->work);
+}
+
 int ipoib_open(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
@@ -161,17 +208,10 @@ int ipoib_open(struct net_device *dev)
 		struct ipoib_dev_priv *cpriv;
 
 		/* Bring up any child interfaces too */
-		down_read(&priv->vlan_rwsem);
-		list_for_each_entry(cpriv, &priv->child_intfs, list) {
-			int flags;
-
-			flags = cpriv->dev->flags;
-			if (flags & IFF_UP)
-				continue;
-
-			dev_change_flags(cpriv->dev, flags | IFF_UP, NULL);
-		}
-		up_read(&priv->vlan_rwsem);
+		netdev_lock_ops_to_full(dev);
+		list_for_each_entry(cpriv, &priv->child_intfs, list)
+			ipoib_schedule_ifupdown_task(cpriv->dev, true);
+		netdev_unlock_full_to_ops(dev);
 	} else if (priv->parent) {
 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
 
@@ -206,17 +246,10 @@ static int ipoib_stop(struct net_device *dev)
 		struct ipoib_dev_priv *cpriv;
 
 		/* Bring down any child interfaces too */
-		down_read(&priv->vlan_rwsem);
-		list_for_each_entry(cpriv, &priv->child_intfs, list) {
-			int flags;
-
-			flags = cpriv->dev->flags;
-			if (!(flags & IFF_UP))
-				continue;
-
-			dev_change_flags(cpriv->dev, flags & ~IFF_UP, NULL);
-		}
-		up_read(&priv->vlan_rwsem);
+		netdev_lock_ops_to_full(dev);
+		list_for_each_entry(cpriv, &priv->child_intfs, list)
+			ipoib_schedule_ifupdown_task(cpriv->dev, false);
+		netdev_unlock_full_to_ops(dev);
 	}
 
 	return 0;
@@ -434,17 +467,20 @@ static int ipoib_match_gid_pkey_addr(struct ipoib_dev_priv *priv,
 		}
 	}
 
+	if (test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags))
+		return matches;
+
 	/* Check child interfaces */
-	down_read_nested(&priv->vlan_rwsem, nesting);
+	netdev_lock(priv->dev);
 	list_for_each_entry(child_priv, &priv->child_intfs, list) {
 		matches += ipoib_match_gid_pkey_addr(child_priv, gid,
-						    pkey_index, addr,
-						    nesting + 1,
-						    found_net_dev);
+						     pkey_index, addr,
+						     nesting + 1,
+						     found_net_dev);
 		if (matches > 1)
 			break;
 	}
-	up_read(&priv->vlan_rwsem);
+	netdev_unlock(priv->dev);
 
 	return matches;
 }
@@ -542,9 +578,11 @@ int ipoib_set_mode(struct net_device *dev, const char *buf)
 
 	if (!strcmp(buf, "datagram\n")) {
 		clear_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
+		netdev_lock_ops(dev);
 		netdev_update_features(dev);
-		dev_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
+		netif_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
 		netif_set_real_num_tx_queues(dev, dev->num_tx_queues);
+		netdev_unlock_ops(dev);
 		rtnl_unlock();
 		ipoib_flush_paths(dev);
 		return (!rtnl_trylock()) ? -EBUSY : 0;
@@ -1293,6 +1331,7 @@ void ipoib_ib_tx_timeout_work(struct work_struct *work)
 	int err;
 
 	rtnl_lock();
+	netdev_lock_ops(priv->dev);
 
 	if (!test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))
 		goto unlock;
@@ -1307,6 +1346,7 @@ void ipoib_ib_tx_timeout_work(struct work_struct *work)
 
 	netif_tx_wake_all_queues(priv->dev);
 unlock:
+	netdev_unlock_ops(priv->dev);
 	rtnl_unlock();
 
 }
@@ -2080,9 +2120,9 @@ static int ipoib_ndo_init(struct net_device *ndev)
 
 		dev_hold(priv->parent);
 
-		down_write(&ppriv->vlan_rwsem);
+		netdev_lock(priv->parent);
 		list_add_tail(&priv->list, &ppriv->child_intfs);
-		up_write(&ppriv->vlan_rwsem);
+		netdev_unlock(priv->parent);
 	}
 
 	return 0;
@@ -2091,8 +2131,6 @@ static int ipoib_ndo_init(struct net_device *ndev)
 static void ipoib_ndo_uninit(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
-
-	ASSERT_RTNL();
 
 	/*
 	 * ipoib_remove_one guarantees the children are removed before the
@@ -2103,9 +2141,9 @@ static void ipoib_ndo_uninit(struct net_device *dev)
 	if (priv->parent) {
 		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
 
-		down_write(&ppriv->vlan_rwsem);
+		netdev_lock(ppriv->dev);
 		list_del(&priv->list);
-		up_write(&ppriv->vlan_rwsem);
+		netdev_unlock(ppriv->dev);
 	}
 
 	ipoib_neigh_hash_uninit(dev);
@@ -2271,7 +2309,6 @@ static void ipoib_build_priv(struct net_device *dev)
 
 	priv->dev = dev;
 	spin_lock_init(&priv->lock);
-	init_rwsem(&priv->vlan_rwsem);
 	mutex_init(&priv->mcast_mutex);
 
 	INIT_LIST_HEAD(&priv->path_list);
@@ -2479,10 +2516,10 @@ static void set_base_guid(struct ipoib_dev_priv *priv, union ib_gid *gid)
 	netif_addr_unlock_bh(netdev);
 
 	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags)) {
-		down_read(&priv->vlan_rwsem);
+		netdev_lock_ops_to_full(priv->dev);
 		list_for_each_entry(child_priv, &priv->child_intfs, list)
 			set_base_guid(child_priv, gid);
-		up_read(&priv->vlan_rwsem);
+		netdev_unlock_full_to_ops(priv->dev);
 	}
 }
 
@@ -2522,6 +2559,14 @@ static int ipoib_set_mac(struct net_device *dev, void *addr)
 
 	set_base_guid(priv, (union ib_gid *)(ss->__data + 4));
 
+	if (!test_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags)) {
+		struct ipoib_dev_priv *cpriv;
+
+		netdev_lock_ops_to_full(dev);
+		list_for_each_entry(cpriv, &priv->child_intfs, list)
+			queue_work(ipoib_workqueue, &cpriv->flush_light);
+		netdev_unlock_full_to_ops(dev);
+	}
 	queue_work(ipoib_workqueue, &priv->flush_light);
 
 	return 0;
@@ -2650,7 +2695,7 @@ static struct net_device *ipoib_add_port(const char *format,
 	ib_register_event_handler(&priv->event_handler);
 
 	/* call event handler to ensure pkey in sync */
-	queue_work(ipoib_workqueue, &priv->flush_heavy);
+	ipoib_queue_work(priv, IPOIB_FLUSH_HEAVY);
 
 	ndev->rtnl_link_ops = ipoib_get_link_ops();
 
@@ -2752,9 +2797,11 @@ static void ipoib_remove_one(struct ib_device *device, void *client_data)
 
 		rtnl_lock();
 
+		netdev_lock(priv->dev);
 		list_for_each_entry_safe(cpriv, tcpriv, &priv->child_intfs,
 					 list)
 			unregister_netdevice_queue(cpriv->dev, &head);
+		netdev_unlock(priv->dev);
 		unregister_netdevice_queue(priv->dev, &head);
 		unregister_netdevice_many(&head);
 

@@ -6,32 +6,46 @@
 #include_next <net/netlink.h>
 #include <net/genetlink.h>
 
-#ifndef nla_for_each_nested_type
+#ifndef HAVE_NLA_FOR_EACH_NESTED_TYPE
 #define nla_for_each_nested_type(pos, type, nla, rem) \
 		nla_for_each_nested(pos, nla, rem) \
 				if (nla_type(pos) == type)
 #endif
 
 #ifndef HAVE_NLA_POLICY_NESTED
+
+#undef NLA_POLICY_RANGE
 #define NLA_POLICY_RANGE(tp, _min, _max) {		\
 		.type = NLA_ENSURE_INT_TYPE(tp),		\
 }
 
+#undef _NLA_POLICY_NESTED
 #define _NLA_POLICY_NESTED(maxattr, policy) \
 		{ .type = NLA_NESTED, .validation_data = policy, .len = maxattr }
+
+#undef _NLA_POLICY_NESTED_ARRAY
 #define _NLA_POLICY_NESTED_ARRAY(maxattr, policy) \
 		{ .type = NLA_NESTED_ARRAY, .validation_data = policy, .len = maxattr }
+
+#undef NLA_POLICY_NESTED
 #define NLA_POLICY_NESTED(policy) \
 		_NLA_POLICY_NESTED(ARRAY_SIZE(policy) - 1, policy)
+
+#undef NLA_POLICY_NESTED_ARRAY
 #define NLA_POLICY_NESTED_ARRAY(policy) \
 		_NLA_POLICY_NESTED_ARRAY(ARRAY_SIZE(policy) - 1, policy)
 
+#undef __NLA_ENSURE
 #define __NLA_ENSURE(condition) BUILD_BUG_ON_ZERO(!(condition))
+
+#undef NLA_ENSURE_INT_TYPE
 #define NLA_ENSURE_INT_TYPE(tp)				\
 	(__NLA_ENSURE(tp == NLA_S8 || tp == NLA_U8 ||	\
 		      tp == NLA_S16 || tp == NLA_U16 ||	\
 		      tp == NLA_S32 || tp == NLA_U32 ||	\
 		      tp == NLA_S64 || tp == NLA_U64) + tp)
+
+#undef NLA_POLICY_MAX
 #define NLA_POLICY_MAX(tp, _max) {			\
 	.type = NLA_ENSURE_INT_TYPE(tp),		\
 }

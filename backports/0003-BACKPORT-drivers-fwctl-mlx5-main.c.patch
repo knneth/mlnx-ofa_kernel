@@ -2,26 +2,20 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 ---
- drivers/fwctl/mlx5/main.c | 11 +++++++++++
- 1 file changed, 11 insertions(+)
+ drivers/fwctl/mlx5/main.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
 
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
-@@ -375,7 +375,13 @@ static int mlx5ctl_probe(struct auxiliar
- 	ret = fwctl_register(&mcdev->fwctl);
+@@ -382,6 +382,7 @@ static int mlx5ctl_probe(struct auxiliar
  	if (ret)
  		return ret;
-+#ifdef HAVE_AUTO_TYPE
  	auxiliary_set_drvdata(adev, no_free_ptr(mcdev));
-+#else
-+	auxiliary_set_drvdata(adev, mcdev);
-+	mcdev = NULL;
-+#endif
 +
  	return 0;
  }
  
-@@ -391,7 +397,12 @@ static const struct auxiliary_device_id
+@@ -397,7 +398,12 @@ static const struct auxiliary_device_id
  	{.name = MLX5_ADEV_NAME ".fwctl",},
  	{}
  };

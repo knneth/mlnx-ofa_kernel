@@ -85,26 +85,6 @@ extern const unsigned char pcie_link_speed[];
 int pcie_get_minimum_link(struct pci_dev *dev, enum pci_bus_speed *speed,
 			  enum pcie_link_width *width);
 
-#ifndef PCIE_SPEED2MBS_ENC
-/* PCIe speed to Mb/s reduced by encoding overhead */
-#define PCIE_SPEED2MBS_ENC(speed) \
-	((speed) == PCIE_SPEED_16_0GT ? 16000*128/130 : \
-	 (speed) == PCIE_SPEED_8_0GT  ?  8000*128/130 : \
-	 (speed) == PCIE_SPEED_5_0GT  ?  5000*8/10 : \
-	 (speed) == PCIE_SPEED_2_5GT  ?  2500*8/10 : \
-	 0)
-#endif
-
-#ifndef PCIE_SPEED2STR
-/* PCIe link information */
-#define PCIE_SPEED2STR(speed) \
-	((speed) == PCIE_SPEED_16_0GT ? "16 GT/s" : \
-	 (speed) == PCIE_SPEED_8_0GT ? "8 GT/s" : \
-	 (speed) == PCIE_SPEED_5_0GT ? "5 GT/s" : \
-	 (speed) == PCIE_SPEED_2_5GT ? "2.5 GT/s" : \
-	 "Unknown speed")
-#endif
-
 #ifndef pci_info
 #define pci_info(pdev, fmt, arg...)	dev_info(&(pdev)->dev, fmt, ##arg)
 #endif
@@ -112,7 +92,4 @@ int pcie_get_minimum_link(struct pci_dev *dev, enum pci_bus_speed *speed,
 static inline void register_pcie_dev_attr_group(struct pci_dev *pdev) { }
 static inline void unregister_pcie_dev_attr_group(struct pci_dev *pdev) { }
 
-#if !defined(HAVE_PCIE_ASPM_ENABLED)
-static inline bool pcie_aspm_enabled(struct pci_dev *pdev) { return false; }
-#endif
 #endif /* _COMPAT_LINUX_PCI_H */

@@ -30,7 +30,6 @@ endif
 
 pversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 prel := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-\(.\+\)/\2/p')
-dkms_version := $(pversion)-$(prel)
 
 export INSTALL_MOD_DIR:=updates
 export INSTALL_MOD_PATH:=$(CURDIR)/debian/$(pdkms)
@@ -74,11 +73,11 @@ endif
 
 	# For dkms
 ifeq ($(WITH_DKMS),1)
-	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(dkms_version)
-	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp *.c *.h debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(dkms_version)"/' <dkms.conf >debian/dkms.conf
+	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(pversion)
+	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	cp *.c *.h debian/$(pdkms)/usr/src/$(pname)-$(pversion)
+	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(pversion)"/' <dkms.conf >debian/dkms.conf
 	# BUILD_EXCLUSIVE_KERNEL_MIN supported since dkms 3.0.11.
 	# Not in debian 11, ubuntu 22.04
 	sed -i -e '/^BUILD_EXCLUSIVE_KERNEL_MIN/s/.*/BUILD_EXCLUSIVE_KERNEL="^6.[6-9]|^6.[12][0-9]|^[7-9]"/' \

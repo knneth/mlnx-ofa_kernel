@@ -1,0 +1,56 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+---
+ drivers/infiniband/hw/mlx5/cq.c | 21 +++++++++++++++++++--
+ 1 file changed, 19 insertions(+), 2 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -754,9 +754,16 @@ static int create_cq_user(struct mlx5_ib
+ 
+ 	*cqe_size = ucmd.cqe_size;
+ 
+-	cq->buf.umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
++	cq->buf.umem =
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
++		ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 					entries * ucmd.cqe_size,
+ 					IB_ACCESS_LOCAL_WRITE, 0);
++#else
++		ib_umem_get_peer(udata, ucmd.buf_addr,
++				 entries * ucmd.cqe_size,
++				 IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(cq->buf.umem)) {
+ 		err = PTR_ERR(cq->buf.umem);
+ 		return err;
+@@ -770,7 +777,11 @@ static int create_cq_user(struct mlx5_ib
+ 		goto err_umem;
+ 	}
+ 
+-	err = mlx5_ib_db_map_user(context, ucmd.db_addr, &cq->db);
++	err = mlx5_ib_db_map_user(context,
++#ifdef HAVE_BASECODE_EXTRAS
++				  udata,
++#endif
++				  ucmd.db_addr, &cq->db);
+ 	if (err)
+ 		goto err_umem;
+ 
+@@ -1196,9 +1207,15 @@ static int resize_user(struct mlx5_ib_de
+ 	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 				(size_t)ucmd.cqe_size * entries,
+ 				IB_ACCESS_LOCAL_WRITE, 0);
++#else
++	umem = ib_umem_get_peer(udata, ucmd.buf_addr,
++				(size_t)ucmd.cqe_size * entries,
++				IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(umem)) {
+ 		err = PTR_ERR(umem);
+ 		return err;

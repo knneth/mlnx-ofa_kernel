@@ -1,25 +1,34 @@
-From: Chris Mi <cmi@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
 
-Change-Id: I2482b31a4ea9406d4b736d5191e6f76748cdd0ff
+Change-Id: I12924101a34211e5f986923b664f2b3da9359679
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -229,12 +229,13 @@ err_dealloc_pd:
- void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
- {
- 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
-+	int i;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+@@ -1,14 +1,17 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
+ #include <linux/mlx5/device.h>
++#if defined(CONFIG_MLX5_EN_PSP) && defined(HAVE_NET_PSP_H)
+ #include <net/psp.h>
+ #include <linux/psp.h>
++#endif
+ #include "mlx5_core.h"
+ #include "psp.h"
+ #include "lib/crypto.h"
+ #include "en_accel/psp.h"
+ #include "fs_core.h"
  
- 	mlx5_crypto_dek_cleanup(mdev->mlx5e_res.dek_priv);
- 	mdev->mlx5e_res.dek_priv = NULL;
- 	if (res->tisn_valid)
- 		mlx5e_destroy_tises(mdev, res->tisn);
--	for (int i = 0; i < res->num_bfregs; i++)
-+	for (i = 0; i < res->num_bfregs; i++)
- 		mlx5_free_bfreg(mdev, res->bfregs + i);
- 	kfree(res->bfregs);
- 	mlx5_core_destroy_mkey(mdev, res->mkey);
++#if defined(CONFIG_MLX5_EN_PSP) && defined(HAVE_NET_PSP_H)
+ enum accel_fs_psp_type {
+ 	ACCEL_FS_PSP4,
+ 	ACCEL_FS_PSP6,
+@@ -958,3 +961,4 @@ void mlx5e_psp_cleanup(struct mlx5e_priv
+ 	priv->psp = NULL;
+ 	kfree(psp);
+ }
++#endif /* CONFIG_MLX5_EN_PSP && HAVE_NET_PSP_H */

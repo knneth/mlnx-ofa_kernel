@@ -35,15 +35,12 @@
 #include <linux/errno.h>
 
 #define DRV_NAME	"iw_cxgb4"
-#define DRV_VERSION	"25.10-2.4.1"
-#define DRV_RELDATE	"19 Mar 2026"
+#define DRV_VERSION	"26.01-1.0.0"
+#define DRV_RELDATE	"17 Feb 2026"
 
 MODULE_AUTHOR("Alaa Hleihel");
 MODULE_DESCRIPTION("iw_cxgb4 dummy kernel module");
 MODULE_LICENSE("Dual BSD/GPL");
-#ifdef RETPOLINE_MLNX
-MODULE_INFO(retpoline, "Y");
-#endif
 MODULE_VERSION(DRV_VERSION);
 
 static int __init iw_cxgb4_init(void)

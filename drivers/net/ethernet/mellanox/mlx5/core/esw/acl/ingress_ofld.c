@@ -339,7 +339,7 @@ acl_ingress_ofld_setup(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 						  num_ftes);
 	if (IS_ERR(vport->ingress.acl)) {
 		err = PTR_ERR(vport->ingress.acl);
-       	vport->ingress.acl = NULL;
+		vport->ingress.acl = NULL;
 		return err;
 	}
 

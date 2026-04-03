@@ -112,6 +112,7 @@ enum mlx5e_ext_link_mode {
 	MLX5E_400GAUI_2_400GBASE_CR2_KR2	= 17,
 	MLX5E_800GAUI_8_800GBASE_CR8_KR8	= 19,
 	MLX5E_800GAUI_4_800GBASE_CR4_KR4	= 20,
+	MLX5E_1600GAUI_8_1600GBASE_CR8_KR8	= 23,
 	MLX5E_EXT_LINK_MODES_NUMBER,
 };
 
@@ -175,9 +176,5 @@ int mlx5_core_query_hca_vport_context(struct mlx5_core_dev *dev,
 				      u8 other_vport, u8 port_num,
 				      u16 vf_num,
 				      struct mlx5_hca_vport_context *rep);
-int mlx5_set_port_pfc_prevention(struct mlx5_core_dev *dev, u16 pfc_preven_critical,
-				 u16 pfc_preven_minor);
-int mlx5_query_port_pfc_prevention(struct mlx5_core_dev *dev,
-				   u16 *pfc_preven_critical);
 
 #endif /* __MLX5_PORT_H__ */

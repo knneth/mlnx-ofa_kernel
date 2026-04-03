@@ -1019,7 +1019,7 @@ static const struct super_operations fuse_super_operations = {
 	.free_inode     = fuse_free_inode,
 	.evict_inode	= fuse_evict_inode,
 	.write_inode	= fuse_write_inode,
-	.drop_inode	= generic_delete_inode,
+	.drop_inode	= inode_just_drop,
 	.umount_begin	= fuse_umount_begin,
 	.statfs		= fuse_statfs,
 	.sync_fs	= fuse_sync_fs,
@@ -1332,8 +1332,6 @@ static int fuse_bdi_init(struct fuse_conn *fc, struct super_block *sb)
 	if (err)
 		return err;
 
-	/* fuse does it's own writeback accounting */
-	sb->s_bdi->capabilities &= ~BDI_CAP_WRITEBACK_ACCT;
 	sb->s_bdi->capabilities |= BDI_CAP_STRICTLIMIT;
 
 	/*
@@ -1475,7 +1473,7 @@ static int fuse_fill_super_submount(struct super_block *sb,
 	fi = get_fuse_inode(root);
 	fi->nlookup--;
 
-	sb->s_d_op = &fuse_dentry_operations;
+	set_default_d_op(sb, &fuse_dentry_operations);
 	sb->s_root = d_make_root(root);
 	if (!sb->s_root)
 		return -ENOMEM;
@@ -1609,12 +1607,10 @@ int fuse_fill_super_common(struct super_block *sb, struct fuse_fs_context *ctx)
 
 	err = -ENOMEM;
 	root = fuse_get_root_inode(sb, ctx->rootmode);
-	sb->s_d_op = &fuse_root_dentry_operations;
+	set_default_d_op(sb, &fuse_dentry_operations);
 	root_dentry = d_make_root(root);
 	if (!root_dentry)
 		goto err_dev_free;
-	/* Root dentry doesn't have .d_revalidate */
-	sb->s_d_op = &fuse_dentry_operations;
 
 	mutex_lock(&fuse_mutex);
 	err = -EINVAL;

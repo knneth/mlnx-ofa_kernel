@@ -37,12 +37,13 @@
 #include <linux/preempt.h>
 #include <linux/dim.h>
 #include <uapi/rdma/ib_user_verbs.h>
+#include <rdma/ib_verbs_nvmf_def.h>
 #include <rdma/rdma_counter.h>
 #include <rdma/restrack.h>
 #include <rdma/signature.h>
 #include <uapi/rdma/rdma_user_ioctl.h>
 #include <uapi/rdma/ib_user_ioctl_verbs.h>
-#include <rdma/ib_verbs_nvmf_def.h>
+#include <linux/pci-tph.h>
 
 #define IB_FW_VERSION_NAME_MAX	ETHTOOL_FWVERS_LEN
 
@@ -326,17 +327,19 @@ enum ib_atomic_cap {
 };
 
 enum ib_odp_general_cap_bits {
-	IB_ODP_SUPPORT		= 1 << 0,
-	IB_ODP_SUPPORT_IMPLICIT = 1 << 1,
+	IB_ODP_SUPPORT		= IB_UVERBS_ODP_SUPPORT,
+	IB_ODP_SUPPORT_IMPLICIT = IB_UVERBS_ODP_SUPPORT_IMPLICIT,
 };
 
 enum ib_odp_transport_cap_bits {
-	IB_ODP_SUPPORT_SEND	= 1 << 0,
-	IB_ODP_SUPPORT_RECV	= 1 << 1,
-	IB_ODP_SUPPORT_WRITE	= 1 << 2,
-	IB_ODP_SUPPORT_READ	= 1 << 3,
-	IB_ODP_SUPPORT_ATOMIC	= 1 << 4,
-	IB_ODP_SUPPORT_SRQ_RECV	= 1 << 5,
+	IB_ODP_SUPPORT_SEND	= IB_UVERBS_ODP_SUPPORT_SEND,
+	IB_ODP_SUPPORT_RECV	= IB_UVERBS_ODP_SUPPORT_RECV,
+	IB_ODP_SUPPORT_WRITE	= IB_UVERBS_ODP_SUPPORT_WRITE,
+	IB_ODP_SUPPORT_READ	= IB_UVERBS_ODP_SUPPORT_READ,
+	IB_ODP_SUPPORT_ATOMIC	= IB_UVERBS_ODP_SUPPORT_ATOMIC,
+	IB_ODP_SUPPORT_SRQ_RECV	= IB_UVERBS_ODP_SUPPORT_SRQ_RECV,
+	IB_ODP_SUPPORT_FLUSH	= IB_UVERBS_ODP_SUPPORT_FLUSH,
+	IB_ODP_SUPPORT_ATOMIC_WRITE	= IB_UVERBS_ODP_SUPPORT_ATOMIC_WRITE,
 };
 
 struct ib_odp_caps {
@@ -641,7 +644,7 @@ struct rdma_hw_stats {
 #define RDMA_HW_STATS_DEFAULT_LIFESPAN 10
 
 struct rdma_hw_stats *rdma_alloc_hw_stats_struct(
-	const struct rdma_stat_desc *descs, int num_counters,
+	const struct rdma_stat_desc *descs, unsigned int num_counters,
 	unsigned long lifespan);
 
 void rdma_free_hw_stats_struct(struct rdma_hw_stats *stats);
@@ -707,7 +710,7 @@ struct ib_port_attr {
 	enum ib_mtu		max_mtu;
 	enum ib_mtu		active_mtu;
 	u32                     phys_mtu;
-	int			gid_tbl_len;
+	unsigned int		gid_tbl_len;
 	unsigned int		ip_gids:1;
 	/* This is the value from PortInfo CapabilityMask, defined by IBA */
 	u32			port_cap_flags;
@@ -725,7 +728,6 @@ struct ib_port_attr {
 	u8			active_width;
 	u16			active_speed;
 	u8                      phys_state;
-	bool			has_smi;
 	u16			port_cap_flags2;
 };
 
@@ -775,6 +777,7 @@ enum ib_event_type {
 	IB_EVENT_CLIENT_REREGISTER,
 	IB_EVENT_GID_CHANGE,
 	IB_EVENT_WQ_FATAL,
+	IB_EVENT_DEVICE_SPEED_CHANGE,
 	IB_EXP_EVENT_XRQ_QP_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR,
 	IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR,
@@ -874,6 +877,7 @@ enum ib_rate {
 	IB_RATE_400_GBPS = 21,
 	IB_RATE_600_GBPS = 22,
 	IB_RATE_800_GBPS = 23,
+	IB_RATE_1600_GBPS = 25,
 };
 
 /**
@@ -891,6 +895,20 @@ __attribute_const__ int ib_rate_to_mult(enum ib_rate rate);
  */
 __attribute_const__ int ib_rate_to_mbps(enum ib_rate rate);
 
+struct ib_port_speed_info {
+	const char *str;
+	int rate;	/* in deci-Gb/sec (100 MBps units) */
+};
+
+/**
+ * ib_port_attr_to_speed_info - Convert port attributes to speed information
+ * @attr: Port attributes containing active_speed and active_width
+ * @speed_info: Speed information to return
+ *
+ * Returns 0 on success, -EINVAL on error.
+ */
+int ib_port_attr_to_speed_info(struct ib_port_attr *attr,
+			       struct ib_port_speed_info *speed_info);
 
 /**
  * enum ib_mr_type - memory region type
@@ -1873,6 +1891,27 @@ struct ib_dm {
 	atomic_t	   usecnt;
 };
 
+/* bit values to mark existence of ib_dmah fields */
+enum {
+	IB_DMAH_CPU_ID_EXISTS,
+	IB_DMAH_MEM_TYPE_EXISTS,
+	IB_DMAH_PH_EXISTS,
+};
+
+struct ib_dmah {
+	struct ib_device *device;
+	struct ib_uobject *uobject;
+	/*
+	 * Implementation details of the RDMA core, don't use in drivers:
+	 */
+	struct rdma_restrack_entry res;
+	u32 cpu_id;
+	enum tph_mem_type mem_type;
+	atomic_t usecnt;
+	u8 ph;
+	u8 valid_fields; /* use IB_DMAH_XXX_EXISTS */
+};
+
 struct ib_mr {
 	struct ib_device  *device;
 	struct ib_pd	  *pd;
@@ -1890,6 +1929,7 @@ struct ib_mr {
 
 	struct ib_dm      *dm;
 	struct ib_sig_attrs *sig_attrs; /* only for IB_MR_TYPE_INTEGRITY MRs */
+	struct ib_dmah *dmah;
 	/*
 	 * Implementation details of the RDMA core, don't use in drivers:
 	 */
@@ -2414,6 +2454,8 @@ struct ib_device_ops {
 						     int comp_vector);
 	int (*query_port)(struct ib_device *device, u32 port_num,
 			  struct ib_port_attr *port_attr);
+	int (*query_port_speed)(struct ib_device *device, u32 port_num,
+				u64 *speed);
 	int (*modify_port)(struct ib_device *device, u32 port_num,
 			   int port_modify_mask,
 			   struct ib_port_modify *port_modify);
@@ -2521,6 +2563,10 @@ struct ib_device_ops {
 	int (*destroy_qp)(struct ib_qp *qp, struct ib_udata *udata);
 	int (*create_cq)(struct ib_cq *cq, const struct ib_cq_init_attr *attr,
 			 struct uverbs_attr_bundle *attrs);
+	int (*create_cq_umem)(struct ib_cq *cq,
+			      const struct ib_cq_init_attr *attr,
+			      struct ib_umem *umem,
+			      struct uverbs_attr_bundle *attrs);
 	int (*modify_cq)(struct ib_cq *cq, u16 cq_count, u16 cq_period);
 	int (*destroy_cq)(struct ib_cq *cq, struct ib_udata *udata);
 	int (*resize_cq)(struct ib_cq *cq, int cqe, struct ib_udata *udata);
@@ -2532,14 +2578,16 @@ struct ib_device_ops {
 	/**
 	 * post_destroy_cq - Free all kernel resources
 	 */
-	int (*post_destroy_cq)(struct ib_cq *cq);
+	void (*post_destroy_cq)(struct ib_cq *cq);
 	struct ib_mr *(*get_dma_mr)(struct ib_pd *pd, int mr_access_flags);
 	struct ib_mr *(*reg_user_mr)(struct ib_pd *pd, u64 start, u64 length,
 				     u64 virt_addr, int mr_access_flags,
+				     struct ib_dmah *dmah,
 				     struct ib_udata *udata);
 	struct ib_mr *(*reg_user_mr_dmabuf)(struct ib_pd *pd, u64 offset,
 					    u64 length, u64 virt_addr, int fd,
 					    int mr_access_flags,
+					    struct ib_dmah *dmah,
 					    struct uverbs_attr_bundle *attrs);
 	struct ib_mr *(*rereg_user_mr)(struct ib_mr *mr, int flags, u64 start,
 				       u64 length, u64 virt_addr,
@@ -2604,6 +2652,9 @@ struct ib_device_ops {
 				  struct ib_dm_alloc_attr *attr,
 				  struct uverbs_attr_bundle *attrs);
 	int (*dealloc_dm)(struct ib_dm *dm, struct uverbs_attr_bundle *attrs);
+	int (*alloc_dmah)(struct ib_dmah *ibdmah,
+			  struct uverbs_attr_bundle *attrs);
+	int (*dealloc_dmah)(struct ib_dmah *dmah, struct uverbs_attr_bundle *attrs);
 	struct ib_mr *(*reg_dm_mr)(struct ib_pd *pd, struct ib_dm *dm,
 				   struct ib_dm_mr_attr *attr,
 				   struct uverbs_attr_bundle *attrs);
@@ -2771,6 +2822,7 @@ struct ib_device_ops {
 	DECLARE_RDMA_OBJ_SIZE(ib_ah);
 	DECLARE_RDMA_OBJ_SIZE(ib_counters);
 	DECLARE_RDMA_OBJ_SIZE(ib_cq);
+	DECLARE_RDMA_OBJ_SIZE(ib_dmah);
 	DECLARE_RDMA_OBJ_SIZE(ib_mw);
 	DECLARE_RDMA_OBJ_SIZE(ib_pd);
 	DECLARE_RDMA_OBJ_SIZE(ib_qp);
@@ -4941,8 +4993,8 @@ static inline int ibdev_to_node(struct ib_device *ibdev)
 
 bool rdma_dev_access_netns(const struct ib_device *device,
 			   const struct net *net);
-bool rdma_dev_has_raw_cap(const struct ib_device *dev);
 
+bool rdma_dev_has_raw_cap(const struct ib_device *dev);
 static inline struct net *rdma_dev_net(struct ib_device *device)
 {
 	return read_pnet(&device->coredev.rdma_net);

@@ -1,0 +1,15 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
+@@ -136,4 +136,4 @@ static void mlx5_devm_port_cleanup(struc
+ {
+ }
+ #endif
+-#endif
++#endif /* MLX5_DEVM_H */

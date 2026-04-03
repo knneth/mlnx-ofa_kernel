@@ -45,9 +45,9 @@ struct l2addr_node {
 	u8                addr[ETH_ALEN];
 };
 
-#define mlx5_mpfs_foreach(hs, tmp, mpfs, i) \
-	for (i = 0; i < MLX5_L2_ADDR_HASH_SIZE; i++) \
-		hlist_for_each_entry_safe(hs, tmp, &(mpfs)->hash[i], node.hlist)
+#define mlx5_mpfs_foreach(hs, tmp, mpfs) \
+	for (int j = 0; j < MLX5_L2_ADDR_HASH_SIZE; j++) \
+		hlist_for_each_entry_safe(hs, tmp, &(mpfs)->hash[j], node.hlist)
 
 #define for_each_l2hash_node(hn, tmp, hash, i) \
 	for (i = 0; i < MLX5_L2_ADDR_HASH_SIZE; i++) \

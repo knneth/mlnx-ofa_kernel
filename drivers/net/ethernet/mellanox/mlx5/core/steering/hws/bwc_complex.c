@@ -782,10 +782,8 @@ static int hws_complex_subrule_create(struct mlx5hws_bwc_matcher *cmatcher,
 
 	ret = mlx5hws_bwc_rule_create_simple(subrule, match_params, actions,
 					     flow_source, bwc_queue_idx);
-	if (ret) {
+	if (ret)
 		goto put_subrule_data;
-		goto unlock;
-	}
 
 	ret = 0;
 	goto unlock;

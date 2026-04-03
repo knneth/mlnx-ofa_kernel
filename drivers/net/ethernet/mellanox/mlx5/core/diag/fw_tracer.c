@@ -359,6 +359,25 @@ static const char *VAL_PARM		= "%llx";
 static const char *REPLACE_64_VAL_PARM	= "%x%x";
 static const char *PARAM_CHAR		= "%";
 
+static bool mlx5_is_valid_spec(const char *str)
+{
+	/* Parse format specifiers to find the actual type.
+	 * Structure: %[flags][width][.precision][length]type
+	 * Skip flags, width, precision & length.
+	 */
+	while (isdigit(*str) || *str == '#' || *str == '.' || *str == 'l')
+		str++;
+
+	/* Check if it's a valid integer/hex specifier or %%:
+	 * Valid formats: %x, %d, %i, %u, etc.
+	 */
+	if (*str != 'x' && *str != 'X' && *str != 'd' && *str != 'i' &&
+	    *str != 'u' && *str != 'c' && *str != '%')
+		return false;
+
+	return true;
+}
+
 static bool mlx5_tracer_validate_params(const char *str)
 {
 	const char *substr = str;
@@ -368,19 +387,14 @@ static bool mlx5_tracer_validate_params(const char *str)
 
 	substr = strstr(substr, PARAM_CHAR);
 	while (substr) {
-		char spec = *(substr + 1);
-
-		/* Check if it's a valid integer/hex format:
-		 * Valid formats: %x, %d, %i, %u, %llx, %lx, %ld, etc.
-		 * These can be prefixed with width/flags like %08x, etc.
-		 */
-		if (!isdigit(spec) && spec != 'x' && spec != 'X' &&
-		    spec != 'd' && spec != 'i' && spec != 'u' && spec != 'l' &&
-		    spec != 'c' && spec != '.' && spec != '#') {
+		if (!mlx5_is_valid_spec(substr + 1))
 			return false;
-		}
 
-		substr = strstr(substr + 2, PARAM_CHAR);
+		if (*(substr + 1) == '%')
+			substr = strstr(substr + 2, PARAM_CHAR);
+		else
+			substr = strstr(substr + 1, PARAM_CHAR);
+
 	}
 
 	return true;
@@ -459,11 +473,15 @@ static int mlx5_tracer_get_num_of_params(char *str)
 		substr = strstr(pstr, VAL_PARM);
 	}
 
-	/* count all the % characters */
+	/* count all the % characters, but skip %% (escaped percent) */
 	substr = strstr(str, PARAM_CHAR);
 	while (substr) {
-		num_of_params += 1;
-		str = substr + 1;
+		if (*(substr + 1) != '%') {
+			num_of_params += 1;
+			str = substr + 1;
+		} else {
+			str = substr + 2;
+		}
 		substr = strstr(str, PARAM_CHAR);
 	}
 
@@ -644,12 +662,11 @@ static int mlx5_tracer_handle_raw_string(struct mlx5_fw_tracer *tracer,
 	return 0;
 }
 
-static int mlx5_tracer_handle_bad_format_string(struct mlx5_fw_tracer *tracer,
-						struct tracer_string_format *cur_string)
+static void mlx5_tracer_handle_bad_format_string(struct mlx5_fw_tracer *tracer,
+						 struct tracer_string_format *cur_string)
 {
 	cur_string->invalid_string = true;
 	list_add_tail(&cur_string->list, &tracer->ready_strings_list);
-	return 0;
 }
 
 static int mlx5_tracer_handle_string_trace(struct mlx5_fw_tracer *tracer,
@@ -671,8 +688,8 @@ static int mlx5_tracer_handle_string_trace(struct mlx5_fw_tracer *tracer,
 		if (cur_string->num_of_params < 0) {
 			pr_debug("%s Invalid format string parameters\n",
 				 __func__);
-			return mlx5_tracer_handle_bad_format_string(tracer,
-								    cur_string);
+			mlx5_tracer_handle_bad_format_string(tracer, cur_string);
+			return 0;
 		}
 		if (cur_string->num_of_params == 0) /* trace with no params */
 			list_add_tail(&cur_string->list, &tracer->ready_strings_list);

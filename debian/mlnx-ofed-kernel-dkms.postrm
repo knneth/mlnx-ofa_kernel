@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        # Remove the ofa_kernel-dkms directory tree
+        # This contains the actual build artifacts that prerm doesn't clean up
+        rm -rf /usr/src/ofa_kernel-dkms
+
+        # Remove ofa_kernel directory if it's empty or only contains empty subdirectories
+        # This directory is created by debian/rules as a placeholder
+        if [ -d /usr/src/ofa_kernel ]; then
+            # Check if directory is empty or only contains empty directories
+            if [ -z "$(find /usr/src/ofa_kernel -type f)" ]; then
+                rm -rf /usr/src/ofa_kernel
+            fi
+        fi
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Don't remove directories during upgrade or error scenarios
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

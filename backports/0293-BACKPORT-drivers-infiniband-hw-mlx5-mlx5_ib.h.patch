@@ -1,0 +1,109 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/mlx5_ib.h
+
+Change-Id: I3d3a97b285b99b4364cc437cea42d40f739a1c88
+---
+ drivers/infiniband/hw/mlx5/mlx5_ib.h | 39 ++++++++++++++++++++++++----
+ 1 file changed, 34 insertions(+), 5 deletions(-)
+
+--- a/drivers/infiniband/hw/mlx5/mlx5_ib.h
++++ b/drivers/infiniband/hw/mlx5/mlx5_ib.h
+@@ -665,7 +665,7 @@ struct mlx5_ib_mkey {
+ 	u32 key;
+ 	enum mlx5_mkey_type type;
+ 	unsigned int ndescs;
+-	struct wait_queue_head wait;
++	wait_queue_head_t wait;
+ 	refcount_t usecount;
+ 	/* Cacheable user Mkey must hold either a rb_key or a cache_ent. */
+ 	struct mlx5r_cache_rb_key rb_key;
+@@ -1355,8 +1355,11 @@ to_mmmap(struct rdma_user_mmap_entry *rd
+ 
+ int mlx5_ib_dev_res_cq_init(struct mlx5_ib_dev *dev);
+ int mlx5_ib_dev_res_srq_init(struct mlx5_ib_dev *dev);
+-int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context, unsigned long virt,
+-			struct mlx5_db *db);
++int mlx5_ib_db_map_user(struct mlx5_ib_ucontext *context,
++#ifdef HAVE_BASECODE_EXTRAS
++			struct ib_udata *udata,
++#endif
++			unsigned long virt, struct mlx5_db *db);
+ void mlx5_ib_db_unmap_user(struct mlx5_ib_ucontext *context, struct mlx5_db *db);
+ void __mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
+ void mlx5_ib_cq_clean(struct mlx5_ib_cq *cq, u32 qpn, struct mlx5_ib_srq *srq);
+@@ -1421,7 +1424,8 @@ int mlx5_ib_advise_mr(struct ib_pd *pd,
+ int mlx5_ib_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
+ int mlx5_ib_dealloc_mw(struct ib_mw *mw);
+ struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
+-					     int access_flags);
++					     struct ib_udata *udata,
++			  		     int access_flags);
+ void mlx5_ib_free_odp_mr(struct mlx5_ib_mr *mr);
+ struct ib_mr *mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
+ 				    u64 length, u64 virt_addr, int access_flags,
+@@ -1503,8 +1507,17 @@ int mlx5r_odp_create_eq(struct mlx5_ib_d
+ void mlx5_ib_odp_cleanup_one(struct mlx5_ib_dev *ibdev);
+ int __init mlx5_ib_odp_init(void);
+ void mlx5_ib_odp_cleanup(void);
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp, unsigned long start,
++			      unsigned long end);
++#endif
+ int mlx5_odp_init_mkey_cache(struct mlx5_ib_dev *dev);
+-int mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
++#ifdef HAVE_HMM_PFN_DMA_MAPPED
++int  
++#else
++void 
++#endif
++mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
+ 			  struct mlx5_ib_mr *mr, int flags);
+ 
+ int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+@@ -1526,11 +1539,16 @@ static inline int mlx5_odp_init_mkey_cac
+ {
+ 	return 0;
+ }
++#ifdef HAVE_HMM_PFN_DMA_MAPPED
+ static inline int mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
+ 					struct mlx5_ib_mr *mr, int flags)
+ {
+ 	return -EOPNOTSUPP;
+ }
++#else
++static inline void mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
++					 struct mlx5_ib_mr *mr, int flags) {}
++#endif
+ 
+ static inline int
+ mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
+@@ -1547,10 +1565,17 @@ static inline int mlx5_ib_init_dmabuf_mr
+ {
+ 	return -EOPNOTSUPP;
+ }
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++static inline void mlx5_ib_invalidate_range(struct ib_umem_odp *umem_odp,
++					    unsigned long start,
++					    unsigned long end){};
++#endif
+ #endif /* CONFIG_INFINIBAND_ON_DEMAND_PAGING */
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ extern const struct mmu_interval_notifier_ops mlx5_mn_ops;
+ 
++#endif
+ /* Needed for rep profile */
+ void __mlx5_ib_remove(struct mlx5_ib_dev *dev,
+ 		      const struct mlx5_ib_profile *profile,
+@@ -1844,7 +1869,11 @@ static inline unsigned long
+ mlx5_umem_dmabuf_find_best_pgsz(struct ib_umem_dmabuf *umem_dmabuf,
+ 				int access_mode)
+ {
++#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
+ 	return mlx5_umem_mkc_find_best_pgsz(to_mdev(umem_dmabuf->umem.ibdev),
++#else
++	return mlx5_umem_mkc_find_best_pgsz(to_mdev(umem_dmabuf->umem.context->device),
++#endif
+ 					    &umem_dmabuf->umem,
+ 					    umem_dmabuf->umem.iova,
+ 					    access_mode);

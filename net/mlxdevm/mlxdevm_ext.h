@@ -1,6 +1,8 @@
 #ifndef _MLXDEVM_EXT_H
 #define _MLXDEVM_EXT_H
 
+#include <net/dcbnl.h>
+
 struct mlxdevm_rate_node {
 	struct list_head list;
 	char *name;

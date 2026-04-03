@@ -1,0 +1,447 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
+
+Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
+---
+ .../ethernet/mellanox/mlx5/core/lib/clock.c   | 172 +++++++++++++++++-
+ 1 file changed, 165 insertions(+), 7 deletions(-)
+
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
+@@ -102,8 +102,12 @@ static void mlx5_clock_lockdep_assert(st
+ {
+ 	if (!clock->shared)
+ 		return;
+-
++#ifdef HAVE_LOCKDEP_ASSERT
+ 	lockdep_assert(lockdep_is_held(&clock_priv(clock)->lock));
++#else
++	lockdep_assert_held(&clock_priv(clock)->lock);
++#endif
++
+ }
+ 
+ static struct mlx5_core_dev *mlx5_clock_mdev_get(struct mlx5_clock *clock)
+@@ -194,6 +198,7 @@ static s32 mlx5_clock_getmaxphase(struct
+ 			     MLX5_MTUTC_OPERATION_ADJUST_TIME_MAX;
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_INFO_NDO_GETMAXPHASE
+ static s32 mlx5_ptp_getmaxphase(struct ptp_clock_info *ptp)
+ {
+ 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
+@@ -207,6 +212,7 @@ static s32 mlx5_ptp_getmaxphase(struct p
+ 
+ 	return ret;
+ }
++#endif
+ 
+ static bool mlx5_is_mtutc_time_adj_cap(struct mlx5_core_dev *mdev, s64 delta)
+ {
+@@ -273,11 +279,15 @@ static int mlx5_mtctr_read(struct mlx5_c
+ 		return -EINVAL;
+ 
+ 	host = MLX5_GET64(mtctr_reg, out, first_clock_timestamp);
++#ifdef HAVE_ENUM_CSID_X86_ART
+ 	*sys_counterval = (struct system_counterval_t) {
+ 			.cycles = host,
+ 			.cs_id = CSID_X86_ART,
+ 			.use_nsecs = true,
+ 	};
++#else
++	*sys_counterval = convert_art_ns_to_tsc(host);
++#endif
+ 	*device = MLX5_GET64(mtctr_reg, out, second_clock_timestamp);
+ 
+ 	return 0;
+@@ -306,6 +316,7 @@ static int mlx5_mtctr_syncdevicetime(kti
+ 	return 0;
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ static int
+ mlx5_mtctr_syncdevicecyclestime(ktime_t *device_time,
+ 				struct system_counterval_t *sys_counterval,
+@@ -322,6 +333,7 @@ mlx5_mtctr_syncdevicecyclestime(ktime_t
+ 
+ 	return 0;
+ }
++#endif /* HAVE_PTP_CLOCK_GETCYCLES */
+ 
+ static int mlx5_ptp_getcrosststamp(struct ptp_clock_info *ptp,
+ 				   struct system_device_crosststamp *cts)
+@@ -348,6 +360,7 @@ unlock:
+ 	return err;
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ static int mlx5_ptp_getcrosscycles(struct ptp_clock_info *ptp,
+ 				   struct system_device_crosststamp *cts)
+ {
+@@ -373,6 +386,7 @@ unlock:
+ 	mlx5_clock_unlock(clock);
+ 	return err;
+ }
++#endif /* HAVE_PTP_CLOCK_GETCYCLES */
+ #endif /* CONFIG_X86 */
+ 
+ static u64 mlx5_read_time(struct mlx5_core_dev *dev,
+@@ -401,7 +415,13 @@ static u64 mlx5_read_time(struct mlx5_co
+ 			   (u64)timer_l | (u64)timer_h1 << 32;
+ }
+ 
++#ifdef HAVE_CYCLECOUNTER_READ_NON_CONST
++/* Newer kernels (6.17+): cyclecounter read callback takes non-const parameter */
+ static u64 read_internal_timer(struct cyclecounter *cc)
++#else
++/* Older kernels: cyclecounter read callback takes const parameter */
++static u64 read_internal_timer(const struct cyclecounter *cc)
++#endif
+ {
+ 	struct mlx5_timer *timer = container_of(cc, struct mlx5_timer, cycles);
+ 	struct mlx5_clock *clock = container_of(timer, struct mlx5_clock, timer);
+@@ -552,8 +572,9 @@ struct timespec64 mlx5_ptp_gettimex_real
+ 	return ts;
+ }
+ 
+-static int mlx5_ptp_gettimex(struct ptp_clock_info *ptp, struct timespec64 *ts,
+-			     struct ptp_system_timestamp *sts)
++static int mlx5_ptp_gettimex(struct ptp_clock_info *ptp,
++			    struct timespec64 *ts,
++			    struct ptp_system_timestamp *sts)
+ {
+ 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
+ 	struct mlx5_core_dev *mdev;
+@@ -574,6 +595,7 @@ out:
+ 	return 0;
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ static int mlx5_ptp_getcyclesx(struct ptp_clock_info *ptp,
+ 			       struct timespec64 *ts,
+ 			       struct ptp_system_timestamp *sts)
+@@ -591,6 +613,7 @@ static int mlx5_ptp_getcyclesx(struct pt
+ 	mlx5_clock_unlock(clock);
+ 	return 0;
+ }
++#endif /* HAVE_PTP_CLOCK_GETCYCLES */
+ 
+ static int mlx5_ptp_adjtime_real_time(struct mlx5_core_dev *mdev, s64 delta)
+ {
+@@ -641,6 +664,7 @@ unlock:
+ 	return err;
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_INFO_ADJPHASE
+ static int mlx5_ptp_adjphase(struct ptp_clock_info *ptp, s32 delta)
+ {
+ 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
+@@ -654,6 +678,7 @@ static int mlx5_ptp_adjphase(struct ptp_
+ 
+ 	return err;
+ }
++#endif
+ 
+ static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_ppm)
+ {
+@@ -661,6 +686,7 @@ static int mlx5_ptp_freq_adj_real_time(s
+ 
+ 	MLX5_SET(mtutc_reg, in, operation, MLX5_MTUTC_OPERATION_ADJUST_FREQ_UTC);
+ 
++#ifdef HAVE_ADJUST_BY_SCALED_PPM
+ 	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_freq_adj_units) &&
+ 	    scaled_ppm <= S32_MAX && scaled_ppm >= S32_MIN) {
+ 		/* HW scaled_ppm support on mlx5 devices only supports a 32-bit value */
+@@ -671,10 +697,54 @@ static int mlx5_ptp_freq_adj_real_time(s
+ 		MLX5_SET(mtutc_reg, in, freq_adj_units, MLX5_MTUTC_FREQ_ADJ_UNITS_PPB);
+ 		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm_to_ppb(scaled_ppm));
+ 	}
++#else
++		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm);
++#endif
++
+ 
+ 	return mlx5_set_mtutc(mdev, in, sizeof(in));
+ }
+ 
++#ifdef HAVE_PTP_CLOCK_INFO_NDO_ADJFREQ
++static int mlx5_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
++{
++	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
++	struct mlx5_timer *timer = &clock->timer;
++	struct mlx5_core_dev *mdev;
++	unsigned long flags;
++	int neg_adj = 0;
++	u32 diff;
++	u64 adj;
++
++	mdev = mlx5_clock_mdev_get(clock);
++	if (mlx5_modify_mtutc_allowed(mdev)) {
++		int err = mlx5_ptp_freq_adj_real_time(mdev, delta);
++
++		if (err)
++			return err;
++	}
++
++	if (delta < 0) {
++		neg_adj = 1;
++		delta = -delta;
++	}
++
++	adj = timer->nominal_c_mult;
++	adj *= delta;
++	diff = div_u64(adj, 1000000000ULL);
++
++	write_seqlock_irqsave(&clock->lock, flags);
++	timecounter_read(&timer->tc);
++	timer->cycles.mult = neg_adj ? timer->nominal_c_mult - diff :
++				       timer->nominal_c_mult + diff;
++	mlx5_update_clock_info_page(mdev);
++	write_sequnlock_irqrestore(&clock->lock, flags);
++
++	return 0;
++}
++#endif
++
++#if defined(HAVE_ADJUST_BY_SCALED_PPM)
+ static int mlx5_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
+ {
+ 	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
+@@ -707,6 +777,34 @@ unlock:
+ 	mlx5_clock_unlock(clock);
+ 	return err;
+ }
++#endif
++
++
++#ifndef PTP_STRICT_FLAGS
++#define PTP_STRICT_FLAGS   (1<<3)
++#endif
++#ifndef PTP_EXTTS_EDGES
++#define PTP_EXTTS_EDGES    (PTP_RISING_EDGE | PTP_FALLING_EDGE)
++#endif
++
++#ifndef HAVE_PTP_FIND_PIN_UNLOCK
++static int mlx5_ptp_find_pin(struct mlx5_clock *clock,
++		enum ptp_pin_function func,
++		unsigned int chan, int on)
++{
++	int i;
++
++	if (on)
++		return ptp_find_pin(clock->ptp, func, chan);
++
++	for (i = 0; i < clock->ptp_info.n_pins; i++) {
++		if (clock->ptp_info.pin_config[i].func == func &&
++				clock->ptp_info.pin_config[i].chan == chan)
++			return i;
++	}
++	return -1;
++}
++#endif
+ 
+ static int mlx5_extts_configure(struct ptp_clock_info *ptp,
+ 				struct ptp_clock_request *rq,
+@@ -722,6 +820,16 @@ static int mlx5_extts_configure(struct p
+ 	int pin = -1;
+ 	int err = 0;
+ 
++#ifndef HAVE_PTP_CLOCK_INFO_SUPPORTED_EXTTS_FLAGS
++	/* Older kernels: manual flag validation (removed in 6.16+) */
++	if (rq->extts.flags & ~(PTP_ENABLE_FEATURE |
++				PTP_RISING_EDGE |
++				PTP_FALLING_EDGE |
++				PTP_STRICT_FLAGS))
++		return -EOPNOTSUPP;
++#endif
++
++
+ 	/* Reject requests to enable time stamping on both edges. */
+ 	if ((rq->extts.flags & PTP_STRICT_FLAGS) &&
+ 	    (rq->extts.flags & PTP_ENABLE_FEATURE) &&
+@@ -731,7 +839,12 @@ static int mlx5_extts_configure(struct p
+ 	if (rq->extts.index >= clock->ptp_info.n_pins)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_PTP_FIND_PIN_UNLOCK
+ 	pin = ptp_find_pin(clock->ptp, PTP_PF_EXTTS, rq->extts.index);
++#else
++	pin = mlx5_ptp_find_pin(clock, PTP_PF_EXTTS, rq->extts.index, on);
++#endif
++
+ 	if (pin < 0)
+ 		return -EBUSY;
+ 
+@@ -815,13 +928,12 @@ static u64 perout_conf_real_time(s64 sec
+ static int perout_conf_1pps(struct mlx5_core_dev *mdev, struct ptp_clock_request *rq,
+ 			    u64 *time_stamp, bool real_time)
+ {
+-	struct timespec64 ts;
++ 	struct timespec64 ts;
+ 	s64 ns;
+ 
+ 	ts.tv_nsec = rq->perout.period.nsec;
+ 	ts.tv_sec = rq->perout.period.sec;
+ 	ns = timespec64_to_ns(&ts);
+-
+ 	if ((ns >> 1) != 500000000LL)
+ 		return -EINVAL;
+ 
+@@ -840,18 +952,22 @@ static int mlx5_perout_conf_out_pulse_du
+ 	u32 out_pulse_duration;
+ 	struct timespec64 ts;
+ 
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
+ 	if (rq->perout.flags & PTP_PEROUT_DUTY_CYCLE) {
+ 		ts.tv_sec = rq->perout.on.sec;
+ 		ts.tv_nsec = rq->perout.on.nsec;
+ 		out_pulse_duration = (u32)timespec64_to_ns(&ts);
+ 	} else {
++#endif
+ 		/* out_pulse_duration_ns should be up to 50% of the
+ 		 * pulse period as default
+ 		 */
+ 		ts.tv_sec = rq->perout.period.sec;
+ 		ts.tv_nsec = rq->perout.period.nsec;
+ 		out_pulse_duration = (u32)timespec64_to_ns(&ts) >> 1;
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
+ 	}
++#endif
+ 
+ 	if (out_pulse_duration < pps_info->min_out_pulse_duration_ns ||
+ 	    out_pulse_duration > MLX5_MAX_PULSE_DURATION) {
+@@ -892,6 +1008,15 @@ static int perout_conf_npps_real_time(st
+ 	return 0;
+ }
+ 
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
++/* Older kernels: manual perout flag validation helper (removed in 6.16+) */
++static bool mlx5_perout_verify_flags(struct mlx5_core_dev *mdev, unsigned int flags)
++{
++	return ((!mlx5_npps_real_time_supported(mdev) && flags) ||
++		(mlx5_npps_real_time_supported(mdev) && flags & ~PTP_PEROUT_DUTY_CYCLE));
++}
++#endif
++
+ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
+ 				 struct ptp_clock_request *rq,
+ 				 int on)
+@@ -914,7 +1039,11 @@ static int mlx5_perout_configure(struct
+ 		return -EINVAL;
+ 
+ 	field_select = MLX5_MTPPS_FS_ENABLE;
++#ifdef HAVE_PTP_FIND_PIN_UNLOCK
+ 	pin = ptp_find_pin(clock->ptp, PTP_PF_PEROUT, rq->perout.index);
++#else
++	pin = mlx5_ptp_find_pin(clock, PTP_PF_PEROUT, rq->perout.index, on);
++#endif
+ 	if (pin < 0)
+ 		return -EBUSY;
+ 
+@@ -927,6 +1056,16 @@ static int mlx5_perout_configure(struct
+ 		goto unlock;
+ 	}
+ 
++#ifdef HAVE_PTP_PEROUT_DUTY_CYCLE
++	/* Reject requests with unsupported flags */
++	if (mlx5_perout_verify_flags(mdev, rq->perout.flags)) {
++#else
++	if (rq->perout.flags) {
++#endif
++		err = -EOPNOTSUPP;
++		goto unlock;
++	}
++
+ 	if (on) {
+ 		pin_mode = MLX5_PIN_MODE_OUT;
+ 		pattern = MLX5_OUT_PATTERN_PERIODIC;
+@@ -1034,9 +1173,18 @@ static const struct ptp_clock_info mlx5_
+ 	.n_per_out	= 0,
+ 	.n_pins		= 0,
+ 	.pps		= 0,
++#ifdef HAVE_PTP_CLOCK_INFO_NDO_ADJFREQ
++	.adjfreq	= mlx5_ptp_adjfreq,
++#endif
++#if defined(HAVE_ADJUST_BY_SCALED_PPM)
+ 	.adjfine	= mlx5_ptp_adjfine,
++#endif
++#ifdef HAVE_PTP_CLOCK_INFO_ADJPHASE
+ 	.adjphase	= mlx5_ptp_adjphase,
++#endif
++#ifdef HAVE_PTP_CLOCK_INFO_NDO_GETMAXPHASE
+ 	.getmaxphase    = mlx5_ptp_getmaxphase,
++#endif
+ 	.adjtime	= mlx5_ptp_adjtime,
+ 	.gettimex64	= mlx5_ptp_gettimex,
+ 	.settime64	= mlx5_ptp_settime,
+@@ -1094,12 +1242,15 @@ static void mlx5_init_pin_config(struct
+ 	clock->ptp_info.verify = mlx5_ptp_verify;
+ 	clock->ptp_info.pps = 1;
+ 
++#ifdef HAVE_PTP_CLOCK_INFO_SUPPORTED_EXTTS_FLAGS
++	/* Newer kernels (6.16+): ptp_clock_info has supported flags fields */
+ 	clock->ptp_info.supported_extts_flags = PTP_RISING_EDGE |
+ 						PTP_FALLING_EDGE |
+ 						PTP_STRICT_FLAGS;
+ 
+ 	if (mlx5_npps_real_time_supported(mdev))
+ 		clock->ptp_info.supported_perout_flags = PTP_PEROUT_DUTY_CYCLE;
++#endif
+ 
+ 	for (i = 0; i < clock->ptp_info.n_pins; i++) {
+ 		snprintf(clock->ptp_info.pin_config[i].name,
+@@ -1151,7 +1302,7 @@ static void ts_next_sec(struct timespec6
+ static u64 perout_conf_next_event_timer(struct mlx5_core_dev *mdev,
+ 					struct mlx5_clock *clock)
+ {
+-	struct timespec64 ts;
++       struct timespec64 ts;
+ 	s64 target_ns;
+ 
+ 	mlx5_ptp_gettimex(&clock->ptp_info, &ts, NULL);
+@@ -1247,7 +1398,6 @@ static void mlx5_init_overflow_period(st
+ 	 */
+ 	overflow_cycles = div64_u64(~0ULL >> 1, timer->cycles.mult);
+ 	overflow_cycles = min(overflow_cycles, div_u64(timer->cycles.mask, 3));
+-
+ 	ns = cyclecounter_cyc2ns(&timer->cycles, overflow_cycles,
+ 				 frac, &frac);
+ 	do_div(ns, NSEC_PER_SEC / HZ);
+@@ -1308,7 +1458,9 @@ static void mlx5_init_timer_max_freq_adj
+ static void mlx5_init_timer_clock(struct mlx5_core_dev *mdev)
+ {
+ 	struct mlx5_clock *clock = mdev->clock;
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ 	bool expose_cycles;
++#endif
+ 
+ 	/* Configure the PHC */
+ 	clock->ptp_info = mlx5_ptp_clock_info;
+@@ -1316,21 +1468,27 @@ static void mlx5_init_timer_clock(struct
+ 	if (MLX5_CAP_MCAM_REG(mdev, mtutc))
+ 		mlx5_init_timer_max_freq_adjustment(mdev);
+ 
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ 	expose_cycles = !MLX5_CAP_GEN(mdev, disciplined_fr_counter) ||
+ 			!mlx5_real_time_mode(mdev);
++#endif
+ 
+ #ifdef CONFIG_X86
+ 	if (MLX5_CAP_MCAM_REG3(mdev, mtptm) &&
+ 	    MLX5_CAP_MCAM_REG3(mdev, mtctr) && boot_cpu_has(X86_FEATURE_ART)) {
+ 		clock->ptp_info.getcrosststamp = mlx5_ptp_getcrosststamp;
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ 		if (expose_cycles)
+ 			clock->ptp_info.getcrosscycles =
+ 				mlx5_ptp_getcrosscycles;
++#endif
+ 	}
+ #endif /* CONFIG_X86 */
+ 
++#ifdef HAVE_PTP_CLOCK_GETCYCLES
+ 	if (expose_cycles)
+ 		clock->ptp_info.getcyclesx64 = mlx5_ptp_getcyclesx;
++#endif
+ 
+ 	mlx5_timecounter_init(mdev);
+ 	mlx5_init_clock_info(mdev);
