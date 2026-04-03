@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
 ---
- .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 746 +++++++++++++++++-
- 1 file changed, 729 insertions(+), 17 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_ethtool.c  | 794 +++++++++++++++++-
+ 1 file changed, 777 insertions(+), 17 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_ethtool.c
@@ -844,15 +844,77 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int mlx5e_set_rxfh_context(struct net_device *dev, const u32 *indir,
  				  const u8 *key, const u8 hfunc,
  				  u32 *rss_context, bool delete)
-@@ -1343,6 +1898,7 @@ unlock:
+@@ -1343,13 +1898,61 @@ unlock:
+ 	mutex_unlock(&priv->state_lock);
+ 	return err;
+ }
++#endif
++
++#ifdef HAVE_STRUCT_ETHTOOL_RXFH_PARAM
++int mlx5e_get_rxfh(struct net_device *netdev, struct ethtool_rxfh_param *rxfh)
++{
++	struct mlx5e_priv *priv = netdev_priv(netdev);
++	u32 rss_context = rxfh->rss_context;
++	int err;
+ 
++	mutex_lock(&priv->state_lock);
++	err = mlx5e_rx_res_rss_get_rxfh(priv->rx_res, rss_context,
++					rxfh->indir, rxfh->key, &rxfh->hfunc);
++	mutex_unlock(&priv->state_lock);
++	return err;
++}
++#else
+ int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
+ 		   u8 *hfunc)
+ {
+ 	return mlx5e_get_rxfh_context(netdev, indir, key, hfunc, 0);
+ }
++#endif
++
++#ifdef HAVE_STRUCT_ETHTOOL_RXFH_PARAM
++int mlx5e_set_rxfh(struct net_device *dev, struct ethtool_rxfh_param *rxfh,
++		   struct netlink_ext_ack *extack)
++{
++	struct mlx5e_priv *priv = netdev_priv(dev);
++	u32 *rss_context = &rxfh->rss_context;
++	u8 hfunc = rxfh->hfunc;
++	int err;
++
++	mutex_lock(&priv->state_lock);
++	if (*rss_context && rxfh->rss_delete) {
++		err = mlx5e_rx_res_rss_destroy(priv->rx_res, *rss_context);
++		goto unlock;
++	}
++
++	if (*rss_context == ETH_RXFH_CONTEXT_ALLOC) {
++		unsigned int count = priv->channels.params.num_channels;
++
++		err = mlx5e_rx_res_rss_init(priv->rx_res, rss_context, count);
++		if (err)
++			goto unlock;
++	}
++
++	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, *rss_context,
++					rxfh->indir, rxfh->key,
++					hfunc == ETH_RSS_HASH_NO_CHANGE ? NULL : &hfunc);
+ 
++unlock:
++	mutex_unlock(&priv->state_lock);
++	return err;
++}
++#else
+ int mlx5e_set_rxfh(struct net_device *dev, const u32 *indir,
+ 		   const u8 *key, const u8 hfunc)
+ {
+@@ -1362,6 +1965,7 @@ int mlx5e_set_rxfh(struct net_device *de
  	mutex_unlock(&priv->state_lock);
  	return err;
  }
 +#endif
  
- int mlx5e_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
- 		   u8 *hfunc)
-@@ -1371,6 +1927,7 @@ int mlx5e_set_rxfh(struct net_device *de
+ #define MLX5E_PFC_PREVEN_AUTO_TOUT_MSEC		100
+ #define MLX5E_PFC_PREVEN_TOUT_MAX_MSEC		8000
+@@ -1371,6 +1975,7 @@ int mlx5e_set_rxfh(struct net_device *de
  	max_t(u16, MLX5E_PFC_PREVEN_TOUT_MIN_MSEC, \
  	      (critical_tout * MLX5E_PFC_PREVEN_MINOR_PRECENT) / 100)
  
@@ -860,7 +922,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int mlx5e_get_pfc_prevention_tout(struct net_device *netdev,
  					 u16 *pfc_prevention_tout)
  {
-@@ -1413,7 +1970,9 @@ static int mlx5e_set_pfc_prevention_tout
+@@ -1413,7 +2018,9 @@ static int mlx5e_set_pfc_prevention_tout
  	return mlx5_set_port_stall_watermark(mdev, critical_tout,
  					     minor);
  }
@@ -870,7 +932,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int mlx5e_get_tunable(struct net_device *dev,
  			     const struct ethtool_tunable *tuna,
  			     void *data)
-@@ -1453,7 +2012,8 @@ static int mlx5e_set_tunable(struct net_
+@@ -1453,7 +2060,8 @@ static int mlx5e_set_tunable(struct net_
  	mutex_unlock(&priv->state_lock);
  	return err;
  }
@@ -880,7 +942,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static void mlx5e_get_pause_stats(struct net_device *netdev,
  				  struct ethtool_pause_stats *pause_stats)
  {
-@@ -1461,7 +2021,7 @@ static void mlx5e_get_pause_stats(struct
+@@ -1461,7 +2069,7 @@ static void mlx5e_get_pause_stats(struct
  
  	mlx5e_stats_pause_get(priv, pause_stats);
  }
@@ -889,7 +951,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  void mlx5e_ethtool_get_pauseparam(struct mlx5e_priv *priv,
  				  struct ethtool_pauseparam *pauseparam)
  {
-@@ -1546,7 +2106,6 @@ static int mlx5e_get_ts_info(struct net_
+@@ -1546,7 +2154,6 @@ static int mlx5e_get_ts_info(struct net_
  
  	return mlx5e_ethtool_get_ts_info(priv, info);
  }
@@ -897,7 +959,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static __u32 mlx5e_get_wol_supported(struct mlx5_core_dev *mdev)
  {
  	__u32 ret = 0;
-@@ -1669,7 +2228,7 @@ static int mlx5e_set_wol(struct net_devi
+@@ -1669,7 +2276,7 @@ static int mlx5e_set_wol(struct net_devi
  
  	return mlx5_set_port_wol(mdev, mlx5_wol_mode);
  }
@@ -906,7 +968,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static void mlx5e_get_fec_stats(struct net_device *netdev,
  				struct ethtool_fec_stats *fec_stats)
  {
-@@ -1677,7 +2236,8 @@ static void mlx5e_get_fec_stats(struct n
+@@ -1677,7 +2284,8 @@ static void mlx5e_get_fec_stats(struct n
  
  	mlx5e_stats_fec_get(priv, fec_stats);
  }
@@ -916,7 +978,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int mlx5e_get_fecparam(struct net_device *netdev,
  			      struct ethtool_fecparam *fecparam)
  {
-@@ -1734,7 +2294,7 @@ static int mlx5e_set_fecparam(struct net
+@@ -1734,7 +2342,7 @@ static int mlx5e_set_fecparam(struct net
  
  	return 0;
  }
@@ -925,7 +987,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static u32 mlx5e_get_msglevel(struct net_device *dev)
  {
  	return ((struct mlx5e_priv *)netdev_priv(dev))->msglevel;
-@@ -1847,6 +2407,7 @@ static int mlx5e_get_module_eeprom(struc
+@@ -1847,6 +2455,7 @@ static int mlx5e_get_module_eeprom(struc
  	return 0;
  }
  
@@ -933,7 +995,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int mlx5e_get_module_eeprom_by_page(struct net_device *netdev,
  					   const struct ethtool_module_eeprom *page_data,
  					   struct netlink_ext_ack *extack)
-@@ -1889,6 +2450,7 @@ static int mlx5e_get_module_eeprom_by_pa
+@@ -1889,6 +2498,7 @@ static int mlx5e_get_module_eeprom_by_pa
  
  	return i;
  }
@@ -941,7 +1003,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  
  int mlx5e_ethtool_flash_device(struct mlx5e_priv *priv,
  			       struct ethtool_flash *flash)
-@@ -1908,7 +2470,11 @@ int mlx5e_ethtool_flash_device(struct ml
+@@ -1908,7 +2518,11 @@ int mlx5e_ethtool_flash_device(struct ml
  	dev_hold(dev);
  	rtnl_unlock();
  
@@ -954,7 +1016,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  	release_firmware(fw);
  
  	rtnl_lock();
-@@ -2005,6 +2571,37 @@ int mlx5e_modify_rx_cqe_compression_lock
+@@ -2005,6 +2619,37 @@ int mlx5e_modify_rx_cqe_compression_lock
  	return 0;
  }
  
@@ -992,7 +1054,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int set_pflag_rx_cqe_compress(struct net_device *netdev,
  				     bool enable)
  {
-@@ -2026,6 +2623,19 @@ static int set_pflag_rx_cqe_compress(str
+@@ -2026,6 +2671,19 @@ static int set_pflag_rx_cqe_compress(str
  	return 0;
  }
  
@@ -1012,7 +1074,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int set_pflag_rx_striding_rq(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -2041,7 +2651,11 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2041,7 +2699,11 @@ static int set_pflag_rx_striding_rq(stru
  
  		if (err)
  			return err;
@@ -1024,7 +1086,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  		netdev_warn(netdev, "Can't set legacy RQ with HW-GRO/LRO, disable them first\n");
  		return -EINVAL;
  	}
-@@ -2054,6 +2668,39 @@ static int set_pflag_rx_striding_rq(stru
+@@ -2054,6 +2716,39 @@ static int set_pflag_rx_striding_rq(stru
  	return mlx5e_safe_switch_params(priv, &new_params, NULL, NULL, true);
  }
  
@@ -1064,7 +1126,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static int set_pflag_rx_no_csum_complete(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -2062,7 +2709,11 @@ static int set_pflag_rx_no_csum_complete
+@@ -2062,7 +2757,11 @@ static int set_pflag_rx_no_csum_complete
  	int i;
  
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state) ||
@@ -1076,7 +1138,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  		return 0;
  
  	for (i = 0; i < channels->num; i++) {
-@@ -2099,10 +2750,12 @@ static int set_pflag_per_channel_stats(s
+@@ -2099,10 +2798,12 @@ static int set_pflag_per_channel_stats(s
  	return 0;
  }
  
@@ -1089,7 +1151,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  
  static int set_pflag_skb_tx_mpwqe(struct net_device *netdev, bool enable)
  {
-@@ -2130,17 +2783,20 @@ static int set_pflag_tx_port_ts(struct n
+@@ -2130,17 +2831,20 @@ static int set_pflag_tx_port_ts(struct n
  	}
  
  	new_params = priv->channels.params;
@@ -1110,7 +1172,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  	MLX5E_SET_PFLAG(&new_params, MLX5E_PFLAG_TX_PORT_TS, enable);
  	/* No need to verify SQ stop room as
  	 * ptpsq.txqsq.stop_room <= generic_sq->stop_room, and both
-@@ -2216,18 +2872,44 @@ static int set_pflag_tx_xdp_hw_checksum(
+@@ -2216,18 +2920,44 @@ static int set_pflag_tx_xdp_hw_checksum(
  	return err;
  }
  
@@ -1155,7 +1217,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  };
  
  static int mlx5e_handle_pflag(struct net_device *netdev,
-@@ -2269,7 +2951,6 @@ static int mlx5e_set_priv_flags(struct n
+@@ -2269,7 +2999,6 @@ static int mlx5e_set_priv_flags(struct n
  
  	mutex_unlock(&priv->state_lock);
  
@@ -1163,7 +1225,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  	netdev_update_features(netdev);
  
  	return err;
-@@ -2343,6 +3024,7 @@ int mlx5_query_port_status(struct mlx5_c
+@@ -2343,6 +3072,7 @@ int mlx5_query_port_status(struct mlx5_c
  	return 0;
  }
  
@@ -1171,7 +1233,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  struct mlx5e_ethtool_link_ext_state_opcode_mapping {
  	u32 status_opcode;
  	enum ethtool_link_ext_state link_ext_state;
-@@ -2487,7 +3169,8 @@ mlx5e_get_link_ext_state(struct net_devi
+@@ -2487,7 +3217,8 @@ mlx5e_get_link_ext_state(struct net_devi
  
  	return -ENODATA;
  }
@@ -1181,7 +1243,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  static void mlx5e_get_eth_phy_stats(struct net_device *netdev,
  				    struct ethtool_eth_phy_stats *phy_stats)
  {
-@@ -2520,15 +3203,24 @@ static void mlx5e_get_rmon_stats(struct
+@@ -2520,15 +3251,24 @@ static void mlx5e_get_rmon_stats(struct
  
  	mlx5e_stats_rmon_get(priv, rmon_stats, ranges);
  }
@@ -1206,7 +1268,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  	.get_strings       = mlx5e_get_strings,
  	.get_sset_count    = mlx5e_get_sset_count,
  	.get_ethtool_stats = mlx5e_get_ethtool_stats,
-@@ -2538,19 +3230,31 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2538,19 +3278,31 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_channels      = mlx5e_set_channels,
  	.get_coalesce      = mlx5e_get_coalesce,
  	.set_coalesce      = mlx5e_set_coalesce,
@@ -1238,7 +1300,7 @@ Change-Id: Ic2cb006c4461ba19d950d4b1965366927d0a5ea3
  	.get_pauseparam    = mlx5e_get_pauseparam,
  	.set_pauseparam    = mlx5e_set_pauseparam,
  	.get_ts_info       = mlx5e_get_ts_info,
-@@ -2559,22 +3263,30 @@ const struct ethtool_ops mlx5e_ethtool_o
+@@ -2559,22 +3311,30 @@ const struct ethtool_ops mlx5e_ethtool_o
  	.set_wol	   = mlx5e_set_wol,
  	.get_module_info   = mlx5e_get_module_info,
  	.get_module_eeprom = mlx5e_get_module_eeprom,

@@ -15,4 +15,4 @@ ExecStop=/etc/init.d/openibd stop
 ExecReload=/etc/init.d/openibd restart bootid=%b
 
 [Install]
-WantedBy=sysinit.target
+WantedBy=multi-user.target

@@ -225,6 +225,15 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_MMGET_NOT_ZERO
 	fi
 
+# define HAVE_NET_PAGE_POOL_H from other flags
+	if check_compat_config_h_var HAVE_NET_PAGE_POOL_OLD_H ||
+	   check_compat_config_h_var HAVE_NET_PAGE_POOL_TYPES_H
+	then
+		set_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
+	else
+		unset_complex_define_to_config_h HAVE_NET_PAGE_POOL_H
+	fi
+
 # Define HAVE_SHAMPO_SUPPORT from other flags
 	if check_compat_config_h_var HAVE_NET_PAGE_POOL_H
 	then

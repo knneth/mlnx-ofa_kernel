@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
 ---
- .../mellanox/mlx5/core/en_accel/tls.h         | 32 +++++++++++++++++--
- 1 file changed, 30 insertions(+), 2 deletions(-)
+ .../mellanox/mlx5/core/en_accel/tls.h         | 36 +++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls.h
@@ -21,9 +21,11 @@ Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
  	u32 expected_seq;
  	__be32 swid;
  };
-@@ -70,14 +74,27 @@ static inline struct mlx5e_tls_offload_c
+@@ -69,24 +73,50 @@ struct mlx5e_tls_offload_context_tx {
+ static inline struct mlx5e_tls_offload_context_tx *
  mlx5e_get_tls_tx_context(struct tls_context *tls_ctx)
  {
++#ifdef TLS_OFFLOAD_CONTEXT_SIZE_TX
  	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_tx) >
 +#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
  		     TLS_OFFLOAD_CONTEXT_SIZE_TX);
@@ -31,6 +33,7 @@ Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
 +#else
 +		     TLS_OFFLOAD_CONTEXT_SIZE);
 +#endif
++#endif /* TLS_OFFLOAD_CONTEXT_SIZE_TX */
 +	return container_of(
 +#ifdef HAVE_TLS_OFFLOAD_CONTEXT_TX_STRUCT
 +			    tls_offload_ctx_tx(tls_ctx),
@@ -50,9 +53,10 @@ Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
  	__be32 handle;
  };
  
-@@ -85,8 +102,17 @@ static inline struct mlx5e_tls_offload_c
+ static inline struct mlx5e_tls_offload_context_rx *
  mlx5e_get_tls_rx_context(struct tls_context *tls_ctx)
  {
++#ifdef TLS_OFFLOAD_CONTEXT_SIZE_TX
  	BUILD_BUG_ON(sizeof(struct mlx5e_tls_offload_context_rx) >
 +#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
  		     TLS_OFFLOAD_CONTEXT_SIZE_RX);
@@ -60,6 +64,7 @@ Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
 +#else
 +		     TLS_OFFLOAD_CONTEXT_SIZE);
 +#endif
++#endif /* TLS_OFFLOAD_CONTEXT_SIZE_TX */
 +	return container_of(
 +#ifdef HAVE_TLS_OFFLOAD_CONTEXT_RX_STRUCT
 +			    tls_offload_ctx_rx(tls_ctx),
@@ -69,7 +74,7 @@ Change-Id: Ic6d0ecbaadb1c6c9e60709a132aae3aaef1888a9
  			    struct mlx5e_tls_offload_context_rx,
  			    base);
  }
-@@ -114,9 +140,11 @@ static inline bool mlx5e_accel_is_tls_de
+@@ -114,9 +144,11 @@ static inline bool mlx5e_accel_is_tls_de
  
  static inline void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
  {

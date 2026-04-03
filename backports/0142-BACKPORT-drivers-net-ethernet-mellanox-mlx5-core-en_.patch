@@ -3,12 +3,12 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
 
 Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
 ---
- .../net/ethernet/mellanox/mlx5/core/en_arfs.c | 24 +++++++++++++------
- 1 file changed, 17 insertions(+), 7 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_arfs.c | 28 ++++++++++++++-----
+ 1 file changed, 21 insertions(+), 7 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_arfs.c
-@@ -30,6 +30,8 @@
+@@ -30,12 +30,18 @@
   * SOFTWARE.
   */
  
@@ -17,7 +17,17 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  #include <linux/hash.h>
  #include <linux/mlx5/fs.h>
  #include <linux/ip.h>
-@@ -96,7 +98,7 @@ struct arfs_rule {
+ #include <linux/ipv6.h>
+ #include "en.h"
+ 
++#ifdef HAVE_RPS_H
++#include <net/rps.h>
++#endif
++
+ #define ARFS_HASH_SHIFT BITS_PER_BYTE
+ #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
+ 
+@@ -96,7 +102,7 @@ struct arfs_rule {
  
  #define mlx5e_for_each_hash_arfs_rule(hn, tmp, hash, j) \
  	for (j = 0; j < ARFS_HASH_SIZE; j++) \
@@ -26,7 +36,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  
  static enum mlx5_traffic_types arfs_get_tt(enum arfs_type type)
  {
-@@ -406,6 +408,8 @@ static void arfs_may_expire_flow(struct
+@@ -406,6 +412,8 @@ static void arfs_may_expire_flow(struct
  	int i;
  	int j;
  
@@ -35,7 +45,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  	spin_lock_bh(&priv->fs.arfs->arfs_lock);
  	mlx5e_for_each_arfs_rule(arfs_rule, htmp, priv->fs.arfs->arfs_tables, i, j) {
  		if (!work_pending(&arfs_rule->arfs_work) &&
-@@ -419,7 +423,7 @@ static void arfs_may_expire_flow(struct
+@@ -419,7 +427,7 @@ static void arfs_may_expire_flow(struct
  		}
  	}
  	spin_unlock_bh(&priv->fs.arfs->arfs_lock);
@@ -44,7 +54,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  		if (arfs_rule->rule)
  			mlx5_del_flow_rules(arfs_rule->rule);
  		hlist_del(&arfs_rule->hlist);
-@@ -435,6 +439,8 @@ static void arfs_del_rules(struct mlx5e_
+@@ -435,6 +443,8 @@ static void arfs_del_rules(struct mlx5e_
  	int i;
  	int j;
  
@@ -53,7 +63,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  	spin_lock_bh(&priv->fs.arfs->arfs_lock);
  	mlx5e_for_each_arfs_rule(rule, htmp, priv->fs.arfs->arfs_tables, i, j) {
  		hlist_del_init(&rule->hlist);
-@@ -442,7 +448,7 @@ static void arfs_del_rules(struct mlx5e_
+@@ -442,7 +452,7 @@ static void arfs_del_rules(struct mlx5e_
  	}
  	spin_unlock_bh(&priv->fs.arfs->arfs_lock);
  
@@ -62,7 +72,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  		cancel_work_sync(&rule->arfs_work);
  		if (rule->rule)
  			mlx5_del_flow_rules(rule->rule);
-@@ -687,9 +693,10 @@ static struct arfs_rule *arfs_find_rule(
+@@ -687,9 +697,10 @@ static struct arfs_rule *arfs_find_rule(
  {
  	struct arfs_rule *arfs_rule;
  	struct hlist_head *head;
@@ -74,7 +84,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  		if (arfs_cmp(&arfs_rule->tuple, fk))
  			return arfs_rule;
  	}
-@@ -705,8 +712,11 @@ int mlx5e_rx_flow_steer(struct net_devic
+@@ -705,8 +716,11 @@ int mlx5e_rx_flow_steer(struct net_devic
  	struct arfs_table *arfs_t;
  	struct arfs_rule *arfs_rule;
  	struct flow_keys fk;
@@ -88,7 +98,7 @@ Change-Id: I8ca092e44ac03af49a2043ff7c0b1d9bcd52a2d3
  		return -EPROTONOSUPPORT;
  
  	if (fk.basic.n_proto != htons(ETH_P_IP) &&
-@@ -739,4 +749,4 @@ int mlx5e_rx_flow_steer(struct net_devic
+@@ -739,4 +753,4 @@ int mlx5e_rx_flow_steer(struct net_devic
  	spin_unlock_bh(&arfs->arfs_lock);
  	return arfs_rule->filter_id;
  }

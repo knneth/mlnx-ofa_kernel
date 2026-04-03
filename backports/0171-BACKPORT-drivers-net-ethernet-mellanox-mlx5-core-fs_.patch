@@ -203,7 +203,7 @@ Change-Id: I0fa7e6ba70eca6894561bed963aee56e3ae9ef89
  	}
  
  	kvfree(in);
-@@ -1737,12 +1794,16 @@ static struct mlx5_flow_handle *add_rule
+@@ -1747,13 +1804,17 @@ static struct mlx5_flow_handle *add_rule
  		fte->action.action = old_action;
  		return handle;
  	}
@@ -211,8 +211,9 @@ Change-Id: I0fa7e6ba70eca6894561bed963aee56e3ae9ef89
  	trace_mlx5_fs_set_fte(fte, false);
 +#endif
  
+ 	/* Link newly added rules into the tree. */
  	for (i = 0; i < handle->num_rules; i++) {
- 		if (refcount_read(&handle->rule[i]->node.refcount) == 1) {
+ 		if (!handle->rule[i]->node.parent) {
  			tree_add_node(&handle->rule[i]->node, &fte->node);
 +#ifndef MLX_DISABLE_TRACEPOINTS
  			trace_mlx5_fs_add_rule(handle->rule[i]);
@@ -220,7 +221,7 @@ Change-Id: I0fa7e6ba70eca6894561bed963aee56e3ae9ef89
  		}
  	}
  	return handle;
-@@ -1808,16 +1869,26 @@ static int build_match_list(struct match
+@@ -1819,16 +1880,26 @@ static int build_match_list(struct match
  			    struct mlx5_flow_group *fg,
  			    bool ft_locked)
  {
@@ -249,7 +250,7 @@ Change-Id: I0fa7e6ba70eca6894561bed963aee56e3ae9ef89
  		struct match_list *curr_match;
  
  		if (fg && fg != g)
-@@ -3232,8 +3303,8 @@ cleanup:
+@@ -3243,8 +3314,8 @@ cleanup:
  int mlx5_init_fs(struct mlx5_core_dev *dev)
  {
  	struct mlx5_flow_steering *steering;

@@ -4,8 +4,8 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I4156bb1bb885f2f506e212654ccb68453802859e
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.h | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/tls_rxtx.h
@@ -18,7 +18,20 @@ Change-Id: I4156bb1bb885f2f506e212654ccb68453802859e
  
  #include <linux/skbuff.h>
  #include "en.h"
-@@ -86,6 +86,6 @@ static inline u16 mlx5e_tls_get_stop_roo
+@@ -48,10 +48,12 @@ u16 mlx5e_tls_get_stop_room(struct mlx5_
+ bool mlx5e_tls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
+ 			     struct sk_buff *skb, struct mlx5e_accel_tx_tls_state *state);
+ 
++#ifndef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
+ static inline bool mlx5e_tls_skb_offloaded(struct sk_buff *skb)
+ {
+ 	return skb->sk && tls_is_sk_tx_device_offloaded(skb->sk);
+ }
++#endif
+ 
+ static inline void
+ mlx5e_tls_handle_tx_wqe(struct mlx5_wqe_ctrl_seg *cseg,
+@@ -86,6 +88,6 @@ static inline u16 mlx5e_tls_get_stop_roo
  	return 0;
  }
  

@@ -210,9 +210,9 @@ Change-Id: I55bc9a084b59711b27a8d0ba4d0f556011e7291f
  			mlx5_rescan_drivers_locked(dev0);
  
 +#ifdef CONFIG_MLX5_ESWITCH
- 			err = mlx5_eswitch_reload_reps(dev0->priv.eswitch);
+ 			err = mlx5_eswitch_reload_ib_reps(dev0->priv.eswitch);
  			if (!err)
- 				err = mlx5_eswitch_reload_reps(dev1->priv.eswitch);
+ 				err = mlx5_eswitch_reload_ib_reps(dev1->priv.eswitch);
 @@ -873,6 +991,7 @@ static void mlx5_do_bond(struct mlx5_lag
  				mlx5_core_err(dev0, "Failed to enable lag\n");
  				return;

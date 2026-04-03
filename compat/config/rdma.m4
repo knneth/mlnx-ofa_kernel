@@ -118,6 +118,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if vm_flags_clear exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/hmm.h>
+	],[
+		vm_flags_clear(NULL, 0);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_VM_FLAGS_CLEAR, 1,
+			[vm_flags_clear exists])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if hmm_range has hmm_pfns])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/hmm.h>
@@ -2040,6 +2054,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if net/tls.h has tls_is_skb_tx_device_offloaded])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/tls.h>
+	],[
+		tls_is_skb_tx_device_offloaded(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED, 1,
+			  [net/tls.h has tls_is_skb_tx_device_offloaded])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if ethtool.h has __ethtool_get_link_ksettings])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/ethtool.h>
@@ -2249,6 +2278,23 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_NETDEV_XDP, 1,
 			  [struct netdev_xdp is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if napi_reschedule exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/netdevice.h>
+	],[
+		int ret;
+
+		ret = napi_reschedule(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NAPI_RESCHEDULE, 1,
+			  [napi_reschedule exists])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -4130,6 +4176,19 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+       AC_MSG_CHECKING([if net/rps.h exists])
+       MLNX_BG_LB_LINUX_TRY_COMPILE([
+              #include <net/rps.h>
+       ],[
+              return 0;
+       ],[
+              AC_MSG_RESULT(yes)
+              MLNX_AC_DEFINE(HAVE_RPS_H, 1,
+                       [net/rps.h exists])
+       ],[
+              AC_MSG_RESULT(no)
+       ])
+
 	AC_MSG_CHECKING([if tc_gact.h has is_tcf_gact_goto_chain])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <net/tc_act/tc_gact.h>
@@ -4542,6 +4601,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
         ],[
                 AC_MSG_RESULT(no)
         ])
+
+	AC_MSG_CHECKING([if ethtool.h has struct ethtool_rxfh_param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/ethtool.h>
+	],[
+                struct ethtool_rxfh_param x;
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_STRUCT_ETHTOOL_RXFH_PARAM, 1,
+			  [ethtool.h has struct ethtool_rxfh_param])
+	],[
+		AC_MSG_RESULT(no)
+	])
 
 	AC_MSG_CHECKING([if ndo_get_ringparam get 4 parameters])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
@@ -7177,6 +7250,22 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/eventfd.h has eventfd_signal with 1 param])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/eventfd.h>
+	],[
+
+		eventfd_signal(NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_EVENTFD_SIGNAL_GET_1_PARAM, 1,
+			  [linux/eventfd.h has eventfd_signal with 1 param])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
         AC_MSG_CHECKING([if net/ipv6.h has struct hop_jumbo_hdr])
         MLNX_BG_LB_LINUX_TRY_COMPILE([
                 #include <net/ipv6.h>
@@ -7615,6 +7704,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT, 1,
 			  [function map_queues returns int])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if bdev_file_open_by_path exist])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/blkdev.h>
+	],[
+		bdev_file_open_by_path(NULL, 0, NULL, NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_BDEV_FILE_OPEN_BY_PATH, 1,
+			[bdev_file_open_by_path exist])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -10566,23 +10669,6 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if blkdev.h has blk_rq_append_bio])
-	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blkdev.h>
-	],[
-		struct bio **bio;
-
-		blk_rq_append_bio(NULL, bio);
-
-		return 0;
-	],[
-		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_RQ_APPEND_BIO, 1,
-			[blk_rq_append_bio is defined])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if blkdev.h has blk_init_request_from_bio])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 		#include <linux/blkdev.h>
@@ -12510,8 +12596,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_NET_PAGE_POOL_H, 1,
+		MLNX_AC_DEFINE(HAVE_NET_PAGE_POOL_OLD_H, 1,
 			  [net/page_pool.h is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if net/page_pool/types.h exists])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/page_pool/types.h>
+	],[
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_NET_PAGE_POOL_TYPES_H, 1,
+			  [net/page_pool/types.h is defined])
 	],[
 		AC_MSG_RESULT(no)
 	])
@@ -15563,20 +15662,31 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if blkdev.h has blk_rq_append_bio])
+	AC_MSG_CHECKING([if BLK_STS_RESV_CONFLICT is defined in blk_types])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
-		#include <linux/blkdev.h>
-		#include <linux/blk-mq.h>
+		#include <linux/blk_types.h>
 	],[
-		struct bio *bio;
-
-		blk_rq_append_bio(NULL, bio);
+		blk_status_t error = BLK_STS_RESV_CONFLICT;
 
 		return 0;
 	],[
 		AC_MSG_RESULT(yes)
-		MLNX_AC_DEFINE(HAVE_BLK_RQ_APPEND_BIO_POINTER, 1,
-			[blk_rq_append_bio is defined with struct *bio])
+		MLNX_AC_DEFINE(HAVE_BLK_STS_RESV_CONFLICT, 1,
+				[blk_types.h has BLK_STS_RESV_CONFLICT])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if linux/aer.h has pci_enable_pcie_error_reporting])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <linux/aer.h>
+	],[
+		pci_enable_pcie_error_reporting(NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING, 1,
+			[linux/aer.h has pci_enable_pcie_error_reporting])
 	],[
 		AC_MSG_RESULT(no)
 	])

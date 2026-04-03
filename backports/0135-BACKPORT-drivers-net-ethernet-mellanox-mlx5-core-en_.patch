@@ -28,7 +28,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  	struct work_struct work;
  	struct mlx5e_priv *priv;
  	refcount_t refcnt;
-@@ -405,7 +409,9 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -404,7 +408,9 @@ void mlx5e_ktls_handle_get_psv_completio
  	struct mlx5e_ktls_rx_resync_ctx *resync;
  	u8 tracker_state, auth_state, *ctx;
  	struct device *dev;
@@ -38,7 +38,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  
  	priv_rx = buf->priv_rx;
  	resync = &priv_rx->resync;
-@@ -425,9 +431,14 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -424,9 +430,14 @@ void mlx5e_ktls_handle_get_psv_completio
  		goto out;
  	}
  
@@ -53,7 +53,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  out:
  	mlx5e_ktls_priv_rx_put(priv_rx);
  	dma_unmap_single(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE, DMA_FROM_DEVICE);
-@@ -463,10 +474,12 @@ static void resync_update_sn(struct mlx5
+@@ -462,10 +473,12 @@ static void resync_update_sn(struct mlx5
  	struct ethhdr *eth = (struct ethhdr *)(skb->data);
  	struct net_device *netdev = rq->netdev;
  	struct sock *sk = NULL;
@@ -67,7 +67,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  	int depth = 0;
  
  	__vlan_get_protocol(skb, eth->h_proto, &depth);
-@@ -504,10 +517,14 @@ static void resync_update_sn(struct mlx5
+@@ -503,10 +516,14 @@ static void resync_update_sn(struct mlx5
  	if (unlikely(!resync_queue_get_psv(sk)))
  		goto unref;
  
@@ -82,7 +82,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  
  unref:
  	sock_gen_put(sk);
-@@ -624,8 +641,10 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -623,8 +640,10 @@ int mlx5e_ktls_add_rx(struct net_device
  	accel_rule_init(&priv_rx->rule, priv);
  	resync = &priv_rx->resync;
  	resync_init(resync, priv);
@@ -93,7 +93,7 @@ Change-Id: I32e25b9af4d84f8ef783db930f22dd155d87b7f7
  
  	err = post_rx_param_wqes(priv->channels.c[rxq], priv_rx, start_offload_tcp_sn);
  	if (err)
-@@ -745,3 +764,4 @@ bool mlx5e_ktls_rx_handle_resync_list(st
+@@ -744,3 +763,4 @@ bool mlx5e_ktls_rx_handle_resync_list(st
  
  	return i == budget;
  }
