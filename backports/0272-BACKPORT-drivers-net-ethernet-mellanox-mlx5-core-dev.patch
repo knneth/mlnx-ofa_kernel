@@ -8,8 +8,8 @@ Change-Id: Ie5812c36cd8b3c1c6c8196696ace1c11c7c753fa
 
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
-@@ -29,16 +29,22 @@ struct mlx5_devlink_trap {
- 	struct list_head list;
+@@ -34,16 +34,22 @@ struct mlx5_devlink_trap_event_ctx {
+ 	int err;
  };
  
 +#ifdef HAVE_DEVLINK_TRAP_SUPPORT

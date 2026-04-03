@@ -454,6 +454,24 @@ int mlx5_core_other_function_get_caps(struct mlx5_core_dev *dev,
 	return mlx5_cmd_exec_inout(dev, query_hca_cap, in, out);
 }
 
+void mlx5_core_uplink_netdev_set(struct mlx5_core_dev *dev, struct net_device *netdev)
+{
+	mutex_lock(&dev->mlx5e_res.uplink_netdev_lock);
+	dev->mlx5e_res.uplink_netdev = netdev;
+	mlx5_blocking_notifier_call_chain(dev, MLX5_DRIVER_EVENT_UPLINK_NETDEV,
+					  netdev);
+	mutex_unlock(&dev->mlx5e_res.uplink_netdev_lock);
+}
+
+void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *dev)
+{
+	mutex_lock(&dev->mlx5e_res.uplink_netdev_lock);
+	mlx5_blocking_notifier_call_chain(dev, MLX5_DRIVER_EVENT_UPLINK_NETDEV,
+					  dev->mlx5e_res.uplink_netdev);
+	mutex_unlock(&dev->mlx5e_res.uplink_netdev_lock);
+}
+EXPORT_SYMBOL(mlx5_core_uplink_netdev_event_replay);
+
 static int mlx5_core_get_caps_mode(struct mlx5_core_dev *dev,
 				   enum mlx5_cap_type cap_type,
 				   enum mlx5_cap_mode cap_mode)
@@ -1885,6 +1903,7 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	lockdep_register_key(&dev->lock_key);
 	mutex_init(&dev->intf_state_mutex);
 	lockdep_set_class(&dev->intf_state_mutex, &dev->lock_key);
+	mutex_init(&dev->mlx5e_res.uplink_netdev_lock);
 
 	mutex_init(&priv->bfregs.reg_head.lock);
 	mutex_init(&priv->bfregs.wc_head.lock);
@@ -1957,6 +1976,7 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev)
 	mutex_destroy(&priv->alloc_mutex);
 	mutex_destroy(&priv->bfregs.wc_head.lock);
 	mutex_destroy(&priv->bfregs.reg_head.lock);
+	mutex_destroy(&dev->mlx5e_res.uplink_netdev_lock);
 	mutex_destroy(&dev->intf_state_mutex);
 	lockdep_unregister_key(&dev->lock_key);
 }

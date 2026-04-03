@@ -273,8 +273,8 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
 +#endif
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
- 	enum devlink_trap_action action_orig;
-@@ -267,7 +391,9 @@ static int mlx5_devlink_trap_action_set(
+ 	struct mlx5_devlink_trap_event_ctx trap_event_ctx;
+@@ -268,7 +392,9 @@ static int mlx5_devlink_trap_action_set(
  	int err = 0;
  
  	if (is_mdev_switchdev_mode(dev)) {
@@ -285,8 +285,8 @@ Change-Id: Iaa6fe411197e75608d3debd9585b45e1a5bfb944
  	}
  
 @@ -295,17 +421,26 @@ static int mlx5_devlink_trap_action_set(
- out:
- 	return err;
+ 
+ 	return trap_event_ctx.err;
  }
 +#endif /* HAVE_DEVLINK_TRAP_SUPPORT */
  

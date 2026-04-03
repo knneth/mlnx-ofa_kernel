@@ -49,6 +49,7 @@
 #include <linux/notifier.h>
 #include <linux/refcount.h>
 #include <linux/auxiliary_bus.h>
+#include <linux/mutex.h>
 
 #include <linux/mlx5/device.h>
 #include <linux/mlx5/doorbell.h>
@@ -816,6 +817,7 @@ struct mlx5e_resources {
 	} hw_objs;
 	struct devlink_port dl_port;
 	struct net_device *uplink_netdev;
+	struct mutex uplink_netdev_lock;
 	struct {
 		bool ct_action_on_nat_conns;
 		bool ct_labels_mapping;
@@ -1226,6 +1228,8 @@ int mlx5_cmd_exec_polling(struct mlx5_core_dev *dev, void *in, int in_size,
 bool mlx5_cmd_is_down(struct mlx5_core_dev *dev);
 
 int mlx5_core_query_special_contexts(struct mlx5_core_dev *dev);
+void mlx5_core_uplink_netdev_set(struct mlx5_core_dev *mdev, struct net_device *netdev);
+void mlx5_core_uplink_netdev_event_replay(struct mlx5_core_dev *mdev);
 int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
 int mlx5_core_other_function_get_caps(struct mlx5_core_dev *dev,
 				      u16 function_id, void *out);

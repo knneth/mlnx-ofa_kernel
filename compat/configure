@@ -7483,6 +7483,156 @@ fi
 fi
 
 
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if linux/netdevice.h has register_netdevice_notifier_dev_net" >&5
+$as_echo_n "checking if linux/netdevice.h has register_netdevice_notifier_dev_net... " >&6; }
+
+# init stuff
+
+if [ "X${RAN_MLNX_PARALLEL_INIT_ONCE}" != "X1" ]; then
+	MAX_JOBS=${NJOBS:-1}
+	RAN_MLNX_PARALLEL_INIT_ONCE=1
+	/bin/rm -rf CONFDEFS_H_DIR
+	/bin/mkdir -p CONFDEFS_H_DIR
+	declare -i CONFDEFS_H_INDEX=0
+	declare -i RUNNING_JOBS=0
+fi
+
+
+# wait if there are MAX_JOBS tests running
+if [ $RUNNING_JOBS -eq $MAX_JOBS ]; then
+	wait
+	RUNNING_JOBS=0
+else
+	let RUNNING_JOBS++
+fi
+
+# inc header index
+let CONFDEFS_H_INDEX++
+
+# run test in background if MAX_JOBS > 1
+if [ $MAX_JOBS -eq 1 ]; then
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+	#include <linux/netdevice.h>
+
+int
+main (void)
+{
+
+		register_netdevice_notifier_dev_net(NULL,NULL,NULL);
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_REGISTER_NETDEVICE_NOTIFIER_DEV_NET 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+else
+{
+
+{
+MAKE=${MAKE:-make}
+tmpbuild=$(/bin/mktemp -d $PWD/build/build_XXXXX)
+/bin/cp build/Makefile $tmpbuild/
+cat >$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>$tmpbuild/conftest.$ac_ext
+cat >>$tmpbuild/conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+#include <linux/kernel.h>
+
+	#include <linux/netdevice.h>
+
+int
+main (void)
+{
+
+		register_netdevice_notifier_dev_net(NULL,NULL,NULL);
+		return 0;
+
+  ;
+  return 0;
+}
+_ACEOF
+if { ac_try='env $CROSS_VARS $MAKE -d modules ${LD:+"LD=$CROSS_COMPILE$LD"} CC="$CROSS_COMPILE$CC" -f $tmpbuild/Makefile MLNX_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="-include generated/autoconf.h $XEN_INCLUDES $EXTRA_MLNX_INCLUDE -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -Iinclude -I$LINUX/arch/$SRCARCH/include/uapi -Iarch/$SRCARCH/include/generated/uapi -I$LINUX/include -I$LINUX/include/uapi -Iinclude/generated/uapi  -I$LINUX/arch/$SRCARCH/include -Iarch/$SRCARCH/include/generated -I$LINUX/arch/$SRCARCH/include -I$LINUX/arch/$SRCARCH/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 $CONFIG_INCLUDE_FLAG" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration -Wno-unused-variable -Wno-uninitialized $EXTRA_KCFLAGS" $CROSS_VARS M=$tmpbuild >/dev/null 2>$tmpbuild/output.log; [ $? -ne 0 ] && cat $tmpbuild/output.log 1>&2 && false || config/warning_filter.sh $tmpbuild/output.log'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; } >/dev/null && { ac_try='test -s $tmpbuild/conftest.o'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }; then :
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		cat >>CONFDEFS_H_DIR/confdefs.h.${CONFDEFS_H_INDEX} <<\_ACEOF
+#define HAVE_REGISTER_NETDEVICE_NOTIFIER_DEV_NET 1
+_ACEOF
+
+
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' $tmpbuild/conftest.$ac_ext >&5
+
+
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+/bin/rm -rf $tmpbuild
+}
+
+}&
+fi
+
+
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if linux/netdevice.h has dev_xdp_prog_id" >&5
 $as_echo_n "checking if linux/netdevice.h has dev_xdp_prog_id... " >&6; }
 
@@ -141051,6 +141201,41 @@ fi
 }
 
 }&
+fi
+
+
+
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if Linux was built with symbol svc_pool_wake_idle_thread exported" >&5
+$as_echo_n "checking if Linux was built with symbol svc_pool_wake_idle_thread exported... " >&6; }
+grep -q -E '[[:space:]]svc_pool_wake_idle_thread[[:space:]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
+rc=$?
+if test $rc -ne 0; then
+	export=0
+	for file in net/sunrpc/svc.c; do
+		grep -q -E "EXPORT_SYMBOL.*\(svc_pool_wake_idle_thread\)" "$LINUX/$file" 2>/dev/null
+		rc=$?
+		if test $rc -eq 0; then
+			export=1
+			break;
+		fi
+	done
+	if test $export -eq 0; then
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+	else
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_SVC_POOL_WAKE_IDLE_THREAD 1" >>confdefs.h
+
+	fi
+else
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_SVC_POOL_WAKE_IDLE_THREAD 1" >>confdefs.h
+
 fi
 
 

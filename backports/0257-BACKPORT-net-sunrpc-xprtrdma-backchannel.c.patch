@@ -3,8 +3,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/backchannel.c
 
 Change-Id: I40d3c93c9302ce89b1ec2a1f830fe78b7131a5f5
 ---
- net/sunrpc/xprtrdma/backchannel.c | 141 ++++++++++++++++++++++++++++++
- 1 file changed, 141 insertions(+)
+ net/sunrpc/xprtrdma/backchannel.c | 145 ++++++++++++++++++++++++++++++
+ 1 file changed, 145 insertions(+)
 
 --- a/net/sunrpc/xprtrdma/backchannel.c
 +++ b/net/sunrpc/xprtrdma/backchannel.c
@@ -94,7 +94,7 @@ Change-Id: I40d3c93c9302ce89b1ec2a1f830fe78b7131a5f5
 +out_err:
 +	pr_err("RPC:       %s: setup backchannel transport failed\n", __func__);
 +	return -ENOMEM;
- }
++}
 +#endif
 +
 +#if defined(CONFIG_SUNRPC_BACKCHANNEL) && defined(HAVE_RPC_XPRT_OPS_BC_UP)
@@ -116,7 +116,7 @@ Change-Id: I40d3c93c9302ce89b1ec2a1f830fe78b7131a5f5
 +    if (ret < 0)
 +        return ret;
 +    return 0;
-+}
+ }
 +#endif
  
  /**
@@ -247,3 +247,15 @@ Change-Id: I40d3c93c9302ce89b1ec2a1f830fe78b7131a5f5
  
  	/* Queue rqst for ULP's callback service */
  	bc_serv = xprt->bc_serv;
+@@ -267,7 +408,11 @@ void rpcrdma_bc_receive_call(struct rpcr
+ 	list_add(&rqst->rq_bc_list, &bc_serv->sv_cb_list);
+ 	spin_unlock(&bc_serv->sv_cb_lock);
+ 
++#ifdef HAVE_SVC_POOL_WAKE_IDLE_THREAD
++	svc_pool_wake_idle_thread(&bc_serv->sv_pools[0]);
++#else
+ 	wake_up(&bc_serv->sv_cb_waitq);
++#endif
+ 
+ 	r_xprt->rx_stats.bcall_count++;
+ 	return;

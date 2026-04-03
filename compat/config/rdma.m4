@@ -258,6 +258,20 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if linux/netdevice.h has register_netdevice_notifier_dev_net])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/netdevice.h>
+	],[
+		register_netdevice_notifier_dev_net(NULL,NULL,NULL);
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_REGISTER_NETDEVICE_NOTIFIER_DEV_NET, 1,
+			[register_netdevice_notifier_dev_net is defined])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if linux/netdevice.h has dev_xdp_prog_id])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/netdevice.h>
@@ -13855,6 +13869,13 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 	],[
 		AC_MSG_RESULT(no)
 	])
+
+
+	LB_CHECK_SYMBOL_EXPORT([svc_pool_wake_idle_thread],
+		[net/sunrpc/svc.c],
+		[AC_DEFINE(HAVE_SVC_POOL_WAKE_IDLE_THREAD, 1,
+			[svc_pool_wake_idle_thread is exported by the kernel])],
+	[])
 
 	AC_MSG_CHECKING([if *send_request has 'struct rpc_rqst *req' as a param])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([

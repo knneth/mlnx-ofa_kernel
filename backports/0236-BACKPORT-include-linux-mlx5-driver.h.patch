@@ -17,7 +17,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  #include <linux/kernel.h>
  #include <linux/completion.h>
  #include <linux/pci.h>
-@@ -56,6 +58,9 @@
+@@ -57,6 +59,9 @@
  #include <linux/timecounter.h>
  #include <linux/ptp_clock_kernel.h>
  #include <net/devlink.h>
@@ -27,7 +27,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  
  #define MLX5_ADEV_NAME "mlx5_core"
  
-@@ -457,9 +462,11 @@ struct mlx5_core_health {
+@@ -458,9 +463,11 @@ struct mlx5_core_health {
  	unsigned long			flags;
  	struct mlx5_fw_crdump		*crdump;
  	struct work_struct		fatal_report_work;
@@ -39,7 +39,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  	struct delayed_work		update_fw_log_ts_work;
  	/* failed recoveries in sequence*/
  	u32 failed_in_seq;
-@@ -529,6 +536,7 @@ struct mlx5_core_sriov {
+@@ -530,6 +537,7 @@ struct mlx5_core_sriov {
  	struct kobject		*groups_config;
  	struct kobject		node_guid_kobj;
  	struct mlx5_sriov_vf	*vfs;
@@ -47,7 +47,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  };
  
  struct mlx5_fc_pool {
-@@ -622,6 +630,12 @@ enum {
+@@ -623,6 +631,12 @@ enum {
  	 * creation/deletion on drivers rescan. Unset during device attach.
  	 */
  	MLX5_PRIV_FLAGS_DETACH = 1 << 2,
@@ -60,7 +60,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  };
  
  struct mlx5_adev {
-@@ -661,6 +675,9 @@ struct mlx5_priv {
+@@ -662,6 +676,9 @@ struct mlx5_priv {
  	/* IRQ table valid only for real pci devices PF or VF */
  	struct mlx5_irq_table   *irq_table;
  	struct mlx5_eq_table	*eq_table;
@@ -70,7 +70,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  
  	/* pages stuff */
  	struct mlx5_nb          pg_nb;
-@@ -871,9 +888,11 @@ struct mlx5_clock {
+@@ -873,9 +890,11 @@ struct mlx5_clock {
  	struct mlx5_nb             pps_nb;
  	seqlock_t                  lock;
  	struct hwtstamp_config     hwtstamp_config;
@@ -82,7 +82,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  	struct mlx5_timer          timer;
  };
  
-@@ -965,7 +984,9 @@ struct mlx5_core_dev {
+@@ -967,7 +986,9 @@ struct mlx5_core_dev {
  	enum mlx5_device_state	state;
  	/* sync interface state */
  	struct mutex		intf_state_mutex;
@@ -92,7 +92,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  	unsigned long		intf_state;
  	struct mlx5_priv	priv;
  	struct mlx5_profile	profile;
-@@ -1047,8 +1068,13 @@ struct mlx5_cmd_work_ent {
+@@ -1049,8 +1070,13 @@ struct mlx5_cmd_work_ent {
  	int			page_queue;
  	u8			status;
  	u8			token;
@@ -106,7 +106,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  	u16			op;
  	bool			polling;
  	/* Track the max comp handlers */
-@@ -1183,7 +1209,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
+@@ -1185,7 +1211,7 @@ void mlx5_cmd_allowed_opcode(struct mlx5
  struct mlx5_async_ctx {
  	struct mlx5_core_dev *dev;
  	atomic_t num_inflight;
@@ -115,7 +115,7 @@ Change-Id: Idcc3f0c83f3d8c856b411f26e8d4c3a7b9793253
  };
  
  struct mlx5_async_work;
-@@ -1504,9 +1530,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1508,9 +1534,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {
