@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en_accel/macsec.c       | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct
+@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct macsec_context *ctx)
  		goto out;
  	}
  
@@ -20,7 +22,7 @@ Subject: [PATCH] BACKPORT:
  		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
  			   assoc_num);
  		err = -EINVAL;
-@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct
+@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct macsec_context *ctx)
  
  	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
  	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
@@ -32,7 +34,7 @@ Subject: [PATCH] BACKPORT:
  	macsec_device->tx_sa[assoc_num] = NULL;
  
  out:
-@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct m
+@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct mlx5e_macsec *macsec, struct mlx5e_macsec
  	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
  	metadata_dst_free(rx_sc->md_dst);
  	kfree(rx_sc->sc_xarray_element);
@@ -44,7 +46,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
-@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct
+@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct macsec_context *ctx)
  		goto out;
  	}
  
@@ -56,7 +58,7 @@ Subject: [PATCH] BACKPORT:
  		netdev_err(ctx->netdev,
  			   "MACsec offload update RX sa %d PN isn't supported\n",
  			   assoc_num);
-@@ -1644,7 +1660,9 @@ static const struct macsec_ops macsec_of
+@@ -1644,7 +1660,9 @@ static const struct macsec_ops macsec_offload_ops = {
  	.mdo_add_secy = mlx5e_macsec_add_secy,
  	.mdo_upd_secy = mlx5e_macsec_upd_secy,
  	.mdo_del_secy = mlx5e_macsec_del_secy,

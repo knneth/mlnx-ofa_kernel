@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 61 ++++++++++++++++++-
  1 file changed, 59 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-@@ -18,6 +18,7 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+@@ -18,6 +18,7 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(struct mlx5e_encap_entry *e)
  
  static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
  					      struct flow_cls_offload *f)
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
  	struct netlink_ext_ack *extack = f->common.extack;
-@@ -80,6 +81,31 @@ static int mlx5e_tc_tun_init_encap_attr_
+@@ -80,6 +81,31 @@ static int mlx5e_tc_tun_init_encap_attr_vxlan(struct net_device *tunnel_dev,
  	return 0;
  }
  
@@ -48,7 +50,7 @@ Subject: [PATCH] BACKPORT:
  static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  					    __u8 *ip_proto,
  					    struct mlx5e_encap_entry *e)
-@@ -90,7 +116,11 @@ static int mlx5e_gen_ip_tunnel_header_vx
+@@ -90,7 +116,11 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  	const struct vxlan_metadata *md;
  	struct vxlanhdr *vxh;
  
@@ -60,7 +62,7 @@ Subject: [PATCH] BACKPORT:
  	    e->tun_info->options_len != sizeof(*md))
  		return -EOPNOTSUPP;
  	vxh = (struct vxlanhdr *)((char *)udp + sizeof(struct udphdr));
-@@ -99,9 +129,13 @@ static int mlx5e_gen_ip_tunnel_header_vx
+@@ -99,9 +129,13 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  	udp->dest = tun_key->tp_dst;
  	vxh->vx_flags = VXLAN_HF_VNI;
  	vxh->vx_vni = vxlan_vni_field(tun_id);
@@ -76,7 +78,7 @@ Subject: [PATCH] BACKPORT:
  	}
  
  	return 0;
-@@ -125,7 +159,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+@@ -125,7 +159,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
  		return -EOPNOTSUPP;
  	}
  
@@ -88,7 +90,7 @@ Subject: [PATCH] BACKPORT:
  		NL_SET_ERR_MSG_MOD(extack, "Wrong VxLAN option type: not GBP");
  		return -EOPNOTSUPP;
  	}
-@@ -140,7 +178,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+@@ -140,7 +178,11 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
  	gbp_mask = (u32 *)&enc_opts.mask->data[0];
  
  	if (*gbp_mask & ~VXLAN_GBP_MASK) {
@@ -100,7 +102,7 @@ Subject: [PATCH] BACKPORT:
  		return -EINVAL;
  	}
  
-@@ -234,14 +276,29 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -234,14 +276,29 @@ static int mlx5e_tc_tun_parse_vxlan(struct mlx5e_priv *priv,
  static bool mlx5e_tc_tun_encap_info_equal_vxlan(struct mlx5e_encap_key *a,
  						struct mlx5e_encap_key *b)
  {

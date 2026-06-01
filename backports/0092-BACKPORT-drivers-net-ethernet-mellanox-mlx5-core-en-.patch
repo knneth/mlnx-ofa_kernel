@@ -2,20 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
- void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
- 				  struct mlx5e_encap_entry *e);
- 
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
- 		       void *type_data);
-+#endif
- 
+@@ -39,6 +39,13 @@ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
  void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
  			  struct sk_buff *skb);
  

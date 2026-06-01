@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: fs/fuse/ioctl.c
  fs/fuse/ioctl.c | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
 
+diff --git a/fs/fuse/ioctl.c b/fs/fuse/ioctl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/ioctl.c
 +++ b/fs/fuse/ioctl.c
-@@ -327,7 +327,11 @@ long fuse_do_ioctl(struct file *file, un
+@@ -327,7 +327,11 @@ long fuse_do_ioctl(struct file *file, unsigned int cmd, unsigned long arg,
  		err = -EFAULT;
  		iov_iter_init(&ii, ITER_SOURCE, in_iov, in_iovs, in_size);
  		for (i = 0; iov_iter_count(&ii) && !WARN_ON(i >= ap.num_folios); i++) {
@@ -19,7 +21,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/ioctl.c
  			if (c != PAGE_SIZE && iov_iter_count(&ii))
  				goto out;
  		}
-@@ -501,7 +505,13 @@ static void fuse_priv_ioctl_cleanup(stru
+@@ -501,7 +505,13 @@ static void fuse_priv_ioctl_cleanup(struct inode *inode, struct fuse_file *ff)
  	fuse_file_release(inode, ff, O_RDONLY, NULL, S_ISDIR(inode->i_mode));
  }
  

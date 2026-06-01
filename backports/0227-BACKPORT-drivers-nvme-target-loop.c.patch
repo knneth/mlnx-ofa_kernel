@@ -2,38 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
 
 ---
- drivers/nvme/target/loop.c | 22 ++++++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ drivers/nvme/target/loop.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
+diff --git a/drivers/nvme/target/loop.c b/drivers/nvme/target/loop.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/loop.c
 +++ b/drivers/nvme/target/loop.c
-@@ -80,7 +80,11 @@ static void nvme_loop_complete_rq(struct
- {
- 	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
- 
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 	sg_free_table_chained(&iod->sg_table, NVME_INLINE_SG_CNT);
-+#else
-+	sg_free_table_chained(&iod->sg_table, true);
-+#endif
- 	nvme_complete_rq(req);
- }
- 
-@@ -158,15 +162,25 @@ static blk_status_t nvme_loop_queue_rq(s
- 
- 	if (blk_rq_nr_phys_segments(req)) {
- 		iod->sg_table.sgl = iod->first_sgl;
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 		if (sg_alloc_table_chained(&iod->sg_table,
- 				blk_rq_nr_phys_segments(req),
- 				iod->sg_table.sgl, NVME_INLINE_SG_CNT)) {
-+#else
-+		if (sg_alloc_table_chained(&iod->sg_table,
-+				blk_rq_nr_phys_segments(req),
-+				iod->sg_table.sgl)) {
-+#endif
- 			nvme_cleanup_cmd(req);
- 			return BLK_STS_RESOURCE;
+@@ -166,7 +166,11 @@ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
  		}
  
  		iod->req.sg = iod->sg_table.sgl;
@@ -45,7 +21,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  		iod->req.transfer_len = blk_rq_payload_bytes(req);
  	}
  
-@@ -216,7 +230,9 @@ static int nvme_loop_init_request(struct
+@@ -216,7 +220,9 @@ static int nvme_loop_init_request(struct blk_mq_tag_set *set,
  			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
  }
  
@@ -55,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  
  static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  		unsigned int hctx_idx)
-@@ -232,7 +248,9 @@ static int nvme_loop_init_hctx(struct bl
+@@ -232,7 +238,9 @@ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  	 * then we can remove the dynamically allocated lock class for each
  	 * flush queue, that way may cause horrible boot delay.
  	 */
@@ -65,7 +41,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  
  	hctx->driver_data = queue;
  	return 0;
-@@ -399,7 +417,11 @@ static int nvme_loop_configure_admin_que
+@@ -399,7 +407,11 @@ static int nvme_loop_configure_admin_queue(struct nvme_loop_ctrl *ctrl)
  		goto out_cleanup_tagset;
  
  	ctrl->ctrl.max_hw_sectors =

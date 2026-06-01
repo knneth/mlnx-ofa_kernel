@@ -446,6 +446,12 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 		return false;
 	}
 
+	if (mlx5_core_is_ecpf(dev) && mlx5_external_controller_sf_exist(dev)) {
+		mlx5_core_warn(dev, "External Controller SFs should be removed "
+				    "before reset\n");
+		return false;
+	}
+
 	if (!mlx5_core_is_ecpf(dev) && !mlx5_sf_table_empty(dev)) {
 		mlx5_core_warn(dev, "SFs should be removed before reset\n");
 		return false;

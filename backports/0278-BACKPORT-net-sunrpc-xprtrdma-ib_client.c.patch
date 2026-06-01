@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  net/sunrpc/xprtrdma/ib_client.c | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/ib_client.c b/net/sunrpc/xprtrdma/ib_client.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/ib_client.c
 +++ b/net/sunrpc/xprtrdma/ib_client.c
 @@ -3,6 +3,7 @@
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  
  /* Per-ib_device private data for rpcrdma */
  struct rpcrdma_device {
-@@ -66,7 +69,9 @@ int rpcrdma_rn_register(struct ib_device
+@@ -66,7 +69,9 @@ int rpcrdma_rn_register(struct ib_device *device,
  		return -ENOMEM;
  	kref_get(&rd->rd_kref);
  	rn->rn_done = done;
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  	return 0;
  }
  
-@@ -75,7 +80,9 @@ static void rpcrdma_rn_release(struct kr
+@@ -75,7 +80,9 @@ static void rpcrdma_rn_release(struct kref *kref)
  	struct rpcrdma_device *rd = container_of(kref, struct rpcrdma_device,
  						 rd_kref);
  
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  	complete(&rd->rd_done);
  }
  
-@@ -92,7 +99,9 @@ void rpcrdma_rn_unregister(struct ib_dev
+@@ -92,7 +99,9 @@ void rpcrdma_rn_unregister(struct ib_device *device,
  	if (!rd)
  		return;
  
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  	xa_erase(&rd->rd_xa, rn->rn_index);
  	kref_put(&rd->rd_kref, rpcrdma_rn_release);
  }
-@@ -118,7 +127,9 @@ static int rpcrdma_add_one(struct ib_dev
+@@ -118,7 +127,9 @@ static int rpcrdma_add_one(struct ib_device *device)
  	init_completion(&rd->rd_done);
  	ib_set_client_data(device, &rpcrdma_ib_client, rd);
  
@@ -65,7 +67,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  	return 0;
  }
  
-@@ -137,7 +148,9 @@ static void rpcrdma_remove_one(struct ib
+@@ -137,7 +148,9 @@ static void rpcrdma_remove_one(struct ib_device *device,
  	struct rpcrdma_notification *rn;
  	unsigned long index;
  
@@ -75,7 +77,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/ib_client.c
  
  	set_bit(RPCRDMA_RD_F_REMOVING, &rd->rd_flags);
  	xa_for_each(&rd->rd_xa, index, rn)
-@@ -148,11 +161,15 @@ static void rpcrdma_remove_one(struct ib
+@@ -148,11 +161,15 @@ static void rpcrdma_remove_one(struct ib_device *device,
  	 * registrants for this device.
  	 */
  	if (!refcount_dec_and_test(&rd->rd_kref.refcount)) {

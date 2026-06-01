@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/sf/devlink.c  | 84 +++++++++++++++++--
  1 file changed, 78 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
 @@ -34,9 +34,26 @@ struct mlx5_sf_table {
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT:
  static struct mlx5_sf *
  mlx5_sf_lookup_by_function_id(struct mlx5_sf_table *table, unsigned int fn_id)
  {
-@@ -142,15 +159,30 @@ static bool mlx5_sf_is_active(const stru
+@@ -142,15 +159,30 @@ static bool mlx5_sf_is_active(const struct mlx5_sf *sf)
  {
  	return sf->hw_state == MLX5_VHCA_STATE_ACTIVE || sf->hw_state == MLX5_VHCA_STATE_IN_USE;
  }
@@ -83,7 +85,7 @@ Subject: [PATCH] BACKPORT:
  				      enum devlink_port_fn_state state,
  				      struct netlink_ext_ack *extack)
  {
-@@ -239,7 +276,11 @@ int mlx5_devlink_sf_port_fn_state_set(st
+@@ -239,7 +276,11 @@ int mlx5_devlink_sf_port_fn_state_set(struct devlink_port *dl_port,
  static int mlx5_sf_add(struct mlx5_core_dev *dev, struct mlx5_sf_table *table,
  		       const struct devlink_port_new_attrs *new_attr,
  		       struct netlink_ext_ack *extack,
@@ -95,7 +97,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
  	struct mlx5_sf *sf;
-@@ -253,7 +294,11 @@ static int mlx5_sf_add(struct mlx5_core_
+@@ -253,7 +294,11 @@ static int mlx5_sf_add(struct mlx5_core_dev *dev, struct mlx5_sf_table *table,
  					 &sf->dl_port, new_attr->controller, new_attr->sfnum);
  	if (err)
  		goto esw_err;
@@ -107,7 +109,7 @@ Subject: [PATCH] BACKPORT:
  	trace_mlx5_sf_add(dev, sf->port_index, sf->controller, sf->hw_fn_id, new_attr->sfnum);
  	return 0;
  
-@@ -302,7 +347,11 @@ static bool mlx5_sf_table_supported(cons
+@@ -302,7 +347,11 @@ static bool mlx5_sf_table_supported(const struct mlx5_core_dev *dev)
  int mlx5_devlink_sf_port_new(struct devlink *devlink,
  			     const struct devlink_port_new_attrs *new_attr,
  			     struct netlink_ext_ack *extack,
@@ -119,7 +121,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(devlink_priv(devlink))->device;
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
-@@ -329,7 +378,11 @@ int mlx5_devlink_sf_port_new(struct devl
+@@ -329,7 +378,11 @@ int mlx5_devlink_sf_port_new(struct devlink *devlink,
  		goto unlock_mlxdevm;
  	}
  
@@ -131,7 +133,7 @@ Subject: [PATCH] BACKPORT:
  
  unlock_mlxdevm:
  	if (!mlxdevm->mlxdevm_flow)
-@@ -375,14 +428,28 @@ static void mlx5_sf_del(struct mlx5_sf_t
+@@ -375,14 +428,28 @@ static void mlx5_sf_del(struct mlx5_sf_table *table, struct mlx5_sf *sf)
  	mlx5_sf_dealloc(table, sf);
  }
  
@@ -161,7 +163,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (!mlxdevm->mlxdevm_flow)
  		devm_lock(mlxdevm);
-@@ -461,6 +528,7 @@ static int mlx5_sf_esw_event(struct noti
+@@ -461,6 +528,7 @@ static int mlx5_sf_esw_event(struct notifier_block *nb, unsigned long event, voi
  	return 0;
  }
  
@@ -177,7 +179,7 @@ Subject: [PATCH] BACKPORT:
  
  int mlx5_sf_table_init(struct mlx5_core_dev *dev)
  {
-@@ -512,9 +581,10 @@ int mlx5_sf_table_init(struct mlx5_core_
+@@ -512,9 +581,10 @@ int mlx5_sf_table_init(struct mlx5_core_dev *dev)
  	if (err)
  		goto vhca_err;
  
@@ -189,7 +191,7 @@ Subject: [PATCH] BACKPORT:
  	return 0;
  
  vhca_err:
-@@ -533,7 +603,9 @@ void mlx5_sf_table_cleanup(struct mlx5_c
+@@ -533,7 +603,9 @@ void mlx5_sf_table_cleanup(struct mlx5_core_dev *dev)
  	if (!table)
  		return;
  

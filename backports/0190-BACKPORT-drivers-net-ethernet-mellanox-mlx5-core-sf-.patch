@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/vhca_event.c
-@@ -93,7 +93,9 @@ mlx5_vhca_event_notify(struct mlx5_core_
+@@ -93,7 +93,9 @@ mlx5_vhca_event_notify(struct mlx5_core_dev *dev, struct mlx5_vhca_state_event *
  					 vhca_state_context.vhca_state);
  
  	mlx5_vhca_event_arm(dev, event->function_id);

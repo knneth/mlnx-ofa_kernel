@@ -708,17 +708,8 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
 	id->cmic = NVME_CTRL_CMIC_MULTI_PORT | NVME_CTRL_CMIC_MULTI_CTRL |
 		NVME_CTRL_CMIC_ANA;
 
-	/* Limit MDTS according to transport capability 
-	 *
-	 *  limit the data transfer size in offload case according to device
-	 *  capability.
-	 *                            */
-	if (req->port->offload)
-		id->mdts = ctrl->ops->peer_to_peer_mdts(req->port);
-	else if (ctrl->ops->get_mdts)
-		id->mdts = ctrl->ops->get_mdts(ctrl);
-	else
-		id->mdts = 0;
+	/* Limit MDTS according to port config or transport capability */
+	id->mdts = nvmet_ctrl_mdts(req);
 
 	if (req->port->offload && req->port->offload_passthrough_sqe_rw)
 		id->ovsncs |= cpu_to_le32(NVME_OVSNCS_PASSTHROUGH_SQE_RW);

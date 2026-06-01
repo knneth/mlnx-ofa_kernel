@@ -6,6 +6,7 @@ PORT=${1##*f}
 PORT_NAME=`echo ${1} | sed -e "s/c[[:digit:]]\+//"`
 IFINDEX=$3
 ECVF=0
+BLUEFIELD_DEVICES="a2d[26cf]"
 
 # need the PATH for BF ARM lspci to work
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -48,6 +49,15 @@ function get_mh_bf_rep_name() {
 }
 
 is_bf=`lspci -s 00:00.0 2> /dev/null | grep -wq "PCI bridge: Mellanox Technologies" && echo 1 || echo 0`
+if [ $is_bf -ne 1 ]; then
+	# Check if the device is a Mellanox BlueField 4 or newer
+	if [ -e /etc/mlnx-release ]; then
+		if [ $(lspci -nD -d 15b3: | grep -E "$BLUEFIELD_DEVICES" | wc -l) -gt 0 ]; then
+			is_bf=1
+		fi
+	fi
+fi
+
 if [ $is_bf -eq 1 ]; then
         num_of_pf=`lspci 2> /dev/null | grep -w "network" | wc -l`
         if [ $num_of_pf -gt 2 ]; then

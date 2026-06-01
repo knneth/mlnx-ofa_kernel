@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 
 Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
 ---
- .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 42 ++++++++++++++++++-
- 1 file changed, 41 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/en/txrx.h | 46 ++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/txrx.h
 @@ -8,6 +8,9 @@
@@ -38,7 +40,7 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
  	MLX5E_ICOSQ_WQE_UMR_TLS,
  	MLX5E_ICOSQ_WQE_SET_PSV_TLS,
  	MLX5E_ICOSQ_WQE_GET_PSV_TLS,
-@@ -86,11 +93,20 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -86,13 +93,26 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget);
  int mlx5e_poll_ico_cq(struct mlx5e_cq *cq);
  
  /* RX */
@@ -57,9 +59,15 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
 +void mlx5e_free_rx_in_progress_descs(struct mlx5e_rq *rq);
 +#endif
  
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++static inline bool mlx5e_rx_hw_stamp(struct kernel_hwtstamp_config *config)
++#else
  static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
++#endif
  {
-@@ -328,6 +344,8 @@ mlx5e_dma_push_single(struct mlx5e_txqsq
+ 	return config->rx_filter == HWTSTAMP_FILTER_ALL;
+ }
+@@ -328,6 +348,8 @@ mlx5e_dma_push_single(struct mlx5e_txqsq *sq, dma_addr_t addr, u32 size)
  	dma->type = MLX5E_DMA_MAP_SINGLE;
  }
  
@@ -68,7 +76,7 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
  static inline void
  mlx5e_dma_push_netmem(struct mlx5e_txqsq *sq, netmem_ref netmem,
  		      dma_addr_t addr, u32 size)
-@@ -338,6 +356,19 @@ mlx5e_dma_push_netmem(struct mlx5e_txqsq
+@@ -338,6 +360,19 @@ mlx5e_dma_push_netmem(struct mlx5e_txqsq *sq, netmem_ref netmem,
  	dma->size = size;
  	dma->type = MLX5E_DMA_MAP_PAGE;
  }
@@ -88,7 +96,7 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
  
  static inline
  struct sk_buff **mlx5e_skb_fifo_get(struct mlx5e_skb_fifo *fifo, u16 i)
-@@ -369,8 +400,12 @@ mlx5e_tx_dma_unmap(struct device *pdev,
+@@ -369,8 +404,12 @@ mlx5e_tx_dma_unmap(struct device *pdev, struct mlx5e_sq_dma *dma)
  		dma_unmap_single(pdev, dma->addr, dma->size, DMA_TO_DEVICE);
  		break;
  	case MLX5E_DMA_MAP_PAGE:
@@ -101,7 +109,7 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
  		break;
  	default:
  		WARN_ONCE(true, "mlx5e_tx_dma_unmap unknown DMA type!\n");
-@@ -496,6 +531,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb,
+@@ -496,6 +535,7 @@ mlx5e_set_eseg_swp(struct sk_buff *skb, struct mlx5_wqe_eth_seg *eseg,
  	case IPPROTO_UDP:
  		eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  		fallthrough;
@@ -109,7 +117,7 @@ Change-Id: I6eec9a699f4caae8bd7b8a2be7916f0a365e176d
  	case IPPROTO_TCP:
  		eseg->swp_inner_l4_offset = skb_inner_transport_offset(skb) / 2;
  		break;
-@@ -579,7 +615,11 @@ static inline bool mlx5e_icosq_can_post_
+@@ -579,7 +619,11 @@ static inline bool mlx5e_icosq_can_post_wqe(struct mlx5e_icosq *sq, u16 wqe_size
  
  static inline struct mlx5e_mpw_info *mlx5e_get_mpw_info(struct mlx5e_rq *rq, int i)
  {

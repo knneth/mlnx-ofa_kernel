@@ -88,8 +88,6 @@ LINUXINCLUDE=\
 		-I$(CWD)/include \
 		-I$(CWD)/include/uapi \
 		-I$(CWD)/drivers/infiniband/debug \
-		$$(if $$(CONFIG_XEN),-D__XEN_INTERFACE_VERSION__=$$(CONFIG_XEN_INTERFACE_VERSION)) \
-		$$(if $$(CONFIG_XEN),-I$$(srctree)/arch/x86/include/mach-xen) \
 		-I$$(srctree)/arch/$$(SRCARCH)/include \
 		-I$$(objtree)/arch/$$(SRCARCH)/include/generated \
 		-I$$(objtree)/include \
@@ -254,11 +252,7 @@ install_scripts:
 	@echo "Installing scripts and configuration files"
 	install -d $(INSTALL_MOD_PATH)/etc/init.d
 	install -d $(INSTALL_MOD_PATH)$(data_dir)
-ifeq ($(shell /usr/bin/lsb_release -s -i 2>/dev/null | grep -qiE "debian|ubuntu" 2>/dev/null && echo YES || echo ''),)
-	install -m 0755 ofed_scripts/openibd $(INSTALL_MOD_PATH)/etc/init.d
-else
-	install -m 0755 ofed_scripts/mlnx-ofed-kernel-utils.openibd.init $(INSTALL_MOD_PATH)/etc/init.d/openibd
-endif
+	install -m 0755 ofed_scripts/openibd $(INSTALL_MOD_PATH)/etc/init.d/openibd
 
 	@echo "Running install helper script"
 	ofed_scripts/install_helper $(INSTALL_MOD_PATH)

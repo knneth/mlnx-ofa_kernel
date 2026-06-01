@@ -6,6 +6,8 @@ Change-Id: I8f6d271197201320c50f893786403f8451d36cb2
  drivers/infiniband/core/cm_trace.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/infiniband/core/cm_trace.h b/drivers/infiniband/core/cm_trace.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cm_trace.h
 +++ b/drivers/infiniband/core/cm_trace.h
 @@ -231,6 +231,9 @@ DEFINE_CM_ERR_EVENT(send_unknown_rej);

@@ -6,6 +6,8 @@ Change-Id: I71a44c858552cdff6ddf9460726eda5660cf1b9f
  drivers/net/ethernet/mellanox/mlx5/core/lib/st.c | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
 @@ -3,6 +3,7 @@

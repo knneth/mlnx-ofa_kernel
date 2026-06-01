@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
  drivers/nvme/target/io-cmd-file.c | 33 +++++++++++++++++++++++++++++++
  1 file changed, 33 insertions(+)
 
+diff --git a/drivers/nvme/target/io-cmd-file.c b/drivers/nvme/target/io-cmd-file.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/io-cmd-file.c
 +++ b/drivers/nvme/target/io-cmd-file.c
 @@ -76,6 +76,15 @@ err:
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
  static ssize_t nvmet_file_submit_bvec(struct nvmet_req *req, loff_t pos,
  		unsigned long nr_segs, size_t count, int ki_flags)
  {
-@@ -88,22 +97,38 @@ static ssize_t nvmet_file_submit_bvec(st
+@@ -88,22 +97,38 @@ static ssize_t nvmet_file_submit_bvec(struct nvmet_req *req, loff_t pos,
  		if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
  			ki_flags |= IOCB_DSYNC;
  		call_iter = req->ns->file->f_op->write_iter;
@@ -62,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
  {
  	struct nvmet_req *req = container_of(iocb, struct nvmet_req, f.iocb);
  	u16 status = NVME_SC_SUCCESS;
-@@ -142,8 +167,12 @@ static bool nvmet_file_execute_io(struct
+@@ -142,8 +167,12 @@ static bool nvmet_file_execute_io(struct nvmet_req *req, int ki_flags)
  
  	memset(&req->f.iocb, 0, sizeof(struct kiocb));
  	for_each_sg(req->sg, sg, req->sg_cnt, i) {
@@ -75,7 +77,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/io-cmd-file.c
  		len += req->f.bvec[bv_cnt].bv_len;
  		total_len += req->f.bvec[bv_cnt].bv_len;
  		bv_cnt++;
-@@ -201,7 +230,11 @@ static bool nvmet_file_execute_io(struct
+@@ -201,7 +230,11 @@ static bool nvmet_file_execute_io(struct nvmet_req *req, int ki_flags)
  	}
  
  complete:

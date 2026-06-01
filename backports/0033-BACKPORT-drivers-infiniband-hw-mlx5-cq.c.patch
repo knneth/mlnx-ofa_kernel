@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
  drivers/infiniband/hw/mlx5/cq.c | 21 +++++++++++++++++++--
  1 file changed, 19 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/cq.c b/drivers/infiniband/hw/mlx5/cq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/cq.c
 +++ b/drivers/infiniband/hw/mlx5/cq.c
-@@ -754,9 +754,16 @@ static int create_cq_user(struct mlx5_ib
+@@ -754,9 +754,16 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
  
  	*cqe_size = ucmd.cqe_size;
  
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
  	if (IS_ERR(cq->buf.umem)) {
  		err = PTR_ERR(cq->buf.umem);
  		return err;
-@@ -770,7 +777,11 @@ static int create_cq_user(struct mlx5_ib
+@@ -770,7 +777,11 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
  		goto err_umem;
  	}
  
@@ -38,7 +40,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
  	if (err)
  		goto err_umem;
  
-@@ -1196,9 +1207,15 @@ static int resize_user(struct mlx5_ib_de
+@@ -1196,9 +1207,15 @@ static int resize_user(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
  	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
  		return -EINVAL;
  

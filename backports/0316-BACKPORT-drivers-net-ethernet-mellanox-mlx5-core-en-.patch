@@ -7,9 +7,11 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  .../mellanox/mlx5/core/en/reporter_rx.c       | 565 ++++++++++++++++--
  1 file changed, 523 insertions(+), 42 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
-@@ -23,6 +23,7 @@ static const char * const rq_sw_state_ty
+@@ -23,6 +23,7 @@ static const char * const rq_sw_state_type_name[] = {
  	[MLX5E_RQ_STATE_XSK] = "xsk",
  };
  
@@ -25,7 +27,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  
  static int mlx5e_wait_for_icosq_flush(struct mlx5e_icosq *icosq)
  {
-@@ -91,8 +93,10 @@ static int mlx5e_rx_reporter_err_icosq_c
+@@ -91,8 +93,10 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
  
  	/* mlx5e_close_rq cancels this work before RQ and ICOSQ are killed. */
  	rq = &icosq->channel->rq;
@@ -36,7 +38,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	mdev = icosq->channel->mdev;
  	dev = icosq->channel->netdev;
  	err = mlx5_core_query_sq_state(mdev, icosq->sqn, &state);
-@@ -123,9 +127,17 @@ static int mlx5e_rx_reporter_err_icosq_c
+@@ -123,9 +127,17 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
  
  	mlx5e_reset_icosq_cc_pc(icosq);
  
@@ -54,7 +56,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  
  	clear_bit(MLX5E_SQ_STATE_RECOVERING, &icosq->state);
  	mlx5e_activate_icosq(icosq);
-@@ -178,6 +190,8 @@ static int mlx5e_rx_reporter_timeout_rec
+@@ -178,6 +190,8 @@ static int mlx5e_rx_reporter_timeout_recover(void *ctx)
  
  	rq = ctx;
  	priv = rq->priv;
@@ -63,7 +65,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  
  	/* Acquire netdev instance lock to synchronize with channel close and
  	 * reopen flows. Either successfully obtain the lock, or detect that
-@@ -189,6 +203,7 @@ static int mlx5e_rx_reporter_timeout_rec
+@@ -189,6 +203,7 @@ static int mlx5e_rx_reporter_timeout_recover(void *ctx)
  			return 0;
  		msleep(20);
  	}
@@ -71,7 +73,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	mutex_lock(&priv->state_lock);
  
  	eq = rq->cq.mcq.eq;
-@@ -198,37 +213,30 @@ static int mlx5e_rx_reporter_timeout_rec
+@@ -198,37 +213,30 @@ static int mlx5e_rx_reporter_timeout_recover(void *ctx)
  		clear_bit(MLX5E_SQ_STATE_ENABLED, &rq->icosq->state);
  
  	mutex_unlock(&priv->state_lock);
@@ -121,7 +123,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "CQ");
  	devlink_fmsg_u32_pair_put(fmsg, "cqn", icosq->cq.mcq.cqn);
  	devlink_fmsg_u32_pair_put(fmsg, "cc", icosq->cq.wq.cc);
-@@ -236,21 +244,97 @@ static void mlx5e_reporter_icosq_diagnos
+@@ -236,21 +244,97 @@ static void mlx5e_reporter_icosq_diagnose(struct mlx5e_icosq *icosq, u8 hw_state
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
  
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -222,7 +224,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  }
  
  static int
-@@ -271,6 +355,7 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -271,6 +355,7 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  	wq_head = mlx5e_rqwq_get_head(rq);
  	wqe_counter = mlx5e_rqwq_get_wqe_counter(rq);
  
@@ -230,7 +232,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	devlink_fmsg_u32_pair_put(fmsg, "rqn", rq->rqn);
  	devlink_fmsg_u8_pair_put(fmsg, "HW state", hw_state);
  	devlink_fmsg_u32_pair_put(fmsg, "WQE counter", wqe_counter);
-@@ -279,7 +364,39 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -279,7 +364,39 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  	mlx5e_health_rq_put_sw_state(fmsg, rq);
  	mlx5e_health_cq_diag_fmsg(&rq->cq, fmsg);
  	mlx5e_health_eq_diag_fmsg(rq->cq.mcq.eq, fmsg);
@@ -270,7 +272,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	if (rq->icosq) {
  		struct mlx5e_icosq *icosq = rq->icosq;
  		u8 icosq_hw_state;
-@@ -289,34 +406,90 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -289,34 +406,90 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  		if (err)
  			return err;
  
@@ -366,7 +368,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "RQ");
  	devlink_fmsg_u8_pair_put(fmsg, "type", params->rq_wq_type);
  	devlink_fmsg_u64_pair_put(fmsg, "stride size", rq_stride);
-@@ -324,38 +497,139 @@ static void mlx5e_rx_reporter_diagnose_g
+@@ -324,38 +497,139 @@ static void mlx5e_rx_reporter_diagnose_generic_rq(struct mlx5e_rq *rq,
  	devlink_fmsg_string_pair_put(fmsg, "ts_format", real_time ? "RT" : "FRC");
  	mlx5e_health_cq_common_diag_fmsg(&rq->cq, fmsg);
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -508,7 +510,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  }
  
  static void mlx5e_rx_reporter_diagnose_rx_res_dir_tirns(struct mlx5e_rx_res *rx_res,
-@@ -458,9 +732,12 @@ static void mlx5e_rx_reporter_diagnose_r
+@@ -458,9 +732,12 @@ static void mlx5e_rx_reporter_diagnose_rqs(struct mlx5e_priv *priv, struct devli
  		struct mlx5e_channel *c = priv->channels.c[i];
  		struct mlx5e_rq *rq;
  
@@ -522,7 +524,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  		mlx5e_rx_reporter_build_diagnose_output(rq, fmsg);
  	}
  	if (ptp_ch && test_bit(MLX5E_PTP_STATE_RX, ptp_ch->state))
-@@ -470,8 +747,11 @@ static void mlx5e_rx_reporter_diagnose_r
+@@ -470,8 +747,11 @@ static void mlx5e_rx_reporter_diagnose_rqs(struct mlx5e_priv *priv, struct devli
  }
  
  static int mlx5e_rx_reporter_diagnose(struct devlink_health_reporter *reporter,
@@ -536,7 +538,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  
-@@ -493,34 +773,87 @@ static int mlx5e_rx_reporter_dump_icosq(
+@@ -493,34 +773,87 @@ static int mlx5e_rx_reporter_dump_icosq(struct mlx5e_priv *priv, struct devlink_
  {
  	struct mlx5e_txqsq *icosq = ctx;
  	struct mlx5_rsc_key key = {};
@@ -627,7 +629,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  }
  
  static int mlx5e_rx_reporter_dump_rq(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
-@@ -528,34 +861,89 @@ static int mlx5e_rx_reporter_dump_rq(str
+@@ -528,34 +861,89 @@ static int mlx5e_rx_reporter_dump_rq(struct mlx5e_priv *priv, struct devlink_fms
  {
  	struct mlx5_rsc_key key = {};
  	struct mlx5e_rq *rq = ctx;
@@ -717,7 +719,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  }
  
  static int mlx5e_rx_reporter_dump_all_rqs(struct mlx5e_priv *priv,
-@@ -563,28 +951,70 @@ static int mlx5e_rx_reporter_dump_all_rq
+@@ -563,28 +951,70 @@ static int mlx5e_rx_reporter_dump_all_rqs(struct mlx5e_priv *priv,
  {
  	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
  	struct mlx5_rsc_key key = {};
@@ -791,7 +793,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  }
  
  static int mlx5e_rx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
-@@ -595,8 +1025,11 @@ static int mlx5e_rx_reporter_dump_from_c
+@@ -595,8 +1025,11 @@ static int mlx5e_rx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
  }
  
  static int mlx5e_rx_reporter_dump(struct devlink_health_reporter *reporter,
@@ -805,7 +807,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_err_ctx *err_ctx = context;
-@@ -604,6 +1037,7 @@ static int mlx5e_rx_reporter_dump(struct
+@@ -604,6 +1037,7 @@ static int mlx5e_rx_reporter_dump(struct devlink_health_reporter *reporter,
  	return err_ctx ? mlx5e_rx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
  			 mlx5e_rx_reporter_dump_all_rqs(priv, fmsg);
  }
@@ -813,7 +815,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  
  void mlx5e_reporter_rx_timeout(struct mlx5e_rq *rq)
  {
-@@ -615,7 +1049,9 @@ void mlx5e_reporter_rx_timeout(struct ml
+@@ -615,7 +1049,9 @@ void mlx5e_reporter_rx_timeout(struct mlx5e_rq *rq)
  
  	err_ctx.ctx = rq;
  	err_ctx.recover = mlx5e_rx_reporter_timeout_recover;
@@ -823,7 +825,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  
  	if (icosq)
  		snprintf(icosq_str, sizeof(icosq_str), "ICOSQ: 0x%x, ", icosq->sqn);
-@@ -634,7 +1070,9 @@ void mlx5e_reporter_rq_cqe_err(struct ml
+@@ -634,7 +1070,9 @@ void mlx5e_reporter_rq_cqe_err(struct mlx5e_rq *rq)
  
  	err_ctx.ctx = rq;
  	err_ctx.recover = mlx5e_rx_reporter_err_rq_cqe_recover;
@@ -833,7 +835,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	snprintf(err_str, sizeof(err_str), "ERR CQE on RQ: 0x%x", rq->rqn);
  
  	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
-@@ -648,7 +1086,9 @@ void mlx5e_reporter_icosq_cqe_err(struct
+@@ -648,7 +1086,9 @@ void mlx5e_reporter_icosq_cqe_err(struct mlx5e_icosq *icosq)
  
  	err_ctx.ctx = icosq;
  	err_ctx.recover = mlx5e_rx_reporter_err_icosq_cqe_recover;
@@ -843,7 +845,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	snprintf(err_str, sizeof(err_str), "ERR CQE on ICOSQ: 0x%x", icosq->sqn);
  
  	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
-@@ -667,23 +1107,58 @@ void mlx5e_reporter_icosq_resume_recover
+@@ -667,23 +1107,58 @@ void mlx5e_reporter_icosq_resume_recovery(struct mlx5e_channel *c)
  #define MLX5E_REPORTER_RX_GRACEFUL_PERIOD 500
  #define MLX5E_REPORTER_RX_BURST_PERIOD 500
  
@@ -904,7 +906,7 @@ Change-Id: I19cc9849cf6b9645ab4a3f01f235b147664a3791
  	if (IS_ERR(reporter)) {
  		netdev_warn(priv->netdev, "Failed to create rx reporter, err = %pe\n",
  			    reporter);
-@@ -697,6 +1172,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+@@ -697,6 +1172,12 @@ void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
  	if (!priv->rx_reporter)
  		return;
  

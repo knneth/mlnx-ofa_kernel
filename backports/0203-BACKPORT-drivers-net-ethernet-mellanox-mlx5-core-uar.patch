@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/uar.c
  drivers/net/ethernet/mellanox/mlx5/core/uar.c | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/uar.c b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/uar.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
-@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars
+@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars_page(struct mlx5_core_dev *mdev,
  	int err = -ENOMEM;
  	phys_addr_t pfn;
  	int bfregs;

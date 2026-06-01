@@ -29,18 +29,25 @@
 %{!?_name: %global _name iser}
 %{!?_version: %global _version 4.0}
 %{!?_release: %global _release 0}
+%global dkms_version %{version}-%{_release}
 
 %bcond_with building_kmods
 
 # KMP is disabled by default
 %{!?KMP: %global KMP 0}
 
+%if 0%{?suse_version} >= 1600
+%global modules_dir /usr/lib/modules
+%else
+%global modules_dir /lib/modules
+%endif
+
 # take kernel version or default to uname -r
 %{!?KVERSION: %global KVERSION %(uname -r)}
 %global kernel_version %{KVERSION}
 %global krelver %(echo -n %{KVERSION} | sed -e 's/-/_/g')
 # take path to kernel sources if provided, otherwise look in default location (for non KMP rpms).
-%{!?K_SRC: %global K_SRC /lib/modules/%{KVERSION}/build}
+%{!?K_SRC: %global K_SRC %{modules_dir}/%{KVERSION}/build}
 
 # define release version
 %{!?src_release: %global src_release %{_release}_%{krelver}}
@@ -71,7 +78,7 @@ Vendor: Mellanox Technologies
 BuildRequires: %kernel_module_package_buildreqs
 %(mkdir -p %{buildroot})
 %(echo '%defattr (-,root,root)' > %{buildroot}/file_list)
-%(echo '/lib/modules/%2-%1' >> %{buildroot}/file_list)
+%(echo '%{modules_dir}/%2-%1' >> %{buildroot}/file_list)
 %(echo '%config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-*-%1.conf' >> %{buildroot}/file_list)
 %{kernel_module_package -f %{buildroot}/file_list -x xen -r %{_kmp_rel} }
 %else
@@ -91,7 +98,7 @@ Obsoletes: iser-kmp < %{version}-%{release}, iser-kmp-default < %{version}-%{rel
 Provides:  kmod-iser = %{version}-%{release}, iser-modules = %{version}-%{release}
 Obsoletes: kmod-iser < %{version}-%{release}, iser-modules < %{version}-%{release}
 %endif
-Requires: mlnx-ofa_kernel-dkms
+Requires: mlnx-ofa_kernel-dkms = %{version}-%{release}
 Requires: dkms >= 3.2
 %description dkms
 DKMS package for %{name}
@@ -112,7 +119,7 @@ kernels at install time.
 %if "%{WITH_MOD_SIGN}" == "1"
 # call module sign script
 %global __modsign_install_post \
-    %{_builddir}/%{name}-%{version}/source/tools/sign-modules %{buildroot}/lib/modules/ %{kernel_source default} || exit 1 \
+    %{_builddir}/%{name}-%{version}/source/tools/sign-modules %{buildroot}%{modules_dir}/ %{kernel_source default} || exit 1 \
 %{nil}
 
 %global __debug_package 1
@@ -132,11 +139,9 @@ kernels at install time.
 #
 
 %if "%{_vendor}" == "suse"
+%if %{suse_version} < 1600
 %debug_package
 %endif
-
-%if 0%{?anolis} == 8
-%global __find_requires %{nil}
 %endif
 
 # set modules dir
@@ -172,7 +177,7 @@ export CONF_OPTIONS="%{configure_options}"
 for flavor in %{flavors_to_build}; do
 	export K_BUILD=%{kernel_source $flavor}
 	export KVER=%{kernel_release $K_BUILD}
-	export LIB_MOD_DIR=/lib/modules/$KVER/$INSTALL_MOD_DIR
+	export LIB_MOD_DIR=%{modules_dir}/$KVER/$INSTALL_MOD_DIR
 	rm -rf obj/$flavor
 	cp -r source obj/$flavor
 	cd $PWD/obj/$flavor
@@ -186,7 +191,9 @@ export INSTALL_MOD_PATH=%{buildroot}
 export INSTALL_MOD_DIR=%{install_mod_dir}
 export PREFIX=%{_prefix}
 mkdir -p %{buildroot}%{_usrsrc}
-cp -a source %{buildroot}%{_usrsrc}/%{name}-%{version}/
+cp -a source %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/
+sed -i -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
+	%{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
 %if %{with building_kmods}
 for flavor in %flavors_to_build; do
 	export K_BUILD=%{kernel_source $flavor}
@@ -194,15 +201,14 @@ for flavor in %flavors_to_build; do
 	cd $PWD/obj/$flavor
 	make install KERNELRELEASE=$KVER
 	# Cleanup unnecessary kernel-generated module dependency files.
-	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+	find $INSTALL_MOD_PATH%{modules_dir} -iname 'modules.*' -exec rm {} \;
 	cd -
 done
-sed -e '/^PACKAGE_VERSION=/s/=.*/="%{version}"/' \
+sed -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
 	-e 's/AUTOINSTALL=.*/AUTOINSTALL="yes"/' \
-	-e '$aBUILD_DEPENDS="mlnx-ofa_kernel"' \
 	-e '$aBUILD_DEPENDS_REBUILD="yes"' \
 	<source/dkms.conf \
-	> %{buildroot}%{_usrsrc}/%{name}-%{version}/dkms.conf
+	> %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
 
 # Set the module(s) to be executable, so that they will be stripped when packaged.
 find %{buildroot} \( -type f -name '*.ko' -o -name '*ko.gz' \) -exec %{__chmod} u+x \{\} \;
@@ -256,25 +262,26 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ -L "${ver_dir}/source" ] || continue
 	old_ver="${ver_dir%/}"
 	old_ver="${old_ver##*/}"
-	[ "${old_ver}" != "%{version}" ] || continue
-	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
+	[ "${old_ver}" != "%{dkms_version}" ] || continue
+	rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms install %{name}/%{version}
+/usr/sbin/dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
+/usr/sbin/dkms install %{name}/%{dkms_version}
 
 %preun dkms
-/usr/sbin/dkms remove  %{name}/%{version} --all || :
+/usr/sbin/dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null || :
 
 %if %{with building_kmods}
 %if "%{KMP}" != "1"
 %files
 %defattr(-,root,root,-)
-/lib/modules/%{KVERSION}/%{install_mod_dir}/
+%{modules_dir}/%{KVERSION}/%{install_mod_dir}/
 %config(noreplace) %{_sysconfdir}/depmod.d/zz02-%{name}-*.conf
 %endif
 %endif
 
 %files dkms
-%{_usrsrc}/%{name}-%{version}
+%{_usrsrc}/%{name}-%{dkms_version}
 %dir %{_datadir}/dkms/modules_to_force_install
 %{_datadir}/dkms/modules_to_force_install/%{name}.force
 

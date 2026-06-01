@@ -10,69 +10,7 @@
 #include "compat.h"
 
 #ifdef CONFIG_MLX5_ESWITCH
-#if defined(HAVE_SWITCHDEV_OPS)
-int mlx5e_attr_get(struct net_device *dev, struct switchdev_attr *attr)
-{
-	int err = 0;
 
-	if (!netif_device_present(dev))
-		return -EOPNOTSUPP;
-
-	switch (attr->id) {
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	return err;
-}
-#endif
-
-#if IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER)
-int mlx5e_vport_rep_load_compat(struct mlx5e_priv *priv)
-{
-	struct net_device *netdev = priv->netdev;
-	struct mlx5e_rep_priv *uplink_rpriv;
-#ifdef HAVE_TC_BLOCK_OFFLOAD
-	struct mlx5e_priv *upriv;
-#endif
-	int err;
-
-	uplink_rpriv = mlx5_eswitch_get_uplink_priv(priv->mdev->priv.eswitch,
-						    REP_ETH);
-#ifdef HAVE_TC_BLOCK_OFFLOAD
-	upriv = netdev_priv(uplink_rpriv->netdev);
-	err = tc_setup_cb_egdev_register(netdev, mlx5e_rep_setup_tc_cb_egdev,
-					 upriv);
-#else
-	err = tc_setup_cb_egdev_register(netdev, mlx5e_rep_setup_tc_cb,
-					 uplink_rpriv->netdev);
-#endif
-	if (err)
-		return err;
-	return 0;
-}
-
-void mlx5e_vport_rep_unload_compat(struct mlx5e_priv *priv)
-{
-	struct net_device *netdev = priv->netdev;
-	struct mlx5e_rep_priv *uplink_rpriv;
-#ifdef HAVE_TC_BLOCK_OFFLOAD
-	struct mlx5e_priv *upriv;
-#endif
-
-	uplink_rpriv = mlx5_eswitch_get_uplink_priv(priv->mdev->priv.eswitch,
-						    REP_ETH);
-#ifdef HAVE_TC_BLOCK_OFFLOAD
-	upriv = netdev_priv(uplink_rpriv->netdev);
-	tc_setup_cb_egdev_unregister(netdev, mlx5e_rep_setup_tc_cb_egdev,
-				     upriv);
-#else
-	tc_setup_cb_egdev_unregister(netdev, mlx5e_rep_setup_tc_cb,
-				     uplink_rpriv->netdev);
-#endif
-
-}
-#endif /* IS_ENABLED(CONFIG_MLX5_CLS_ACT) && defined(HAVE_TC_SETUP_CB_EGDEV_REGISTER */
 
 struct ip_ttl_word {
 	__u8	ttl;

@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  fs/fuse/dev.c | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/fs/fuse/dev.c b/fs/fuse/dev.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/dev.c
 +++ b/fs/fuse/dev.c
 @@ -38,6 +38,7 @@ void fuse_creds(struct fuse_req *req)
@@ -26,7 +28,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
  }
-@@ -112,6 +117,7 @@ void fuse_force_creds(struct fuse_req *r
+@@ -112,6 +117,7 @@ void fuse_force_creds(struct fuse_req *req)
  {
  	struct fuse_conn *fc = req->fm->fc;
  
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
  		req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
  		req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
-@@ -119,6 +125,10 @@ void fuse_force_creds(struct fuse_req *r
+@@ -119,6 +125,10 @@ void fuse_force_creds(struct fuse_req *req)
  		req->in.h.uid = FUSE_INVALID_UIDGID;
  		req->in.h.gid = FUSE_INVALID_UIDGID;
  	}
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
  }
-@@ -346,7 +356,11 @@ static int fuse_check_folio(struct folio
+@@ -346,7 +356,11 @@ static int fuse_check_folio(struct folio *folio)
  {
  	if (folio_mapped(folio) ||
  	    folio->mapping != NULL ||
@@ -65,7 +67,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  /*
   * Resending all processing queue requests.
   *
-@@ -960,6 +975,7 @@ static int fuse_notify_resend(struct fus
+@@ -960,6 +975,7 @@ static int fuse_notify_resend(struct fuse_conn *fc)
  	fuse_resend(fc);
  	return 0;
  }
@@ -73,7 +75,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dev.c
  
  int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
  		unsigned int size, struct fuse_copy_state *cs)
-@@ -986,8 +1002,10 @@ int fuse_notify(struct fuse_conn *fc, en
+@@ -986,8 +1002,10 @@ int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
  	case FUSE_NOTIFY_DELETE:
  		return fuse_notify_delete(fc, size, cs);
  

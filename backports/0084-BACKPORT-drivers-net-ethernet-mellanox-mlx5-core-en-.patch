@@ -2,12 +2,26 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 6 +++---
- 1 file changed, 3 insertions(+), 3 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
-@@ -72,12 +72,12 @@ struct mlx5e_ptp {
+@@ -64,7 +64,11 @@ struct mlx5e_ptp {
+ 	/* control */
+ 	struct mlx5e_priv         *priv;
+ 	struct mlx5_core_dev      *mdev;
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	struct kernel_hwtstamp_config    *tstamp;
++#else
+ 	struct hwtstamp_config    *tstamp;
++#endif
+ 	DECLARE_BITMAP(state, MLX5E_PTP_STATE_NUM_STATES);
+ 	struct mlx5_sq_bfreg      *bfreg;
+ };
+@@ -72,12 +76,12 @@ struct mlx5e_ptp {
  static inline bool mlx5e_use_ptpsq(struct sk_buff *skb)
  {
  	struct flow_keys fk;

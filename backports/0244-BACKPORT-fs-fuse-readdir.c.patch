@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: fs/fuse/readdir.c
  fs/fuse/readdir.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/fs/fuse/readdir.c b/fs/fuse/readdir.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/readdir.c
 +++ b/fs/fuse/readdir.c
 @@ -479,7 +479,11 @@ retry_locked:

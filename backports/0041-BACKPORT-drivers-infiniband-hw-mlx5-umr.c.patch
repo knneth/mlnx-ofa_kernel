@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
  drivers/infiniband/hw/mlx5/umr.c | 8 ++++++--
  1 file changed, 6 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/umr.c b/drivers/infiniband/hw/mlx5/umr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/umr.c
 +++ b/drivers/infiniband/hw/mlx5/umr.c
-@@ -695,8 +695,8 @@ _mlx5r_umr_update_mr_pas(struct mlx5_ib_
+@@ -695,8 +695,8 @@ _mlx5r_umr_update_mr_pas(struct mlx5_ib_mr *mr, unsigned int flags, bool dd,
  	size_t processed_blocks = 0;
  	struct ib_block_iter biter;
  	size_t cur_block_idx = 0;
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
  	size_t orig_sg_length;
  	size_t total_blocks;
  	size_t final_size;
-@@ -905,6 +905,7 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_
+@@ -905,6 +905,7 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
  		size_to_map = npages * desc_size;
  		dma_sync_single_for_cpu(ddev, sg.addr, sg.length,
  					DMA_TO_DEVICE);
@@ -26,7 +28,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/umr.c
  		/*
  		 * npages is the maximum number of pages to map, but we
  		 * can't guarantee that all pages are actually mapped.
-@@ -916,6 +917,9 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_
+@@ -916,6 +917,9 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
  		err = mlx5_odp_populate_xlt(xlt, idx, npages, mr, flags);
  		if (err)
  			return err;

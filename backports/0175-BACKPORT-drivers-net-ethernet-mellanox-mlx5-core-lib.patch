@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
  drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
-@@ -446,7 +446,11 @@ int mlx5_sd_init(struct mlx5_core_dev *d
+@@ -446,7 +446,11 @@ int mlx5_sd_init(struct mlx5_core_dev *dev)
  	primary = mlx5_sd_get_primary(dev);
  
  	for (i = 0; i < ACCESS_KEY_LEN; i++)

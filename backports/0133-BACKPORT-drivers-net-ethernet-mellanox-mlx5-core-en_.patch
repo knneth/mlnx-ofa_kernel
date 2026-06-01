@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en_accel/ipsec_rxtx.h  | 35 ++++++++++++++++---
  1 file changed, 30 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
 @@ -49,6 +49,9 @@ struct mlx5e_accel_tx_ipsec_state {
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT:
  };
  
  #ifdef CONFIG_MLX5_EN_IPSEC
-@@ -83,6 +86,9 @@ static inline bool mlx5e_ipsec_eseg_meta
+@@ -83,6 +86,9 @@ static inline bool mlx5e_ipsec_eseg_meta(struct mlx5_wqe_eth_seg *eseg)
  }
  
  void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
@@ -28,7 +30,7 @@ Subject: [PATCH] BACKPORT:
  			       struct mlx5_wqe_eth_seg *eseg);
  
  static inline netdev_features_t
-@@ -90,6 +96,12 @@ mlx5e_ipsec_feature_check(struct sk_buff
+@@ -90,6 +96,12 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
  {
  	struct xfrm_offload *xo = xfrm_offload(skb);
  	struct sec_path *sp = skb_sec_path(skb);
@@ -41,7 +43,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (sp && sp->len && xo) {
  		struct xfrm_state *x = sp->xvec[0];
-@@ -98,9 +110,9 @@ mlx5e_ipsec_feature_check(struct sk_buff
+@@ -98,9 +110,9 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
  			goto out_disable;
  
  		/* Only support UDP or TCP L4 checksum */

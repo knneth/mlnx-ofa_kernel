@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  .../net/ethernet/mellanox/mlx5/core/sriov.c   | 40 ++++++++++++++++++-
  1 file changed, 39 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov.c
-@@ -73,7 +73,10 @@ static int sriov_restore_guids(struct ml
+@@ -73,7 +73,10 @@ static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf, u16 func_id)
  static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
  {
  	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
@@ -19,7 +21,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  	int vport_num;
  
  	err = mlx5_eswitch_enable(dev->priv.eswitch, num_vfs);
-@@ -93,7 +96,9 @@ static int mlx5_device_enable_sriov(stru
+@@ -93,7 +96,9 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
  		return err;
  	}
  
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  	for (vf = 0; vf < num_vfs; vf++) {
  		/* Notify the VF before its enablement to let it set
  		 * some stuff.
-@@ -106,6 +111,7 @@ static int mlx5_device_enable_sriov(stru
+@@ -106,6 +111,7 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
  			continue;
  		}
  
@@ -37,7 +39,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  		err = mlx5_set_msix_vec_count(dev, vf + 1, num_msix_count);
  		if (err) {
  			mlx5_core_warn(dev,
-@@ -113,6 +119,7 @@ static int mlx5_device_enable_sriov(stru
+@@ -113,6 +119,7 @@ static int mlx5_device_enable_sriov(struct mlx5_core_dev *dev, int num_vfs)
  				       vf, err);
  			continue;
  		}
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  
  		sriov->vfs_ctx[vf].enabled = 1;
  		if (MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) {
-@@ -192,15 +199,21 @@ mlx5_device_disable_sriov(struct mlx5_co
+@@ -192,15 +199,21 @@ mlx5_device_disable_sriov(struct mlx5_core_dev *dev, int num_vfs, bool clear_vf,
  static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -67,7 +69,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  	if (err) {
  		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
  		return err;
-@@ -209,11 +222,15 @@ static int mlx5_sriov_enable(struct pci_
+@@ -209,11 +222,15 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
  	err = pci_enable_sriov(pdev, num_vfs);
  	if (err) {
  		mlx5_core_warn(dev, "pci_enable_sriov failed : %d\n", err);
@@ -83,7 +85,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  	}
  	return err;
  }
-@@ -221,16 +238,22 @@ static int mlx5_sriov_enable(struct pci_
+@@ -221,16 +238,22 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
  void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change)
  {
  	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  }
  
  int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
-@@ -251,6 +274,7 @@ int mlx5_core_sriov_configure(struct pci
+@@ -251,6 +274,7 @@ int mlx5_core_sriov_configure(struct pci_dev *pdev, int num_vfs)
  	return err ? err : num_vfs;
  }
  
@@ -114,7 +116,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sriov.c
  int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
  {
  	struct pci_dev *pf = pci_physfn(vf);
-@@ -268,12 +292,26 @@ int mlx5_core_sriov_set_msix_vec_count(s
+@@ -268,12 +292,26 @@ int mlx5_core_sriov_set_msix_vec_count(struct pci_dev *vf, int msix_vec_count)
  			mlx5_get_default_msix_vec_count(dev, pci_num_vf(pf));
  
  	sriov = &dev->priv.sriov;

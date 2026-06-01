@@ -1,0 +1,48 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: include/uapi/rdma/ib_user_ioctl_cmds.h
+
+Change-Id: I5edf2f6b75a59a8fa4d94a531eb44d3ca3f83875
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ include/uapi/rdma/ib_user_ioctl_cmds.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/include/uapi/rdma/ib_user_ioctl_cmds.h b/include/uapi/rdma/ib_user_ioctl_cmds.h
+index xxxxxxx..xxxxxxx 100644
+--- a/include/uapi/rdma/ib_user_ioctl_cmds.h
++++ b/include/uapi/rdma/ib_user_ioctl_cmds.h
+@@ -34,6 +34,8 @@
+ #ifndef IB_USER_IOCTL_CMDS_H
+ #define IB_USER_IOCTL_CMDS_H
+ 
++#include "../../../compat/config.h"
++
+ #define UVERBS_ID_NS_MASK 0xF000
+ #define UVERBS_ID_NS_SHIFT 12
+ 
+@@ -56,7 +58,9 @@ enum uverbs_default_objects {
+ 	UVERBS_OBJECT_COUNTERS,
+ 	UVERBS_OBJECT_ASYNC_EVENT,
+ 	UVERBS_OBJECT_DMAH,
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	UVERBS_OBJECT_DMABUF,
++#endif
+ };
+ 
+ enum {
+@@ -264,6 +268,7 @@ enum uverbs_methods_dmah {
+ 	UVERBS_METHOD_DMAH_FREE,
+ };
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ enum uverbs_attrs_alloc_dmabuf_cmd_attr_ids {
+ 	UVERBS_ATTR_ALLOC_DMABUF_HANDLE,
+ 	UVERBS_ATTR_ALLOC_DMABUF_PGOFF,
+@@ -272,6 +277,7 @@ enum uverbs_attrs_alloc_dmabuf_cmd_attr_ids {
+ enum uverbs_methods_dmabuf {
+ 	UVERBS_METHOD_DMABUF_ALLOC,
+ };
++#endif
+ 
+ enum uverbs_attrs_reg_dm_mr_cmd_attr_ids {
+ 	UVERBS_ATTR_REG_DM_MR_HANDLE,

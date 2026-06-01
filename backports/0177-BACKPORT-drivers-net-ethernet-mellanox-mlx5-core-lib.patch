@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 
 ---
- .../ethernet/mellanox/mlx5/core/lib/vxlan.c   | 83 ++++++++++++++++++-
- 1 file changed, 79 insertions(+), 4 deletions(-)
+ .../ethernet/mellanox/mlx5/core/lib/vxlan.c   | 66 +++++++++++++++++--
+ 1 file changed, 62 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 @@ -41,11 +41,17 @@ struct mlx5_vxlan {
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
  	u16 udp_port;
  };
  
-@@ -101,24 +107,62 @@ static struct mlx5_vxlan_port *vxlan_loo
+@@ -101,24 +107,62 @@ static struct mlx5_vxlan_port *vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 p
  int mlx5_vxlan_add_port(struct mlx5_vxlan *vxlan, u16 port)
  {
  	struct mlx5_vxlan_port *vxlanp;
@@ -92,7 +94,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
  }
  
  int mlx5_vxlan_del_port(struct mlx5_vxlan *vxlan, u16 port)
-@@ -129,15 +173,29 @@ int mlx5_vxlan_del_port(struct mlx5_vxla
+@@ -129,15 +173,29 @@ int mlx5_vxlan_del_port(struct mlx5_vxlan *vxlan, u16 port)
  	mutex_lock(&vxlan->sync_lock);
  
  	vxlanp = vxlan_lookup_port(vxlan, port);
@@ -122,39 +124,3 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
  
  out_unlock:
  	mutex_unlock(&vxlan->sync_lock);
-@@ -167,14 +225,30 @@ struct mlx5_vxlan *mlx5_vxlan_create(str
- 
- void mlx5_vxlan_destroy(struct mlx5_vxlan *vxlan)
- {
-+#ifndef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
-+	struct mlx5_vxlan_port *vxlanp;
-+	struct hlist_node *tmp;
-+	int bkt;
-+
-+#endif
- 	if (!mlx5_vxlan_allowed(vxlan))
- 		return;
- 
-+#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
- 	mlx5_vxlan_del_port(vxlan, IANA_VXLAN_UDP_PORT);
- 	WARN_ON(!hash_empty(vxlan->htable));
-+#else
-+	/* Lockless since we are the only hash table consumers*/
-+	hash_for_each_safe(vxlan->htable, bkt, tmp, vxlanp, hlist) {
-+		hash_del(&vxlanp->hlist);
-+		mlx5_vxlan_core_del_port_cmd(vxlan->mdev, vxlanp->udp_port);
-+		kfree(vxlanp);
-+	}
-+#endif
- 
- 	kfree(vxlan);
- }
-+#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
- 
- void mlx5_vxlan_reset_to_default(struct mlx5_vxlan *vxlan)
- {
-@@ -194,3 +268,4 @@ void mlx5_vxlan_reset_to_default(struct
- 		mlx5_vxlan_del_port(vxlan, vxlanp->udp_port);
- 	}
- }
-+#endif

@@ -177,6 +177,14 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DPLL_DEVICE_PUT_TRACKER, [dpll_device_put has tracker argument], [
+		#include <linux/dpll.h>
+	],[
+		dpll_device_put(NULL, NULL);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_KVFREE_IN_SLAB_H, [kvfree prototype is in slab.h], [
 		#include <linux/slab.h>
 	],[
@@ -195,11 +203,82 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#endif
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_KZALLOC_OBJ_AND_OBJS, [kzalloc_obj and kzalloc_objs in linux/slab.h], [
+		#include <linux/slab.h>
+	],[
+		#if defined(kzalloc_obj) && defined(kzalloc_objs)
+			return 0;
+		#else
+			#return 1;
+		#endif
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_HMM_PFN_TO_PAGE, [have hmm_pfn_to_page], [
 	#include <linux/hmm.h>
 	],[
 		hmm_pfn_to_page(0UL);
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SPEED_800000, [SPEED_800000 is defined ], [
+	#include <linux/ethtool.h>
+	],[
+		#ifdef SPEED_800000
+			return 0;
+		#else
+			Dont Compile
+		#endif
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SPEED_1600000, [SPEED_1600000 is defined ], [
+	#include <linux/ethtool.h>
+	],[
+		#ifdef SPEED_1600000
+			return 0;
+		#else
+			Dont Compile
+		#endif
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_LINK_MODE_200000baseCR_Full_BIT, [ETHTOOL_LINK_MODE_200000baseCR_Full_BIT is defined ], [
+	#include <linux/ethtool.h>
+	],[
+			enum ethtool_link_mode_bit_indices elmbi = ETHTOOL_LINK_MODE_200000baseCR_Full_BIT;
+			return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT, [ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT is defined ], [
+	#include <linux/ethtool.h>
+	],[
+			enum ethtool_link_mode_bit_indices elmbi = ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT;
+			return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT, [ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT is defined ], [
+	#include <linux/ethtool.h>
+	],[
+			enum ethtool_link_mode_bit_indices elmbi = ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT;
+			return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_FEC_LLRS, [ETHTOOL_FEC_LLRS is defined ], [
+	#include <linux/ethtool.h>
+	],[
+		#ifdef ETHTOOL_FEC_LLRS
+			return 0;
+		#else
+			Dont Compile
+		#endif
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_TAINT_FWCTL, [TAINT_FWCTL is defined ], [
+	#include <linux/ethtool.h>
+	],[
+		#ifdef TAINT_FWCTL
+			return 0;
+		#else
+			Dont Compile
+		#endif
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_HMM_PFN_TO_MAP_ORDER, [have hmm_pfn_to_map_order], [
@@ -354,14 +433,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_GET_USER_PAGES_LONGTERM, [get_user_pages_longterm is defined], [
-		#include <linux/mm.h>
-	],[
-		get_user_pages_longterm(0, 0, 0, NULL, NULL);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_GET_USER_PAGES_4_PARAMS, [get_user_pages has 4 params], [
 		#include <linux/mm.h>
 	],[
@@ -408,13 +479,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		get_user_pages_remote(NULL, NULL, 0, 0, 0, NULL, NULL, NULL);
 
 		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_INT_POW, [int_pow defined], [
-		#include <linux/kernel.h>
-	],[
-		return int_pow(2, 3);
-
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_GET_RANDOM_U32_INCLUSIVE, [get_random_u32_inclusive defined], [
@@ -807,13 +871,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_ATRRS_SET_GET_5_PARAMS, [devlink_port_attrs_set has 5 parameters], [
-		#include <net/devlink.h>
-	],[
-		devlink_port_attrs_set(NULL, 0, 0, 0, 0);
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS, [devlink_port_attrs_set has 2 parameters], [
 		#include <net/devlink.h>
 	],[
@@ -881,34 +938,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		#include <net/devlink.h>
 	],[
 		devlink_net(NULL);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HAS_RELOAD, [reload is defined], [
-	        #include <net/devlink.h>
-
-	        static int devlink_reload(struct devlink *devlink,
-	                                struct netlink_ext_ack *extack)
-	        {
-	                return 0;
-	        }
-
-	],[
-	        struct devlink_ops dlops = {
-	                .reload = devlink_reload,
-	        };
-
-	        return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_HAS_RELOAD_UP_DOWN, [reload_up/down is defined], [
-		#include <net/devlink.h>
-	],[
-		struct devlink_ops dlops = {
-			.reload_up = NULL,
-			.reload_down = NULL,
-		};
-
 		return 0;
 	])
 
@@ -1001,13 +1030,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		struct devlink_port_ops dlops = {
 		};
 
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_TRAP_SUPPORT, [devlink struct devlink_trap exists], [
-		#include <net/devlink.h>
-	],[
-		struct devlink_trap t;
 		return 0;
 	])
 
@@ -1295,16 +1317,6 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PORT_HAS_SWITCH_ID, [struct devlink_port has attrs.switch_id], [
-		#include <net/devlink.h>
-	],[
-		struct devlink_port *port;
-
-		port->attrs.switch_id.id_len = 0;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_NET_DEVICE_HAS_DEVLINK_PORT, [struct net_device has devlink_port], [
 		#include <linux/netdevice.h>
 	],[
@@ -1464,16 +1476,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC, [struct tlsdev_ops has tls_dev_resync], [
-		#include <net/tls.h>
-	],[
-		struct tlsdev_ops dev;
-
-		dev.tls_dev_resync = NULL;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_SKB_FRAG_FILL_PAGE_DESC, [linux/skbuff.h skb_frag_fill_page_desc is defined], [
 		#include <linux/skbuff.h>
 	],[
@@ -1494,12 +1496,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 	],[
 		napi_build_skb(NULL, 0);
 
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NET_TC_CT_H, [net/tc_act/tc_ct.h header exists], [
-		#include <net/tc_act/tc_ct.h>
-	],[
 		return 0;
 	])
 
@@ -1564,6 +1560,7 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_FILE_KATTR, [struct file_kattr exists], [
+		#include <linux/fs.h>
 		#include <linux/fileattr.h>
 	],[
 		struct file_kattr fa;
@@ -1659,6 +1656,14 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 	],[
 		struct ethtool_ops ops;
 		ops.rxfh_max_num_contexts = 0;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_INDIR_LOST, [ethtool_rxfh_indir_lost is defined], [
+		#include <linux/ethtool.h>
+	],[
+		ethtool_rxfh_indir_lost(NULL);
 
 		return 0;
 	])
@@ -1785,40 +1790,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_TC_FLOWER_OFFLOAD, [struct tc_cls_flower_offload is defined], [
-		#include <net/pkt_cls.h>
-	],[
-		struct tc_cls_flower_offload x;
-		x = x;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_BLOCK_OFFLOAD, [struct tc_block_offload is defined], [
-		#include <net/pkt_cls.h>
-	],[
-		struct tc_block_offload x;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_BLOCK_OFFLOAD, [struct flow_block_offload exists], [
-		#include <net/pkt_cls.h>
-	],[
-		struct flow_block_offload x;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_UNLOCKED_DRIVER_CB, [struct flow_block_offload has unlocked_driver_cb], [
-		#include <net/pkt_cls.h>
-	],[
-		struct flow_block_offload x;
-		x.unlocked_driver_cb = true;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_NL_ASSERT_CTX_FITS, [NL_ASSERT_CTX_FITS exists], [
 		#include <linux/netlink.h>
 	],[
@@ -1857,25 +1828,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		struct netlink_ext_ack extack = {};
 
 		NL_SET_ERR_MSG_FMT_MOD(&extack, "test");
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TASK_STRUCT_CPUS_PTR, [struct task_struct has cpus_ptr], [
-		#include <linux/sched.h>
-	],[
-		struct task_struct *p = NULL;
-
-		p->cpus_ptr = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_BLOCK_OFFLOAD_EXTACK, [struct tc_block_offload has extack], [
-		#include <net/pkt_cls.h>
-	],[
-		struct tc_block_offload x;
-		x.extack = NULL;
-
 		return 0;
 	])
 
@@ -1991,14 +1943,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_WANT_INIT_ON_ALLOC, [want_init_on_alloc is defined], [
-		#include <linux/mm.h>
-	],[
-		bool x = want_init_on_alloc(__GFP_ZERO);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_PAGE_DMA_ADDR_ARRAY, [struct page has dma_addr array member], [
 		#include <linux/mm_types.h>
 	],[
@@ -2025,36 +1969,10 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_DEV_CHANGE_FLAGS_HAS_3_PARAMS, [dev_change_flags has 3 parameters], [
-		#include <linux/netdevice.h>
-	],[
-		dev_change_flags(NULL, 0, NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_CHECK_ZEROED_USER, [access_ok has check_zeroed_user], [
-		#include <linux/uaccess.h>
-	],[
-		int ret;
-
-		ret = check_zeroed_user(NULL,0);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS, [put_user_pages_dirty_lock has 3 parameters], [
 		#include <linux/mm.h>
 	],[
 		put_user_pages_dirty_lock(NULL, 0, 0);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS, [put_user_pages_dirty_lock has 2 parameters], [
-		#include <linux/mm.h>
-	],[
-		put_user_pages_dirty_lock(NULL, 0);
 
 		return 0;
 	])
@@ -2079,20 +1997,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		#include <net/switchdev.h>
 	],[
 		enum switchdev_attr_id x = SWITCHDEV_ATTR_ID_BRIDGE_VLAN_PROTOCOL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_SWITCHDEV_OPS, [HAVE_SWITCHDEV_OPS is defined], [
-		#include <net/switchdev.h>
-		#include <linux/netdevice.h>
-
-		/* Declare here to avoid dandling pointer error */
-		static struct switchdev_ops x;
-	],[
-		struct net_device *ndev;
-
-		ndev->switchdev_ops = &x;
 
 		return 0;
 	])
@@ -2182,10 +2086,11 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_VLAN_GET_ENCAP_LEVEL, [vlan_get_encap_level is defined], [
-		#include <linux/if_vlan.h>
+	MLNX_RDMA_TEST_CASE(HAVE_SEC_PATH_LEN_U8, [struct sec_path len is u8], [
+		#include <net/xfrm.h>
 	],[
-		vlan_get_encap_level(NULL);
+		struct sec_path *sp = NULL;
+		u8 *p = &sp->len;
 
 		return 0;
 	])
@@ -2370,23 +2275,6 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_OFFLOAD_HAS_ONE_ACTION, [flow_offload_has_one_action exists], [
-		#include <net/flow_offload.h>
-	],[
-		struct flow_action action;
-
-		flow_offload_has_one_action(&action);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_SETUP_CB_ADD, [tc_setup_cb_add is defined], [
-		#include <net/pkt_cls.h>
-	],[
-		tc_setup_cb_add(NULL, NULL, 0, NULL ,0 ,NULL, NULL ,0);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_TC_SETUP_FLOW_ACTION_FUNC, [tc_setup_flow_action is defined], [
 		#include <net/pkt_cls.h>
 	],[
@@ -2419,67 +2307,11 @@ MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_RXFH_PARAM_HAS_RSS_CONTEXT,
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE___TC_INDR_BLOCK_CB_REGISTER, [__tc_indr_block_cb_register is defined], [
-		#include <net/pkt_cls.h>
+	MLNX_RDMA_TEST_CASE(HAVE_RPS_H, [net/rps.h exists], [
+			#include <net/rps.h>
 	],[
-		__tc_indr_block_cb_register(NULL, NULL, NULL, NULL);
-
-		return 0;
+			return 0;
 	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_CLSMATCHALL_STATS, [TC_CLSMATCHALL_STATS is defined], [
-		#include <net/pkt_cls.h>
-	],[
-		enum tc_matchall_command x = TC_CLSMATCHALL_STATS;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE___FLOW_INDR_BLOCK_CB_REGISTER, [__flow_indr_block_cb_register is defined], [
-		#include <net/flow_offload.h>
-	],[
-		__flow_indr_block_cb_register(NULL, NULL, NULL, NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_CLS_OFFLOAD_FLOW_RULE, [flow_cls_offload_flow_rule is defined], [
-		#include <net/flow_offload.h>
-	],[
-		flow_cls_offload_flow_rule(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE, [flow_block_cb_setup_simple is defined], [
-		#include <net/flow_offload.h>
-	],[
-		flow_block_cb_setup_simple(NULL, NULL, NULL, NULL, NULL, false);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_BLOCK_CB_ALLOC, [flow_block_cb_alloc is defined], [
-		#include <net/flow_offload.h>
-	],[
-		flow_block_cb_alloc(NULL, NULL, NULL, NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_SETUP_CB_T, [flow_setup_cb_t is defined], [
-		#include <net/flow_offload.h>
-	],[
-		flow_setup_cb_t *cb = NULL;
-
-		return 0;
-	])
-
-       MLNX_RDMA_TEST_CASE(HAVE_RPS_H, [net/rps.h exists], [
-              #include <net/rps.h>
-       ],[
-              return 0;
-       ])
 
 	MLNX_RDMA_TEST_CASE(HAVE_NDO_ETH_IOCTL, [net_device_ops has ndo_eth_ioctl is defined], [
 		#include <linux/netdevice.h>
@@ -2713,17 +2545,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_FOR_IFA, [for_ifa defined], [
-	#include <linux/inetdevice.h>
-        ],[
-		struct in_device *in_dev;
-
-		for_ifa(in_dev) {
-		}
-
-		endfor_ifa(in_dev);
-        ])
-
 	MLNX_RDMA_TEST_CASE(HAVE_NETIF_F_NETNS_LOCAL, [NETIF_F_NETNS_LOCAL is defined in netdev_features.h], [
 		#include <linux/netdev_features.h>
 	],[
@@ -2783,27 +2604,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_NLA_POLICY_NESTED, [NLA_POLICY_NESTED defined], [
-		#include <net/netlink.h>
-		#
-		static const struct nla_policy dpll_pin_get_dump_nl_policy[[1 + 1]] = {
-		    [[1]] = { .type = NLA_U32 },
-		};
-
-		static const struct nla_policy my_nested_policy[[]] = {
-		    [[0]] = NLA_POLICY_NESTED(dpll_pin_get_dump_nl_policy),
-		};
-
-	],[
-		#ifdef NLA_POLICY_NESTED
-			return 0;
-		#else
-			#return 1;
-		#endif
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_NLA_STRSCPY, [nla_strscpy exist], [
 		#include <net/netlink.h>
 	],[
@@ -2816,14 +2616,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <net/netlink.h>
 	],[
 		nla_put_bitfield32(NULL, 0, 0, 0);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NLA_NEST_START_NOFLAG, [nla_nest_start_noflag exist], [
-		#include <net/netlink.h>
-	],[
-		nla_nest_start_noflag(NULL, 0);
 
 		return 0;
 	])
@@ -2862,16 +2654,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_VALIDATE, [struct genl_ops has member validate], [
-		#include <net/genetlink.h>
-	],[
-		struct genl_ops x;
-
-		x.validate = 0;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_GENL_OPS_POLICY, [struct genl_ops has member policy], [
 		#include <net/genetlink.h>
 	],[
@@ -2902,16 +2684,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_GENL_FAMILY_POLICY, [struct genl_family has member policy], [
-		#include <net/genetlink.h>
-	],[
-		struct genl_family x;
-
-		x.policy = NULL;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_READ_PNET_RCU, [function read_pnet_rcu is defined], [
 		#include <net/net_namespace.h>
 	],[
@@ -2936,16 +2708,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <net/genetlink.h>
 	],[
 		genl_dumpit_info(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NETLINK_CALLBACK_HAS_CTX, [struct netlink_callback has member ctx], [
-		#include <linux/netlink.h>
-	],[
-		struct netlink_callback x;
-
-		x.ctx[[0]] = 0;
 
 		return 0;
 	])
@@ -3087,15 +2849,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_SKB_SET_REDIRECTED, [skb_set_redirected is defined], [
-		#include <linux/skbuff.h>
-	],[
-		struct sk_buff x;
-		skb_set_redirected(&x, false);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_LOCKDEP_ASSERT, [lockdep.h has lockdep_assert], [
 		#include <linux/lockdep.h>
 	],[
@@ -3124,61 +2877,12 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
                 return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_KOBJ_TYPE_DEFAULT_GROUPS, [linux/kobject.h kobj_type has default_groups member], [
-		#include <linux/kobject.h>
-	],[
-		struct kobj_type x = {
-			.default_groups = NULL,
-		};
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_LOCKDEP_UNREGISTER_KEY, [linux/lockdep.h has lockdep_unregister_key], [
-		#include <linux/lockdep.h>
-	],[
-		lockdep_unregister_key(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_LOCKUP_ASSERT_HELD_WRITE, [linux/lockdep.h has lockdep_assert_held_write], [
-		#include <linux/lockdep.h>
-	],[
-		#ifdef lockdep_assert_held_write
-			int x = 5;
-		#else
-			int x
-		#endif
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_FIB_NH_DEV, [fib_nh has fib_nh_dev], [
 		#include <net/ip_fib.h>
 	],[
 		struct fib_nh x = {
 			.fib_nh_dev = NULL,
 		};
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_ATOMIC_PINNED_VM, [atomic_pinned_vm is defined], [
-		#include <linux/mm_types.h>
-	],[
-		struct mm_struct x;
-                atomic64_t y;
-		x.pinned_vm = y;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_PINNED_VM, [pinned_vm is defined], [
-		#include <linux/mm_types.h>
-	],[
-		struct mm_struct x;
-		x.pinned_vm = 0;
 
 		return 0;
 	])
@@ -3315,18 +3019,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_IDR_FOR_EACH_ENTRY_CONTINUE_UL, [idr_for_each_entry_continue_ul is defined], [
-		#include <linux/idr.h>
-	],[
-		#ifdef idr_for_each_entry_continue_ul
-			return 0;
-		#else
-			#return
-		#endif
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_XA_FOR_EACH_RANGE, [xa_for_each_range is defined], [
 		#include <linux/xarray.h>
 	],[
@@ -3390,6 +3082,21 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 	],[
 		struct class cm_class = {
 			.namespace = net_namespace,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NET_NAMESPACE_RETURNS_NS_COMMON, [class.namespace returns const struct ns_common *], [
+		#include <linux/device.h>
+		static const struct ns_common *test_namespace(const struct device *d);
+		static const struct ns_common *test_namespace(const struct device *d)
+		{
+			return NULL;
+		}
+	],[
+		struct class cm_class = {
+			.namespace = test_namespace,
 		};
 
 		return 0;
@@ -3467,6 +3174,18 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_POLL_TIMEOUT_US, [macro poll_timeout_us is defined ], [
+		#include <linux/iopoll.h>
+
+	],[
+		#ifdef poll_timeout_us
+			return 0;
+		#else
+			#return 1
+		#endif
+
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NLMSG_FOR_EACH_ATTR_TYPE, [macro nlmsg_for_each_attr_type is defined ], [
 		#include <net/netlink.h>
 
@@ -3488,11 +3207,25 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NET_IPV6_STUBS_H, [net/ipv6_stubs.h exists], [
+		#include <net/ipv6_stubs.h>
+	],[
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_STRUCT_HOP_JUMBO_HDR, [net/ipv6.h has struct  hop_jumbo_hdr], [
 		#include <net/ipv6.h>
 	],[
 
 		struct hop_jumbo_hdr jumbo;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_SKB_IPV6_PAYLOAD_LEN, [linux/ipv6.h has struct skb_ipv6_payload_len], [
+		#include <linux/ipv6.h>
+	],[
+		skb_ipv6_payload_len(NULL);
 
 		return 0;
 	])
@@ -3507,14 +3240,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		struct xfrmdev_ops x = {
 			.xdo_dev_state_delete = my_xdo_dev_state_delete,
 		};
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FOLL_LONGTERM, [FOLL_LONGTERM is defined], [
-		#include <linux/mm.h>
-	],[
-		int x = FOLL_LONGTERM;
 
 		return 0;
 	])
@@ -3560,6 +3285,14 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <linux/dma-mapping.h>
 	],[
 		dma_zalloc_coherent(NULL, 0, NULL, GFP_KERNEL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_ATTR_REQUIRE_COHERENT, [dma-mapping.h has enum DMA_ATTR_REQUIRE_COHERENT], [
+		#include <linux/dma-mapping.h>
+	],[
+		unsigned long dma_attr = DMA_ATTR_REQUIRE_COHERENT;
 
 		return 0;
 	])
@@ -3873,6 +3606,22 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_QUEUECOMMAND_SCSI_QC_STATUS, [queuecommand returns enum scsi_qc_status], [
+		#include <scsi/scsi_host.h>
+
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd);
+		static enum scsi_qc_status test_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
+		{
+			return 0;
+		}
+	],[
+		struct scsi_host_template t = {
+			.queuecommand = test_queuecommand,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_SE_CMD_HAS_SENSE_INFO, [struct se_cmd has member sense_info], [
 		#include <target/target_core_base.h>
 
@@ -4024,38 +3773,11 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		prog = bpf_prog_inc(prog);
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_CLS_OFFLOAD, [struct flow_cls_offload exists], [
-		#include <net/flow_offload.h>
-	],[
-		struct flow_cls_offload x = {
-			.classid = 3,
-		};
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_CT_METADATA_ORIG_DIR, [struct flow_action_entry has ct_metadata.orig_dir], [
 		#include <net/flow_offload.h>
 	],[
 		struct flow_action_entry x = {
 			.ct_metadata.orig_dir = true,
-		};
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_PTYPE, [struct flow_action_entry has ptype], [
-		#include <net/flow_offload.h>
-	],[
-		struct flow_action_entry x = {
-			.ptype = 1,
-		};
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_MPLS, [struct flow_action_entry has mpls], [
-		#include <net/flow_offload.h>
-	],[
-		struct flow_action_entry x = {
-			.mpls_push.label = 1,
 		};
 		return 0;
 	])
@@ -4096,40 +3818,11 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_RULE_MATCH_META, [flow_rule_match_meta exists], [
-		#include <net/flow_offload.h>
-	],[
-		flow_rule_match_meta(NULL, NULL);
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_HW_STATS_CHECK, [flow_action_hw_stats_check exists], [
 		#include <net/flow_offload.h>
 	],[
 		#pragma GCC diagnostic ignored "-Warray-bounds"
 		flow_action_hw_stats_check(NULL, NULL, 0);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_CT, [FLOW_ACTION_CT exists], [
-		#include <net/flow_offload.h>
-	],[
-		enum flow_action_id action = FLOW_ACTION_CT;
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_ACTION_REDIRECT_INGRESS, [FLOW_ACTION_REDIRECT_INGRESS exists], [
-		#include <net/flow_offload.h>
-	],[
-		enum flow_action_id action = FLOW_ACTION_REDIRECT_INGRESS;
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_ENUM_FLOW_BLOCK_BINDER_TYPE, [enum flow_block_binder_type exists], [
-		#include <net/flow_offload.h>
-	],[
-		enum flow_block_binder_type binder_type;
-
 		return 0;
 	])
 
@@ -4213,12 +3906,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 			.ndo_tx_timeout = mlx5e_tx_timeout,
 		};
 
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NET_TC_ACT_TC_MPLS_H, [net/tc_act/tc_mpls.h exists], [
-		#include <net/tc_act/tc_mpls.h>
-	],[
 		return 0;
 	])
 
@@ -4336,43 +4023,11 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#endif
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_REGISTER_LSM_NOTIFIER, [linux/security.h has register_lsm_notifier], [
-		#include <linux/security.h>
-	],[
-		register_lsm_notifier(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_REGISTER_BLOCKING_LSM_NOTIFIER, [linux/security.h has register_blocking_lsm_notifier], [
-		#include <linux/security.h>
-	],[
-		register_blocking_lsm_notifier(NULL);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED, [linux/dma-map-ops.h has DMA_F_PCI_P2PDMA_SUPPORTED], [
 		#include <linux/dma-map-ops.h>
 	],[
 		struct dma_map_ops * a;
 		a->flags = DMA_F_PCI_P2PDMA_SUPPORTED;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TCF_EXTS_STATS_UPDATE, [tcf_exts_stats_update is defined], [
-		#include <net/pkt_cls.h>
-	],[
-		tcf_exts_stats_update(NULL, 0, 0, 0);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_ACTION_OPS_HAS_ID, [struct  tc_action_ops has id], [
-		#include <net/act_api.h>
-	],[
-		struct tc_action_ops x = { .id = 0, };
 
 		return 0;
 	])
@@ -4430,20 +4085,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_LIST_BULK_MOVE_TAIL, [list_bulk_move_tail is defined], [
-		#include <linux/list.h>
-	],[
-		list_bulk_move_tail(NULL, NULL, NULL);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_LIST_IS_FIRST, [list_is_first is defined], [
-		#include <linux/list.h>
-	],[
-		list_is_first(NULL, NULL);
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_LIST_ENTRY_IS_HEAD, [HAVE_LIST_ENTRY_IS_HEAD exists], [
 		#include <linux/list.h>
 
@@ -4471,12 +4112,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 	],[
 		struct sg_append_table  sgt_append;
 
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_DMA_RESV_H, [linux/dma-resv.h exists], [
-		#include <linux/dma-resv.h>
-	],[
 		return 0;
 	])
 
@@ -4518,6 +4153,24 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_BUF_ATTACH_OPS_INVALIDATE_MAPPINGS, [struct dma_buf_attach_ops has invalidate_mappings], [
+		#include <linux/dma-buf.h>
+	],[
+		struct dma_buf_attach_ops x = {
+			.invalidate_mappings = NULL,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_BUF_INVALIDATE_MAPPINGS, [dma_buf_invalidate_mappings is defined], [
+		#include <linux/dma-buf.h>
+	],[
+		dma_buf_invalidate_mappings(NULL);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_NETIF_NAPI_ADD_GET_3_PARAMS, [netif_napi_add get 3 params], [
 		#include <linux/netdevice.h>
 	],[
@@ -4550,43 +4203,11 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE, [ib_umem_notifier_invalidate_range_start has parameter blockable], [
-		#include <linux/mmu_notifier.h>
-		static int notifier(struct mmu_notifier *mn,
-				    struct mm_struct *mm,
-				    unsigned long start,
-				    unsigned long end,
-				    bool blockable) {
-			return 0;
-		}
-	],[
-		static const struct mmu_notifier_ops notifiers = {
-			.invalidate_range_start = notifier
-		};
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_MMU_NOTIFIER_CALL_SRCU, [mmu_notifier_call_srcu defined], [
 		#include <linux/mmu_notifier.h>
 	],[
 		mmu_notifier_call_srcu(NULL, NULL);
 		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE, [mmu_notifier_range_blockable defined], [
-		#include <linux/mmu_notifier.h>
-	],[
-                const struct mmu_notifier_range *range;
-
-		mmu_notifier_range_blockable(range);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER, [struct mmu_notifier_ops has alloc/free_notifier ], [
-		#include <linux/mmu_notifier.h>
-	],[
-		static struct mmu_notifier_ops notifiers = {
-			.free_notifier = NULL,
-		};
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_MMU_NOTIFIER_RANGE_STRUCT, [ib_umem_notifier_invalidate_range_start get struct mmu_notifier_range ], [
@@ -4600,13 +4221,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		static const struct mmu_notifier_ops notifiers = {
 			.invalidate_range_start = notifier
 		};
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_MMU_NOTIFIER_UNREGISTER_NO_RELEASE, [mmu_notifier_unregister_no_release defined], [
-		#include <linux/mmu_notifier.h>
-	],[
-		mmu_notifier_unregister_no_release(NULL, NULL);
-		return 0;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_MMU_INTERVAL_NOTIFIER, [mmu interval notifier defined], [
@@ -4633,6 +4247,14 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		__blkdev_issue_discard(NULL, 0, 0, 0, NULL);
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE___BLKDEV_ISSUE_DISCARD_5_PARAM_RETURNS_INT, [__blkdev_issue_discard has 5 params and returns int], [
+		#include <linux/blkdev.h>
+	],[
+		int ret = __blkdev_issue_discard(NULL, 0, 0, 0, NULL);
+
+		return ret;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_BIO_BI_DISK, [struct bio has member bi_disk], [
@@ -4664,38 +4286,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		[AC_DEFINE(HAVE_INTERVAL_TREE_EXPORTED, 1,
 			[interval_tree functions exported by the kernel])],
 	[])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NFT_CHAIN_OFFLOAD_PRIORITY, [nft_chain_offload_priority is defined], [
-		#include <net/netfilter/nf_tables_offload.h>
-	],[
-		nft_chain_offload_priority(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_NFT_CHAIN_OFFLOAD_SUPPORT, [nft_chain_offload_support is defined], [
-		#include <net/netfilter/nf_tables_offload.h>
-	],[
-		nft_chain_offload_support(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TC_SETUP_CB_EGDEV_REGISTER, [tc_setup_cb_egdev_register is defined], [
-		#include <net/act_api.h>
-	],[
-		tc_setup_cb_egdev_register(NULL, NULL, NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_TCF_ACTION_STATS_UPDATE, [tc_action_stats_update is defined], [
-		#include <net/act_api.h>
-	],[
-		tcf_action_stats_update(NULL, 0, 0, 0);
-
-		return 0;
-	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_TCF_ACTION_STATS_UPDATE_5_PARAMS, [tc_action_stats_update is defined and has 5 params], [
 		#include <net/act_api.h>
@@ -4792,10 +4382,24 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_IRQ_AFFINITY_DESC, [irq_affinity_desc is defined], [
-		#include <linux/interrupt.h>
+	MLNX_RDMA_TEST_CASE(HAVE_NDO_QUEUE_MEM_ALLOC_QCFG, [ndo_queue_mem_alloc and ndo_queue_start have struct netdev_queue_config], [
+		#include <net/netdev_queues.h>
+
+		static int test_alloc(struct net_device *dev, struct netdev_queue_config *qcfg, void *mem, int idx);
+		static int test_alloc(struct net_device *dev, struct netdev_queue_config *qcfg, void *mem, int idx)
+		{
+			return 0;
+		}
+		static int test_start(struct net_device *dev, struct netdev_queue_config *qcfg, void *mem, int idx);
+		static int test_start(struct net_device *dev, struct netdev_queue_config *qcfg, void *mem, int idx)
+		{
+			return 0;
+		}
 	],[
-		struct irq_affinity_desc x;
+		struct netdev_queue_mgmt_ops ops = {
+			.ndo_queue_mem_alloc = test_alloc,
+			.ndo_queue_start = test_start,
+		};
 
 		return 0;
 	])
@@ -4996,6 +4600,16 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		struct vfio_device_ops vfio_ops;
 
 		vfio_ops.match_token_uuid = NULL;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS, [struct vfio_device_ops has get_region_info_caps], [
+		#include <linux/vfio.h>
+	],[
+		struct vfio_device_ops vfio_ops;
+
+		vfio_ops.get_region_info_caps = NULL;
 
 		return 0;
 	])
@@ -5207,14 +4821,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_TLS_DRIVER_CTX, [net/tls.h has tls_driver_ctx], [
-		#include <net/tls.h>
-	],[
-		tls_driver_ctx(NULL, 0);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_BLK_QUEUE_MAKE_REQUEST, [blk_queue_make_request existing], [
 		#include <linux/blkdev.h>
 	],[
@@ -5287,19 +4893,19 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_ZAP_SPECIAL_VMA_RANGE, [mm.h has zap_special_vma_range], [
+		#include <linux/mm.h>
+	],[
+		zap_special_vma_range(NULL, 0, 0);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_PAGE_FOLIO_INDEX_FIELD, [struct page has __folio_index field], [
 		#include <linux/mm_types.h>
 	],[
 		struct page p;
 		p.__folio_index = 0;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_T10_PI_PREPARE, [t10_pi_prepare is defined], [
-		#include <linux/t10-pi.h>
-	],[
-		t10_pi_prepare(NULL, 0);
 
 		return 0;
 	])
@@ -5394,37 +5000,10 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_BLKDEV_DMA_MAP_BVEC, [dma_map_bvec exist], [
-		#include <linux/blkdev.h>
-		#include <linux/dma-mapping.h>
-	],[
-		struct bio_vec bv = {};
-
-		dma_map_bvec(NULL, &bv, 0, 0);
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_FLOW_INDR_BLOCK_CB_ALLOC, [flow_indr_block_cb_alloc exist], [
 		#include <net/flow_offload.h>
 	],[
 		flow_indr_block_cb_alloc(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_FLOW_BLOCK_CB, [struct flow_block_cb exist], [
-		#include <net/flow_offload.h>
-	],[
-		struct flow_block_cb a;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM, [sg_alloc_table_chained has nents_first_chunk parameter], [
-		#include <linux/scatterlist.h>
-	],[
-		sg_alloc_table_chained(NULL, 0, NULL, 0);
 
 		return 0;
 	])
@@ -5509,44 +5088,12 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 			[svc_pool_wake_idle_thread is exported by the kernel])],
 	[])
 
-	MLNX_RDMA_TEST_CASE(HAVE_XPRT_OPS_SEND_REQUEST_RQST_ARG, [*send_request has 'struct rpc_rqst *req' as a param], [
-		#include <linux/sunrpc/xprt.h>
-
-		int send_request(struct rpc_rqst *req);
-		int send_request(struct rpc_rqst *req)
-		{
-			return 0;
-		}
-	],[
-		struct rpc_xprt_ops ops;
-
-		ops.send_request = send_request;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XPRT_REQUEST_GET_CONG, [get cong request], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		return xprt_request_get_cong(NULL, NULL);
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_SVC_XPRT_XPO_SECURE_PORT, [struct svc_xprt_ops 'xpo_secure_port' field], [
 		#include <linux/sunrpc/svc_xprt.h>
 	],[
 		struct svc_xprt_ops dummy_svc_ops;
 
 		dummy_svc_ops.xpo_secure_port = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_SVC_XPRT_XPO_PREP_REPLY_HDR, [struct svc_xprt_ops 'xpo_prep_reply_hdr' field], [
-		#include <linux/sunrpc/svc_xprt.h>
-	],[
-		struct svc_xprt_ops dummy_svc_ops;
-
-		dummy_svc_ops.xpo_prep_reply_hdr = NULL;
 
 		return 0;
 	])
@@ -5581,59 +5128,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_OPS_SET_RETRANS_TIMEOUT, [struct rpc_xprt_ops has 'set_retrans_timeout' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		struct rpc_xprt_ops dummy_ops;
-
-		dummy_ops.set_retrans_timeout = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_OPS_WAIT_FOR_REPLY_REQUEST, [struct rpc_xprt_ops has 'wait_for_reply_request' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		struct rpc_xprt_ops dummy_ops;
-
-		dummy_ops.wait_for_reply_request = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XPRT_QUEUE_LOCK, [struct rpc_xprt has 'queue_lock' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		spinlock_t *dummy_lock;
-		struct rpc_xprt dummy_xprt;
-
-		dummy_lock = &dummy_xprt.queue_lock;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XPRT_WAIT_FOR_BUFFER_SPACE_RQST_ARG, [xprt_wait_for_buffer_space has xprt as a parameter], [
-		#include <linux/sunrpc/xprt.h>
-
-		/* If it is stack, we get error that frame is too large: */
-		static struct rpc_xprt xprt;
-	],[
-		xprt_wait_for_buffer_space(&xprt);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_RECV_LOCK, [struct rpc_xprt has 'recv_lock' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		spinlock_t *dummy_lock;
-		struct rpc_xprt dummy_xprt;
-
-		dummy_lock = &dummy_xprt.recv_lock;
-
-		return 0;
-	])
-
 
 	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_XPRT_CLASS, [struct rpc_xprt has 'xprt_class' field], [
 		#include <linux/sunrpc/xprt.h>
@@ -5651,26 +5145,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 			[xprt_reconnect_delay is exported by the kernel])],
 	[])
 
-	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_OPS_BC_NUM_SLOTS, [struct rpc_xprt_ops has 'bc_num_slots' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		struct rpc_xprt_ops dummy_ops;
-
-		dummy_ops.bc_num_slots = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_RPC_XPRT_OPS_BC_UP, [struct rpc_xprt_ops has 'bc_up' field], [
-		#include <linux/sunrpc/xprt.h>
-	],[
-		struct rpc_xprt_ops dummy_ops;
-
-		dummy_ops.bc_up = NULL;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_XPRT_CLASS_NETID, [struct xprt_class has 'netid' field], [
 		#include <linux/sunrpc/xprt.h>
 	],[
@@ -5681,52 +5155,12 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_SYSCTL_ZERO_ENABLED, [linux/sysctl.h has SYSCTL_ZERO defined], [
-		#include <linux/sysctl.h>
-	],[
-		void *dummy;
-
-		dummy = SYSCTL_ZERO;
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_CTL_TABLE_CHILD, [struct ctl_table have "child" field], [
 		#include <linux/sysctl.h>
 	],[
 		 struct ctl_table dummy_table;
 
 		dummy_table.child = NULL;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XDRBUF_SPARSE_PAGES, [XDRBUF_SPARSE_PAGES has defined in linux/sunrpc/xdr.h], [
-		#include <linux/sunrpc/xdr.h>
-	],[
-		int dummy;
-
-		dummy = XDRBUF_SPARSE_PAGES;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XDR_INIT_ENCODE_RQST_ARG, [xdr_init_encode has rqst as a parameter], [
-		#include <linux/sunrpc/xdr.h>
-	],[
-		struct rpc_rqst *rqst = NULL;
-
-		xdr_init_encode(NULL, NULL, NULL, rqst);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_XDR_INIT_DECODE_RQST_ARG, [xdr_init_decode has rqst as a parameter], [
-		#include <linux/sunrpc/xdr.h>
-	],[
-		struct rpc_rqst *rqst = NULL;
-
-		xdr_init_decode(NULL, NULL, NULL, rqst);
 
 		return 0;
 	])
@@ -5950,15 +5384,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <linux/pci-p2pdma.h>
 	],[
 		pci_p2pdma_map_sg_attrs(NULL, NULL, 0, 0, 0);
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_UAPI_LINUX_NVME_PASSTHRU_CMD64, [uapi/linux/nvme_ioctl.h has struct nvme_passthru_cmd64], [
-		#include <linux/nvme_ioctl.h>
-		#include <linux/types.h>
-		#include <uapi/asm-generic/ioctl.h>
-	],[
-		struct nvme_passthru_cmd64 cmd = {};
 		return 0;
 	])
 
@@ -6982,6 +6407,20 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_RQ_END_IO_FN_3_ARGS, [rq_end_io_fn has io_comp_batch argument], [
+		#include <linux/blk-mq.h>
+
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob);
+		static enum rq_end_io_ret test_end_io(struct request *rq, blk_status_t status, const struct io_comp_batch *iob)
+		{
+			return RQ_END_IO_NONE;
+		}
+	],[
+		rq_end_io_fn *fn = test_end_io;
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT, [function map_queues returns int], [
 		#include <linux/blk-mq.h>
 	],[
@@ -7271,16 +6710,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		};
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_IRQ_AFFINITY_PRIV, [struct irq_affinity has priv], [
-		#include <linux/interrupt.h>
-	],[
-		struct irq_affinity affd = {
-			.priv = NULL,
-		};
-
-		return 0;
-	])
-
 	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING, [linux/aer.h has pci_enable_pcie_error_reporting], [
 		#include <linux/aer.h>
 	],[
@@ -7292,24 +6721,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <linux/blkdev.h>
 	],[
 		int x = QUEUE_FLAG_PCI_P2PDMA;
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_REQUEST_HAS_DEADLINE, [blkdev.h struct request has deadline], [
-		#include <linux/blkdev.h>
-		#include <linux/blk-mq.h>
-	],[
-		struct request rq = { .deadline = 0 };
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_BLK_MQ_OPS_COMMIT_RQS, [struct blk_mq_ops has commit_rqs], [
-		#include <linux/blk-mq.h>
-	],[
-		struct blk_mq_ops ops = {
-			.commit_rqs = NULL,
-		};
 
 		return 0;
 	])
@@ -7374,10 +6785,18 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM, [include/linux/pci.h has pci_enable_ptm], [
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM_GET_2_PARAM, [include/linux/pci.h has pci_enable_ptm get 2 param], [
 		#include <linux/pci.h>
 	],[
 		pci_enable_ptm(NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM_GET_1_PARAM, [include/linux/pci.h has pci_enable_ptm get 1 param], [
+		#include <linux/pci.h>
+	],[
+		pci_enable_ptm(NULL);
 
 		return 0;
 	])
@@ -7402,14 +6821,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <linux/blkdev.h>
 	],[
 		bdev_release(NULL);
-
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS, [blk_alloc_queue_node has 3 args], [
-		#include <linux/blkdev.h>
-	],[
-		blk_alloc_queue_node(0, 0, NULL);
 
 		return 0;
 	])
@@ -7515,14 +6926,6 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 	MLNX_RDMA_TEST_CASE(HAVE_RATELIMIT_TYPES_H, [linux/ratelimit_types.h exists], [
 		#include <linux/ratelimit_types.h>
 	],[
-		return 0;
-	])
-
-	MLNX_RDMA_TEST_CASE(HAVE_BLK_OP_STR, [linux/blkdev.h has blk_op_str], [
-		#include <linux/blkdev.h>
-	],[
-		const char *s = blk_op_str(0);
-
 		return 0;
 	])
 
@@ -7928,6 +7331,15 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_BDEV_ROT, [blkdev.h has bdev_rot], [
+		#include <linux/blkdev.h>
+	],[
+		struct block_device *bdev = NULL;
+
+		bdev_rot(bdev);
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_REQUEST_QUEUE_IA_RANGES, [blkdev.h struct request_queue has ia_ranges], [
 		#include <linux/blkdev.h>
 	],[
@@ -8058,10 +7470,19 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST, [nvme_auth_generate_digest is defined], [
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8, [nvme_auth_generate_digest is defined], [
 		#include <linux/nvme-auth.h>
 	],[
 		u8 *b;
+		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR, [nvme_auth_generate_digest is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		char *b;
 		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
 
 		return 0;
@@ -8074,6 +7495,23 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		int x = nvme_auth_derive_tls_psk(0, NULL, 0, NULL, &b);
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_PARSE_KEY, [nvme_auth_parse_key is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		struct nvme_dhchap_key *key = NULL;
+
+		nvme_auth_parse_key(NULL, &key);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GEN_SESSION_KEY, [nvme_auth_gen_session_key is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		int x = nvme_auth_gen_session_key(NULL, NULL, 0, NULL, 0, 0);
+
+		return x;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_APPLE_RTKIT_OPS_CRASHED_3_PARAMS, [apple_rtkit_ops.crashed takes 3 params], [
@@ -8295,6 +7733,16 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_IO_URING_SQE_CMD_2_ARGS, [io_uring_sqe128_cmd macro exists], [
+		#include <linux/io_uring/cmd.h>
+	],[
+		struct io_uring_sqe sqe = {};
+		const struct io_uring_sqe *p = &sqe;
+		const void *cmd = io_uring_sqe128_cmd(p, struct io_uring_sqe);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_QUEUE_LIMITS_MAX_WRITE_STREAMS, [struct queue_limits->max_write_streams exists], [
 		#include <linux/blkdev.h>
 	],[
@@ -8349,6 +7797,29 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_BLK_RQ_DMA_MAP_ITER_NEXT_3_ARGS, [blk_rq_dma_map_iter_next has 3 args without dma_iova_state], [
+		#include <linux/blk-mq-dma.h>
+	],[
+		struct blk_dma_iter iter;
+		blk_rq_dma_map_iter_next(NULL, NULL, &iter);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_LINUX_HEX_H, [linux/hex.h exists as standalone header], [
+		#include <linux/hex.h>
+	],[
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR, [posix_acl_to_xattr allocs buffer and returns void pointer], [
+		#include <linux/fs.h>
+		#include <linux/posix_acl_xattr.h>
+	],[
+		size_t size;
+		void *ptr = posix_acl_to_xattr(NULL, NULL, &size, GFP_KERNEL);
+		return ptr ? 0 : -ENOMEM;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_INIT_LLIST_NODE, [init_llist_node is defined], [
 		#include <linux/llist.h>
 	],[
@@ -8399,6 +7870,52 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		#include <linux/blk-mq-dma.h>
 	],[
 		blk_rq_dma_unmap(NULL, NULL, NULL, 0, PCI_P2PDMA_MAP_NONE);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_KERNEL_NEON_BEGIN_END_1_PARAM, [kernel_neon_begin/end has 1 param], [
+		#include <asm/neon.h>
+	],[
+		kernel_neon_end(NULL);
+		kernel_neon_begin(NULL);
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DMA_BUF_PHYS_VEC_TO_SGT, [dma_buf_phys_vec_to_sgt is defined], [
+		#include <linux/scatterlist.h>
+		#include <linux/dma-buf-mapping.h>
+	],[
+		struct sg_table *t = dma_buf_phys_vec_to_sgt(NULL, NULL, NULL, 0, 0, 0);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PHYS_VEC, [struct phys_vec is defined], [
+		#include <linux/types.h>
+	],[
+		struct phys_vec pv = {0, 0};
+
+		return 0;
+       ])
+
+	MLNX_RDMA_TEST_CASE(HAVE_ETHTOOL_OPS_GET_RX_RING_COUNT, [get_rx_ring_count is defined], [
+		#include <linux/ethtool.h>
+	],[
+		const struct ethtool_ops en_ethtool_ops = {
+			.get_rx_ring_count = NULL,
+		};
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NDO_HWTSTAMP_GET_SET, [ndo_hwtstamp_get/set is defined], [
+		#include <linux/netdevice.h>
+	],[
+		struct net_device_ops netdev_ops = {
+		       .ndo_hwtstamp_get = NULL,
+		       .ndo_hwtstamp_set = NULL,
+		};
+
 		return 0;
 	])
 ])

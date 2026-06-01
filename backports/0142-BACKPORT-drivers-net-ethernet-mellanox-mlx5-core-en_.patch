@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
  drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c | 14 +++++++++++++-
  1 file changed, 13 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
-@@ -76,6 +76,7 @@ static const struct {
+@@ -61,6 +61,7 @@ enum {
  				   MLX5_CAP_QCAM_REG(mdev, qpts) && \
  				   MLX5_CAP_QCAM_REG(mdev, qpdpm))
  
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
  static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state);
  static int mlx5e_set_dscp2prio(struct mlx5e_priv *priv, u8 dscp, u8 prio);
  
-@@ -1185,7 +1186,10 @@ static int mlx5e_set_trust_state(struct
+@@ -1178,7 +1179,10 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
  	bool reset = true;
  	int err;
  
@@ -26,7 +28,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
  	mutex_lock(&priv->state_lock);
  	mqprio.mode = priv->channels.params.mqprio.mode;
  	if (mqprio.mode != TC_MQPRIO_MODE_DCB) {
-@@ -1209,12 +1213,16 @@ static int mlx5e_set_trust_state(struct
+@@ -1202,12 +1206,16 @@ static int mlx5e_set_trust_state(struct mlx5e_priv *priv, u8 trust_state)
  unlock:
  	mutex_unlock(&priv->state_lock);
  	if (err) {
@@ -44,7 +46,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
  		mutex_lock(&priv->state_lock);
  		mlx5e_setup_tc_mqprio(priv, &mqprio);
  		mutex_unlock(&priv->state_lock);
-@@ -1225,7 +1233,10 @@ unlock:
+@@ -1218,7 +1226,10 @@ unlock:
  		mutex_unlock(&priv->state_lock);
  	}
  
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_dcbnl.c
  	return 0;
  }
  
-@@ -1329,3 +1340,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e
+@@ -1322,3 +1333,4 @@ void mlx5e_dcbnl_initialize(struct mlx5e_priv *priv)
  
  	mlx5e_ets_init(priv);
  }

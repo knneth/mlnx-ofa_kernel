@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
  .../net/ethernet/mellanox/mlx5/core/sf/sf.h   | 24 +++++++++++++++++--
  1 file changed, 22 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h b/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/sf.h
-@@ -21,15 +21,35 @@ bool mlx5_sf_table_empty(const struct ml
+@@ -21,15 +21,35 @@ bool mlx5_sf_table_empty(const struct mlx5_core_dev *dev);
  int mlx5_devlink_sf_port_new(struct devlink *devlink,
  			     const struct devlink_port_new_attrs *add_attr,
  			     struct netlink_ext_ack *extack,

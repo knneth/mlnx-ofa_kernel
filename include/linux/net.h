@@ -5,14 +5,6 @@
 
 #include_next <linux/net.h>
 
-#ifndef SOCK_ASYNC_NOSPACE
-#define SOCK_ASYNC_NOSPACE SOCKWQ_ASYNC_NOSPACE
-#endif
-
-#ifndef SOCK_ASYNC_WAITDATA
-#define SOCK_ASYNC_WAITDATA SOCKWQ_ASYNC_WAITDATA
-#endif
-
 #if !defined(HAVE_SENDPAGE_OK)
 #include <linux/page_ref.h>
 

@@ -2,12 +2,46 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
 
 ---
- drivers/infiniband/core/rdma_core.c | 3 +--
- 1 file changed, 1 insertion(+), 2 deletions(-)
+ drivers/infiniband/core/rdma_core.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/core/rdma_core.c b/drivers/infiniband/core/rdma_core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/rdma_core.c
 +++ b/drivers/infiniband/core/rdma_core.c
-@@ -525,7 +525,6 @@ static void alloc_abort_idr_uobject(stru
+@@ -465,7 +465,11 @@ alloc_begin_fd_uobject(const struct uverbs_api_object *obj,
+ 
+ 	fd_type =
+ 		container_of(obj->type_attrs, struct uverbs_obj_fd_type, type);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	if (WARN_ON(fd_type->fops && fd_type->fops->release != &uverbs_uobject_fd_release &&
++#else
++	if (WARN_ON(fd_type->fops->release != &uverbs_uobject_fd_release &&
++#endif
+ 		    fd_type->fops->release != &uverbs_async_event_release)) {
+ 		ret = ERR_PTR(-EINVAL);
+ 		goto err_fd;
+@@ -477,7 +481,9 @@ alloc_begin_fd_uobject(const struct uverbs_api_object *obj,
+ 		goto err_fd;
+ 	}
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	if (fd_type->fops) {
++#endif
+ 		/* Note that uverbs_uobject_fd_release() is called during abort */
+ 		filp = anon_inode_getfile(fd_type->name, fd_type->fops, NULL,
+ 					  fd_type->flags);
+@@ -486,7 +492,9 @@ alloc_begin_fd_uobject(const struct uverbs_api_object *obj,
+ 			goto err_getfile;
+ 		}
+ 		uobj->object = filp;
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	}
++#endif
+ 
+ 	uobj->id = new_fd;
+ 	return uobj;
+@@ -527,7 +535,6 @@ static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
  {
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);
@@ -15,7 +49,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
  	xa_erase(&uobj->ufile->idr, uobj->id);
  }
  
-@@ -546,13 +545,13 @@ static int __must_check destroy_hw_idr_u
+@@ -548,13 +555,13 @@ static int __must_check destroy_hw_idr_uobject(struct ib_uobject *uobj,
  
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);
@@ -30,3 +64,32 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
  	/* Matches the kref in alloc_commit_idr_uobject */
  	uverbs_uobject_put(uobj);
  }
+@@ -563,7 +570,9 @@ static void alloc_abort_fd_uobject(struct ib_uobject *uobj)
+ {
+ 	struct file *filp = uobj->object;
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	if (filp)
++#endif
+ 		fput(filp);
+ 	put_unused_fd(uobj->id);
+ }
+@@ -631,13 +640,18 @@ static void alloc_commit_fd_uobject(struct ib_uobject *uobj)
+ 	/* This shouldn't be used anymore. Use the file object instead */
+ 	uobj->id = 0;
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	if (!filp->private_data) {
++#endif
+ 		/*
+ 		 * NOTE: Once we install the file we loose ownership of our kref on
+ 		 * uobj. It will be put by uverbs_uobject_fd_release()
+ 		 */
+ 		filp->private_data = uobj;
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	}
++
++#endif
+ 	fd_install(fd, filp);
+ }
+ 

@@ -5,6 +5,11 @@
 
 #include_next <linux/nvme-auth.h>
 
+#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
+/* Newer kernels (7.1+): nvme_auth_digest_name removed from kernel header */
+const char *nvme_auth_digest_name(u8 hmac_id);
+#endif
+
 #if defined(CONFIG_NVME_TCP_TLS) && defined(HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP)
 #ifndef HAVE_NVME_AUTH_GENERATE_PSK
 int nvme_auth_generate_psk(u8 hmac_id, u8 *skey, size_t skey_len,

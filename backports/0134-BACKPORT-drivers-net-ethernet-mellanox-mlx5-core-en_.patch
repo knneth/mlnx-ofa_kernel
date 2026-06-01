@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 
 ---
- .../mellanox/mlx5/core/en_accel/ktls.c        | 53 +++++++++++++++++--
- 1 file changed, 50 insertions(+), 3 deletions(-)
+ .../mellanox/mlx5/core/en_accel/ktls.c        | 49 +++++++++++++++++--
+ 1 file changed, 46 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 @@ -1,6 +1,7 @@
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT:
  {
  	const void *key;
  	u32 sz_bytes;
-@@ -33,16 +39,31 @@ struct mlx5_crypto_dek *mlx5_ktls_create
+@@ -33,16 +39,31 @@ struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_po
  		break;
  	}
  	default:
@@ -65,7 +67,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_ktls_add(struct net_device *netdev, struct sock *sk,
-@@ -60,7 +81,11 @@ static int mlx5e_ktls_add(struct net_dev
+@@ -60,7 +81,11 @@ static int mlx5e_ktls_add(struct net_device *netdev, struct sock *sk,
  	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
  		err = mlx5e_ktls_add_tx(netdev, sk, crypto_info, start_offload_tcp_sn);
  	else
@@ -77,7 +79,7 @@ Subject: [PATCH] BACKPORT:
  
  	return err;
  }
-@@ -71,10 +96,13 @@ static void mlx5e_ktls_del(struct net_de
+@@ -71,8 +96,10 @@ static void mlx5e_ktls_del(struct net_device *netdev,
  {
  	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
  		mlx5e_ktls_del_tx(netdev, tls_ctx);
@@ -87,11 +89,8 @@ Subject: [PATCH] BACKPORT:
 +#endif
  }
  
-+#ifdef HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC
  static int mlx5e_ktls_resync(struct net_device *netdev,
- 			     struct sock *sk, u32 seq, u8 *rcd_sn,
- 			     enum tls_offload_ctx_dir direction)
-@@ -82,14 +110,21 @@ static int mlx5e_ktls_resync(struct net_
+@@ -82,8 +109,12 @@ static int mlx5e_ktls_resync(struct net_device *netdev,
  	if (unlikely(direction != TLS_OFFLOAD_CTX_DIR_RX))
  		return -EOPNOTSUPP;
  
@@ -102,18 +101,9 @@ Subject: [PATCH] BACKPORT:
 +	return -EOPNOTSUPP;
 +#endif
  }
-+#endif
  
  static const struct tlsdev_ops mlx5e_ktls_ops = {
- 	.tls_dev_add = mlx5e_ktls_add,
- 	.tls_dev_del = mlx5e_ktls_del,
-+#ifdef HAVE_TLSDEV_OPS_HAS_TLS_DEV_RESYNC
- 	.tls_dev_resync = mlx5e_ktls_resync,
-+#endif
- };
- 
- bool mlx5e_is_ktls_rx(struct mlx5_core_dev *mdev)
-@@ -123,14 +158,17 @@ void mlx5e_ktls_build_netdev(struct mlx5
+@@ -123,14 +154,17 @@ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
  		netdev->features    |= NETIF_F_HW_TLS_TX;
  	}
  
@@ -131,7 +121,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5e_priv *priv = netdev_priv(netdev);
  	int err = 0;
  
-@@ -142,10 +180,15 @@ int mlx5e_ktls_set_feature_rx(struct net
+@@ -142,10 +176,15 @@ int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable)
  	mutex_unlock(&priv->state_lock);
  
  	return err;
@@ -147,7 +137,7 @@ Subject: [PATCH] BACKPORT:
  	int err;
  
  	if (!mlx5e_is_ktls_rx(priv->mdev))
-@@ -163,11 +206,13 @@ int mlx5e_ktls_init_rx(struct mlx5e_priv
+@@ -163,11 +202,13 @@ int mlx5e_ktls_init_rx(struct mlx5e_priv *priv)
  		}
  	}
  
@@ -161,7 +151,7 @@ Subject: [PATCH] BACKPORT:
  	if (!mlx5e_is_ktls_rx(priv->mdev))
  		return;
  
-@@ -175,6 +220,7 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
+@@ -175,6 +216,7 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv)
  		mlx5e_accel_fs_tcp_destroy(priv->fs);
  
  	destroy_workqueue(priv->tls->rx_wq);
@@ -169,7 +159,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static void mlx5e_tls_debugfs_init(struct mlx5e_tls *tls,
-@@ -218,3 +264,4 @@ void mlx5e_ktls_cleanup(struct mlx5e_pri
+@@ -218,3 +260,4 @@ void mlx5e_ktls_cleanup(struct mlx5e_priv *priv)
  	kfree(priv->tls);
  	priv->tls = NULL;
  }

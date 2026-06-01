@@ -5,7 +5,7 @@
 
 #include_next <linux/panic.h>
 
-#ifndef TAINT_FWCTL
+#ifndef HAVE_TAINT_FWCTL
 #define TAINT_FWCTL                19
 #undef 	TAINT_FLAGS_COUNT
 #define TAINT_FLAGS_COUNT          20

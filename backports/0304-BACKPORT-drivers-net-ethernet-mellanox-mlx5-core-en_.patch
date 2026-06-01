@@ -7,6 +7,8 @@ Change-Id: I86ef7093908103c9985eb6c0fed59f150cb01d40
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 7 +++++--
  1 file changed, 5 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 @@ -132,6 +132,7 @@ enum mlx5_ipsec_cap {
@@ -36,7 +38,7 @@ Change-Id: I86ef7093908103c9985eb6c0fed59f150cb01d40
  void mlx5e_ipsec_init(struct mlx5e_priv *priv);
  void mlx5e_ipsec_cleanup(struct mlx5e_priv *priv);
  void mlx5e_ipsec_build_netdev(struct mlx5e_priv *priv);
-@@ -319,7 +320,9 @@ void mlx5e_accel_ipsec_fs_del_rule(struc
+@@ -319,7 +320,9 @@ void mlx5e_accel_ipsec_fs_del_rule(struct mlx5e_ipsec_sa_entry *sa_entry);
  int mlx5e_accel_ipsec_fs_add_pol(struct mlx5e_ipsec_pol_entry *pol_entry);
  void mlx5e_accel_ipsec_fs_del_pol(struct mlx5e_ipsec_pol_entry *pol_entry);
  void mlx5e_accel_ipsec_fs_modify(struct mlx5e_ipsec_sa_entry *sa_entry);

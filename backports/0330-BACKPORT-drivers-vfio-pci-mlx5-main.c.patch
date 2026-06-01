@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/vfio/pci/mlx5/main.c
 
 Change-Id: I66acaae28fb1547cb94d7c8c71904bfa6c035e28
 ---
- drivers/vfio/pci/mlx5/main.c | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ drivers/vfio/pci/mlx5/main.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
 
+diff --git a/drivers/vfio/pci/mlx5/main.c b/drivers/vfio/pci/mlx5/main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/vfio/pci/mlx5/main.c
 +++ b/drivers/vfio/pci/mlx5/main.c
 @@ -3,6 +3,7 @@
@@ -16,7 +18,7 @@ Change-Id: I66acaae28fb1547cb94d7c8c71904bfa6c035e28
  #include <linux/device.h>
  #include <linux/eventfd.h>
  #include <linux/file.h>
-@@ -563,6 +564,9 @@ static const struct file_operations mlx5
+@@ -563,6 +564,9 @@ static const struct file_operations mlx5vf_save_fops = {
  	.unlocked_ioctl = mlx5vf_precopy_ioctl,
  	.compat_ioctl = compat_ptr_ioctl,
  	.release = mlx5vf_release_file,
@@ -26,7 +28,7 @@ Change-Id: I66acaae28fb1547cb94d7c8c71904bfa6c035e28
  };
  
  static int mlx5vf_pci_save_device_inc_data(struct mlx5vf_pci_core_device *mvdev)
-@@ -980,6 +984,9 @@ static const struct file_operations mlx5
+@@ -980,6 +984,9 @@ static const struct file_operations mlx5vf_resume_fops = {
  	.owner = THIS_MODULE,
  	.write = mlx5vf_resume_write,
  	.release = mlx5vf_release_file,
@@ -36,7 +38,16 @@ Change-Id: I66acaae28fb1547cb94d7c8c71904bfa6c035e28
  };
  
  static struct mlx5_vf_migration_file *
-@@ -1372,11 +1379,18 @@ static const struct vfio_device_ops mlx5
+@@ -1366,17 +1373,27 @@ static const struct vfio_device_ops mlx5vf_pci_ops = {
+ 	.open_device = mlx5vf_pci_open_device,
+ 	.close_device = mlx5vf_pci_close_device,
+ 	.ioctl = vfio_pci_core_ioctl,
++#ifdef HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS
++	.get_region_info_caps = vfio_pci_ioctl_get_region_info,
++#endif
+ 	.device_feature = vfio_pci_core_ioctl_feature,
+ 	.read = vfio_pci_core_read,
+ 	.write = vfio_pci_core_write,
  	.mmap = vfio_pci_core_mmap,
  	.request = vfio_pci_core_request,
  	.match = vfio_pci_core_match,
@@ -55,7 +66,7 @@ Change-Id: I66acaae28fb1547cb94d7c8c71904bfa6c035e28
  };
  
  static int mlx5vf_pci_probe(struct pci_dev *pdev,
-@@ -1427,10 +1441,13 @@ static struct pci_driver mlx5vf_pci_driv
+@@ -1427,10 +1444,13 @@ static struct pci_driver mlx5vf_pci_driver = {
  	.probe = mlx5vf_pci_probe,
  	.remove = mlx5vf_pci_remove,
  	.err_handler = &mlx5vf_err_handlers,

@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en/tc/sample.c   | 16 +++++++++++++++-
  1 file changed, 15 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.c
-@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psamp
+@@ -325,6 +325,7 @@ sample_restore_put(struct mlx5e_tc_psample *tc_psample, struct mlx5e_sample_rest
  
  void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj)
  {
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  	u32 trunc_size = mapped_obj->sample.trunc_size;
  	struct psample_group psample_group = {};
  	struct psample_metadata md = {};
-@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff
+@@ -336,6 +337,19 @@ void mlx5e_tc_sample_skb(struct sk_buff *skb, struct mlx5_mapped_obj *mapped_obj
  	skb_push(skb, skb->mac_len);
  
  	psample_sample_packet(&psample_group, skb, mapped_obj->sample.rate, &md);
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int
-@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_
+@@ -478,7 +492,7 @@ mlx5e_tc_sample_offload(struct mlx5e_tc_psample *tc_psample,
  	struct mlx5e_sample_attr *sample_attr;
  	struct mlx5_flow_attr *pre_attr;
  	struct mlx5_eswitch *esw;

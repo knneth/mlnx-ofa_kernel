@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  drivers/infiniband/ulp/ipoib/ipoib_vlan.c | 27 ++++++++++++++++++++---
  1 file changed, 24 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
-@@ -72,7 +72,10 @@ static bool is_child_unique(struct ipoib
+@@ -72,7 +72,10 @@ static bool is_child_unique(struct ipoib_dev_priv *ppriv,
  	if (ppriv->pkey == priv->pkey)
  		return false;
  
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  	list_for_each_entry(tpriv, &ppriv->child_intfs, list) {
  		if (tpriv->pkey == priv->pkey &&
  		    tpriv->child_type == IPOIB_LEGACY_CHILD) {
-@@ -80,7 +83,10 @@ static bool is_child_unique(struct ipoib
+@@ -80,7 +83,10 @@ static bool is_child_unique(struct ipoib_dev_priv *ppriv,
  			break;
  		}
  	}
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  
  	return result;
  }
-@@ -106,7 +112,6 @@ int __ipoib_vlan_add(struct ipoib_dev_pr
+@@ -106,7 +112,6 @@ int __ipoib_vlan_add(struct ipoib_dev_priv *ppriv, struct ipoib_dev_priv *priv,
  	 * always use this flow.
  	 */
  	ndev->priv_destructor = ipoib_intf_free;
@@ -37,7 +39,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  	/*
  	 * Racing with unregister of the parent must be prevented by the
  	 * caller.
-@@ -232,13 +237,15 @@ static void ipoib_vlan_delete_task(struc
+@@ -232,13 +237,15 @@ static void ipoib_vlan_delete_task(struct work_struct *work)
  	struct ipoib_vlan_delete_work *pwork =
  		container_of(work, struct ipoib_vlan_delete_work, work);
  	struct net_device *dev = pwork->dev;
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  
  		ipoib_dbg(ppriv, "delete child vlan %s\n", dev->name);
  		unregister_netdevice(dev);
-@@ -268,7 +275,10 @@ int ipoib_vlan_delete(struct net_device
+@@ -268,7 +275,10 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
  	ppriv = ipoib_priv(pdev);
  
  	rc = -ENODEV;
@@ -66,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  	list_for_each_entry_safe(priv, tpriv, &ppriv->child_intfs, list) {
  		if (priv->pkey == pkey &&
  		    priv->child_type == IPOIB_LEGACY_CHILD) {
-@@ -280,7 +290,15 @@ int ipoib_vlan_delete(struct net_device
+@@ -280,7 +290,15 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
  				goto out;
  			}
  
@@ -82,7 +84,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_vlan.c
  			work->dev = priv->dev;
  			INIT_WORK(&work->work, ipoib_vlan_delete_task);
  			queue_work(ipoib_workqueue, &work->work);
-@@ -291,7 +309,10 @@ int ipoib_vlan_delete(struct net_device
+@@ -291,7 +309,10 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey)
  	}
  
  out:

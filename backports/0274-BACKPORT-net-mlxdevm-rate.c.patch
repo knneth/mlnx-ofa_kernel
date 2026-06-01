@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
  net/mlxdevm/rate.c | 21 +++++++++++++++++++++
  1 file changed, 21 insertions(+)
 
+diff --git a/net/mlxdevm/rate.c b/net/mlxdevm/rate.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/rate.c
 +++ b/net/mlxdevm/rate.c
-@@ -167,14 +167,17 @@ static void mlxdevm_rate_notify(struct m
+@@ -167,14 +167,17 @@ static void mlxdevm_rate_notify(struct mlxdevm_rate *mlxdevm_rate,
  				enum mlxdevm_command cmd)
  {
  	struct mlxdevm *mlxdevm = mlxdevm_rate->mlxdevm;
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -186,6 +189,7 @@ static void mlxdevm_rate_notify(struct m
+@@ -186,6 +189,7 @@ static void mlxdevm_rate_notify(struct mlxdevm_rate *mlxdevm_rate,
  	}
  
  	mlxdevm_nl_notify_send(mlxdevm, msg);
@@ -33,7 +35,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
  }
  #ifdef HAVE_BLOCKED_DEVLINK_CODE
  
-@@ -358,23 +362,35 @@ static int mlxdevm_nl_rate_tc_bw_parse(s
+@@ -358,23 +362,35 @@ static int mlxdevm_nl_rate_tc_bw_parse(struct nlattr *parent_nest, u32 *tc_bw,
  		return err;
  
  	if (!tb[MLXDEVM_RATE_TC_ATTR_INDEX]) {
@@ -69,7 +71,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/rate.c
  		return -EINVAL;
  	}
  
-@@ -403,9 +419,14 @@ static int mlxdevm_nl_rate_tc_bw_set(str
+@@ -403,9 +419,14 @@ static int mlxdevm_nl_rate_tc_bw_set(struct mlxdevm_rate *mlxdevm_rate,
  
  	for (i = 0; i < MLXDEVM_RATE_TCS_MAX; i++) {
  		if (!test_bit(i, bitmap)) {

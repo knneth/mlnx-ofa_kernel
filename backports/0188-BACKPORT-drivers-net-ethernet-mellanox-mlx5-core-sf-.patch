@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/sf/hw_table.c | 45 ++++++++++++++++---
  1 file changed, 40 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
-@@ -247,8 +247,20 @@ static void mlx5_sf_hw_table_hwc_cleanup
+@@ -247,8 +247,20 @@ static void mlx5_sf_hw_table_hwc_cleanup(struct mlx5_sf_hwc_table *hwc)
  
  static void mlx5_sf_hw_table_res_unregister(struct mlx5_core_dev *dev)
  {
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
-@@ -262,31 +274,56 @@ static int mlx5_sf_hw_table_res_register
+@@ -262,31 +274,56 @@ static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
  
  	devlink_resource_size_params_init(&size_params, max_fn, max_fn, 1,
  					  DEVLINK_RESOURCE_UNIT_ENTRY);
@@ -89,7 +91,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
-@@ -306,10 +343,8 @@ int mlx5_sf_hw_table_init(struct mlx5_co
+@@ -306,10 +343,8 @@ int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
  	err = mlx5_esw_sf_max_hpf_functions(dev, &max_ext_fn, &ext_base_id);
  	if (err)
  		return err;

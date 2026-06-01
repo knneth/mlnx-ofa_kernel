@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c b/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/irq_affinity.c
 @@ -198,8 +198,13 @@ out:
@@ -22,7 +24,7 @@ Subject: [PATCH] BACKPORT:
  		if (ret) {
  			mlx5_core_err(dev, "Failed to create sysfs entry for irq %d, ret = %d\n",
  				      mlx5_irq_get_irq(least_loaded_irq), ret);
-@@ -219,8 +224,13 @@ void mlx5_irq_affinity_irq_release(struc
+@@ -219,8 +224,13 @@ void mlx5_irq_affinity_irq_release(struct mlx5_core_dev *dev, struct mlx5_irq *i
  	synchronize_irq(pci_irq_vector(pool->dev->pdev,
  				       mlx5_irq_get_index(irq)));
  	if (mlx5_irq_pool_is_sf_pool(pool))

@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
 
 ---
- drivers/nvme/common/auth.c | 101 +++++++++++++++++++++++++++++++++++++
- 1 file changed, 101 insertions(+)
+ drivers/nvme/common/auth.c | 266 +++++++++++++++++++++++++++++++++++--
+ 1 file changed, 258 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/nvme/common/auth.c b/drivers/nvme/common/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/common/auth.c
 +++ b/drivers/nvme/common/auth.c
 @@ -3,6 +3,7 @@
@@ -15,17 +17,18 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
  #include <linux/module.h>
  #include <linux/crc32.h>
  #include <linux/base64.h>
-@@ -11,7 +12,9 @@
+@@ -11,7 +12,10 @@
  #include <linux/unaligned.h>
  #include <crypto/hash.h>
  #include <crypto/dh.h>
-+#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
++#ifdef HAVE_HKDF_EXPAND
++/* Older kernels: crypto/hkdf.h provides hkdf_extract and hkdf_expand */
  #include <crypto/hkdf.h>
 +#endif
  #include <linux/nvme.h>
  #include <linux/nvme-auth.h>
  
-@@ -20,6 +23,87 @@
+@@ -20,6 +24,99 @@
  static u32 nvme_dhchap_seqnum;
  static DEFINE_MUTEX(nvme_dhchap_mutex);
  
@@ -108,12 +111,45 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
 +	return err;
 +}
 +#endif /* HAVE_NVME_AUTH_DERIVE_TLS_PSK */
-+#endif
++
++/* Newer kernels (7.1+): crypto/hkdf.h removed, inline hkdf_extract */
++static inline int hkdf_extract(struct crypto_shash *hmac_tfm, const u8 *ikm,
++				unsigned int ikmlen, const u8 *salt,
++				unsigned int saltlen, u8 *prk)
++{
++	int err = crypto_shash_setkey(hmac_tfm, salt, saltlen);
++
++	if (!err)
++		err = crypto_shash_tfm_digest(hmac_tfm, ikm, ikmlen, prk);
++	return err;
++}
++#endif /* !HAVE_HKDF_EXPAND */
 +
  u32 nvme_auth_get_seqnum(void)
  {
  	u32 seqnum;
-@@ -178,7 +262,13 @@ struct nvme_dhchap_key *nvme_auth_extrac
+@@ -161,11 +258,20 @@ u32 nvme_auth_key_struct_size(u32 key_len)
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_key_struct_size);
+ 
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): secret type changed to const char * */
++struct nvme_dhchap_key *nvme_auth_extract_key(const char *secret,
++					      u8 key_hash)
++{
++	struct nvme_dhchap_key *key;
++	const char *p;
++#else
+ struct nvme_dhchap_key *nvme_auth_extract_key(unsigned char *secret,
+ 					      u8 key_hash)
+ {
+ 	struct nvme_dhchap_key *key;
+ 	unsigned char *p;
++#endif
+ 	u32 crc;
+ 	int ret, key_len;
+ 	size_t allocated_len = strlen(secret);
+@@ -178,7 +284,13 @@ struct nvme_dhchap_key *nvme_auth_extract_key(unsigned char *secret,
  	if (!key)
  		return ERR_PTR(-ENOMEM);
  
@@ -127,7 +163,239 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
  	if (key_len < 0) {
  		pr_debug("base64 key decoding error %d\n",
  			 key_len);
-@@ -663,7 +753,13 @@ int nvme_auth_generate_digest(u8 hmac_id
+@@ -238,7 +350,12 @@ void nvme_auth_free_key(struct nvme_dhchap_key *key)
+ EXPORT_SYMBOL_GPL(nvme_auth_free_key);
+ 
+ struct nvme_dhchap_key *nvme_auth_transform_key(
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): key and nqn are now const */
++		const struct nvme_dhchap_key *key, const char *nqn)
++#else
+ 		struct nvme_dhchap_key *key, char *nqn)
++#endif
+ {
+ 	const char *hmac_name;
+ 	struct crypto_shash *key_tfm;
+@@ -304,7 +421,12 @@ out_free_key:
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_transform_key);
+ 
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): skey is now const */
++static int nvme_auth_hash_skey(int hmac_id, const u8 *skey, size_t skey_len, u8 *hkey)
++#else
+ static int nvme_auth_hash_skey(int hmac_id, u8 *skey, size_t skey_len, u8 *hkey)
++#endif
+ {
+ 	const char *digest_name;
+ 	struct crypto_shash *tfm;
+@@ -329,22 +451,39 @@ static int nvme_auth_hash_skey(int hmac_id, u8 *skey, size_t skey_len, u8 *hkey)
+ 	return ret;
+ }
+ 
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): skey and challenge are now const */
++int nvme_auth_augmented_challenge(u8 hmac_id, const u8 *skey, size_t skey_len,
++		const u8 *challenge, u8 *aug, size_t hlen)
++#else
+ int nvme_auth_augmented_challenge(u8 hmac_id, u8 *skey, size_t skey_len,
+ 		u8 *challenge, u8 *aug, size_t hlen)
++#endif
+ {
+ 	struct crypto_shash *tfm;
+-	u8 *hashed_key;
+ 	const char *hmac_name;
+-	int ret;
++	const u8 *hmac_key;
++	size_t hmac_key_len;
++	int ret = 0;
++#ifndef HAVE_NVME_AUTH_GEN_SESSION_KEY
++	/* Older kernels: session key is raw DH secret, hash it before use as HMAC key */
++	u8 *hashed_key;
+ 
+ 	hashed_key = kmalloc(hlen, GFP_KERNEL);
+ 	if (!hashed_key)
+ 		return -ENOMEM;
+-
+-	ret = nvme_auth_hash_skey(hmac_id, skey,
+-				  skey_len, hashed_key);
+-	if (ret < 0)
+-		goto out_free_key;
++	ret = nvme_auth_hash_skey(hmac_id, skey, skey_len, hashed_key);
++	if (ret < 0) {
++		kfree_sensitive(hashed_key);
++		return ret;
++	}
++	hmac_key = hashed_key;
++	hmac_key_len = hlen;
++#else
++	/* Newer kernels (7.1+): session key is already H(g^xy mod p) */
++	hmac_key = skey;
++	hmac_key_len = skey_len;
++#endif
+ 
+ 	hmac_name = nvme_auth_hmac_name(hmac_id);
+ 	if (!hmac_name) {
+@@ -360,7 +499,7 @@ int nvme_auth_augmented_challenge(u8 hmac_id, u8 *skey, size_t skey_len,
+ 		goto out_free_key;
+ 	}
+ 
+-	ret = crypto_shash_setkey(tfm, hashed_key, hlen);
++	ret = crypto_shash_setkey(tfm, hmac_key, hmac_key_len);
+ 	if (ret)
+ 		goto out_free_hash;
+ 
+@@ -368,7 +507,9 @@ int nvme_auth_augmented_challenge(u8 hmac_id, u8 *skey, size_t skey_len,
+ out_free_hash:
+ 	crypto_free_shash(tfm);
+ out_free_key:
++#ifndef HAVE_NVME_AUTH_GEN_SESSION_KEY
+ 	kfree_sensitive(hashed_key);
++#endif
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_augmented_challenge);
+@@ -410,8 +551,15 @@ int nvme_auth_gen_pubkey(struct crypto_kpp *dh_tfm,
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_gen_pubkey);
+ 
++#ifndef HAVE_NVME_AUTH_GEN_SESSION_KEY
++/* Older kernels: raw DH shared secret stored as session key */
+ int nvme_auth_gen_shared_secret(struct crypto_kpp *dh_tfm,
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): ctrl_key is now const */
++		const u8 *ctrl_key, size_t ctrl_key_len,
++#else
+ 		u8 *ctrl_key, size_t ctrl_key_len,
++#endif
+ 		u8 *sess_key, size_t sess_key_len)
+ {
+ 	struct kpp_request *req;
+@@ -437,8 +585,71 @@ int nvme_auth_gen_shared_secret(struct crypto_kpp *dh_tfm,
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_gen_shared_secret);
++#else
++/* Newer kernels (7.1+): session key is H(g^xy mod p), hashed after DH computation */
++int nvme_auth_gen_session_key(struct crypto_kpp *dh_tfm,
++		const u8 *public_key, size_t public_key_len,
++		u8 *sess_key, size_t sess_key_len, u8 hash_id)
++{
++	struct kpp_request *req;
++	struct crypto_wait wait;
++	struct scatterlist src, dst;
++	u8 *dh_secret;
++	size_t dh_secret_len, hash_len;
++	int ret;
++
++	hash_len = nvme_auth_hmac_hash_len(hash_id);
++	if (!hash_len) {
++		pr_warn("%s: invalid hash algorithm %d\n", __func__, hash_id);
++		return -EINVAL;
++	}
++
++	if (sess_key_len != hash_len) {
++		pr_warn("%s: sess_key buffer missized (%zu != %zu)\n",
++			__func__, sess_key_len, hash_len);
++		return -EINVAL;
++	}
++
++	dh_secret_len = crypto_kpp_maxsize(dh_tfm);
++	dh_secret = kzalloc(dh_secret_len, GFP_KERNEL);
++	if (!dh_secret)
++		return -ENOMEM;
+ 
++	req = kpp_request_alloc(dh_tfm, GFP_KERNEL);
++	if (!req) {
++		ret = -ENOMEM;
++		goto out_free_secret;
++	}
++
++	crypto_init_wait(&wait);
++	sg_init_one(&src, public_key, public_key_len);
++	kpp_request_set_input(req, &src, public_key_len);
++	sg_init_one(&dst, dh_secret, dh_secret_len);
++	kpp_request_set_output(req, &dst, dh_secret_len);
++	kpp_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
++				 crypto_req_done, &wait);
++
++	ret = crypto_wait_req(crypto_kpp_compute_shared_secret(req), &wait);
++	kpp_request_free(req);
++
++	if (ret)
++		goto out_free_secret;
++
++	ret = nvme_auth_hash_skey(hash_id, dh_secret, dh_secret_len, sess_key);
++
++out_free_secret:
++	kfree_sensitive(dh_secret);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(nvme_auth_gen_session_key);
++#endif
++
++#ifdef HAVE_NVME_AUTH_PARSE_KEY
++/* Newer kernels (7.1+): function renamed to nvme_auth_parse_key */
++int nvme_auth_parse_key(const char *secret, struct nvme_dhchap_key **ret_key)
++#else
+ int nvme_auth_generate_key(u8 *secret, struct nvme_dhchap_key **ret_key)
++#endif
+ {
+ 	struct nvme_dhchap_key *key;
+ 	u8 key_hash;
+@@ -461,7 +672,12 @@ int nvme_auth_generate_key(u8 *secret, struct nvme_dhchap_key **ret_key)
+ 	*ret_key = key;
+ 	return 0;
+ }
++#ifdef HAVE_NVME_AUTH_PARSE_KEY
++/* Newer kernels (7.1+): function renamed to nvme_auth_parse_key */
++EXPORT_SYMBOL_GPL(nvme_auth_parse_key);
++#else
+ EXPORT_SYMBOL_GPL(nvme_auth_generate_key);
++#endif
+ 
+ /**
+  * nvme_auth_generate_psk - Generate a PSK for TLS
+@@ -486,8 +702,14 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_key);
+  * Returns 0 on success with a valid generated PSK pointer in @ret_psk and
+  * the length of @ret_psk in @ret_len, or a negative error number otherwise.
+  */
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): skey, c1, c2 are now const */
++int nvme_auth_generate_psk(u8 hmac_id, const u8 *skey, size_t skey_len,
++		const u8 *c1, const u8 *c2, size_t hash_len, u8 **ret_psk, size_t *ret_len)
++#else
+ int nvme_auth_generate_psk(u8 hmac_id, u8 *skey, size_t skey_len,
+ 		u8 *c1, u8 *c2, size_t hash_len, u8 **ret_psk, size_t *ret_len)
++#endif
+ {
+ 	struct crypto_shash *tfm;
+ 	SHASH_DESC_ON_STACK(shash, tfm);
+@@ -584,12 +806,23 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_psk);
+  * Returns 0 on success with a valid digest pointer in @ret_digest, or a
+  * negative error number on failure.
+  */
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): psk/subsysnqn/hostnqn now const, ret_digest is char** */
++int nvme_auth_generate_digest(u8 hmac_id, const u8 *psk, size_t psk_len,
++		const char *subsysnqn, const char *hostnqn, char **ret_digest)
++{
++	struct crypto_shash *tfm;
++	SHASH_DESC_ON_STACK(shash, tfm);
++	u8 *digest;
++	char *enc;
++#else
+ int nvme_auth_generate_digest(u8 hmac_id, u8 *psk, size_t psk_len,
+ 		char *subsysnqn, char *hostnqn, u8 **ret_digest)
+ {
+ 	struct crypto_shash *tfm;
+ 	SHASH_DESC_ON_STACK(shash, tfm);
+ 	u8 *digest, *enc;
++#endif
+ 	const char *hmac_name;
+ 	size_t digest_len, hmac_len;
+ 	int ret;
+@@ -663,7 +896,13 @@ int nvme_auth_generate_digest(u8 hmac_id, u8 *psk, size_t psk_len,
  	if (ret)
  		goto out_free_digest;
  
@@ -141,7 +409,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
  	if (ret < hmac_len) {
  		ret = -ENOKEY;
  		goto out_free_digest;
-@@ -698,6 +794,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_dig
+@@ -698,6 +937,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_digest);
   * Returns 0 on success with output keying material stored in @okm,
   * or a negative errno value otherwise.
   */
@@ -149,7 +417,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
  static int hkdf_expand_label(struct crypto_shash *hmac_tfm,
  		const u8 *label, unsigned int labellen,
  		const u8 *context, unsigned int contextlen,
-@@ -735,6 +832,7 @@ static int hkdf_expand_label(struct cryp
+@@ -735,6 +975,7 @@ static int hkdf_expand_label(struct crypto_shash *hmac_tfm,
  	kfree_sensitive(info);
  	return err;
  }
@@ -157,15 +425,23 @@ Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
  
  /**
   * nvme_auth_derive_tls_psk - Derive TLS PSK
-@@ -763,6 +861,7 @@ static int hkdf_expand_label(struct cryp
+@@ -763,8 +1004,15 @@ static int hkdf_expand_label(struct crypto_shash *hmac_tfm,
   * Returns 0 on success with a valid psk pointer in @ret_psk or a negative
   * error number otherwise.
   */
 +#ifdef HAVE_NVME_AUTH_DERIVE_TLS_PSK
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): psk is const u8*, psk_digest is const char* */
++int nvme_auth_derive_tls_psk(int hmac_id, const u8 *psk, size_t psk_len,
++		const char *psk_digest, u8 **ret_psk)
++#else
  int nvme_auth_derive_tls_psk(int hmac_id, u8 *psk, size_t psk_len,
  		u8 *psk_digest, u8 **ret_psk)
++#endif
  {
-@@ -842,6 +941,8 @@ out_free_shash:
+ 	struct crypto_shash *hmac_tfm;
+ 	const char *hmac_name;
+@@ -842,6 +1090,8 @@ out_free_shash:
  	return ret;
  }
  EXPORT_SYMBOL_GPL(nvme_auth_derive_tls_psk);

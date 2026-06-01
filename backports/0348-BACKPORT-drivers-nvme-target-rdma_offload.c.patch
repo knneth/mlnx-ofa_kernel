@@ -6,6 +6,8 @@ Change-Id: I2669a57758115ffaaa6744a625240586411a9ac5
  drivers/nvme/target/rdma_offload.c | 23 +++++++++++++++++++++++
  1 file changed, 23 insertions(+)
 
+diff --git a/drivers/nvme/target/rdma_offload.c b/drivers/nvme/target/rdma_offload.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/rdma_offload.c
 +++ b/drivers/nvme/target/rdma_offload.c
 @@ -16,6 +16,10 @@
@@ -19,7 +21,7 @@ Change-Id: I2669a57758115ffaaa6744a625240586411a9ac5
  
  static unsigned int
  __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
-@@ -428,6 +432,11 @@ static void nvmet_rdma_free_be_ctrl(stru
+@@ -428,6 +432,11 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
  	bool has_err = false;
  	int ret;
  
@@ -31,7 +33,7 @@ Change-Id: I2669a57758115ffaaa6744a625240586411a9ac5
  	ida_free(&nvmet_rdma_bectrl_ida, be_ctrl->offload_ctx.id);
  	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
  
-@@ -629,6 +638,15 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
+@@ -629,6 +638,15 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
  	}
  	mutex_unlock(&xrq->be_mutex);
  

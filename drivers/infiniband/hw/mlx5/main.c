@@ -2432,12 +2432,86 @@ static int mlx5_ib_mmap_clock_info_page(struct mlx5_ib_dev *dev,
 			      virt_to_page(dev->mdev->clock_info));
 }
 
+static int phys_addr_to_bar(struct pci_dev *pdev, phys_addr_t pa)
+{
+	resource_size_t start, end;
+	int bar;
+
+	for (bar = 0; bar < PCI_STD_NUM_BARS; bar++) {
+		/* Skip BARs not present or not memory-mapped */
+		if (!(pci_resource_flags(pdev, bar) & IORESOURCE_MEM))
+			continue;
+
+		start = pci_resource_start(pdev, bar);
+		end = pci_resource_end(pdev, bar);
+
+		if (!start || !end)
+			continue;
+
+		if (pa >= start && pa <= end)
+			return bar;
+	}
+
+	return -1;
+}
+
+static int mlx5_ib_mmap_get_pfns(struct rdma_user_mmap_entry *entry,
+				 struct phys_vec *phys_vec,
+				 struct p2pdma_provider **provider)
+{
+	struct mlx5_user_mmap_entry *mentry = to_mmmap(entry);
+	struct pci_dev *pdev = to_mdev(entry->ucontext->device)->mdev->pdev;
+	int bar;
+
+	phys_vec->paddr = mentry->address;
+	phys_vec->len = entry->npages * PAGE_SIZE;
+
+	bar = phys_addr_to_bar(pdev, phys_vec->paddr);
+	if (bar < 0)
+		return -EINVAL;
+
+	*provider = pcim_p2pdma_provider(pdev, bar);
+	/* If the kernel was not compiled with CONFIG_PCI_P2PDMA the
+	 * functionality is not supported.
+	 */
+	if (!*provider)
+		return -EOPNOTSUPP;
+
+	return 0;
+}
+
+static struct rdma_user_mmap_entry *
+mlx5_ib_pgoff_to_mmap_entry(struct ib_ucontext *ucontext, off_t pg_off)
+{
+	unsigned long entry_pgoff;
+	unsigned long idx;
+	u8 command;
+
+	pg_off = pg_off >> PAGE_SHIFT;
+	command = get_command(pg_off);
+	idx = get_extended_index(pg_off);
+
+	entry_pgoff = command << 16 | idx;
+
+	return rdma_user_mmap_entry_get_pgoff(ucontext, entry_pgoff);
+}
+
+static void mlx5_ib_free_var_mmap_entry(struct mlx5_user_mmap_entry *mentry,
+					struct mlx5_var_region *var_region)
+{
+	mutex_lock(&var_region->bitmap_lock);
+	clear_bit(mentry->page_idx, var_region->bitmap);
+	mutex_unlock(&var_region->bitmap_lock);
+	kfree(mentry);
+}
+
 static void mlx5_ib_mmap_free(struct rdma_user_mmap_entry *entry)
 {
 	struct mlx5_user_mmap_entry *mentry = to_mmmap(entry);
 	struct mlx5_ib_dev *dev = to_mdev(entry->ucontext->device);
 	struct mlx5_var_table *var_table = &dev->var_table;
 	struct mlx5_ib_ucontext *context = to_mucontext(entry->ucontext);
+	struct mlx5_var_region *var_region;
 
 	switch (mentry->mmap_flag) {
 	case MLX5_IB_MMAP_TYPE_MEMIC:
@@ -2445,10 +2519,12 @@ static void mlx5_ib_mmap_free(struct rdma_user_mmap_entry *entry)
 		mlx5_ib_dm_mmap_free(dev, mentry);
 		break;
 	case MLX5_IB_MMAP_TYPE_VAR:
-		mutex_lock(&var_table->bitmap_lock);
-		clear_bit(mentry->page_idx, var_table->bitmap);
-		mutex_unlock(&var_table->bitmap_lock);
-		kfree(mentry);
+		var_region = &var_table->var_region;
+		mlx5_ib_free_var_mmap_entry(mentry, var_region);
+		break;
+	case MLX5_IB_MMAP_TYPE_TLP_VAR:
+		var_region = &var_table->tlp_var_region;
+		mlx5_ib_free_var_mmap_entry(mentry, var_region);
 		break;
 	case MLX5_IB_MMAP_TYPE_UAR_WC:
 	case MLX5_IB_MMAP_TYPE_UAR_NC:
@@ -2599,6 +2675,7 @@ static int mlx5_ib_mmap_offset(struct mlx5_ib_dev *dev,
 	mentry = to_mmmap(entry);
 	pfn = (mentry->address >> PAGE_SHIFT);
 	if (mentry->mmap_flag == MLX5_IB_MMAP_TYPE_VAR ||
+	    mentry->mmap_flag == MLX5_IB_MMAP_TYPE_TLP_VAR ||
 	    mentry->mmap_flag == MLX5_IB_MMAP_TYPE_UAR_NC)
 		prot = pgprot_noncached(vma->vm_page_prot);
 	else
@@ -4054,46 +4131,54 @@ static int mlx5_rdma_user_mmap_entry_insert(struct mlx5_ib_ucontext *c,
 }
 
 static struct mlx5_user_mmap_entry *
-alloc_var_entry(struct mlx5_ib_ucontext *c)
+alloc_var_entry(struct mlx5_ib_ucontext *c, u32 flags)
 {
 	struct mlx5_user_mmap_entry *entry;
+	struct mlx5_var_region *var_region;
 	struct mlx5_var_table *var_table;
 	u32 page_idx;
 	int err;
 
 	var_table = &to_mdev(c->ibucontext.device)->var_table;
+	if (flags & MLX5_IB_UAPI_VAR_ALLOC_FLAG_TLP)
+		var_region = &var_table->tlp_var_region;
+	else
+		var_region = &var_table->var_region;
+
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_lock(&var_table->bitmap_lock);
-	page_idx = find_first_zero_bit(var_table->bitmap,
-				       var_table->num_var_hw_entries);
-	if (page_idx >= var_table->num_var_hw_entries) {
+	mutex_lock(&var_region->bitmap_lock);
+	page_idx = find_first_zero_bit(var_region->bitmap,
+				       var_region->num_var_hw_entries);
+	if (page_idx >= var_region->num_var_hw_entries) {
 		err = -ENOSPC;
-		mutex_unlock(&var_table->bitmap_lock);
+		mutex_unlock(&var_region->bitmap_lock);
 		goto end;
 	}
 
-	set_bit(page_idx, var_table->bitmap);
-	mutex_unlock(&var_table->bitmap_lock);
+	set_bit(page_idx, var_region->bitmap);
+	mutex_unlock(&var_region->bitmap_lock);
 
-	entry->address = var_table->hw_start_addr +
-				(page_idx * var_table->stride_size);
+	entry->address = var_region->hw_start_addr +
+				(page_idx * var_region->stride_size);
 	entry->page_idx = page_idx;
-	entry->mmap_flag = MLX5_IB_MMAP_TYPE_VAR;
+	entry->mmap_flag = flags & MLX5_IB_UAPI_VAR_ALLOC_FLAG_TLP ?
+				   MLX5_IB_MMAP_TYPE_TLP_VAR :
+				   MLX5_IB_MMAP_TYPE_VAR;
 
 	err = mlx5_rdma_user_mmap_entry_insert(c, entry,
-					       var_table->stride_size);
+					       var_region->stride_size);
 	if (err)
 		goto err_insert;
 
 	return entry;
 
 err_insert:
-	mutex_lock(&var_table->bitmap_lock);
-	clear_bit(page_idx, var_table->bitmap);
-	mutex_unlock(&var_table->bitmap_lock);
+	mutex_lock(&var_region->bitmap_lock);
+	clear_bit(page_idx, var_region->bitmap);
+	mutex_unlock(&var_region->bitmap_lock);
 end:
 	kfree(entry);
 	return ERR_PTR(err);
@@ -4104,9 +4189,10 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_VAR_OBJ_ALLOC)(
 {
 	struct ib_uobject *uobj = uverbs_attr_get_uobject(
 		attrs, MLX5_IB_ATTR_VAR_OBJ_ALLOC_HANDLE);
-	struct mlx5_ib_ucontext *c;
 	struct mlx5_user_mmap_entry *entry;
+	struct mlx5_ib_ucontext *c;
 	u64 mmap_offset;
+	u32 flags = 0;
 	u32 length;
 	int err;
 
@@ -4114,12 +4200,32 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_VAR_OBJ_ALLOC)(
 	if (IS_ERR(c))
 		return PTR_ERR(c);
 
-	entry = alloc_var_entry(c);
+	err = uverbs_get_flags32(&flags, attrs,
+				 MLX5_IB_ATTR_VAR_OBJ_ALLOC_FLAGS,
+				 MLX5_IB_UAPI_VAR_ALLOC_FLAG_TLP);
+	if (err)
+		return err;
+
+	if (flags & MLX5_IB_UAPI_VAR_ALLOC_FLAG_TLP) {
+		if (!MLX5_CAP_GEN(to_mdev(c->ibucontext.device)->mdev,
+				  tlp_device_emulation_manager))
+			return -EOPNOTSUPP;
+	} else {
+		if (!(MLX5_CAP_GEN_64(to_mdev(c->ibucontext.device)->mdev,
+				      general_obj_types) &
+		      MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q))
+			return -EOPNOTSUPP;
+	}
+
+	entry = alloc_var_entry(c, flags);
 	if (IS_ERR(entry))
 		return PTR_ERR(entry);
 
 	mmap_offset = mlx5_entry_to_mmap_offset(entry);
-	length = entry->rdma_entry.npages * PAGE_SIZE;
+	if (check_mul_overflow(entry->rdma_entry.npages, (u32)PAGE_SIZE, &length)) {
+		rdma_user_mmap_entry_remove(&entry->rdma_entry);
+		return -EOVERFLOW;
+	}
 	uobj->object = entry;
 	uverbs_finalize_uobj_create(attrs, MLX5_IB_ATTR_VAR_OBJ_ALLOC_HANDLE);
 
@@ -4144,6 +4250,9 @@ DECLARE_UVERBS_NAMED_METHOD(
 			MLX5_IB_OBJECT_VAR,
 			UVERBS_ACCESS_NEW,
 			UA_MANDATORY),
+	UVERBS_ATTR_FLAGS_IN(MLX5_IB_ATTR_VAR_OBJ_ALLOC_FLAGS,
+			     enum mlx5_ib_uapi_var_alloc_flags,
+			     UA_OPTIONAL),
 	UVERBS_ATTR_PTR_OUT(MLX5_IB_ATTR_VAR_OBJ_ALLOC_PAGE_ID,
 			   UVERBS_ATTR_TYPE(u32),
 			   UA_MANDATORY),
@@ -4171,7 +4280,8 @@ static bool var_is_supported(struct ib_device *device)
 	struct mlx5_ib_dev *dev = to_mdev(device);
 
 	return (MLX5_CAP_GEN_64(dev->mdev, general_obj_types) &
-			MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q);
+			MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q) ||
+		MLX5_CAP_GEN(dev->mdev, tlp_device_emulation_manager);
 }
 
 static struct mlx5_user_mmap_entry *
@@ -4399,7 +4509,13 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
 	if (err)
 		goto err_mp;
 
+	err = pcim_p2pdma_init(mdev->pdev);
+	if (err && err != -EOPNOTSUPP)
+		goto err_dd;
+
 	return 0;
+err_dd:
+	mlx5_ib_data_direct_cleanup(dev);
 err_mp:
 	mlx5_ib_cleanup_multiport_master(dev);
 err:
@@ -4451,11 +4567,13 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
 	.map_mr_sg_pi = mlx5_ib_map_mr_sg_pi,
 	.mmap = mlx5_ib_mmap,
 	.mmap_free = mlx5_ib_mmap_free,
+	.mmap_get_pfns = mlx5_ib_mmap_get_pfns,
 	.modify_cq = mlx5_ib_modify_cq,
 	.modify_device = mlx5_ib_modify_device,
 	.modify_port = mlx5_ib_modify_port,
 	.modify_qp = mlx5_ib_modify_qp,
 	.modify_srq = mlx5_ib_modify_srq,
+	.pgoff_to_mmap_entry = mlx5_ib_pgoff_to_mmap_entry,
 	.pre_destroy_cq = mlx5_ib_pre_destroy_cq,
 	.poll_cq = mlx5_ib_poll_cq,
 	.post_destroy_cq = mlx5_ib_post_destroy_cq,
@@ -4525,10 +4643,10 @@ static const struct ib_device_ops mlx5_ib_dev_xrc_ops = {
 	INIT_RDMA_OBJ_SIZE(ib_xrcd, mlx5_ib_xrcd, ibxrcd),
 };
 
-static int mlx5_ib_init_var_table(struct mlx5_ib_dev *dev)
+static int mlx5_ib_init_var_region(struct mlx5_ib_dev *dev)
 {
+	struct mlx5_var_region *var_region = &dev->var_table.var_region;
 	struct mlx5_core_dev *mdev = dev->mdev;
-	struct mlx5_var_table *var_table = &dev->var_table;
 	u8 log_doorbell_bar_size;
 	u8 log_doorbell_stride;
 	u64 bar_size;
@@ -4537,17 +4655,39 @@ static int mlx5_ib_init_var_table(struct mlx5_ib_dev *dev)
 					log_doorbell_bar_size);
 	log_doorbell_stride = MLX5_CAP_DEV_VDPA_EMULATION(mdev,
 					log_doorbell_stride);
-	var_table->hw_start_addr = dev->mdev->bar_addr +
+	var_region->hw_start_addr = dev->mdev->bar_addr +
 				MLX5_CAP64_DEV_VDPA_EMULATION(mdev,
 					doorbell_bar_offset);
 	bar_size = (1ULL << log_doorbell_bar_size) * 4096;
-	var_table->stride_size = 1ULL << log_doorbell_stride;
-	var_table->num_var_hw_entries = div_u64(bar_size,
-						var_table->stride_size);
-	mutex_init(&var_table->bitmap_lock);
-	var_table->bitmap = bitmap_zalloc(var_table->num_var_hw_entries,
-					  GFP_KERNEL);
-	return (var_table->bitmap) ? 0 : -ENOMEM;
+	var_region->stride_size = 1ULL << log_doorbell_stride;
+	var_region->num_var_hw_entries = div_u64(bar_size,
+						 var_region->stride_size);
+	mutex_init(&var_region->bitmap_lock);
+	var_region->bitmap = bitmap_zalloc(var_region->num_var_hw_entries,
+					   GFP_KERNEL);
+	return (var_region->bitmap) ? 0 : -ENOMEM;
+}
+
+static int mlx5_ib_init_tlp_var_region(struct mlx5_ib_dev *dev)
+{
+	struct mlx5_var_region *var_region = &dev->var_table.tlp_var_region;
+	struct mlx5_core_dev *mdev = dev->mdev;
+	u8 log_tlp_var_stride;
+
+	log_tlp_var_stride =
+		MLX5_CAP_DEV_TLP_EMULATION(mdev, log_tlp_rsp_gw_page_stride);
+	var_region->hw_start_addr =
+		dev->mdev->bar_addr +
+		MLX5_CAP64_DEV_TLP_EMULATION(mdev, tlp_rsp_gw_pages_bar_offset);
+
+	var_region->stride_size = (1ULL << log_tlp_var_stride) * 4096;
+	var_region->num_var_hw_entries =
+		MLX5_CAP_DEV_TLP_EMULATION(mdev, tlp_rsp_gw_num_pages);
+
+	mutex_init(&var_region->bitmap_lock);
+	var_region->bitmap = bitmap_zalloc(var_region->num_var_hw_entries,
+					   GFP_KERNEL);
+	return (var_region->bitmap) ? 0 : -ENOMEM;
 }
 
 static void mlx5_ib_cleanup_ucaps(struct mlx5_ib_dev *dev)
@@ -4585,13 +4725,19 @@ remove_local:
 	return ret;
 }
 
+static void mlx5_ib_cleanup_var_table(struct mlx5_ib_dev *dev)
+{
+	bitmap_free(dev->var_table.var_region.bitmap);
+	bitmap_free(dev->var_table.tlp_var_region.bitmap);
+}
+
 static void mlx5_ib_stage_caps_cleanup(struct mlx5_ib_dev *dev)
 {
 	if (MLX5_CAP_GEN_2_64(dev->mdev, general_obj_types_127_64) &
 	    MLX5_HCA_CAP_2_GENERAL_OBJECT_TYPES_RDMA_CTRL)
 		mlx5_ib_cleanup_ucaps(dev);
 
-	bitmap_free(dev->var_table.bitmap);
+	mlx5_ib_cleanup_var_table(dev);
 }
 
 static int mlx5_ib_stage_caps_init(struct mlx5_ib_dev *dev)
@@ -4647,7 +4793,7 @@ static int mlx5_ib_stage_caps_init(struct mlx5_ib_dev *dev)
 
 	if (MLX5_CAP_GEN_64(dev->mdev, general_obj_types) &
 			MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q) {
-		err = mlx5_ib_init_var_table(dev);
+		err = mlx5_ib_init_var_region(dev);
 		if (err)
 			return err;
 	}
@@ -4656,12 +4802,24 @@ static int mlx5_ib_stage_caps_init(struct mlx5_ib_dev *dev)
 	    MLX5_HCA_CAP_2_GENERAL_OBJECT_TYPES_RDMA_CTRL) {
 		err = mlx5_ib_init_ucaps(dev);
 		if (err)
-			return err;
+			goto err_ucaps;
+	}
+
+	if (MLX5_CAP_GEN(dev->mdev, tlp_device_emulation_manager)) {
+		err = mlx5_ib_init_tlp_var_region(dev);
+		if (err)
+			goto err_tlp_var;
 	}
 
 	dev->ib_dev.use_cq_dim = true;
 
 	return 0;
+
+err_tlp_var:
+	mlx5_ib_cleanup_ucaps(dev);
+err_ucaps:
+	bitmap_free(dev->var_table.var_region.bitmap);
+	return err;
 }
 
 static const struct ib_device_ops mlx5_ib_dev_port_ops = {

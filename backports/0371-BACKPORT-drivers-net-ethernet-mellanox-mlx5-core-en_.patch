@@ -7,6 +7,8 @@ Change-Id: I05fa426608de93b95ed1379222a37771824595a4
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.c
 @@ -7,13 +7,17 @@
@@ -27,7 +29,7 @@ Change-Id: I05fa426608de93b95ed1379222a37771824595a4
  enum {
  	MLX5E_PSP_OFFLOAD_RX_SYNDROME_DECRYPTED,
  	MLX5E_PSP_OFFLOAD_RX_SYNDROME_AUTH_FAILED,
-@@ -198,3 +202,4 @@ bool mlx5e_psp_handle_tx_skb(struct net_
+@@ -198,3 +202,4 @@ bool mlx5e_psp_handle_tx_skb(struct net_device *netdev,
  
  	return true;
  }

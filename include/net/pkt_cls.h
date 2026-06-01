@@ -48,7 +48,6 @@ enum tc_htb_command {
 };
 #endif
 
-#ifndef HAVE___TC_INDR_BLOCK_CB_REGISTER
 typedef int tc_indr_block_bind_cb_t(struct net_device *dev, void *cb_priv,
                                     enum tc_setup_type type, void *type_data);
 
@@ -64,7 +63,6 @@ void __tc_indr_block_cb_unregister(struct net_device *dev,
                                    tc_indr_block_bind_cb_t *cb, void *cb_ident)
 {
 }
-#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)) && (LINUX_VERSION_CODE <= KERNEL_VERSION(4,7,10))
 #undef tc_for_each_action
@@ -89,59 +87,10 @@ void __tc_indr_block_cb_unregister(struct net_device *dev,
 unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
 #endif
 
-#ifdef HAVE_TC_FLOWER_OFFLOAD
-#define FLOW_BLOCK_BIND TC_BLOCK_BIND
-#define FLOW_BLOCK_UNBIND TC_BLOCK_UNBIND
-#define FLOW_CLS_REPLACE TC_CLSFLOWER_REPLACE
-#define FLOW_CLS_DESTROY TC_CLSFLOWER_DESTROY
-#define FLOW_CLS_STATS TC_CLSFLOWER_STATS
-#define FLOW_CLS_TMPLT_CREATE TC_CLSFLOWER_TMPLT_CREATE
-#define FLOW_CLS_TMPLT_DESTROY TC_CLSFLOWER_TMPLT_DESTROY
-#define FLOW_BLOCK_BINDER_TYPE_UNSPEC TCF_BLOCK_BINDER_TYPE_UNSPEC
-#define FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS TCF_BLOCK_BINDER_TYPE_CLSACT_INGRESS
-#define FLOW_BLOCK_BINDER_TYPE_CLSACT_EGRESS TCF_BLOCK_BINDER_TYPE_CLSACT_EGRESS
-#define flow_block_offload tc_block_offload
-#define __flow_indr_block_cb_register __tc_indr_block_cb_register
-#define __flow_indr_block_cb_unregister __tc_indr_block_cb_unregister
 
-#ifndef HAVE_ENUM_FLOW_BLOCK_BINDER_TYPE
-#define flow_block_binder_type tcf_block_binder_type
-#endif
 
-#endif /* HAVE_TC_FLOWER_OFFLOAD */
 
-#ifdef HAVE___TC_INDR_BLOCK_CB_REGISTER
-#define __flow_indr_block_cb_register __tc_indr_block_cb_register
-#define __flow_indr_block_cb_unregister __tc_indr_block_cb_unregister
-#endif
 
-#if !defined(HAVE_TC_FLOWER_OFFLOAD) && !defined(HAVE_FLOW_CLS_OFFLOAD)
-enum tc_fl_command {
-	TC_CLSFLOWER_REPLACE,
-	TC_CLSFLOWER_DESTROY,
-	TC_CLSFLOWER_STATS,
-	TC_CLSFLOWER_TMPLT_CREATE,
-	TC_CLSFLOWER_TMPLT_DESTROY,
-};
-
-struct tc_cls_flower_offload {
-	enum tc_fl_command command;
-	u32 prio;
-	unsigned long cookie;
-	struct LINUX_BACKPORT(flow_dissector) *dissector;
-	struct fl_flow_key *mask;
-	struct fl_flow_key *key;
-	struct tcf_exts *exts;
-};
-#endif /* !defined(HAVE_TC_FLOWER_OFFLOAD) && !defined(HAVE_FLOW_CLS_OFFLOAD) */
-
-#ifndef HAVE_FLOW_CLS_OFFLOAD
-#define flow_cls_offload tc_cls_flower_offload
-#endif
-
-#ifndef HAVE_FLOW_CLS_OFFLOAD_FLOW_RULE
-#define flow_cls_offload_flow_rule tc_cls_flower_offload_flow_rule
-#endif
 
 #ifdef CONFIG_MLX5_ESWITCH
 #ifndef HAVE_TC_SETUP_FLOW_ACTION

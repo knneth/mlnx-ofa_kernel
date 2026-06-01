@@ -385,8 +385,7 @@ check_complex_defines()
 	fi
 
 # Define HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_DEVLINK_PORT_ATRRS_SET_GET_5_PARAMS ||
-	   check_compat_config_h_var HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS ||
+	if check_compat_config_h_var HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS ||
 	   check_compat_config_h_var HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS
 	then
 		set_complex_define_to_config_h HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT
@@ -543,32 +542,6 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
 	else
 		unset_complex_define_to_config_h HAVE_DEVLINK_PER_AUXDEV
-	fi
-
-# define HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON from other flags
-	if check_compat_config_h_var HAVE_FLOW_CLS_OFFLOAD
-	then
-		set_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
-	else
-		unset_complex_define_to_config_h HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
-	fi
-
-# define HAVE_PRIO_CHAIN_SUPPORT from other flags
-	if check_compat_config_h_var HAVE_TC_CLS_FLOWER_OFFLOAD_COMMON
-	then
-		set_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
-	else
-		unset_complex_define_to_config_h HAVE_PRIO_CHAIN_SUPPORT
-	fi
-
-# define HAVE_PRIO_CHAIN_SUPPORT from other flags
-	if check_compat_config_h_var HAVE___TC_INDR_BLOCK_CB_REGISTER ||
-	   check_compat_config_h_var HAVE___FLOW_INDR_BLOCK_CB_REGISTER ||
-	   check_compat_config_h_var HAVE_FLOW_BLOCK_CB
-	then
-		set_complex_define_to_config_h HAVE_TC_INDR_API
-	else
-		unset_complex_define_to_config_h HAVE_TC_INDR_API
 	fi
 
 # define HAVE_TCF_PEDIT_TCFP_KEYS_EX from other flags
@@ -739,16 +712,6 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BLK_RQ_INTEGRITY_MAP_USER
 	fi
 
-# Define HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR from other flags
-	if check_compat_config_h_var HAVE_TC_SETUP_CB_ADD ||
-	   check_compat_config_h_var HAVE_NFT_CHAIN_OFFLOAD_SUPPORT ||
-	   check_compat_config_h_var HAVE_NFT_CHAIN_OFFLOAD_PRIORITY
-	then
-		set_complex_define_to_config_h HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR
-	else
-		unset_complex_define_to_config_h HAVE_HW_PRIO_OR_BLK_OFLD_CNT_REFACTOR
-	fi
-
 # Block devlink upstream code
 	unset_complex_define_to_config_h HAVE_BLOCKED_DEVLINK_CODE
 
@@ -785,6 +748,49 @@ check_complex_defines()
                unset_complex_define_to_config_h HAVE_DEVLINK_PCIE_CONG_PARAM_REGISTERED
        fi
 
+# Define HAVE_RSS_CRYPTO_OFFLOAD_ENABLED from both function name variants
+	if check_compat_config_h_var HAVE_SEC_PATH_LEN_U8
+	then
+		set_complex_define_to_config_h HAVE_RSS_CRYPTO_OFFLOAD_ENABLED
+	else
+		unset_complex_define_to_config_h HAVE_RSS_CRYPTO_OFFLOAD_ENABLED
+	fi
+
+# Define HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF from other flags
+	check_autofconf CONFIG_DMA_SHARED_BUFFER
+	if [ "${CONFIG_DMA_SHARED_BUFFER}" == "1" ]; then
+		if check_compat_config_h_var HAVE_DMA_BUF_PHYS_VEC_TO_SGT
+		then
+			set_complex_define_to_config_h HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+		else
+			unset_complex_define_to_config_h HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+		fi
+	fi
+
+# Define HAVE_NVME_TARGET_MDTS as a beta feature for RHEL 9.6
+	if [ "$(get_distro)" = "rhel:9.6" ]; then
+		set_complex_define_to_config_h HAVE_NVME_TARGET_MDTS
+	else
+		unset_complex_define_to_config_h HAVE_NVME_TARGET_MDTS
+	fi
+
+# Define HAVE_PCI_ENABLE_PTM from both function name variants
+	if check_compat_config_h_var HAVE_PCI_ENABLE_PTM_GET_2_PARAM ||
+	   check_compat_config_h_var HAVE_PCI_ENABLE_PTM_GET_1_PARAM
+	then
+		set_complex_define_to_config_h HAVE_PCI_ENABLE_PTM
+	else
+		unset_complex_define_to_config_h HAVE_PCI_ENABLE_PTM
+	fi
+
+# Define HAVE_NVME_AUTH_GENERATE_DIGEST from both function name variants
+	if check_compat_config_h_var HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8 ||
+	   check_compat_config_h_var HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
+	then
+		set_complex_define_to_config_h HAVE_NVME_AUTH_GENERATE_DIGEST
+	else
+		unset_complex_define_to_config_h HAVE_NVME_AUTH_GENERATE_DIGEST
+	fi
 }
 
 # Check if the kernel we build with has an auxiliary bus module
@@ -982,17 +988,17 @@ MIN_KVERSION="5.4"
 REBASE_STAGE="BACKPORTS"
 
 # Non-supported version thresholds (features disabled at these versions and above)
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
 
 # VIRTIOFS version requirements
 VIRTIOFS_SUPPORTED_KVERSION="6.6.0"
-VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="6.20"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
 
 KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
@@ -1083,7 +1089,7 @@ get_default_build_options() {
 	if [ "$CONFIG_XFRM_OFFLOAD$CONFIG_INET_ESP_OFFLOAD$CONFIG_INET6_ESP_OFFLOAD" = "111" ]; then
 		echo --with-mlx5-ipsec
 	fi
-	case "$distro" in rhel:* | kylin:* | ubuntu:18.04 | ubuntu:2[024].04 | debian:12)
+	case "$distro" in rhel:* | kylin:* | ubuntu:18.04 | ubuntu:2[02468].04 | debian:12)
 		echo --with-gds;;
 	esac
 	case "$distro" in euleros:sp8 | euleros:sp1[01])
@@ -1770,6 +1776,20 @@ MODULES_DIR=${MODULES_DIR:-/lib/modules/${KVERSION}/updates}
 
 set_ksrc_vars
 
+# DKMS >= 3.3 sources the build_environment file before building, but
+# older versions silently ignore it. Source it here so that builds on
+# DKMS < 3.3 also pick up the correct toolchain.
+_dkms_build_env="/etc/dkms/framework.conf.d/build_environment.conf"
+if [ -f "${_dkms_build_env}" ]
+then
+    . "${_dkms_build_env}"
+    if [ -f "${build_environment}" ]
+    then
+        . "${build_environment}"
+        _build_env_sourced=1
+    fi
+fi
+
 CONFIG_IS_MARINER=
 if grep -qiE 'mariner' /etc/os-release 2>/dev/null; then
 	CONFIG_IS_MARINER="y"
@@ -2189,6 +2209,12 @@ AUTOCONF_H=${AUTOCONF_H}
 WITH_MAKE_PARAMS=${WITH_MAKE_PARAMS}
 
 EOFCONFIG
+
+if [ "${_build_env_sourced}" = "1" ]
+then
+    _bin_path="$(dirname "$(command -v gcc)")"
+    echo "export PATH := ${_bin_path}:\$(PATH)" >> "${CWD}/${CONFIG}"
+fi
 
     config_vars=""
     defined_vars=""

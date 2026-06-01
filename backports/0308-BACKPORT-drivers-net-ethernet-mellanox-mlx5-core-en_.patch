@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
 Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 91 ++++++++++++++++++-
- 1 file changed, 88 insertions(+), 3 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 106 +++++++++++++++++-
+ 1 file changed, 103 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 @@ -43,6 +43,9 @@
@@ -18,7 +20,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  
  static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
  				       u32 cqcc, void *data)
-@@ -146,6 +149,10 @@ static inline u16 mlx5e_calc_min_inline(
+@@ -146,6 +149,10 @@ static inline u16 mlx5e_calc_min_inline(enum mlx5_inline_modes mode,
  		break;
  	case MLX5_INLINE_MODE_IP:
  		hlen = mlx5e_skb_l3_header_offset(skb);
@@ -29,7 +31,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  		break;
  	case MLX5_INLINE_MODE_L2:
  	default:
-@@ -167,13 +174,21 @@ static inline void mlx5e_insert_vlan(voi
+@@ -167,13 +174,21 @@ static inline void mlx5e_insert_vlan(void *start, struct sk_buff *skb, u16 ihs)
  	int cpy1_sz = 2 * ETH_ALEN;
  	int cpy2_sz = ihs - cpy1_sz;
  
@@ -40,7 +42,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
 +#endif
  	vhdr->h_vlan_proto = skb->vlan_proto;
  	vhdr->h_vlan_TCI = cpu_to_be16(skb_vlan_tag_get(skb));
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	unsafe_memcpy(&vhdr->h_vlan_encapsulated_proto,
  		      skb->data + cpy1_sz,
  		      cpy2_sz,
@@ -51,7 +53,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  }
  
  static inline void
-@@ -186,8 +201,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+@@ -186,8 +201,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		return;
  #endif
  
@@ -66,11 +68,11 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  
  	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
  		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-@@ -212,32 +233,52 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+@@ -212,32 +233,52 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
   * to inline later in the transmit descriptor
   */
  static inline u16
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq *sq, struct sk_buff *skb, int *hopbyhop)
 +#else
 +mlx5e_tx_get_gso_ihs(struct mlx5e_txqsq *sq, struct sk_buff *skb)
@@ -79,7 +81,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  	struct mlx5e_sq_stats *stats = sq->stats;
  	u16 ihs;
  
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	*hopbyhop = 0;
 +#endif
  	if (skb->encapsulation) {
@@ -103,7 +105,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
 +#else
 +			ihs = skb_transport_offset(skb) + tcp_hdrlen(skb);
 +#endif
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  			if (ipv6_has_hopopt_jumbo(skb)) {
  				*hopbyhop = sizeof(struct hop_jumbo_hdr);
  				ihs -= sizeof(struct hop_jumbo_hdr);
@@ -111,7 +113,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
 +#endif
  		}
  		stats->tso_packets++;
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  		stats->tso_bytes += skb->len - ihs - *hopbyhop;
 +#else
 +		stats->tso_bytes += skb->len - ihs;
@@ -119,7 +121,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  	}
  
  	return ihs;
-@@ -280,7 +321,13 @@ mlx5e_txwqe_build_dsegs(struct mlx5e_txq
+@@ -280,7 +321,13 @@ mlx5e_txwqe_build_dsegs(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		dseg->lkey       = sq->mkey_be;
  		dseg->byte_count = cpu_to_be32(fsz);
  
@@ -137,17 +139,17 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  	__be16 mss;
  	u16 insz;
  	u8 opcode;
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	u8 hopbyhop;
 +#endif
  };
  
  struct mlx5e_tx_wqe_attr {
-@@ -335,16 +384,24 @@ static void mlx5e_sq_xmit_prepare(struct
+@@ -335,16 +384,24 @@ static void mlx5e_sq_xmit_prepare(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	struct mlx5e_sq_stats *stats = sq->stats;
  
  	if (skb_is_gso(skb)) {
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  		int hopbyhop;
  		u16 ihs = mlx5e_tx_get_gso_ihs(sq, skb, &hopbyhop);
 +#else
@@ -159,7 +161,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  			.mss       = cpu_to_be16(skb_shinfo(skb)->gso_size),
  			.ihs       = ihs,
  			.num_bytes = skb->len + (skb_shinfo(skb)->gso_segs - 1) * ihs,
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  			.headlen   = skb_headlen(skb) - ihs - hopbyhop,
  			.hopbyhop  = hopbyhop,
 +#else
@@ -168,7 +170,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  		};
  
  		stats->packets += skb_shinfo(skb)->gso_segs;
-@@ -485,6 +542,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -485,6 +542,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -176,38 +178,48 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -498,8 +556,10 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -498,8 +556,12 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	struct mlx5_wqe_eth_seg  *eseg;
  	struct mlx5_wqe_data_seg *dseg;
  	struct mlx5e_tx_wqe_info *wi;
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	u16 ihs = attr->ihs;
++#endif
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	struct ipv6hdr *h6;
 +#endif
  	struct mlx5e_sq_stats *stats = sq->stats;
  	int num_dma;
  
-@@ -513,6 +573,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -513,6 +575,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  
  	eseg->mss = attr->mss;
  
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	if (ihs) {
  		u8 *start = eseg->inline_hdr.start;
  
-@@ -540,18 +601,35 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -540,18 +603,44 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		} else if (skb_vlan_tag_present(skb)) {
  			mlx5e_insert_vlan(start, skb, ihs);
  			ihs += VLAN_HLEN;
 +#else
 +	if (attr->ihs) {
 +		if (skb_vlan_tag_present(skb)) {
++			/* k7+: local ihs tracks inline size; single sz |= at end (like hop_jumbo path).
++			 * Older kernels without ihs: set sz before insert (no second |= below).
++			 */
++#if defined(HAVE_SKB_IPV6_PAYLOAD_LEN) && !defined(HAVE_STRUCT_HOP_JUMBO_HDR)
++			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, attr->ihs);
++			ihs += VLAN_HLEN;
++#else
 +			eseg->inline_hdr.sz |= cpu_to_be16(attr->ihs + VLAN_HLEN);
 +			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, attr->ihs);
 +#endif
++#endif
  			stats->added_vlan_packets++;
  		} else {
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  			unsafe_memcpy(eseg->inline_hdr.start, skb->data,
 -				      attr->ihs,
 -				      MLX5_UNSAFE_MEMCPY_DISCLAIMER);
@@ -218,14 +230,15 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
 +			memcpy(eseg->inline_hdr.start, skb->data, attr->ihs);
 +#endif
  		}
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  		eseg->inline_hdr.sz |= cpu_to_be16(ihs);
 +#endif
  		dseg += wqe_attr->ds_cnt_inl;
  	}
  
  	dseg += wqe_attr->ds_cnt_ids;
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	num_dma = mlx5e_txwqe_build_dsegs(sq, skb, skb->data + attr->ihs + attr->hopbyhop,
 +#else
 +	num_dma = mlx5e_txwqe_build_dsegs(sq, skb, skb->data + attr->ihs,
@@ -233,7 +246,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  					  attr->headlen, dseg);
  	if (unlikely(num_dma < 0))
  		goto err_drop;
-@@ -911,7 +989,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -911,7 +1000,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
  				nbytes += wi->num_bytes;
  				continue;
  			}
@@ -241,18 +254,22 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  			if (unlikely(mlx5e_ktls_tx_try_handle_resync_dump_comp(sq, wi,
  									       &dma_fifo_cc)))
  				continue;
-@@ -1078,6 +1155,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1082,6 +1170,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	eseg->mss = attr.mss;
  
  	if (attr.ihs) {
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  		if (unlikely(attr.hopbyhop)) {
  			struct ipv6hdr *h6;
  
-@@ -1101,11 +1179,18 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1105,11 +1194,22 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  				      attr.ihs,
  				      MLX5_UNSAFE_MEMCPY_DISCLAIMER);
  		}
++#elif defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
++		unsafe_memcpy(eseg->inline_hdr.start, skb->data,
++			      attr.ihs,
++			      MLX5_UNSAFE_MEMCPY_DISCLAIMER);
 +#else
 +		memcpy(eseg->inline_hdr.start, skb->data, attr.ihs);
 +#endif
@@ -260,7 +277,7 @@ Change-Id: I1b4b8ffadea836f78f788ddcf9471e648abb6f2a
  		dseg += wqe_attr.ds_cnt_inl;
  	}
  
-+#ifdef HAVE_STRUCT_HOP_JUMBO_HDR
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	num_dma = mlx5e_txwqe_build_dsegs(sq, skb, skb->data + attr.ihs + attr.hopbyhop,
 +#else
 +	num_dma = mlx5e_txwqe_build_dsegs(sq, skb, skb->data + attr.ihs,

@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fault_inject.c
  drivers/nvme/host/fault_inject.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/nvme/host/fault_inject.c b/drivers/nvme/host/fault_inject.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fault_inject.c
 +++ b/drivers/nvme/host/fault_inject.c
-@@ -57,7 +57,11 @@ void nvme_fault_inject_fini(struct nvme_
+@@ -57,7 +57,11 @@ void nvme_fault_inject_fini(struct nvme_fault_inject *fault_inject)
  
  void nvme_should_fail(struct request *req)
  {

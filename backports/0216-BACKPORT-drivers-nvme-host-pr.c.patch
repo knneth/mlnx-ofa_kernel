@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  drivers/nvme/host/pr.c | 26 ++++++++++++++++++++++++--
  1 file changed, 24 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/host/pr.c b/drivers/nvme/host/pr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/pr.c
 +++ b/drivers/nvme/host/pr.c
-@@ -29,6 +29,7 @@ static enum nvme_pr_type nvme_pr_type_fr
+@@ -29,6 +29,7 @@ static enum nvme_pr_type nvme_pr_type_from_blk(enum pr_type type)
  	return 0;
  }
  
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  static enum pr_type block_pr_type_from_nvme(enum nvme_pr_type type)
  {
  	switch (type) {
-@@ -48,6 +49,7 @@ static enum pr_type block_pr_type_from_n
+@@ -48,6 +49,7 @@ static enum pr_type block_pr_type_from_nvme(enum nvme_pr_type type)
  
  	return 0;
  }
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  
  static int nvme_send_ns_head_pr_command(struct block_device *bdev,
  		struct nvme_command *c, void *data, unsigned int data_len)
-@@ -72,6 +74,7 @@ static int nvme_send_ns_pr_command(struc
+@@ -72,6 +74,7 @@ static int nvme_send_ns_pr_command(struct nvme_ns *ns, struct nvme_command *c,
  	return nvme_submit_sync_cmd(ns->queue, c, data, data_len);
  }
  
@@ -31,7 +33,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  static int nvme_status_to_pr_err(int status)
  {
  	if (nvme_is_path_error(status))
-@@ -91,6 +94,7 @@ static int nvme_status_to_pr_err(int sta
+@@ -91,6 +94,7 @@ static int nvme_status_to_pr_err(int status)
  		return PR_STS_IOERR;
  	}
  }
@@ -39,7 +41,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  
  static int __nvme_send_pr_command(struct block_device *bdev, u32 cdw10,
  		u32 cdw11, u8 op, void *data, unsigned int data_len)
-@@ -113,7 +117,14 @@ static int nvme_send_pr_command(struct b
+@@ -113,7 +117,14 @@ static int nvme_send_pr_command(struct block_device *bdev, u32 cdw10, u32 cdw11,
  	int ret;
  
  	ret = __nvme_send_pr_command(bdev, cdw10, cdw11, op, data, data_len);
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/pr.c
  }
  
  static int nvme_pr_register(struct block_device *bdev, u64 old_key, u64 new_key,
-@@ -202,6 +213,7 @@ static int nvme_pr_release(struct block_
+@@ -202,6 +213,7 @@ static int nvme_pr_release(struct block_device *bdev, u64 key, enum pr_type type
  			&data, sizeof(data));
  }
  

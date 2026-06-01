@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  drivers/infiniband/core/rw.c | 129 +++++++++++++++++++++++++++++++++++
  1 file changed, 129 insertions(+)
 
+diff --git a/drivers/infiniband/core/rw.c b/drivers/infiniband/core/rw.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/rw.c
 +++ b/drivers/infiniband/core/rw.c
-@@ -275,6 +275,52 @@ static int rdma_rw_init_single_wr(struct
+@@ -275,6 +275,52 @@ static int rdma_rw_init_single_wr(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  	return 1;
  }
  
@@ -60,7 +62,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  /**
   * rdma_rw_ctx_init - initialize a RDMA READ/WRITE context
   * @ctx:	context to initialize
-@@ -295,16 +341,29 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx
+@@ -295,16 +341,29 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u32 port_num,
  		u64 remote_addr, u32 rkey, enum dma_data_direction dir)
  {
  	struct ib_device *dev = qp->pd->device;
@@ -90,7 +92,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  
  	/*
  	 * Skip to the S/G entry that sg_offset falls into:
-@@ -340,7 +399,15 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx
+@@ -340,7 +399,15 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u32 port_num,
  	return ret;
  
  out_unmap_sg:
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  	return ret;
  }
  EXPORT_SYMBOL(rdma_rw_ctx_init);
-@@ -371,6 +438,7 @@ int rdma_rw_ctx_signature_init(struct rd
+@@ -371,6 +438,7 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  	struct ib_device *dev = qp->pd->device;
  	u32 pages_per_mr = rdma_rw_fr_page_list_len(qp->pd->device,
  						    qp->integrity_en);
@@ -114,7 +116,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  	struct sg_table sgt = {
  		.sgl = sg,
  		.orig_nents = sg_cnt,
-@@ -379,6 +447,7 @@ int rdma_rw_ctx_signature_init(struct rd
+@@ -379,6 +447,7 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  		.sgl = prot_sg,
  		.orig_nents = prot_sg_cnt,
  	};
@@ -122,7 +124,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  	struct ib_rdma_wr *rdma_wr;
  	int count = 0, ret;
  
-@@ -388,14 +457,39 @@ int rdma_rw_ctx_signature_init(struct rd
+@@ -388,14 +457,39 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  		return -EINVAL;
  	}
  
@@ -162,7 +164,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  	}
  
  	ctx->type = RDMA_RW_SIG_MR;
-@@ -416,11 +510,20 @@ int rdma_rw_ctx_signature_init(struct rd
+@@ -416,11 +510,20 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  
  	memcpy(ctx->reg->mr->sig_attrs, sig_attrs, sizeof(struct ib_sig_attrs));
  
@@ -211,7 +213,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  	return ret;
  }
  EXPORT_SYMBOL(rdma_rw_ctx_signature_init);
-@@ -595,7 +715,11 @@ void rdma_rw_ctx_destroy(struct rdma_rw_
+@@ -595,7 +715,11 @@ void rdma_rw_ctx_destroy(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  		break;
  	}
  
@@ -223,7 +225,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
  }
  EXPORT_SYMBOL(rdma_rw_ctx_destroy);
  
-@@ -623,8 +747,13 @@ void rdma_rw_ctx_destroy_signature(struc
+@@ -623,8 +747,13 @@ void rdma_rw_ctx_destroy_signature(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
  	kfree(ctx->reg);
  
  	if (prot_sg_cnt)

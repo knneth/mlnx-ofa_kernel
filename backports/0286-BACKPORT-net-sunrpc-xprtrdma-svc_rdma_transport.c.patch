@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
 
 ---
- net/sunrpc/xprtrdma/svc_rdma_transport.c | 120 ++++++++++++++++++++++-
- 1 file changed, 118 insertions(+), 2 deletions(-)
+ net/sunrpc/xprtrdma/svc_rdma_transport.c | 92 +++++++++++++++++++++++-
+ 1 file changed, 90 insertions(+), 2 deletions(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_transport.c b/net/sunrpc/xprtrdma/svc_rdma_transport.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_transport.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_transport.c
 @@ -59,7 +59,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  
  #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
  
-@@ -72,21 +74,52 @@ static struct svc_xprt *svc_rdma_create(
+@@ -72,21 +74,44 @@ static struct svc_xprt *svc_rdma_create(struct svc_serv *serv,
  					struct sockaddr *sa, int salen,
  					int flags);
  static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt);
@@ -36,11 +38,6 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
 +#endif
  static void svc_rdma_kill_temp_xprt(struct svc_xprt *);
  
-+#ifdef HAVE_SVC_XPRT_XPO_PREP_REPLY_HDR
-+static void svc_rdma_prep_reply_hdr(struct svc_rqst *rqstp)
-+{
-+}
-+#endif
 +
  static const struct svc_xprt_ops svc_rdma_ops = {
  	.xpo_create = svc_rdma_create,
@@ -59,9 +56,6 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
 +#endif
  	.xpo_detach = svc_rdma_detach,
  	.xpo_free = svc_rdma_free,
-+#ifdef HAVE_SVC_XPRT_XPO_PREP_REPLY_HDR
-+	.xpo_prep_reply_hdr = svc_rdma_prep_reply_hdr,
-+#endif
  	.xpo_has_wspace = svc_rdma_has_wspace,
  	.xpo_accept = svc_rdma_accept,
 +#ifdef HAVE_SVC_XPRT_XPO_SECURE_PORT
@@ -70,30 +64,10 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  	.xpo_kill_temp_xprt = svc_rdma_kill_temp_xprt,
  };
  
-@@ -98,12 +131,35 @@ struct svc_xprt_class svc_rdma_class = {
+@@ -98,12 +123,15 @@ struct svc_xprt_class svc_rdma_class = {
  	.xcl_ident = XPRT_TRANSPORT_RDMA,
  };
  
-+#if defined(CONFIG_SUNRPC_BACKCHANNEL) && defined(HAVE_RPC_XPRT_OPS_BC_UP)
-+static const struct svc_xprt_ops svc_rdma_bc_ops = {
-+    .xpo_create = svc_rdma_create,
-+    .xpo_detach = svc_rdma_detach,
-+    .xpo_free = svc_rdma_free,
-+#ifdef HAVE_SVC_XPRT_XPO_PREP_REPLY_HDR
-+    .xpo_prep_reply_hdr = svc_rdma_prep_reply_hdr,
-+#endif
-+#ifdef HAVE_SVC_XPRT_XPO_SECURE_PORT
-+    .xpo_secure_port = svc_rdma_secure_port,
-+#endif
-+};
-+
-+struct svc_xprt_class svc_rdma_bc_class = {
-+    .xcl_name = "rdma-bc",
-+    .xcl_owner = THIS_MODULE,
-+    .xcl_ops = &svc_rdma_bc_ops,
-+    .xcl_max_payload = (1024 - RPCRDMA_HDRLEN_MIN)
-+};
-+#endif
 +
  /* QP event handler */
  static void qp_event_handler(struct ib_event *event, void *context)
@@ -106,7 +80,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  	switch (event->event) {
  	/* These are considered benign events */
  	case IB_EVENT_PATH_MIG:
-@@ -119,7 +175,12 @@ static void qp_event_handler(struct ib_e
+@@ -119,7 +147,12 @@ static void qp_event_handler(struct ib_event *event, void *context)
  	case IB_EVENT_QP_ACCESS_ERR:
  	case IB_EVENT_DEVICE_FATAL:
  	default:
@@ -119,7 +93,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		break;
  	}
  }
-@@ -339,7 +400,15 @@ static int svc_rdma_cma_handler(struct r
+@@ -339,7 +372,15 @@ static int svc_rdma_cma_handler(struct rdma_cm_id *cma_id,
  		svc_xprt_enqueue(xprt);
  		break;
  	case RDMA_CM_EVENT_DISCONNECTED:
@@ -135,7 +109,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		break;
  	default:
  		break;
-@@ -383,15 +452,18 @@ static struct svc_xprt *svc_rdma_create(
+@@ -383,15 +424,18 @@ static struct svc_xprt *svc_rdma_create(struct svc_serv *serv,
  	return &cma_xprt->sc_xprt;
  }
  
@@ -155,7 +129,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  
  /*
   * This is the xpo_recvfrom function for listening endpoints. Its
-@@ -434,13 +506,14 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -434,13 +478,14 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	dev = newxprt->sc_cm_id->device;
  	newxprt->sc_port_num = newxprt->sc_cm_id->port_num;
  
@@ -171,7 +145,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  	newxprt->sc_fc_credits = cpu_to_be32(newxprt->sc_max_requests);
  
  	/* Qualify the transport's resource defaults with the
-@@ -453,11 +526,18 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -453,11 +498,18 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	newxprt->sc_max_send_sges += (svcrdma_max_req_size / PAGE_SIZE) + 1;
  	if (newxprt->sc_max_send_sges > dev->attrs.max_send_sge)
  		newxprt->sc_max_send_sges = dev->attrs.max_send_sge;
@@ -190,7 +164,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		newxprt->sc_max_requests = rq_depth - 2;
  		newxprt->sc_max_bc_requests = 2;
  	}
-@@ -477,7 +557,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -477,7 +529,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  
  	newxprt->sc_pd = ib_alloc_pd(dev, 0);
  	if (IS_ERR(newxprt->sc_pd)) {
@@ -200,7 +174,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		goto errout;
  	}
  	newxprt->sc_sq_cq = ib_alloc_cq_any(dev, newxprt, newxprt->sc_sq_depth,
-@@ -510,7 +592,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -510,7 +564,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_sq_depth, rq_depth);
  	ret = rdma_create_qp(newxprt->sc_cm_id, newxprt->sc_pd, &qp_attr);
  	if (ret) {
@@ -210,7 +184,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		goto errout;
  	}
  	newxprt->sc_max_send_sges = qp_attr.cap.max_send_sge;
-@@ -520,7 +604,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -520,7 +576,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_snd_w_inv = false;
  	if (!rdma_protocol_iwarp(dev, newxprt->sc_port_num) &&
  	    !rdma_ib_or_roce(dev, newxprt->sc_port_num)) {
@@ -220,7 +194,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		goto errout;
  	}
  
-@@ -542,7 +628,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -542,7 +600,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  					   dev->attrs.max_qp_init_rd_atom);
  	if (!conn_param.initiator_depth) {
  		ret = -EINVAL;
@@ -230,7 +204,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		goto errout;
  	}
  	conn_param.private_data = &pmsg;
-@@ -552,7 +640,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -552,7 +612,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	ret = rdma_accept(newxprt->sc_cm_id, &conn_param);
  	rdma_unlock_handler(newxprt->sc_cm_id);
  	if (ret) {
@@ -240,7 +214,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  		goto errout;
  	}
  
-@@ -577,12 +667,20 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -577,12 +639,20 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	if (newxprt->sc_qp && !IS_ERR(newxprt->sc_qp))
  		ib_destroy_qp(newxprt->sc_qp);
  	rdma_destroy_id(newxprt->sc_cm_id);
@@ -261,7 +235,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  static void svc_rdma_detach(struct svc_xprt *xprt)
  {
  	struct svcxprt_rdma *rdma =
-@@ -595,7 +693,9 @@ static void __svc_rdma_free(struct work_
+@@ -595,7 +665,9 @@ static void __svc_rdma_free(struct work_struct *work)
  {
  	struct svcxprt_rdma *rdma =
  		container_of(work, struct svcxprt_rdma, sc_work);
@@ -271,7 +245,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  
  	/* This blocks until the Completion Queues are empty */
  	if (rdma->sc_qp && !IS_ERR(rdma->sc_qp))
-@@ -624,8 +724,10 @@ static void __svc_rdma_free(struct work_
+@@ -624,8 +696,10 @@ static void __svc_rdma_free(struct work_struct *work)
  	/* Destroy the CM ID */
  	rdma_destroy_id(rdma->sc_cm_id);
  
@@ -282,7 +256,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_transport.c
  	kfree(rdma);
  }
  
-@@ -654,6 +756,20 @@ static int svc_rdma_has_wspace(struct sv
+@@ -654,6 +728,20 @@ static int svc_rdma_has_wspace(struct svc_xprt *xprt)
  	return 1;
  }
  

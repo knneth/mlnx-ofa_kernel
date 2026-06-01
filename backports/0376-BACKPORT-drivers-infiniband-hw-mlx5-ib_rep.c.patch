@@ -6,9 +6,11 @@ Change-Id: Icb6d0113ef3a69e48aa3e4703dc957d6988a06ba
  drivers/infiniband/hw/mlx5/ib_rep.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/infiniband/hw/mlx5/ib_rep.c b/drivers/infiniband/hw/mlx5/ib_rep.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/ib_rep.c
 +++ b/drivers/infiniband/hw/mlx5/ib_rep.c
-@@ -323,7 +323,11 @@ static const struct auxiliary_device_id
+@@ -323,7 +323,11 @@ static const struct auxiliary_device_id mlx5r_rep_id_table[] = {
  	{},
  };
  

@@ -7,6 +7,8 @@ Change-Id: I12924101a34211e5f986923b664f2b3da9359679
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
 @@ -1,14 +1,17 @@
@@ -27,7 +29,7 @@ Change-Id: I12924101a34211e5f986923b664f2b3da9359679
  enum accel_fs_psp_type {
  	ACCEL_FS_PSP4,
  	ACCEL_FS_PSP6,
-@@ -958,3 +961,4 @@ void mlx5e_psp_cleanup(struct mlx5e_priv
+@@ -950,3 +953,4 @@ void mlx5e_psp_cleanup(struct mlx5e_priv *priv)
  	priv->psp = NULL;
  	kfree(psp);
  }

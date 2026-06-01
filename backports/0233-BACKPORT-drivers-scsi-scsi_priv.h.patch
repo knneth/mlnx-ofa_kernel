@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_priv.h
  drivers/scsi/scsi_priv.h | 7 +++++++
  1 file changed, 7 insertions(+)
 
+diff --git a/drivers/scsi/scsi_priv.h b/drivers/scsi/scsi_priv.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/scsi/scsi_priv.h
 +++ b/drivers/scsi/scsi_priv.h
 @@ -4,7 +4,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_priv.h
  
  struct bsg_device;
  struct request_queue;
-@@ -193,7 +195,9 @@ static inline void scsi_dh_release_devic
+@@ -193,7 +195,9 @@ static inline void scsi_dh_release_device(struct scsi_device *sdev) { }
  
  struct bsg_device *scsi_bsg_register_queue(struct scsi_device *sdev);
  
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_priv.h
  
  /* 
   * internal scsi timeout functions: for use by mid-layer and transport
-@@ -201,5 +205,8 @@ extern int scsi_device_max_queue_depth(s
+@@ -201,5 +205,8 @@ extern int scsi_device_max_queue_depth(struct scsi_device *sdev);
   */
  
  #define SCSI_DEVICE_BLOCK_MAX_TIMEOUT	600	/* units in seconds */

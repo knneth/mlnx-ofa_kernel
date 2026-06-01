@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 
 Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
 ---
- .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 140 ++++++++++++++++--
- 1 file changed, 130 insertions(+), 10 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 134 ++++++++++++++++--
+ 1 file changed, 124 insertions(+), 10 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 @@ -33,6 +33,9 @@
@@ -18,7 +20,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  #include "en.h"
  #include "en_tc.h"
  #include "eswitch.h"
-@@ -65,7 +68,7 @@ static ssize_t mlx5e_store_tc_num(struct
+@@ -65,7 +68,7 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	struct net_device *netdev = priv->netdev;
@@ -27,7 +29,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	int tc_num;
  	int err = 0;
  
-@@ -305,11 +308,21 @@ static ssize_t mlx5e_show_hfunc(struct d
+@@ -305,11 +308,21 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	u8 hfunc;
@@ -50,7 +52,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	mutex_unlock(&priv->state_lock);
  
  	len += sprintf(buf + len, "Operational hfunc: %s\n",
-@@ -319,7 +332,11 @@ static ssize_t mlx5e_show_hfunc(struct d
+@@ -319,7 +332,11 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
  
  	rtnl_unlock();
  
@@ -63,7 +65,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  }
  
  static ssize_t mlx5e_store_hfunc(struct device *device,
-@@ -352,11 +369,18 @@ static ssize_t mlx5e_store_hfunc(struct
+@@ -352,11 +369,18 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
  		if (ch_count > mlx5e_rqt_max_num_channels_allowed_for_xor8())
  			goto unlock;
  	}
@@ -84,7 +86,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	return count;
  
  unlock:
-@@ -376,11 +400,21 @@ static ssize_t mlx5e_show_xfrm(struct de
+@@ -376,11 +400,21 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	int len = 0;
@@ -108,7 +110,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	mutex_unlock(&priv->state_lock);
  	rtnl_unlock();
  
-@@ -388,7 +422,11 @@ static ssize_t mlx5e_show_xfrm(struct de
+@@ -388,7 +422,11 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
  		       symmetric == true ?  "symmetric-or-xor" : "none");
  	len += sprintf(buf + len, "Supported xfrm: symmetric-or-xor none\n");
  
@@ -120,7 +122,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  }
  
  static ssize_t mlx5e_store_xfrm(struct device *device,
-@@ -415,7 +453,11 @@ static ssize_t mlx5e_store_xfrm(struct d
+@@ -415,7 +453,11 @@ static ssize_t mlx5e_store_xfrm(struct device *device,
  
  	rtnl_lock();
  	mutex_lock(&priv->state_lock);
@@ -133,7 +135,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	mutex_unlock(&priv->state_lock);
  	rtnl_unlock();
  	return err ? err : count;
-@@ -939,11 +981,9 @@ static ssize_t mlx5e_store_force_local_l
+@@ -939,11 +981,9 @@ static ssize_t mlx5e_store_force_local_lb(struct device *device,
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -145,7 +147,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
  		mlx5_nic_vport_update_local_lb(mdev,
-@@ -957,6 +997,64 @@ static DEVICE_ATTR(force_local_lb_disabl
+@@ -957,6 +997,64 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
  		   mlx5e_show_force_local_lb,
  		   mlx5e_store_force_local_lb);
  
@@ -210,25 +212,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  static struct attribute *mlx5e_settings_attrs[] = {
  	&dev_attr_hfunc.attr,
  	&dev_attr_xfrm.attr,
-@@ -1136,11 +1234,17 @@ static struct attribute *prio_hp_attrs[]
- 	NULL
- };
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(prio_hp);
-+#endif
- 
- static struct kobj_type prio_hp_sysfs = {
- 	.sysfs_ops     = &prio_hp_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = prio_hp_groups
-+#else
-+	.default_attrs = prio_hp_attrs
-+#endif
- };
- 
- int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
-@@ -1459,9 +1563,18 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1459,9 +1557,18 @@ int mlx5e_sysfs_create(struct net_device *dev)
  	if (err)
  		goto remove_qos_group;
  
@@ -247,7 +231,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  
  	mlx5_eswitch_compat_sysfs_init(dev);
  
-@@ -1479,6 +1592,10 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1479,6 +1586,10 @@ int mlx5e_sysfs_create(struct net_device *dev)
  
  	return 0;
  
@@ -258,7 +242,7 @@ Change-Id: I2bdeee099761e55eb4771ae917b69cb4d7168cf4
  remove_debug_group:
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  remove_qos_group:
-@@ -1503,6 +1620,9 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1503,6 +1614,9 @@ void mlx5e_sysfs_remove(struct net_device *dev)
  	sysfs_remove_group(&dev->dev.kobj, &qos_group);
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);

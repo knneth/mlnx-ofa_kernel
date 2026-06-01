@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/pci-epf.c
  drivers/nvme/target/pci-epf.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/nvme/target/pci-epf.c b/drivers/nvme/target/pci-epf.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/pci-epf.c
 +++ b/drivers/nvme/target/pci-epf.c
 @@ -6,6 +6,10 @@
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/pci-epf.c
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  
  #include <linux/delay.h>
-@@ -641,7 +645,11 @@ static void nvmet_pci_epf_raise_irq(stru
+@@ -641,7 +645,11 @@ static void nvmet_pci_epf_raise_irq(struct nvmet_pci_epf_ctrl *ctrl,
  		 */
  		ret = pci_epc_raise_irq(epf->epc, epf->func_no, epf->vfunc_no,
  					nvme_epf->irq_type, cq->vector + 1);

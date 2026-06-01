@@ -2,12 +2,29 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/dpll.c    | 47 ++++++++++++++++++-
- 1 file changed, 45 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/dpll.c    | 96 +++++++++++++++++--
+ 1 file changed, 88 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/dpll.c b/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
-@@ -40,9 +40,11 @@ struct mlx5_dpll_synce_status {
+@@ -9,7 +9,14 @@
+  */
+ struct mlx5_dpll {
+ 	struct dpll_device *dpll;
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): reference count tracking added */
++	dpll_tracker dpll_tracker;
++#endif
+ 	struct dpll_pin *dpll_pin;
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++	dpll_tracker pin_tracker;
++#endif
+ 	struct mlx5_core_dev *mdev;
+ 	struct workqueue_struct *wq;
+ 	struct delayed_work work;
+@@ -40,9 +47,11 @@ struct mlx5_dpll_synce_status {
  	enum mlx5_msees_admin_status admin_status;
  	enum mlx5_msees_oper_status oper_status;
  	bool ho_acq;
@@ -20,7 +37,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  };
  
  static int
-@@ -60,9 +62,11 @@ mlx5_dpll_synce_status_get(struct mlx5_c
+@@ -60,9 +69,11 @@ mlx5_dpll_synce_status_get(struct mlx5_core_dev *mdev,
  	synce_status->admin_status = MLX5_GET(msees_reg, out, admin_status);
  	synce_status->oper_status = MLX5_GET(msees_reg, out, oper_status);
  	synce_status->ho_acq = MLX5_GET(msees_reg, out, ho_acq);
@@ -33,7 +50,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  	return 0;
  }
  
-@@ -75,10 +79,14 @@ mlx5_dpll_synce_status_set(struct mlx5_c
+@@ -75,10 +86,14 @@ mlx5_dpll_synce_status_set(struct mlx5_core_dev *mdev,
  
  	MLX5_SET(msees_reg, in, field_select,
  		 MLX5_MSEES_FIELD_SELECT_ENABLE |
@@ -48,7 +65,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  	return mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
  				    MLX5_REG_MSEES, 0, 1);
  }
-@@ -101,6 +109,7 @@ mlx5_dpll_lock_status_get(struct mlx5_dp
+@@ -101,6 +116,7 @@ mlx5_dpll_lock_status_get(struct mlx5_dpll_synce_status *synce_status)
  	}
  }
  
@@ -56,7 +73,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  static enum dpll_lock_status_error
  mlx5_dpll_lock_status_error_get(struct mlx5_dpll_synce_status *synce_status)
  {
-@@ -120,6 +129,7 @@ mlx5_dpll_lock_status_error_get(struct m
+@@ -120,6 +136,7 @@ mlx5_dpll_lock_status_error_get(struct mlx5_dpll_synce_status *synce_status)
  		return DPLL_LOCK_STATUS_ERROR_NONE;
  	}
  }
@@ -64,7 +81,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  
  static enum dpll_pin_state
  mlx5_dpll_pin_state_get(struct mlx5_dpll_synce_status *synce_status)
-@@ -130,6 +140,7 @@ mlx5_dpll_pin_state_get(struct mlx5_dpll
+@@ -130,6 +147,7 @@ mlx5_dpll_pin_state_get(struct mlx5_dpll_synce_status *synce_status)
  	       DPLL_PIN_STATE_CONNECTED : DPLL_PIN_STATE_DISCONNECTED;
  }
  
@@ -72,7 +89,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  static int
  mlx5_dpll_pin_ffo_get(struct mlx5_dpll_synce_status *synce_status,
  		      s64 *ffo)
-@@ -139,12 +150,20 @@ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_s
+@@ -139,12 +157,20 @@ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_synce_status *synce_status,
  	*ffo = synce_status->frequency_diff;
  	return 0;
  }
@@ -93,7 +110,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  {
  	struct mlx5_dpll_synce_status synce_status;
  	struct mlx5_dpll *mdpll = priv;
-@@ -154,7 +173,9 @@ mlx5_dpll_device_lock_status_get(const s
+@@ -154,7 +180,9 @@ mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll, void *priv,
  	if (err)
  		return err;
  	*status = mlx5_dpll_lock_status_get(&synce_status);
@@ -103,7 +120,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  	return 0;
  }
  
-@@ -166,6 +187,7 @@ static int mlx5_dpll_device_mode_get(con
+@@ -166,6 +194,7 @@ static int mlx5_dpll_device_mode_get(const struct dpll_device *dpll,
  	return 0;
  }
  
@@ -111,7 +128,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  enum {
  	MLX5_DPLL_SSM_CODE_PRC = 0b0010,
  	MLX5_DPLL_SSM_CODE_SSU_A = 0b0100,
-@@ -245,11 +267,14 @@ errout:
+@@ -245,11 +274,14 @@ errout:
  	NL_SET_ERR_MSG_MOD(extack, "Invalid clock quality level obtained from firmware");
  	return -EINVAL;
  }
@@ -126,7 +143,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  };
  
  static int mlx5_dpll_pin_direction_get(const struct dpll_pin *pin,
-@@ -296,6 +321,7 @@ static int mlx5_dpll_state_on_dpll_set(c
+@@ -296,6 +328,7 @@ static int mlx5_dpll_state_on_dpll_set(const struct dpll_pin *pin,
  					  MLX5_MSEES_ADMIN_STATUS_FREE_RUNNING);
  }
  
@@ -134,7 +151,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  static int mlx5_dpll_ffo_get(const struct dpll_pin *pin, void *pin_priv,
  			     const struct dpll_device *dpll, void *dpll_priv,
  			     s64 *ffo, struct netlink_ext_ack *extack)
-@@ -309,12 +335,15 @@ static int mlx5_dpll_ffo_get(const struc
+@@ -309,12 +342,15 @@ static int mlx5_dpll_ffo_get(const struct dpll_pin *pin, void *pin_priv,
  		return err;
  	return mlx5_dpll_pin_ffo_get(&synce_status, ffo);
  }
@@ -150,7 +167,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  };
  
  static const struct dpll_pin_properties mlx5_dpll_pin_properties = {
-@@ -366,7 +395,12 @@ static void mlx5_dpll_netdev_dpll_pin_se
+@@ -366,7 +402,12 @@ static void mlx5_dpll_netdev_dpll_pin_set(struct mlx5_dpll *mdpll,
  {
  	if (mdpll->tracking_netdev)
  		return;
@@ -163,7 +180,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  	mdpll->tracking_netdev = netdev;
  }
  
-@@ -374,7 +408,11 @@ static void mlx5_dpll_netdev_dpll_pin_cl
+@@ -374,7 +415,11 @@ static void mlx5_dpll_netdev_dpll_pin_clear(struct mlx5_dpll *mdpll)
  {
  	if (!mdpll->tracking_netdev)
  		return;
@@ -175,7 +192,81 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
  	mdpll->tracking_netdev = NULL;
  }
  
-@@ -523,7 +561,12 @@ static const struct auxiliary_device_id
+@@ -438,7 +483,12 @@ static int mlx5_dpll_probe(struct auxiliary_device *adev,
+ 	auxiliary_set_drvdata(adev, mdpll);
+ 
+ 	/* Multiple mdev instances might share one DPLL device. */
+-	mdpll->dpll = dpll_device_get(clock_id, 0, THIS_MODULE);
++	mdpll->dpll = dpll_device_get(clock_id, 0, THIS_MODULE
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++				      , &mdpll->dpll_tracker
++#endif
++				      );
+ 	if (IS_ERR(mdpll->dpll)) {
+ 		err = PTR_ERR(mdpll->dpll);
+ 		goto err_free_mdpll;
+@@ -451,7 +501,12 @@ static int mlx5_dpll_probe(struct auxiliary_device *adev,
+ 
+ 	/* Multiple mdev instances might share one DPLL pin. */
+ 	mdpll->dpll_pin = dpll_pin_get(clock_id, mlx5_get_dev_index(mdev),
+-				       THIS_MODULE, &mlx5_dpll_pin_properties);
++				       THIS_MODULE, &mlx5_dpll_pin_properties
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++				       , &mdpll->pin_tracker
++#endif
++				       );
+ 	if (IS_ERR(mdpll->dpll_pin)) {
+ 		err = PTR_ERR(mdpll->dpll_pin);
+ 		goto err_unregister_dpll_device;
+@@ -479,11 +534,21 @@ err_unregister_dpll_pin:
+ 	dpll_pin_unregister(mdpll->dpll, mdpll->dpll_pin,
+ 			    &mlx5_dpll_pins_ops, mdpll);
+ err_put_dpll_pin:
+-	dpll_pin_put(mdpll->dpll_pin);
++	dpll_pin_put(mdpll->dpll_pin
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		     , &mdpll->pin_tracker
++#endif
++		     );
+ err_unregister_dpll_device:
+ 	dpll_device_unregister(mdpll->dpll, &mlx5_dpll_device_ops, mdpll);
+ err_put_dpll_device:
+-	dpll_device_put(mdpll->dpll);
++	dpll_device_put(mdpll->dpll
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		       , &mdpll->dpll_tracker
++#endif
++		       );
+ err_free_mdpll:
+ 	kfree(mdpll);
+ 	return err;
+@@ -499,9 +564,19 @@ static void mlx5_dpll_remove(struct auxiliary_device *adev)
+ 	destroy_workqueue(mdpll->wq);
+ 	dpll_pin_unregister(mdpll->dpll, mdpll->dpll_pin,
+ 			    &mlx5_dpll_pins_ops, mdpll);
+-	dpll_pin_put(mdpll->dpll_pin);
++	dpll_pin_put(mdpll->dpll_pin
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		     , &mdpll->pin_tracker
++#endif
++		     );
+ 	dpll_device_unregister(mdpll->dpll, &mlx5_dpll_device_ops, mdpll);
+-	dpll_device_put(mdpll->dpll);
++	dpll_device_put(mdpll->dpll
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		       , &mdpll->dpll_tracker
++#endif
++		       );
+ 	kfree(mdpll);
+ 
+ 	mlx5_dpll_synce_status_set(mdev,
+@@ -523,7 +598,12 @@ static const struct auxiliary_device_id mlx5_dpll_id_table[] = {
  	{},
  };
  

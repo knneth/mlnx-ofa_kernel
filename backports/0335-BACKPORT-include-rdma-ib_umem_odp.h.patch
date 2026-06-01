@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
 
 Change-Id: I3234dd28332c1c2da690fe0ac18e78e3a4beb1b4
 ---
- include/rdma/ib_umem_odp.h | 134 +++++++++++++++++++++++++++++++++++++
- 1 file changed, 134 insertions(+)
+ include/rdma/ib_umem_odp.h | 120 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 120 insertions(+)
 
+diff --git a/include/rdma/ib_umem_odp.h b/include/rdma/ib_umem_odp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/ib_umem_odp.h
 +++ b/include/rdma/ib_umem_odp.h
 @@ -6,15 +6,27 @@
@@ -86,7 +88,7 @@ Change-Id: I3234dd28332c1c2da690fe0ac18e78e3a4beb1b4
  	unsigned int		page_shift;
  };
  
-@@ -46,13 +89,21 @@ static inline struct ib_umem_odp *to_ib_
+@@ -46,13 +89,21 @@ static inline struct ib_umem_odp *to_ib_umem_odp(struct ib_umem *umem)
  /* Returns the first page of an ODP umem. */
  static inline unsigned long ib_umem_start(struct ib_umem_odp *umem_odp)
  {
@@ -108,7 +110,7 @@ Change-Id: I3234dd28332c1c2da690fe0ac18e78e3a4beb1b4
  }
  
  static inline size_t ib_umem_odp_num_pages(struct ib_umem_odp *umem_odp)
-@@ -61,30 +112,113 @@ static inline size_t ib_umem_odp_num_pag
+@@ -61,30 +112,99 @@ static inline size_t ib_umem_odp_num_pages(struct ib_umem_odp *umem_odp)
  	       umem_odp->page_shift;
  }
  
@@ -136,26 +138,12 @@ Change-Id: I3234dd28332c1c2da690fe0ac18e78e3a4beb1b4
  struct ib_umem_odp *ib_umem_odp_alloc_implicit(struct ib_device *device,
 +#else
 +struct ib_ucontext_per_mm {
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct mmu_notifier mn;
 +	struct pid *tgid;
-+#else
-+	struct ib_ucontext *context;
-+	struct mm_struct *mm;
-+ 	struct pid *tgid;
-+	bool active;
-+#endif
 +
 +	struct rb_root_cached umem_tree;
 +	/* Protects umem_tree */
 +	struct rw_semaphore umem_rwsem;
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+	struct mmu_notifier mn;
-+	unsigned int odp_mrs_count;
-+
-+	struct list_head ucontext_list;
-+	struct rcu_head rcu;
-+#endif
 +};
 +
 +struct ib_umem_odp *ib_umem_odp_get(struct ib_udata *udata, unsigned long addr,
@@ -193,7 +181,7 @@ Change-Id: I3234dd28332c1c2da690fe0ac18e78e3a4beb1b4
 +int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root,
 +				  u64 start, u64 end,
 +				  umem_call_back cb,
-+#if defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)
++#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
 +				  bool blockable,
 +#endif
 +				  void *cookie);

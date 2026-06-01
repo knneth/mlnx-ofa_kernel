@@ -6,9 +6,11 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  drivers/infiniband/core/cm.c | 68 ++++++++++++++++++++++++++++++++++++
  1 file changed, 68 insertions(+)
 
+diff --git a/drivers/infiniband/core/cm.c b/drivers/infiniband/core/cm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cm.c
 +++ b/drivers/infiniband/core/cm.c
-@@ -1588,7 +1588,9 @@ int ib_send_cm_req(struct ib_cm_id *cm_i
+@@ -1588,7 +1588,9 @@ int ib_send_cm_req(struct ib_cm_id *cm_id,
  	cm_id_priv->local_qpn = cpu_to_be32(IBA_GET(CM_REQ_LOCAL_QPN, req_msg));
  	cm_id_priv->rq_psn = cpu_to_be32(IBA_GET(CM_REQ_STARTING_PSN, req_msg));
  
@@ -18,7 +20,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -1635,9 +1637,11 @@ static int cm_issue_rej(struct cm_port *
+@@ -1635,9 +1637,11 @@ static int cm_issue_rej(struct cm_port *port,
  		IBA_SET_MEM(CM_REJ_ARI, rej_msg, ari, ari_length);
  	}
  
@@ -30,7 +32,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -1989,7 +1993,9 @@ static void cm_dup_req_handler(struct cm
+@@ -1989,7 +1993,9 @@ static void cm_dup_req_handler(struct cm_work *work,
  	}
  	spin_unlock_irq(&cm_id_priv->lock);
  
@@ -40,7 +42,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto free;
-@@ -2153,7 +2159,9 @@ static int cm_req_handler(struct cm_work
+@@ -2153,7 +2159,9 @@ static int cm_req_handler(struct cm_work *work)
  
  	listen_cm_id_priv = cm_match_req(work, cm_id_priv);
  	if (!listen_cm_id_priv) {
@@ -50,7 +52,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		cm_id_priv->id.state = IB_CM_IDLE;
  		ret = -EINVAL;
  		goto destroy;
-@@ -2305,7 +2313,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+@@ -2305,7 +2313,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_id,
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id->state != IB_CM_REQ_RCVD &&
  	    cm_id->state != IB_CM_MRA_REQ_SENT) {
@@ -60,7 +62,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		goto out;
  	}
-@@ -2319,7 +2329,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+@@ -2319,7 +2329,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_id,
  	rep_msg = (struct cm_rep_msg *) msg->mad;
  	cm_format_rep(rep_msg, cm_id_priv, param);
  
@@ -70,7 +72,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -2380,7 +2392,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+@@ -2380,7 +2392,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_id,
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id->state != IB_CM_REP_RCVD &&
  	    cm_id->state != IB_CM_MRA_REP_SENT) {
@@ -80,7 +82,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		goto error;
  	}
-@@ -2394,7 +2408,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+@@ -2394,7 +2408,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_id,
  	cm_format_rtu((struct cm_rtu_msg *) msg->mad, cm_id_priv,
  		      private_data, private_data_len);
  
@@ -90,7 +92,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		spin_unlock_irqrestore(&cm_id_priv->lock, flags);
-@@ -2476,7 +2492,9 @@ static void cm_dup_rep_handler(struct cm
+@@ -2476,7 +2492,9 @@ static void cm_dup_rep_handler(struct cm_work *work)
  		goto unlock;
  	spin_unlock_irq(&cm_id_priv->lock);
  
@@ -100,7 +102,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto free;
-@@ -2500,8 +2518,10 @@ static int cm_rep_handler(struct cm_work
+@@ -2500,8 +2518,10 @@ static int cm_rep_handler(struct cm_work *work)
  		cpu_to_be32(IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg)), 0);
  	if (!cm_id_priv) {
  		cm_dup_rep_handler(work);
@@ -111,7 +113,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		return -EINVAL;
  	}
  
-@@ -2514,10 +2534,12 @@ static int cm_rep_handler(struct cm_work
+@@ -2514,10 +2534,12 @@ static int cm_rep_handler(struct cm_work *work)
  		break;
  	default:
  		ret = -EINVAL;
@@ -124,7 +126,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		spin_unlock_irq(&cm_id_priv->lock);
  		goto error;
  	}
-@@ -2534,8 +2556,10 @@ static int cm_rep_handler(struct cm_work
+@@ -2534,8 +2556,10 @@ static int cm_rep_handler(struct cm_work *work)
  		spin_unlock(&cm.lock);
  		spin_unlock_irq(&cm_id_priv->lock);
  		ret = -EINVAL;
@@ -135,7 +137,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		goto error;
  	}
  	/* Check for a stale connection. */
-@@ -2551,9 +2575,11 @@ static int cm_rep_handler(struct cm_work
+@@ -2551,9 +2575,11 @@ static int cm_rep_handler(struct cm_work *work)
  			     IB_CM_REJ_STALE_CONN, CM_MSG_RESPONSE_REP,
  			     NULL, 0);
  		ret = -EINVAL;
@@ -147,7 +149,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  
  		if (cur_cm_id_priv) {
  			ib_send_cm_dreq(&cur_cm_id_priv->id, NULL, 0);
-@@ -2680,7 +2706,9 @@ static void cm_issue_dreq(struct cm_id_p
+@@ -2680,7 +2706,9 @@ static void cm_issue_dreq(struct cm_id_private *cm_id_priv)
  
  	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv, NULL, 0);
  
@@ -157,7 +159,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -2700,7 +2728,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+@@ -2700,7 +2728,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_id, const void *private_data,
  
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id_priv->id.state != IB_CM_ESTABLISHED) {
@@ -167,7 +169,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		goto unlock;
  	}
-@@ -2719,7 +2749,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+@@ -2719,7 +2749,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_id, const void *private_data,
  	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv,
  		       private_data, private_data_len);
  
@@ -177,7 +179,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_enter_timewait(cm_id_priv);
-@@ -2762,7 +2794,9 @@ static int cm_send_drep_locked(struct cm
+@@ -2762,7 +2794,9 @@ static int cm_send_drep_locked(struct cm_id_private *cm_id_priv,
  		return -EINVAL;
  
  	if (cm_id_priv->id.state != IB_CM_DREQ_RCVD) {
@@ -187,7 +189,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		kfree(private_data);
  		return -EINVAL;
  	}
-@@ -2777,7 +2811,9 @@ static int cm_send_drep_locked(struct cm
+@@ -2777,7 +2811,9 @@ static int cm_send_drep_locked(struct cm_id_private *cm_id_priv,
  	cm_format_drep((struct cm_drep_msg *) msg->mad, cm_id_priv,
  		       private_data, private_data_len);
  
@@ -197,7 +199,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -2827,9 +2863,11 @@ static int cm_issue_drep(struct cm_port
+@@ -2827,9 +2863,11 @@ static int cm_issue_drep(struct cm_port *port,
  	IBA_SET(CM_DREP_LOCAL_COMM_ID, drep_msg,
  		IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg));
  
@@ -209,7 +211,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -2851,9 +2889,11 @@ static int cm_dreq_handler(struct cm_wor
+@@ -2851,9 +2889,11 @@ static int cm_dreq_handler(struct cm_work *work)
  		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
  						     [CM_DREQ_COUNTER]);
  		cm_issue_drep(work->port, work->mad_recv_wc);
@@ -221,7 +223,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		return -EINVAL;
  	}
  
-@@ -2898,7 +2938,9 @@ static int cm_dreq_handler(struct cm_wor
+@@ -2898,7 +2938,9 @@ static int cm_dreq_handler(struct cm_work *work)
  						     [CM_DREQ_COUNTER]);
  		goto unlock;
  	default:
@@ -231,7 +233,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		goto unlock;
  	}
  	cm_id_priv->id.state = IB_CM_DREQ_RCVD;
-@@ -2957,7 +2999,9 @@ static int cm_send_rej_locked(struct cm_
+@@ -2957,7 +2999,9 @@ static int cm_send_rej_locked(struct cm_id_private *cm_id_priv,
  	    (ari && ari_length > IB_CM_REJ_ARI_LENGTH))
  		return -EINVAL;
  
@@ -241,7 +243,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  
  	switch (state) {
  	case IB_CM_REQ_SENT:
-@@ -2985,7 +3029,9 @@ static int cm_send_rej_locked(struct cm_
+@@ -2985,7 +3029,9 @@ static int cm_send_rej_locked(struct cm_id_private *cm_id_priv,
  			      state);
  		break;
  	default:
@@ -251,7 +253,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		return -EINVAL;
  	}
  
-@@ -3097,7 +3143,9 @@ static int cm_rej_handler(struct cm_work
+@@ -3097,7 +3143,9 @@ static int cm_rej_handler(struct cm_work *work)
  		}
  		fallthrough;
  	default:
@@ -261,7 +263,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		spin_unlock_irq(&cm_id_priv->lock);
  		goto out;
  	}
-@@ -3137,7 +3185,9 @@ int ib_prepare_cm_mra(struct ib_cm_id *c
+@@ -3137,7 +3185,9 @@ int ib_prepare_cm_mra(struct ib_cm_id *cm_id)
  		}
  		fallthrough;
  	default:
@@ -271,7 +273,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		goto error_unlock;
  	}
-@@ -3222,7 +3272,9 @@ static int cm_mra_handler(struct cm_work
+@@ -3222,7 +3272,9 @@ static int cm_mra_handler(struct cm_work *work)
  						     [CM_MRA_COUNTER]);
  		fallthrough;
  	default:
@@ -281,7 +283,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		goto out;
  	}
  
-@@ -3508,7 +3560,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id
+@@ -3508,7 +3560,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id *cm_id,
  	cm_format_sidr_req((struct cm_sidr_req_msg *)msg->mad, cm_id_priv,
  			   param);
  
@@ -291,7 +293,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -3669,7 +3723,9 @@ static int cm_send_sidr_rep_locked(struc
+@@ -3669,7 +3723,9 @@ static int cm_send_sidr_rep_locked(struct cm_id_private *cm_id_priv,
  
  	cm_format_sidr_rep((struct cm_sidr_rep_msg *) msg->mad, cm_id_priv,
  			   param);
@@ -301,7 +303,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -3772,7 +3828,9 @@ static void cm_process_send_error(struct
+@@ -3772,7 +3828,9 @@ static void cm_process_send_error(struct cm_id_private *cm_id_priv,
  	    wc_status == IB_WC_WR_FLUSH_ERR)
  		goto out_unlock;
  
@@ -311,7 +313,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  	switch (state) {
  	case IB_CM_REQ_SENT:
  	case IB_CM_MRA_REQ_RCVD:
-@@ -3883,7 +3941,9 @@ static void cm_work_handler(struct work_
+@@ -3883,7 +3941,9 @@ static void cm_work_handler(struct work_struct *_work)
  		ret = cm_timewait_handler(work);
  		break;
  	default:
@@ -321,7 +323,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		break;
  	}
-@@ -3918,7 +3978,9 @@ static int cm_establish(struct ib_cm_id
+@@ -3918,7 +3978,9 @@ static int cm_establish(struct ib_cm_id *cm_id)
  		ret = -EISCONN;
  		break;
  	default:
@@ -331,7 +333,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		break;
  	}
-@@ -4115,7 +4177,9 @@ static int cm_init_qp_init_attr(struct c
+@@ -4115,7 +4177,9 @@ static int cm_init_qp_init_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:
@@ -341,7 +343,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		break;
  	}
-@@ -4168,7 +4232,9 @@ static int cm_init_qp_rtr_attr(struct cm
+@@ -4168,7 +4232,9 @@ static int cm_init_qp_rtr_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:
@@ -351,7 +353,7 @@ Change-Id: Ib45dd1cdfddaedf41bdfba79ba1d8a924f60fb14
  		ret = -EINVAL;
  		break;
  	}
-@@ -4230,7 +4296,9 @@ static int cm_init_qp_rts_attr(struct cm
+@@ -4230,7 +4296,9 @@ static int cm_init_qp_rts_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:

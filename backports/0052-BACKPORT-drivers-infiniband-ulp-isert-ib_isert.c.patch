@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
  drivers/infiniband/ulp/isert/ib_isert.c | 53 +++++++++++++++++++++++++
  1 file changed, 53 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/isert/ib_isert.c b/drivers/infiniband/ulp/isert/ib_isert.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/isert/ib_isert.c
 +++ b/drivers/infiniband/ulp/isert/ib_isert.c
-@@ -1571,12 +1571,20 @@ isert_check_pi_status(struct se_cmd *se_
+@@ -1571,12 +1571,20 @@ isert_check_pi_status(struct se_cmd *se_cmd, struct ib_mr *sig_mr)
  		}
  		sec_offset_err = mr_status.sig_err.sig_err_offset;
  		do_div(sec_offset_err, block_size);
@@ -28,7 +30,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
  			  mr_status.sig_err.expected,
  			  mr_status.sig_err.actual);
  		ret = 1;
-@@ -2426,11 +2434,47 @@ isert_set_conn_info(struct iscsi_np *np,
+@@ -2426,11 +2434,47 @@ isert_set_conn_info(struct iscsi_np *np, struct iscsit_conn *conn,
  {
  	struct rdma_cm_id *cm_id = isert_conn->cm_id;
  	struct rdma_route *cm_route = &cm_id->route;
@@ -76,7 +78,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.c
  }
  
  static int
-@@ -2565,8 +2609,17 @@ isert_wait4cmds(struct iscsit_conn *conn
+@@ -2565,8 +2609,17 @@ isert_wait4cmds(struct iscsit_conn *conn)
  	isert_info("iscsit_conn %p\n", conn);
  
  	if (conn->sess) {

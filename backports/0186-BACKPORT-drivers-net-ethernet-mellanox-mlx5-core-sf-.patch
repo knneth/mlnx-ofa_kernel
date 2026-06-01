@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mlx5/core/sf/diag/sf_tracepoint.h         | 28 +++++++++++++++++++
  1 file changed, 28 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/sf_tracepoint.h
 @@ -24,7 +24,11 @@ TRACE_EVENT(mlx5_sf_add,
@@ -68,7 +70,7 @@ Subject: [PATCH] BACKPORT:
  		    __entry->hw_fn_id = hw_fn_id;
  	    ),
  	    TP_printk("(%s) hw_id=0x%x\n", __get_str(devname), __entry->hw_fn_id)
-@@ -113,7 +133,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_state_templa
+@@ -113,7 +133,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_state_template,
  				     __field(unsigned int, port_index)
  				     __field(u32, controller)
  				     __field(u16, hw_fn_id)),

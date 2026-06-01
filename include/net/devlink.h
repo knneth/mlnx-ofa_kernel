@@ -5,10 +5,6 @@
 
 #include_next <net/devlink.h>
 
-#ifndef DEVLINK_INFO_VERSION_GENERIC_FW
-#define DEVLINK_INFO_VERSION_GENERIC_FW         "fw"
-#endif
-
 #ifndef HAVE_DEVLINK_PORT_NEW_ATTRS_STRUCT
 struct devlink_port_new_attrs {
 	enum devlink_port_flavour flavour;

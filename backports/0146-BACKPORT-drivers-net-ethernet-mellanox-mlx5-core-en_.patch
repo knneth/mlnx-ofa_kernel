@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
  1 file changed, 20 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
-@@ -96,14 +96,26 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -96,14 +96,26 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
  	skb_reserve(skb, NET_IP_ALIGN);
  
  	/*  Reserve for ethernet and IP header  */
@@ -38,7 +40,7 @@ Subject: [PATCH] BACKPORT:
  
  	/* Fill ETH header */
  	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
-@@ -132,7 +144,11 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -132,7 +144,11 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
  	ip_send_check(iph);
  
  	/* Fill test header and data */

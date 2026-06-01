@@ -3,18 +3,24 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 
 ---
- .../mellanox/mlx5/core/en/tc_tun_encap.c      | 34 +++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ .../mellanox/mlx5/core/en/tc_tun_encap.c      | 43 +++++++++++++++++++
+ 1 file changed, 43 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
-@@ -1,8 +1,14 @@
+@@ -1,8 +1,18 @@
  // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
  /* Copyright (c) 2021 Mellanox Technologies. */
  
 +#ifdef HAVE_BASECODE_EXTRAS
 +#include <net/arp.h>
++#ifndef HAVE_NET_IPV6_STUBS_H
++#include <net/ndisc.h>
++#else
 +#include <net/ipv6_stubs.h>
++#endif
 +#endif
  #include <net/fib_notifier.h>
 +#ifdef HAVE_FIB_INFO_NH
@@ -23,7 +29,20 @@ Subject: [PATCH] BACKPORT:
  #include <net/ip_tunnels.h>
  #include "tc_tun_encap.h"
  #include "fs_core.h"
-@@ -444,7 +450,9 @@ void mlx5e_tc_update_neigh_used_value(st
+@@ -402,7 +412,12 @@ void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe)
+ 		tbl = &arp_tbl;
+ #if IS_ENABLED(CONFIG_IPV6)
+ 	else if (m_neigh->family == AF_INET6)
++#ifndef HAVE_NET_IPV6_STUBS_H
++/* Newer kernels (7.1+): ipv6_stub removed, direct nd_tbl access */
++		tbl = &nd_tbl;
++#else
+ 		tbl = ipv6_stub->nd_tbl;
++#endif
+ #endif
+ 	else
+ 		return;
+@@ -444,7 +459,9 @@ void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe)
  		}
  	}
  
@@ -33,7 +52,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (neigh_used) {
  		nhe->reported_lastuse = jiffies;
-@@ -595,7 +603,11 @@ bool mlx5e_tc_tun_encap_info_equal_gener
+@@ -595,7 +612,11 @@ bool mlx5e_tc_tun_encap_info_equal_generic(struct mlx5e_encap_key *a,
  
  bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
  					   struct mlx5e_encap_key *b,
@@ -45,7 +64,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct ip_tunnel_info *a_info;
  	struct ip_tunnel_info *b_info;
-@@ -604,8 +616,14 @@ bool mlx5e_tc_tun_encap_info_equal_optio
+@@ -604,8 +625,14 @@ bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
  	if (!mlx5e_tc_tun_encap_info_equal_generic(a, b))
  		return false;
  
@@ -60,7 +79,7 @@ Subject: [PATCH] BACKPORT:
  
  	/* keys are equal when both don't have any options attached */
  	if (!a_has_opts && !b_has_opts)
-@@ -1740,15 +1758,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+@@ -1740,15 +1767,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
@@ -80,7 +99,7 @@ Subject: [PATCH] BACKPORT:
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1785,13 +1807,17 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1785,13 +1816,17 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_priv *priv,
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
@@ -98,7 +117,7 @@ Subject: [PATCH] BACKPORT:
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1870,8 +1896,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+@@ -1870,8 +1905,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_init(struct mlx5e_priv *priv)
  	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
  	spin_lock_init(&encap->route_lock);
  	hash_init(encap->route_tbl);
@@ -111,7 +130,7 @@ Subject: [PATCH] BACKPORT:
  	if (err) {
  		kvfree(encap);
  		return ERR_PTR(err);
-@@ -1885,7 +1915,11 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+@@ -1885,7 +1924,11 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_tc_tun_encap *encap)
  	if (!encap)
  		return;
  

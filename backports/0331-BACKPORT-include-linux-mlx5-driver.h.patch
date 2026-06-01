@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
 
 Change-Id: I849d4a68e31b87f2fc4a443e66766c6ddacb9047
 ---
- include/linux/mlx5/driver.h | 27 +++++++++++++++++++++++++--
- 1 file changed, 25 insertions(+), 2 deletions(-)
+ include/linux/mlx5/driver.h | 25 +++++++++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
 
+diff --git a/include/linux/mlx5/driver.h b/include/linux/mlx5/driver.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
 @@ -33,6 +33,8 @@
@@ -65,17 +67,7 @@ Change-Id: I849d4a68e31b87f2fc4a443e66766c6ddacb9047
  	struct net_device *uplink_netdev;
  	netdevice_tracker tracker;
  	struct mutex uplink_netdev_lock;
-@@ -926,7 +944,9 @@ struct mlx5_core_dev {
- 	enum mlx5_device_state	state;
- 	/* sync interface state */
- 	struct mutex		intf_state_mutex;
-+#ifdef HAVE_LOCKDEP_UNREGISTER_KEY
- 	struct lock_class_key	lock_key;
-+#endif
- 	unsigned long		intf_state;
- 	struct mlx5_priv	priv;
- 	struct mlx5_profile	profile;
-@@ -1355,7 +1375,7 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
+@@ -1355,7 +1373,7 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  int mlx5_dm_sw_icm_dealloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  			   u64 length, u16 uid, phys_addr_t addr, u32 obj_id);
  
@@ -84,7 +76,7 @@ Change-Id: I849d4a68e31b87f2fc4a443e66766c6ddacb9047
  int mlx5_st_alloc_index(struct mlx5_core_dev *dev, enum tph_mem_type mem_type,
  			unsigned int cpu_uid, u16 *st_index);
  int mlx5_st_dealloc_index(struct mlx5_core_dev *dev, u16 st_index);
-@@ -1372,8 +1392,10 @@ static inline int mlx5_st_dealloc_index(
+@@ -1372,8 +1390,10 @@ static inline int mlx5_st_dealloc_index(struct mlx5_core_dev *dev, u16 st_index)
  }
  #endif
  
@@ -95,7 +87,7 @@ Change-Id: I849d4a68e31b87f2fc4a443e66766c6ddacb9047
  
  int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
  					  int vf_id,
-@@ -1501,9 +1523,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1501,9 +1521,10 @@ bool mlx5_is_roce_on(struct mlx5_core_dev *dev);
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {

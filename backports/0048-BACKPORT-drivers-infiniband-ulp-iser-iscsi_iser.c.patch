@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  drivers/infiniband/ulp/iser/iscsi_iser.c | 61 ++++++++++++++++++++++--
  1 file changed, 57 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/iser/iscsi_iser.c b/drivers/infiniband/ulp/iser/iscsi_iser.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
-@@ -78,7 +78,11 @@ MODULE_DESCRIPTION("iSER (iSCSI Extensio
+@@ -78,7 +78,11 @@ MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
  MODULE_LICENSE("Dual BSD/GPL");
  MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
  
@@ -20,7 +22,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  static struct iscsi_transport iscsi_iser_transport;
  static struct scsi_transport_template *iscsi_iser_scsi_transport;
  static struct workqueue_struct *release_wq;
-@@ -489,7 +493,9 @@ static int iscsi_iser_conn_bind(struct i
+@@ -489,7 +493,9 @@ static int iscsi_iser_conn_bind(struct iscsi_cls_session *cls_session,
  	iser_conn->iscsi_conn = conn;
  
  out:
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	mutex_unlock(&iser_conn->state_mutex);
  	return error;
  }
-@@ -564,7 +570,11 @@ static void iscsi_iser_session_destroy(s
+@@ -564,7 +570,11 @@ static void iscsi_iser_session_destroy(struct iscsi_cls_session *cls_session)
  	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
  
  	iscsi_session_teardown(cls_session);
@@ -42,7 +44,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	iscsi_host_free(shost);
  }
  
-@@ -645,10 +655,10 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -645,10 +655,10 @@ iscsi_iser_session_create(struct iscsi_endpoint *ep,
  			scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP |
  						   SHOST_DIX_GUARD_CRC);
  		}
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
  			mutex_unlock(&iser_conn->state_mutex);
  			goto free_host;
-@@ -681,7 +691,11 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -681,7 +691,11 @@ iscsi_iser_session_create(struct iscsi_endpoint *ep,
  	return cls_session;
  
  remove_host:
@@ -67,7 +69,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  free_host:
  	iscsi_host_free(shost);
  	return NULL;
-@@ -952,7 +966,36 @@ static umode_t iser_attr_is_visible(int
+@@ -952,7 +966,36 @@ static umode_t iser_attr_is_visible(int param_type, int param)
  	return 0;
  }
  
@@ -105,7 +107,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  	.module                 = THIS_MODULE,
  	.name                   = "iSCSI Initiator over iSER",
  	.queuecommand           = iscsi_queuecommand,
-@@ -964,10 +1007,18 @@ static const struct scsi_host_template i
+@@ -964,10 +1007,18 @@ static const struct scsi_host_template iscsi_iser_sht = {
  	.eh_device_reset_handler= iscsi_eh_device_reset,
  	.eh_target_reset_handler = iscsi_eh_recover_target,
  	.target_alloc		= iscsi_target_alloc,
@@ -124,7 +126,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iscsi_iser.c
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -980,7 +1031,9 @@ static struct iscsi_transport iscsi_iser
+@@ -980,7 +1031,9 @@ static struct iscsi_transport iscsi_iser_transport = {
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,

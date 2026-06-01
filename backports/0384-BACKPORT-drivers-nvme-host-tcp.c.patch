@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/tcp.c
 
 Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
 ---
- drivers/nvme/host/tcp.c | 347 +++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 340 insertions(+), 7 deletions(-)
+ drivers/nvme/host/tcp.c | 343 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 336 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/nvme/host/tcp.c b/drivers/nvme/host/tcp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/tcp.c
 +++ b/drivers/nvme/host/tcp.c
 @@ -3,19 +3,30 @@
@@ -66,7 +68,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	__le32			exp_ddgst;
  	__le32			recv_ddgst;
  	struct completion       tls_complete;
-@@ -351,14 +367,20 @@ static void nvme_tcp_init_iter(struct nv
+@@ -351,14 +367,20 @@ static void nvme_tcp_init_iter(struct nvme_tcp_request *req,
  		offset = 0;
  	} else {
  		struct bio *bio = req->curr_bio;
@@ -87,7 +89,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		size = bio->bi_iter.bi_size;
  		offset = bio->bi_iter.bi_bvec_done;
  	}
-@@ -376,7 +398,11 @@ static inline void nvme_tcp_advance_req(
+@@ -376,7 +398,11 @@ static inline void nvme_tcp_advance_req(struct nvme_tcp_request *req,
  	if (!iov_iter_count(&req->iter) &&
  	    req->data_sent < req->data_len) {
  		req->curr_bio = req->curr_bio->bi_next;
@@ -99,7 +101,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	}
  }
  
-@@ -457,6 +483,7 @@ nvme_tcp_fetch_request(struct nvme_tcp_q
+@@ -457,6 +483,7 @@ nvme_tcp_fetch_request(struct nvme_tcp_queue *queue)
  	return req;
  }
  
@@ -107,7 +109,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  #define NVME_TCP_CRC_SEED (~0)
  
  static inline void nvme_tcp_ddgst_update(u32 *crcp,
-@@ -490,6 +517,35 @@ static inline void nvme_tcp_set_hdgst(vo
+@@ -490,6 +517,35 @@ static inline void nvme_tcp_set_hdgst(void *pdu, size_t len)
  {
  	*(__le32 *)(pdu + len) = nvme_tcp_hdgst(pdu, len);
  }
@@ -143,7 +145,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  static int nvme_tcp_verify_hdgst(struct nvme_tcp_queue *queue,
  		void *pdu, size_t pdu_len)
-@@ -506,7 +562,12 @@ static int nvme_tcp_verify_hdgst(struct
+@@ -506,7 +562,12 @@ static int nvme_tcp_verify_hdgst(struct nvme_tcp_queue *queue,
  	}
  
  	recv_digest = *(__le32 *)(pdu + hdr->hlen);
@@ -156,7 +158,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (recv_digest != exp_digest) {
  		dev_err(queue->ctrl->ctrl.device,
  			"header digest error: recv %#x expected %#x\n",
-@@ -532,7 +593,11 @@ static int nvme_tcp_check_ddgst(struct n
+@@ -532,7 +593,11 @@ static int nvme_tcp_check_ddgst(struct nvme_tcp_queue *queue, void *pdu)
  		nvme_tcp_queue_id(queue));
  		return -EPROTO;
  	}
@@ -168,7 +170,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	return 0;
  }
-@@ -936,7 +1001,11 @@ static int nvme_tcp_recv_data(struct nvm
+@@ -936,7 +1001,11 @@ static int nvme_tcp_recv_data(struct nvme_tcp_queue *queue, struct sk_buff *skb,
  				nvme_tcp_init_recv_ctx(queue);
  				return -EIO;
  			}
@@ -180,7 +182,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		}
  
  		/* we can read only from what is left in this bio */
-@@ -944,8 +1013,13 @@ static int nvme_tcp_recv_data(struct nvm
+@@ -944,8 +1013,13 @@ static int nvme_tcp_recv_data(struct nvme_tcp_queue *queue, struct sk_buff *skb,
  				iov_iter_count(&req->iter));
  
  		if (queue->data_digest)
@@ -194,7 +196,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		else
  			ret = skb_copy_datagram_iter(skb, *offset,
  					&req->iter, recv_len);
-@@ -963,7 +1037,11 @@ static int nvme_tcp_recv_data(struct nvm
+@@ -963,7 +1037,11 @@ static int nvme_tcp_recv_data(struct nvme_tcp_queue *queue, struct sk_buff *skb,
  
  	if (!queue->data_remaining) {
  		if (queue->data_digest) {
@@ -206,7 +208,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  			queue->ddgst_remaining = NVME_TCP_DIGEST_LENGTH;
  		} else {
  			if (pdu->hdr.flags & NVME_TCP_F_DATA_SUCCESS) {
-@@ -1063,7 +1141,9 @@ static void nvme_tcp_data_ready(struct s
+@@ -1063,7 +1141,9 @@ static void nvme_tcp_data_ready(struct sock *sk)
  {
  	struct nvme_tcp_queue *queue;
  
@@ -216,7 +218,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	read_lock_bh(&sk->sk_callback_lock);
  	queue = sk->sk_user_data;
-@@ -1142,15 +1222,33 @@ static int nvme_tcp_try_send_data(struct
+@@ -1142,15 +1222,33 @@ static int nvme_tcp_try_send_data(struct nvme_tcp_request *req)
  	u32 h2cdata_left = req->h2cdata_left;
  
  	while (true) {
@@ -250,7 +252,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		int ret;
  
  		if (last && !queue->data_digest && !nvme_tcp_queue_more(queue))
-@@ -1158,18 +1256,28 @@ static int nvme_tcp_try_send_data(struct
+@@ -1158,18 +1256,28 @@ static int nvme_tcp_try_send_data(struct nvme_tcp_request *req)
  		else
  			msg.msg_flags |= MSG_MORE;
  
@@ -279,7 +281,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  		/*
  		 * update the request iterator except for the last payload send
-@@ -1182,8 +1290,14 @@ static int nvme_tcp_try_send_data(struct
+@@ -1182,8 +1290,14 @@ static int nvme_tcp_try_send_data(struct nvme_tcp_request *req)
  		/* fully successful last send in current PDU */
  		if (last && ret == len) {
  			if (queue->data_digest) {
@@ -294,7 +296,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  				req->state = NVME_TCP_SEND_DDGST;
  				req->offset = 0;
  			} else {
-@@ -1202,24 +1316,44 @@ static int nvme_tcp_try_send_cmd_pdu(str
+@@ -1202,24 +1316,44 @@ static int nvme_tcp_try_send_cmd_pdu(struct nvme_tcp_request *req)
  {
  	struct nvme_tcp_queue *queue = req->queue;
  	struct nvme_tcp_cmd_pdu *pdu = nvme_tcp_req_cmd_pdu(req);
@@ -339,7 +341,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (unlikely(ret <= 0))
  		return ret;
  
-@@ -1228,7 +1362,11 @@ static int nvme_tcp_try_send_cmd_pdu(str
+@@ -1228,7 +1362,11 @@ static int nvme_tcp_try_send_cmd_pdu(struct nvme_tcp_request *req)
  		if (inline_data) {
  			req->state = NVME_TCP_SEND_DATA;
  			if (queue->data_digest)
@@ -351,7 +353,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		} else {
  			nvme_tcp_done_send_req(queue);
  		}
-@@ -1243,21 +1381,37 @@ static int nvme_tcp_try_send_data_pdu(st
+@@ -1243,21 +1381,37 @@ static int nvme_tcp_try_send_data_pdu(struct nvme_tcp_request *req)
  {
  	struct nvme_tcp_queue *queue = req->queue;
  	struct nvme_tcp_data_pdu *pdu = nvme_tcp_req_data_pdu(req);
@@ -389,7 +391,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (unlikely(ret <= 0))
  		return ret;
  
-@@ -1265,7 +1419,11 @@ static int nvme_tcp_try_send_data_pdu(st
+@@ -1265,7 +1419,11 @@ static int nvme_tcp_try_send_data_pdu(struct nvme_tcp_request *req)
  	if (!len) {
  		req->state = NVME_TCP_SEND_DATA;
  		if (queue->data_digest)
@@ -401,7 +403,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  		return 1;
  	}
  	req->offset += ret;
-@@ -1410,6 +1568,43 @@ static void nvme_tcp_io_work(struct work
+@@ -1410,6 +1568,43 @@ static void nvme_tcp_io_work(struct work_struct *w)
  	queue_work_on(queue->io_cpu, nvme_tcp_wq, &queue->io_work);
  }
  
@@ -445,7 +447,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  static void nvme_tcp_free_async_req(struct nvme_tcp_ctrl *ctrl)
  {
  	struct nvme_tcp_request *async = &ctrl->async_req;
-@@ -1435,6 +1630,9 @@ static int nvme_tcp_alloc_async_req(stru
+@@ -1435,6 +1630,9 @@ static int nvme_tcp_alloc_async_req(struct nvme_tcp_ctrl *ctrl)
  
  static void nvme_tcp_free_queue(struct nvme_ctrl *nctrl, int qid)
  {
@@ -455,7 +457,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	struct nvme_tcp_ctrl *ctrl = to_tcp_ctrl(nctrl);
  	struct nvme_tcp_queue *queue = &ctrl->queues[qid];
  	unsigned int noreclaim_flag;
-@@ -1442,7 +1640,20 @@ static void nvme_tcp_free_queue(struct n
+@@ -1442,7 +1640,20 @@ static void nvme_tcp_free_queue(struct nvme_ctrl *nctrl, int qid)
  	if (!test_and_clear_bit(NVME_TCP_Q_ALLOCATED, &queue->flags))
  		return;
  
@@ -476,7 +478,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	noreclaim_flag = memalloc_noreclaim_save();
  	/* ->sock will be released by fput() */
-@@ -1455,12 +1666,18 @@ static void nvme_tcp_free_queue(struct n
+@@ -1455,12 +1666,18 @@ static void nvme_tcp_free_queue(struct nvme_ctrl *nctrl, int qid)
  	mutex_destroy(&queue->queue_lock);
  }
  
@@ -495,7 +497,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	struct msghdr msg = {};
  	struct kvec iov;
  	bool ctrl_hdgst, ctrl_ddgst;
-@@ -1516,6 +1733,7 @@ static int nvme_tcp_init_connection(stru
+@@ -1516,6 +1733,7 @@ static int nvme_tcp_init_connection(struct nvme_tcp_queue *queue)
  		goto free_icresp;
  	}
  	ret = -ENOTCONN;
@@ -503,7 +505,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (nvme_tcp_queue_tls(queue)) {
  		ctype = tls_get_record_type(queue->sock->sk,
  					    (struct cmsghdr *)cbuf);
-@@ -1525,6 +1743,7 @@ static int nvme_tcp_init_connection(stru
+@@ -1525,6 +1743,7 @@ static int nvme_tcp_init_connection(struct nvme_tcp_queue *queue)
  			goto free_icresp;
  		}
  	}
@@ -519,7 +521,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  static void nvme_tcp_tls_done(void *data, int status, key_serial_t pskid)
  {
  	struct nvme_tcp_queue *queue = data;
-@@ -1707,11 +1927,13 @@ static void nvme_tcp_tls_done(void *data
+@@ -1707,11 +1927,13 @@ static void nvme_tcp_tls_done(void *data, int status, key_serial_t pskid)
  out_complete:
  	complete(&queue->tls_complete);
  }
@@ -533,7 +535,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	int qid = nvme_tcp_queue_id(queue);
  	int ret;
  	struct tls_handshake_args args;
-@@ -1759,6 +1981,9 @@ static int nvme_tcp_start_tls(struct nvm
+@@ -1759,6 +1981,9 @@ static int nvme_tcp_start_tls(struct nvme_ctrl *nctrl,
  		ret = queue->tls_err;
  	}
  	return ret;
@@ -543,7 +545,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  }
  
  static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
-@@ -1768,6 +1993,9 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1768,6 +1993,9 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  	struct nvme_tcp_queue *queue = &ctrl->queues[qid];
  	int ret, rcv_pdu_size;
  	struct file *sock_file;
@@ -553,7 +555,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	mutex_init(&queue->queue_lock);
  	queue->ctrl = ctrl;
-@@ -1797,14 +2025,38 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1797,14 +2025,38 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  		goto err_destroy_mutex;
  	}
  
@@ -592,7 +594,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	/*
  	 * Cleanup whatever is sitting in the TCP transmit queue on socket
-@@ -1817,14 +2069,28 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1817,14 +2069,28 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  		sock_set_priority(queue->sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -621,7 +623,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	queue->io_cpu = WORK_CPU_UNBOUND;
  	queue->request = NULL;
  	queue->data_remaining = 0;
-@@ -1834,7 +2100,14 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1834,7 +2100,14 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  	sk_set_memalloc(queue->sock->sk);
  
  	if (nctrl->opts->mask & NVMF_OPT_HOST_TRADDR) {
@@ -637,7 +639,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  			sizeof(ctrl->src_addr));
  		if (ret) {
  			dev_err(nctrl->device,
-@@ -1844,6 +2117,7 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1844,6 +2117,7 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  		}
  	}
  
@@ -645,7 +647,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (nctrl->opts->mask & NVMF_OPT_HOST_IFACE) {
  		char *iface = nctrl->opts->host_iface;
  		sockptr_t optval = KERNEL_SOCKPTR(iface);
-@@ -1857,23 +2131,45 @@ static int nvme_tcp_alloc_queue(struct n
+@@ -1857,23 +2131,45 @@ static int nvme_tcp_alloc_queue(struct nvme_ctrl *nctrl, int qid,
  			goto err_sock;
  		}
  	}
@@ -706,7 +708,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  err_sock:
  	/* ->sock will be released by fput() */
  	fput(queue->sock->file);
-@@ -2068,6 +2369,7 @@ static int nvme_tcp_alloc_admin_queue(st
+@@ -2068,6 +2369,7 @@ static int nvme_tcp_alloc_admin_queue(struct nvme_ctrl *ctrl)
  	int ret;
  	key_serial_t pskid = 0;
  
@@ -714,7 +716,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (nvme_tcp_tls_configured(ctrl)) {
  		if (ctrl->opts->tls_key)
  			pskid = key_serial(ctrl->opts->tls_key);
-@@ -2081,6 +2383,7 @@ static int nvme_tcp_alloc_admin_queue(st
+@@ -2081,6 +2383,7 @@ static int nvme_tcp_alloc_admin_queue(struct nvme_ctrl *ctrl)
  			}
  		}
  	}
@@ -722,7 +724,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	ret = nvme_tcp_alloc_queue(ctrl, 0, pskid);
  	if (ret)
-@@ -2636,7 +2939,12 @@ static void nvme_tcp_complete_timed_out(
+@@ -2636,7 +2939,12 @@ static void nvme_tcp_complete_timed_out(struct request *rq)
  	nvmf_complete_timed_out_request(rq);
  }
  
@@ -736,23 +738,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  {
  	struct nvme_tcp_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_ctrl *ctrl = &req->queue->ctrl->ctrl;
-@@ -2749,6 +3057,7 @@ static blk_status_t nvme_tcp_setup_cmd_p
- 	return 0;
- }
- 
-+#ifdef HAVE_BLK_MQ_OPS_COMMIT_RQS
- static void nvme_tcp_commit_rqs(struct blk_mq_hw_ctx *hctx)
- {
- 	struct nvme_tcp_queue *queue = hctx->driver_data;
-@@ -2756,6 +3065,7 @@ static void nvme_tcp_commit_rqs(struct b
- 	if (!llist_empty(&queue->req_list))
- 		queue_work_on(queue->io_cpu, nvme_tcp_wq, &queue->io_work);
- }
-+#endif
- 
- static blk_status_t nvme_tcp_queue_rq(struct blk_mq_hw_ctx *hctx,
- 		const struct blk_mq_queue_data *bd)
-@@ -2781,14 +3091,30 @@ static blk_status_t nvme_tcp_queue_rq(st
+@@ -2781,14 +3089,30 @@ static blk_status_t nvme_tcp_queue_rq(struct blk_mq_hw_ctx *hctx,
  	return BLK_STS_OK;
  }
  
@@ -783,17 +769,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  {
  	struct nvme_tcp_queue *queue = hctx->driver_data;
  	struct sock *sk = queue->sock->sk;
-@@ -2833,7 +3159,9 @@ static int nvme_tcp_get_address(struct n
- 
- static const struct blk_mq_ops nvme_tcp_mq_ops = {
- 	.queue_rq	= nvme_tcp_queue_rq,
-+#ifdef HAVE_BLK_MQ_OPS_COMMIT_RQS
- 	.commit_rqs	= nvme_tcp_commit_rqs,
-+#endif
- 	.complete	= nvme_complete_rq,
- 	.init_request	= nvme_tcp_init_request,
- 	.exit_request	= nvme_tcp_exit_request,
-@@ -2934,6 +3262,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
+@@ -2934,6 +3258,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_alloc_ctrl(struct device *dev,
  		}
  	}
  
@@ -801,7 +777,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  	if (opts->mask & NVMF_OPT_HOST_IFACE) {
  		if (!__dev_get_by_name(&init_net, opts->host_iface)) {
  			pr_err("invalid interface passed: %s\n",
-@@ -2942,6 +3271,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_al
+@@ -2942,6 +3267,7 @@ static struct nvme_tcp_ctrl *nvme_tcp_alloc_ctrl(struct device *dev,
  			goto out_free_ctrl;
  		}
  	}
@@ -809,7 +785,7 @@ Change-Id: If4f8cb233312dd8dacba7abc44a7178594827ec8
  
  	if (!opts->duplicate_connect && nvme_tcp_existing_controller(opts)) {
  		ret = -EALREADY;
-@@ -3017,7 +3347,10 @@ static struct nvmf_transport_ops nvme_tc
+@@ -3017,7 +3343,10 @@ static struct nvmf_transport_ops nvme_tcp_transport = {
  			  NVMF_OPT_HOST_TRADDR | NVMF_OPT_CTRL_LOSS_TMO |
  			  NVMF_OPT_HDR_DIGEST | NVMF_OPT_DATA_DIGEST |
  			  NVMF_OPT_NR_WRITE_QUEUES | NVMF_OPT_NR_POLL_QUEUES |

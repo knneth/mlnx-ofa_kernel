@@ -7,6 +7,8 @@ Change-Id: Idcf27d3d1fb7d54a066041cb72bcea5be43943d9
  .../mellanox/mlx5/core/diag/reporter_vnic.c   | 157 +++++++++++++++++-
  1 file changed, 150 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 @@ -3,6 +3,7 @@
@@ -25,7 +27,7 @@ Change-Id: Idcf27d3d1fb7d54a066041cb72bcea5be43943d9
  static void mlx5_reporter_vnic_diagnose_counter_icm(struct mlx5_core_dev *dev,
  						    struct devlink_fmsg *fmsg,
  						    u16 vport_num, bool other_vport)
-@@ -58,35 +60,83 @@ static void mlx5_reporter_vnic_diagnose_
+@@ -58,35 +60,83 @@ static void mlx5_reporter_vnic_diagnose_counter_icm(struct mlx5_core_dev *dev,
  	cur_alloc_icm = MLX5_GET(vhca_icm_ctrl_reg, out_icm_reg, max_alloc_icm_th);
  	devlink_fmsg_u32_pair_put(fmsg, "icm_consumption", cur_alloc_icm);
  }
@@ -111,7 +113,7 @@ Change-Id: Idcf27d3d1fb7d54a066041cb72bcea5be43943d9
  	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun))
  		devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
  					  VNIC_ENV_GET(&vnic, cq_overrun));
-@@ -117,18 +167,101 @@ void mlx5_reporter_vnic_diagnose_counter
+@@ -117,18 +167,101 @@ void mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
  					  VNIC_ENV_GET(&vnic, odp_remote_triggered_page_fault));
  	}
  
@@ -215,7 +217,7 @@ Change-Id: Idcf27d3d1fb7d54a066041cb72bcea5be43943d9
  }
  
  static const struct devlink_health_reporter_ops mlx5_reporter_vnic_ops = {
-@@ -142,9 +275,18 @@ void mlx5_reporter_vnic_create(struct ml
+@@ -142,9 +275,18 @@ void mlx5_reporter_vnic_create(struct mlx5_core_dev *dev)
  	struct devlink *devlink = priv_to_devlink(dev);
  
  	health->vnic_reporter =
@@ -237,7 +239,7 @@ Change-Id: Idcf27d3d1fb7d54a066041cb72bcea5be43943d9
  	if (IS_ERR(health->vnic_reporter))
  		mlx5_core_warn(dev,
  			       "Failed to create vnic reporter, err = %pe\n",
-@@ -158,3 +300,4 @@ void mlx5_reporter_vnic_destroy(struct m
+@@ -158,3 +300,4 @@ void mlx5_reporter_vnic_destroy(struct mlx5_core_dev *dev)
  	if (!IS_ERR_OR_NULL(health->vnic_reporter))
  		devlink_health_reporter_destroy(health->vnic_reporter);
  }

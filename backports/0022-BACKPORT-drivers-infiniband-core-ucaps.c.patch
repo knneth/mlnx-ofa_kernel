@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucaps.c
  drivers/infiniband/core/ucaps.c | 21 ++++++++++++++++-----
  1 file changed, 16 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/infiniband/core/ucaps.c b/drivers/infiniband/core/ucaps.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/ucaps.c
 +++ b/drivers/infiniband/core/ucaps.c
 @@ -3,6 +3,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucaps.c
  #include <linux/kref.h>
  #include <linux/cdev.h>
  #include <linux/mutex.h>
-@@ -28,7 +31,11 @@ static const char *ucap_names[RDMA_UCAP_
+@@ -28,7 +31,11 @@ static const char *ucap_names[RDMA_UCAP_MAX] = {
  	[RDMA_UCAP_MLX5_CTRL_OTHER_VHCA] = "mlx5_perm_ctrl_other_vhca"
  };
  
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucaps.c
  {
  	if (mode)
  		*mode = 0600;
-@@ -36,7 +43,7 @@ static char *ucaps_devnode(const struct
+@@ -36,7 +43,7 @@ static char *ucaps_devnode(const struct device *dev, umode_t *mode)
  	return kasprintf(GFP_KERNEL, "infiniband/%s", dev_name(dev));
  }
  
@@ -38,7 +40,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/ucaps.c
  	.name = "infiniband_ucaps",
  	.devnode = ucaps_devnode,
  };
-@@ -53,13 +60,15 @@ static const struct file_operations ucap
+@@ -53,13 +60,15 @@ static const struct file_operations ucaps_cdev_fops = {
   */
  void ib_cleanup_ucaps(void)
  {

@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
  fs/fuse/fuse_i.h | 22 +++++++++++++++++++++-
  1 file changed, 21 insertions(+), 1 deletion(-)
 
+diff --git a/fs/fuse/fuse_i.h b/fs/fuse/fuse_i.h
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/fuse_i.h
 +++ b/fs/fuse/fuse_i.h
-@@ -67,6 +67,10 @@ extern struct kmem_cache *fuse_inode_cac
+@@ -67,6 +67,10 @@ extern struct kmem_cache *fuse_inode_cachep;
  extern unsigned max_user_bgreq;
  extern unsigned max_user_congthresh;
  
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
  /* One forget request */
  struct fuse_forget_link {
  	struct fuse_forget_one forget_one;
-@@ -1241,7 +1245,11 @@ ssize_t __fuse_simple_request(struct mnt
+@@ -1241,7 +1245,11 @@ ssize_t __fuse_simple_request(struct mnt_idmap *idmap,
  
  static inline ssize_t fuse_simple_request(struct fuse_mount *fm, struct fuse_args *args)
  {
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
  }
  
  static inline ssize_t fuse_simple_idmap_request(struct mnt_idmap *idmap,
-@@ -1449,7 +1457,11 @@ ssize_t fuse_getxattr(struct inode *inod
+@@ -1449,7 +1457,11 @@ ssize_t fuse_getxattr(struct inode *inode, const char *name, void *value,
  		      size_t size);
  ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size);
  int fuse_removexattr(struct inode *inode, const char *name);
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/fuse_i.h
  
  struct posix_acl;
  struct posix_acl *fuse_get_inode_acl(struct inode *inode, int type, bool rcu);
-@@ -1499,9 +1511,17 @@ void fuse_dax_cancel_work(struct fuse_co
+@@ -1499,9 +1511,17 @@ void fuse_dax_cancel_work(struct fuse_conn *fc);
  long fuse_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
  long fuse_file_compat_ioctl(struct file *file, unsigned int cmd,
  			    unsigned long arg);

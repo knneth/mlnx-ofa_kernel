@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/esw/bridge.c  | 19 +++++++++++++++++++
  1 file changed, 19 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-@@ -1863,9 +1863,15 @@ int mlx5_esw_bridge_port_mdb_add(struct
+@@ -1863,9 +1863,15 @@ int mlx5_esw_bridge_port_mdb_add(struct net_device *dev, u16 vport_num, u16 esw_
  		esw_warn(br_offloads->esw->dev,
  			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
  			 addr, vport_num);
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT:
  		return -EINVAL;
  	}
  
-@@ -1876,20 +1882,33 @@ int mlx5_esw_bridge_port_mdb_add(struct
+@@ -1876,20 +1882,33 @@ int mlx5_esw_bridge_port_mdb_add(struct net_device *dev, u16 vport_num, u16 esw_
  			esw_warn(br_offloads->esw->dev,
  				 "Failed to lookup bridge port vlan metadata to create MDB (MAC=%pM,vid=%u,vport=%u)\n",
  				 addr, vid, vport_num);

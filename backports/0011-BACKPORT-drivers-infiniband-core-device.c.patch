@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 
 ---
- drivers/infiniband/core/device.c | 97 +++++++++++++++++++++++++++++---
- 1 file changed, 88 insertions(+), 9 deletions(-)
+ drivers/infiniband/core/device.c | 91 ++++++++++++++++++++++++++++----
+ 1 file changed, 81 insertions(+), 10 deletions(-)
 
+diff --git a/drivers/infiniband/core/device.c b/drivers/infiniband/core/device.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/device.c
 +++ b/drivers/infiniband/core/device.c
 @@ -46,6 +46,9 @@
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  
  /*
   * Each of the three rwsem locks (devices, clients, client_data) protects the
-@@ -211,13 +216,21 @@ static DEFINE_SPINLOCK(ndev_hash_lock);
+@@ -212,13 +217,19 @@ static DEFINE_SPINLOCK(ndev_hash_lock);
  static DECLARE_HASHTABLE(ndev_hash, 5);
  
  static void free_netdevs(struct ib_device *ib_dev);
@@ -35,7 +37,6 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  static void ib_unregister_work(struct work_struct *work);
 +#endif
  static void __ib_unregister_device(struct ib_device *device);
-+#if defined(HAVE_REGISTER_BLOCKING_LSM_NOTIFIER) || defined (HAVE_REGISTER_LSM_NOTIFIER)
  static int ib_security_change(struct notifier_block *nb, unsigned long event,
  			      void *lsm_data);
  static void ib_policy_change_task(struct work_struct *work);
@@ -44,12 +45,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
 +static struct notifier_block ibdev_lsm_nb = {
 +	.notifier_call = ib_security_change,
 +};
-+#endif
 +
  static void __ibdev_printk(const char *level, const struct ib_device *ibdev,
  			   struct va_format *vaf)
  {
-@@ -261,10 +274,6 @@ define_ibdev_printk_level(ibdev_warn, KE
+@@ -262,10 +273,6 @@ define_ibdev_printk_level(ibdev_warn, KERN_WARNING);
  define_ibdev_printk_level(ibdev_notice, KERN_NOTICE);
  define_ibdev_printk_level(ibdev_info, KERN_INFO);
  
@@ -60,7 +60,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  static int rdma_dev_change_netns(struct ib_device *device, struct net *cur_net,
  				 struct net *net);
  
-@@ -433,6 +442,7 @@ int ib_device_rename(struct ib_device *i
+@@ -434,6 +441,7 @@ int ib_device_rename(struct ib_device *ibdev, const char *name)
  	}
  
  	strscpy(ibdev->name, name, IB_DEVICE_NAME_MAX);
@@ -68,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  	ret = rename_compat_devs(ibdev);
  
  	downgrade_write(&devices_rwsem);
-@@ -465,11 +475,15 @@ static int alloc_name(struct ib_device *
+@@ -466,9 +474,9 @@ static int alloc_name(struct ib_device *ibdev, const char *name)
  {
  	struct ib_device *device;
  	unsigned long index;
@@ -77,39 +77,52 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  	int rc;
 -	int i;
  
-+#ifdef HAVE_LOCKUP_ASSERT_HELD_WRITE
  	lockdep_assert_held_write(&devices_rwsem);
-+#else
-+	lockdep_assert_held_exclusive(&devices_rwsem);
-+#endif
  	ida_init(&inuse);
- 	xa_for_each (&devices, index, device) {
- 		char buf[IB_DEVICE_NAME_MAX];
-@@ -523,7 +537,11 @@ static void ib_device_release(struct dev
+@@ -524,8 +532,14 @@ static void ib_device_release(struct device *device)
  	kfree_rcu(dev, rcu_head);
  }
  
-+#ifdef HAVE_NET_NAMESPACE_GET_CONST_DEVICE
++#if defined(HAVE_NET_NAMESPACE_RETURNS_NS_COMMON) || defined(HAVE_NET_NAMESPACE_GET_CONST_DEVICE)
++/* Newer kernels (7.0+/6.x+): dev_uevent takes const struct device or return const device*/
  static int ib_device_uevent(const struct device *device,
+-			    struct kobj_uevent_env *env)
 +#else
++/* Older kernels: dev_uevent takes non-const struct device * */
 +static int ib_device_uevent(struct device *device,
 +#endif
- 			    struct kobj_uevent_env *env)
++				struct kobj_uevent_env *env)
  {
  	if (add_uevent_var(env, "NAME=%s", dev_name(device)))
-@@ -536,7 +554,11 @@ static int ib_device_uevent(const struct
+ 		return -ENOMEM;
+@@ -537,12 +551,26 @@ static int ib_device_uevent(const struct device *device,
  	return 0;
  }
  
-+#ifdef HAVE_NET_NAMESPACE_GET_CONST_DEVICE
++#ifdef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
++/* Newer kernels (7.0+): class.namespace returns const struct ns_common * */
++static const struct ns_common *net_namespace(const struct device *d)
++#elif defined(HAVE_NET_NAMESPACE_GET_CONST_DEVICE)
++/* Older kernels (6.x): const struct device * param, const void * return */
  static const void *net_namespace(const struct device *d)
 +#else
++/* Oldest kernels: non-const struct device * param */
 +static const void *net_namespace(struct device *d)
 +#endif
  {
  	const struct ib_core_device *coredev =
  			container_of(d, struct ib_core_device, dev);
-@@ -633,7 +655,9 @@ struct ib_device *_ib_alloc_device(size_
++#ifdef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
++	struct net *net = read_pnet(&coredev->rdma_net);
+ 
++	return net ? to_ns_common(net) : NULL;
++#else
+ 	return read_pnet(&coredev->rdma_net);
++#endif
+ }
+ 
+ static struct class ib_class = {
+@@ -634,7 +662,9 @@ struct ib_device *_ib_alloc_device(size_t size, struct net *net)
  	xa_init_flags(&device->compat_devs, XA_FLAGS_ALLOC);
  	mutex_init(&device->compat_devs_mutex);
  	init_completion(&device->unreg_completion);
@@ -119,23 +132,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  
  	spin_lock_init(&device->cq_pools_lock);
  	for (i = 0; i < ARRAY_SIZE(device->cq_pools); i++)
-@@ -915,6 +939,7 @@ void ib_get_device_fw_str(struct ib_devi
- }
- EXPORT_SYMBOL(ib_get_device_fw_str);
- 
-+#if defined(HAVE_REGISTER_BLOCKING_LSM_NOTIFIER) || defined (HAVE_REGISTER_LSM_NOTIFIER)
- static void ib_policy_change_task(struct work_struct *work)
- {
- 	struct ib_device *dev;
-@@ -944,6 +969,7 @@ static int ib_security_change(struct not
- 
- 	return NOTIFY_OK;
- }
-+#endif /* HAVE_REGISTER_BLOCKING_LSM_NOTIFIER */
- 
- static void compatdev_release(struct device *dev)
- {
-@@ -1659,6 +1685,7 @@ void ib_unregister_driver(enum rdma_driv
+@@ -1660,6 +1690,7 @@ void ib_unregister_driver(enum rdma_driver_id driver_id)
  }
  EXPORT_SYMBOL(ib_unregister_driver);
  
@@ -143,7 +140,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  static void ib_unregister_work(struct work_struct *work)
  {
  	struct ib_device *ib_dev =
-@@ -1667,6 +1694,7 @@ static void ib_unregister_work(struct wo
+@@ -1668,6 +1699,7 @@ static void ib_unregister_work(struct work_struct *work)
  	__ib_unregister_device(ib_dev);
  	put_device(&ib_dev->dev);
  }
@@ -151,7 +148,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  
  /**
   * ib_unregister_device_queued - Unregister a device using a work queue
-@@ -1679,6 +1707,7 @@ static void ib_unregister_work(struct wo
+@@ -1680,6 +1712,7 @@ static void ib_unregister_work(struct work_struct *work)
   * Drivers using this API must use ib_unregister_driver before module unload
   * to ensure that all scheduled unregistrations have completed.
   */
@@ -159,7 +156,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  void ib_unregister_device_queued(struct ib_device *ib_dev)
  {
  	WARN_ON(!refcount_read(&ib_dev->refcount));
-@@ -1688,6 +1717,7 @@ void ib_unregister_device_queued(struct
+@@ -1689,6 +1722,7 @@ void ib_unregister_device_queued(struct ib_device *ib_dev)
  		put_device(&ib_dev->dev);
  }
  EXPORT_SYMBOL(ib_unregister_device_queued);
@@ -167,7 +164,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  
  /*
   * The caller must pass in a device that has the kref held and the refcount
-@@ -2248,12 +2278,20 @@ int ib_device_set_netdev(struct ib_devic
+@@ -2249,12 +2283,20 @@ int ib_device_set_netdev(struct ib_device *ib_dev, struct net_device *ndev,
  		return 0;
  	}
  
@@ -188,7 +185,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  
  	/* Make sure that the device is registered before we send events */
  	if (xa_load(&devices, ib_dev->index) != ib_dev)
-@@ -2293,7 +2331,11 @@ static void free_netdevs(struct ib_devic
+@@ -2294,7 +2336,11 @@ static void free_netdevs(struct ib_device *ib_dev)
  			 * comparisons after the put
  			 */
  			rcu_assign_pointer(pdata->netdev, NULL);
@@ -200,7 +197,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  		}
  		spin_unlock_irqrestore(&pdata->netdev_lock, flags);
  	}
-@@ -2374,7 +2416,7 @@ struct ib_device *ib_device_get_by_netde
+@@ -2375,7 +2421,7 @@ struct ib_device *ib_device_get_by_netdev(struct net_device *ndev,
  	struct ib_port_data *cur;
  
  	rcu_read_lock();
@@ -209,7 +206,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  				    (uintptr_t)ndev) {
  		if (rcu_access_pointer(cur->netdev) == ndev &&
  		    (driver_id == RDMA_DRIVER_UNKNOWN ||
-@@ -2793,6 +2835,9 @@ void ib_set_device_ops(struct ib_device
+@@ -2825,6 +2871,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
  	SET_DEVICE_OP(dev_ops, get_vf_config);
  	SET_DEVICE_OP(dev_ops, get_vf_guid);
  	SET_DEVICE_OP(dev_ops, get_vf_stats);
@@ -219,7 +216,27 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  	SET_DEVICE_OP(dev_ops, iw_accept);
  	SET_DEVICE_OP(dev_ops, iw_add_ref);
  	SET_DEVICE_OP(dev_ops, iw_connect);
-@@ -3045,20 +3090,34 @@ static int __init ib_core_init(void)
+@@ -2836,7 +2885,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
+ 	SET_DEVICE_OP(dev_ops, map_mr_sg);
+ 	SET_DEVICE_OP(dev_ops, map_mr_sg_pi);
+ 	SET_DEVICE_OP(dev_ops, mmap);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	SET_DEVICE_OP(dev_ops, mmap_get_pfns);
++#endif
+ 	SET_DEVICE_OP(dev_ops, mmap_free);
+ 	SET_DEVICE_OP(dev_ops, modify_ah);
+ 	SET_DEVICE_OP(dev_ops, modify_cq);
+@@ -2847,7 +2898,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
+ 	SET_DEVICE_OP(dev_ops, modify_srq);
+ 	SET_DEVICE_OP(dev_ops, modify_wq);
+ 	SET_DEVICE_OP(dev_ops, peek_cq);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	SET_DEVICE_OP(dev_ops, pgoff_to_mmap_entry);
++#endif
+ 	SET_DEVICE_OP(dev_ops, pre_destroy_cq);
+ 	SET_DEVICE_OP(dev_ops, poll_cq);
+ 	SET_DEVICE_OP(dev_ops, port_groups);
+@@ -3079,20 +3132,34 @@ static int __init ib_core_init(void)
  	if (!ib_wq)
  		return -ENOMEM;
  
@@ -257,41 +274,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  	if (!ib_comp_unbound_wq)
  		goto err_comp;
  
-@@ -3088,11 +3147,17 @@ static int __init ib_core_init(void)
- 		goto err_mad;
- 	}
- 
-+#if defined(HAVE_REGISTER_BLOCKING_LSM_NOTIFIER) || defined(HAVE_REGISTER_LSM_NOTIFIER)
-+#ifdef HAVE_REGISTER_BLOCKING_LSM_NOTIFIER
- 	ret = register_blocking_lsm_notifier(&ibdev_lsm_nb);
-+#elif defined(HAVE_REGISTER_LSM_NOTIFIER)
-+       ret = register_lsm_notifier(&ibdev_lsm_nb);
-+#endif /* HAVE_REGISTER_BLOCKING_LSM_NOTIFIER */
- 	if (ret) {
- 		pr_warn("Couldn't register LSM notifier. ret %d\n", ret);
- 		goto err_sa;
- 	}
-+#endif
- 
- 	ret = register_pernet_device(&rdma_dev_net_ops);
- 	if (ret) {
-@@ -3117,9 +3182,15 @@ err_parent:
- 	nldev_exit();
- 	unregister_pernet_device(&rdma_dev_net_ops);
- err_compat:
-+#if defined(HAVE_REGISTER_BLOCKING_LSM_NOTIFIER) || defined(HAVE_REGISTER_LSM_NOTIFIER)
-+#ifdef HAVE_REGISTER_BLOCKING_LSM_NOTIFIER
- 	unregister_blocking_lsm_notifier(&ibdev_lsm_nb);
-+#elif defined(HAVE_REGISTER_LSM_NOTIFIER)
-+	unregister_lsm_notifier(&ibdev_lsm_nb);
-+#endif /* HAVE_REGISTER_BLOCKING_LSM_NOTIFIER */
- err_sa:
- 	ib_sa_cleanup();
-+#endif
- err_mad:
- 	ib_mad_cleanup();
- err_addr:
-@@ -3131,8 +3202,10 @@ err_comp_unbound:
+@@ -3165,8 +3232,10 @@ err_comp_unbound:
  err_comp:
  	destroy_workqueue(ib_comp_wq);
  err_unbound:
@@ -302,19 +285,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
  	destroy_workqueue(ib_wq);
  	return ret;
  }
-@@ -3144,7 +3217,11 @@ static void __exit ib_core_cleanup(void)
- 	rdma_nl_unregister(RDMA_NL_LS);
- 	nldev_exit();
- 	unregister_pernet_device(&rdma_dev_net_ops);
-+#ifdef HAVE_REGISTER_BLOCKING_LSM_NOTIFIER
- 	unregister_blocking_lsm_notifier(&ibdev_lsm_nb);
-+#elif defined(HAVE_REGISTER_LSM_NOTIFIER)
-+	unregister_lsm_notifier(&ibdev_lsm_nb);
-+#endif
- 	ib_sa_cleanup();
- 	ib_mad_cleanup();
- 	addr_cleanup();
-@@ -3154,7 +3231,9 @@ static void __exit ib_core_cleanup(void)
+@@ -3188,7 +3257,9 @@ static void __exit ib_core_cleanup(void)
  	destroy_workqueue(ib_comp_wq);
  	/* Make sure that any pending umem accounting work is done. */
  	destroy_workqueue(ib_wq);

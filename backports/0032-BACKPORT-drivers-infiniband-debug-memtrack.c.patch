@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/debug/memtrack.c
  drivers/infiniband/debug/memtrack.c | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
+diff --git a/drivers/infiniband/debug/memtrack.c b/drivers/infiniband/debug/memtrack.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/debug/memtrack.c
 +++ b/drivers/infiniband/debug/memtrack.c
-@@ -1082,9 +1082,15 @@ static ssize_t memtrack_read(struct file
+@@ -1092,9 +1092,15 @@ static ssize_t memtrack_read(struct file *filp,
  	}
  }
  
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/debug/memtrack.c
  
  static const char *memtrack_proc_entry_name = "mt_memtrack";
  
-@@ -1103,7 +1109,11 @@ static int create_procfs_tree(void)
+@@ -1113,7 +1119,11 @@ static int create_procfs_tree(void)
  
  	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
  		if (bit_mask & track_mask) {

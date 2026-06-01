@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 
 ---
- net/sunrpc/xprtrdma/svc_rdma_sendto.c | 614 +++++++++++++++++++++++++-
- 1 file changed, 613 insertions(+), 1 deletion(-)
+ net/sunrpc/xprtrdma/svc_rdma_sendto.c | 604 +++++++++++++++++++++++++-
+ 1 file changed, 603 insertions(+), 1 deletion(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_sendto.c b/net/sunrpc/xprtrdma/svc_rdma_sendto.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_sendto.c
 @@ -109,7 +109,9 @@
@@ -17,17 +19,9 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  static void svc_rdma_wc_send(struct ib_cq *cq, struct ib_wc *wc);
  
-@@ -212,14 +214,21 @@ struct svc_rdma_send_ctxt *svc_rdma_send
- 
- out:
- 	rpcrdma_set_xdrlen(&ctxt->sc_hdrbuf, 0);
-+#ifdef HAVE_XDR_INIT_ENCODE_RQST_ARG
+@@ -215,11 +217,13 @@ out:
  	xdr_init_encode(&ctxt->sc_stream, &ctxt->sc_hdrbuf,
  			ctxt->sc_xprt_buf, NULL);
-+#else
-+	xdr_init_encode(&ctxt->sc_stream, &ctxt->sc_hdrbuf,
-+			ctxt->sc_xprt_buf);
-+#endif
  
 +#ifdef HAVE_SVC_RDMA_PCL
  	svc_rdma_cc_init(rdma, &ctxt->sc_reply_info.wi_cc);
@@ -40,7 +34,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  	ctxt->sc_sqecount = 1;
  
  	return ctxt;
-@@ -231,6 +240,7 @@ out_empty:
+@@ -231,6 +235,7 @@ out_empty:
  	goto out;
  }
  
@@ -48,7 +42,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  static void svc_rdma_send_ctxt_release(struct svcxprt_rdma *rdma,
  				       struct svc_rdma_send_ctxt *ctxt)
  {
-@@ -239,16 +249,23 @@ static void svc_rdma_send_ctxt_release(s
+@@ -239,16 +244,23 @@ static void svc_rdma_send_ctxt_release(struct svcxprt_rdma *rdma,
  
  	svc_rdma_reply_chunk_release(rdma, ctxt);
  
@@ -72,7 +66,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  		ib_dma_unmap_page(device,
  				  ctxt->sc_sges[i].addr,
  				  ctxt->sc_sges[i].length,
-@@ -279,6 +296,39 @@ void svc_rdma_send_ctxt_put(struct svcxp
+@@ -279,6 +291,39 @@ void svc_rdma_send_ctxt_put(struct svcxprt_rdma *rdma,
  	INIT_WORK(&ctxt->sc_work, svc_rdma_send_ctxt_put_async);
  	queue_work(svcrdma_wq, &ctxt->sc_work);
  }
@@ -112,7 +106,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  /**
   * svc_rdma_wake_send_waiters - manage Send Queue accounting
-@@ -314,19 +364,29 @@ static void svc_rdma_wc_send(struct ib_c
+@@ -314,19 +359,29 @@ static void svc_rdma_wc_send(struct ib_cq *cq, struct ib_wc *wc)
  	if (unlikely(wc->status != IB_WC_SUCCESS))
  		goto flushed;
  
@@ -142,7 +136,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  /**
   * svc_rdma_post_send - Post a WR chain to the Send Queue
   * @rdma: transport context
-@@ -351,7 +411,9 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -351,7 +406,9 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  	struct ib_send_wr *first_wr = ctxt->sc_wr_chain;
  	struct ib_send_wr *send_wr = &ctxt->sc_send_wr;
  	const struct ib_send_wr *bad_wr = first_wr;
@@ -152,7 +146,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  	int ret, sqecount = ctxt->sc_sqecount;
  
  	might_sleep();
-@@ -374,17 +436,26 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -374,17 +431,26 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  			 * exit.
  			 */
  			percpu_counter_inc(&svcrdma_stat_sq_starve);
@@ -179,7 +173,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  			svc_xprt_deferred_close(&rdma->sc_xprt);
  
  			/* If even one WR was posted, there will be a
-@@ -394,11 +465,75 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -394,11 +460,75 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  				svc_rdma_wake_send_waiters(rdma, sqecount);
  				break;
  			}
@@ -255,7 +249,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  /**
   * svc_rdma_encode_read_list - Encode RPC Reply's Read chunk list
-@@ -415,6 +550,7 @@ static ssize_t svc_rdma_encode_read_list
+@@ -415,6 +545,7 @@ static ssize_t svc_rdma_encode_read_list(struct svc_rdma_send_ctxt *sctxt)
  	return xdr_stream_encode_item_absent(&sctxt->sc_stream);
  }
  
@@ -263,7 +257,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  /**
   * svc_rdma_encode_write_segment - Encode one Write segment
   * @sctxt: Send context for the RPC Reply
-@@ -444,11 +580,43 @@ static ssize_t svc_rdma_encode_write_seg
+@@ -444,11 +575,43 @@ static ssize_t svc_rdma_encode_write_segment(struct svc_rdma_send_ctxt *sctxt,
  	*remaining -= length;
  	xdr_encode_rdma_segment(p, segment->rs_handle, length,
  				segment->rs_offset);
@@ -271,8 +265,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  	trace_svcrdma_encode_wseg(sctxt, segno, segment->rs_handle, length,
  				  segment->rs_offset);
 +#endif
- 	return len;
- }
++	return len;
++}
 +#else
 +static ssize_t svc_rdma_encode_write_segment(__be32 *src,
 +					     struct svc_rdma_send_ctxt *sctxt,
@@ -282,7 +276,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +	const size_t len = rpcrdma_segment_maxsz * sizeof(*p);
 +	u32 handle, length;
 +	u64 offset;
- 
++
 +	p = xdr_reserve_space(&sctxt->sc_stream, len);
 +	if (!p)
 +		return -EMSGSIZE;
@@ -299,15 +293,15 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +	}
 +	xdr_encode_rdma_segment(p, handle, length, offset);
 +
-+	return len;
-+}
+ 	return len;
+ }
 +#endif
-+
+ 
 +#ifdef HAVE_SVC_RDMA_PCL
  /**
   * svc_rdma_encode_write_chunk - Encode one Write chunk
   * @sctxt: Send context for the RPC Reply
-@@ -490,7 +658,41 @@ static ssize_t svc_rdma_encode_write_chu
+@@ -490,7 +653,41 @@ static ssize_t svc_rdma_encode_write_chunk(struct svc_rdma_send_ctxt *sctxt,
  
  	return len;
  }
@@ -349,7 +343,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  /**
   * svc_rdma_encode_write_list - Encode RPC Reply's Write chunk list
   * @rctxt: Reply context with information about the RPC Call
-@@ -522,6 +724,27 @@ static ssize_t svc_rdma_encode_write_lis
+@@ -522,6 +719,27 @@ static ssize_t svc_rdma_encode_write_list(struct svc_rdma_recv_ctxt *rctxt,
  
  	return len + ret;
  }
@@ -377,7 +371,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  /**
   * svc_rdma_encode_reply_chunk - Encode RPC Reply's Reply chunk
-@@ -535,6 +758,7 @@ static ssize_t svc_rdma_encode_write_lis
+@@ -535,6 +753,7 @@ static ssize_t svc_rdma_encode_write_list(struct svc_rdma_recv_ctxt *rctxt,
   *   %-EMSGSIZE on XDR buffer overflow
   *   %-E2BIG if the RPC message is larger than the Reply chunk
   */
@@ -385,7 +379,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  static ssize_t
  svc_rdma_encode_reply_chunk(struct svc_rdma_recv_ctxt *rctxt,
  			    struct svc_rdma_send_ctxt *sctxt,
-@@ -552,7 +776,18 @@ svc_rdma_encode_reply_chunk(struct svc_r
+@@ -552,7 +771,18 @@ svc_rdma_encode_reply_chunk(struct svc_rdma_recv_ctxt *rctxt,
  	chunk->ch_payload_length = length;
  	return svc_rdma_encode_write_chunk(sctxt, chunk);
  }
@@ -404,7 +398,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  struct svc_rdma_map_data {
  	struct svcxprt_rdma		*md_rdma;
  	struct svc_rdma_send_ctxt	*md_ctxt;
-@@ -584,17 +819,45 @@ static int svc_rdma_page_dma_map(void *d
+@@ -584,17 +814,45 @@ static int svc_rdma_page_dma_map(void *data, struct page *page,
  	if (ib_dma_mapping_error(dev, dma_addr))
  		goto out_maperr;
  
@@ -450,7 +444,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  /**
   * svc_rdma_iov_dma_map - DMA map an iovec
   * @data: pointer to arguments
-@@ -659,7 +922,21 @@ static int svc_rdma_xb_dma_map(const str
+@@ -659,7 +917,21 @@ static int svc_rdma_xb_dma_map(const struct xdr_buf *xdr, void *data)
  
  	return xdr->len;
  }
@@ -472,7 +466,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  struct svc_rdma_pullup_data {
  	u8		*pd_dest;
  	unsigned int	pd_length;
-@@ -807,10 +1084,130 @@ static int svc_rdma_pull_up_reply_msg(co
+@@ -807,10 +1079,130 @@ static int svc_rdma_pull_up_reply_msg(const struct svcxprt_rdma *rdma,
  		return ret;
  
  	sctxt->sc_sges[0].length = sctxt->sc_hdrbuf.len + args.pd_length;
@@ -530,7 +524,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +	/* xdr->tail */
 +	if (xdr->tail[0].iov_len)
 +		++elements;
- 
++
 +	/* assume 1 SGE is needed for the transport header */
 +	return elements >= rdma->sc_max_send_sges;
 +}
@@ -587,7 +581,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +			ppages++;
 +		}
 +	}
-+
+ 
 +	if (taillen)
 +		memcpy(dst, tailbase, taillen);
 +
@@ -603,7 +597,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  /* svc_rdma_map_reply_msg - DMA map the buffer holding RPC message
   * @rdma: controlling transport
   * @sctxt: send_ctxt for the Send WR
-@@ -855,6 +1252,89 @@ int svc_rdma_map_reply_msg(struct svcxpr
+@@ -855,6 +1247,89 @@ int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
  	return pcl_process_nonpayloads(write_pcl, xdr,
  				       svc_rdma_xb_dma_map, &args);
  }
@@ -693,7 +687,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  /* The svc_rqst and all resources it owns are released as soon as
   * svc_rdma_sendto returns. Transfer pages under I/O to the ctxt
-@@ -895,8 +1375,12 @@ static int svc_rdma_send_reply_msg(struc
+@@ -895,8 +1370,12 @@ static int svc_rdma_send_reply_msg(struct svcxprt_rdma *rdma,
  	struct ib_send_wr *send_wr = &sctxt->sc_send_wr;
  	int ret;
  
@@ -706,7 +700,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  	if (ret < 0)
  		return ret;
  
-@@ -912,7 +1396,11 @@ static int svc_rdma_send_reply_msg(struc
+@@ -912,7 +1391,11 @@ static int svc_rdma_send_reply_msg(struct svcxprt_rdma *rdma,
  		send_wr->opcode = IB_WR_SEND;
  	}
  
@@ -718,21 +712,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  }
  
  /**
-@@ -939,8 +1427,13 @@ void svc_rdma_send_error_msg(struct svcx
- 	__be32 *p;
- 
- 	rpcrdma_set_xdrlen(&sctxt->sc_hdrbuf, 0);
-+#ifdef HAVE_XDR_INIT_ENCODE_RQST_ARG
- 	xdr_init_encode(&sctxt->sc_stream, &sctxt->sc_hdrbuf,
- 			sctxt->sc_xprt_buf, NULL);
-+#else
-+	xdr_init_encode(&sctxt->sc_stream, &sctxt->sc_hdrbuf,
-+			sctxt->sc_xprt_buf);
-+#endif
- 
- 	p = xdr_reserve_space(&sctxt->sc_stream,
- 			      rpcrdma_fixed_maxsz * sizeof(*p));
-@@ -961,7 +1454,9 @@ void svc_rdma_send_error_msg(struct svcx
+@@ -961,7 +1444,9 @@ void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
  		*p++ = err_vers;
  		*p++ = rpcrdma_version;
  		*p = rpcrdma_version;
@@ -742,7 +722,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  		break;
  	default:
  		p = xdr_reserve_space(&sctxt->sc_stream, sizeof(*p));
-@@ -969,14 +1464,20 @@ void svc_rdma_send_error_msg(struct svcx
+@@ -969,14 +1454,20 @@ void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
  			goto put_ctxt;
  
  		*p = err_chunk;
@@ -763,7 +743,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  		goto put_ctxt;
  	return;
  
-@@ -1004,13 +1505,21 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -1004,13 +1495,21 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  	struct svc_rdma_recv_ctxt *rctxt = rqstp->rq_xprt_ctxt;
  	__be32 *rdma_argp = rctxt->rc_recv_buf;
  	struct svc_rdma_send_ctxt *sctxt;
@@ -785,7 +765,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  	ret = -ENOMEM;
  	sctxt = svc_rdma_send_ctxt_get(rdma);
-@@ -1023,6 +1532,7 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -1023,6 +1522,7 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  	if (!p)
  		goto put_ctxt;
  
@@ -793,7 +773,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  	ret = svc_rdma_send_write_list(rdma, rctxt, &rqstp->rq_res);
  	if (ret < 0)
  		goto put_ctxt;
-@@ -1036,26 +1546,76 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -1036,26 +1536,76 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  			goto reply_chunk;
  		rc_size = ret;
  	}
@@ -870,7 +850,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  reply_chunk:
  	if (ret != -E2BIG && ret != -EINVAL)
-@@ -1066,15 +1626,48 @@ reply_chunk:
+@@ -1066,15 +1616,48 @@ reply_chunk:
  	 */
  	svc_rdma_save_io_pages(rqstp, sctxt);
  	svc_rdma_send_error_msg(rdma, sctxt, rctxt, ret);
@@ -919,7 +899,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  
  /**
   * svc_rdma_result_payload - special processing for a result payload
-@@ -1090,6 +1683,8 @@ drop_connection:
+@@ -1090,6 +1673,8 @@ drop_connection:
   *   %0 if successful or nothing needed to be done
   *   %-E2BIG if the payload was larger than the Write chunk
   */
@@ -928,7 +908,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_sendto.c
  int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
  			    unsigned int length)
  {
-@@ -1108,3 +1703,20 @@ int svc_rdma_result_payload(struct svc_r
+@@ -1108,3 +1693,20 @@ int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
  	chunk->ch_payload_length = length;
  	return 0;
  }

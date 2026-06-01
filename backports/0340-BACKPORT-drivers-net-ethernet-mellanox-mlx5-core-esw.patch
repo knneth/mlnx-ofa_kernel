@@ -4,9 +4,11 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
 ---
- .../mellanox/mlx5/core/esw/devlink_port.c     | 131 +++++++++++++++++-
- 1 file changed, 125 insertions(+), 6 deletions(-)
+ .../mellanox/mlx5/core/esw/devlink_port.c     | 129 +++++++++++++++++-
+ 1 file changed, 123 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/devlink_port.c
 @@ -2,14 +2,19 @@
@@ -29,7 +31,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  
  bool mlx5_esw_devlink_port_supported(struct mlx5_eswitch *esw, u16 vport_num)
  {
-@@ -22,23 +27,39 @@ static void mlx5_esw_offloads_pf_vf_devl
+@@ -22,23 +27,39 @@ static void mlx5_esw_offloads_pf_vf_devlink_port_attrs_set(struct mlx5_eswitch *
  							   u16 vport_num,
  							   struct devlink_port *dl_port)
  {
@@ -70,7 +72,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  	} else if (mlx5_eswitch_is_vf_vport(esw, vport_num)) {
  		u16 func_id = vport_num - 1;
  
-@@ -50,16 +71,45 @@ static void mlx5_esw_offloads_pf_vf_devl
+@@ -50,16 +71,45 @@ static void mlx5_esw_offloads_pf_vf_devlink_port_attrs_set(struct mlx5_eswitch *
  			pfnum = vport->adj_info.parent_pci_devfn;
  		}
  
@@ -118,7 +120,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  }
  
  int mlx5_esw_offloads_pf_vf_devlink_port_init(struct mlx5_eswitch *esw,
-@@ -93,6 +143,7 @@ void mlx5_esw_offloads_pf_vf_devlink_por
+@@ -93,6 +143,7 @@ void mlx5_esw_offloads_pf_vf_devlink_port_cleanup(struct mlx5_eswitch *esw,
  	vport->dl_port = NULL;
  }
  
@@ -126,7 +128,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  static const struct devlink_port_ops mlx5_esw_pf_vf_dl_port_ops = {
  	.port_fn_hw_addr_get = mlx5_devlink_port_fn_hw_addr_get,
  	.port_fn_hw_addr_set = mlx5_devlink_port_fn_hw_addr_set,
-@@ -101,14 +152,19 @@ static const struct devlink_port_ops mlx
+@@ -101,14 +152,19 @@ static const struct devlink_port_ops mlx5_esw_pf_vf_dl_port_ops = {
  	.port_fn_migratable_get = mlx5_devlink_port_fn_migratable_get,
  	.port_fn_migratable_set = mlx5_devlink_port_fn_migratable_set,
  #ifdef CONFIG_XFRM_OFFLOAD
@@ -146,14 +148,10 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  
  static void mlx5_esw_offloads_sf_devlink_port_attrs_set(struct mlx5_eswitch *esw,
  							struct devlink_port *dl_port,
-@@ -120,9 +176,16 @@ static void mlx5_esw_offloads_sf_devlink
- 
- 	pfnum = PCI_FUNC(dev->pdev->devfn);
+@@ -122,7 +178,12 @@ static void mlx5_esw_offloads_sf_devlink_port_attrs_set(struct mlx5_eswitch *esw
  	mlx5_esw_get_port_parent_id(dev, &ppid);
-+#if defined(HAVE_DEVLINK_PORT_HAS_SWITCH_ID)
  	memcpy(dl_port->attrs.switch_id.id, &ppid.id[0], ppid.id_len);
  	dl_port->attrs.switch_id.id_len = ppid.id_len;
-+#endif
 +#if defined(HAVE_DEVLINK_PORT_HAS_SWITCH_PORT)
 +	dl_port->attrs.switch_port = true;
 +#endif
@@ -163,7 +161,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  }
  
  int mlx5_esw_offloads_sf_devlink_port_init(struct mlx5_eswitch *esw, struct mlx5_vport *vport,
-@@ -141,9 +204,12 @@ void mlx5_esw_offloads_sf_devlink_port_c
+@@ -141,9 +202,12 @@ void mlx5_esw_offloads_sf_devlink_port_cleanup(struct mlx5_eswitch *esw, struct
  	vport->dl_port = NULL;
  }
  
@@ -176,7 +174,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  #endif
  	.port_fn_hw_addr_get = mlx5_devlink_port_fn_hw_addr_get,
  	.port_fn_hw_addr_set = mlx5_devlink_port_fn_hw_addr_set,
-@@ -153,9 +219,12 @@ static const struct devlink_port_ops mlx
+@@ -153,9 +217,12 @@ static const struct devlink_port_ops mlx5_esw_dl_sf_port_ops = {
  	.port_fn_state_get = mlx5_devlink_sf_port_fn_state_get,
  	.port_fn_state_set = mlx5_devlink_sf_port_fn_state_set,
  #endif
@@ -189,7 +187,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  
  int mlx5_esw_offloads_devlink_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
  {
-@@ -165,34 +234,71 @@ int mlx5_esw_offloads_devlink_port_regis
+@@ -165,34 +232,71 @@ int mlx5_esw_offloads_devlink_port_register(struct mlx5_eswitch *esw, struct mlx
  	u16 vport_num = vport->vport;
  	unsigned int dl_port_index;
  	struct devlink *devlink;
@@ -263,7 +261,7 @@ Change-Id: I665ee8f5126f39657630b05b92900b1c2759f446
  }
  
  void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_vport *vport)
-@@ -203,10 +309,23 @@ void mlx5_esw_offloads_devlink_port_unre
+@@ -203,10 +307,23 @@ void mlx5_esw_offloads_devlink_port_unregister(struct mlx5_vport *vport)
  		return;
  	dl_port = vport->dl_port;
  

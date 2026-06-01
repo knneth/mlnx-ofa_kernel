@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 
 ---
- net/mlxdevm/netlink_gen.c | 315 ++++++++++++++++++++++++++++++++++++++
- 1 file changed, 315 insertions(+)
+ net/mlxdevm/netlink_gen.c | 271 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 271 insertions(+)
 
+diff --git a/net/mlxdevm/netlink_gen.c b/net/mlxdevm/netlink_gen.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/netlink_gen.c
 +++ b/net/mlxdevm/netlink_gen.c
 @@ -7,6 +7,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  
  #include <uapi/linux/devlink.h>
  
-@@ -623,6 +626,7 @@ static const struct nla_policy devlink_n
+@@ -623,6 +626,7 @@ static const struct nla_policy devlink_notify_filter_set_nl_policy[DEVLINK_ATTR_
  #endif
  
  /* Ops table for mlxdevm */
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  const struct genl_split_ops mlxdevm_nl_ops[29] = {
  	{
  		.cmd		= MLXDEVM_CMD_GET,
-@@ -1315,3 +1319,314 @@ const struct genl_split_ops mlxdevm_nl_o
+@@ -1315,3 +1319,270 @@ const struct genl_split_ops mlxdevm_nl_ops[29] = {
  	},
  #endif
  };
@@ -33,9 +35,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +const struct genl_ops mlxdevm_nl_ops[22] = {
 +	{
 +		.cmd		= MLXDEVM_CMD_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_get_doit,
 +		.dumpit		= mlxdevm_nl_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -47,9 +47,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PORT_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_port_get_doit,
 +		.dumpit		= mlxdevm_nl_port_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -61,9 +59,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PORT_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_port_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_port_set_nl_policy,
@@ -75,9 +71,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PORT_NEW,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_port_new_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_port_new_nl_policy,
@@ -89,9 +83,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PORT_DEL,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_port_del_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_port_del_nl_policy,
@@ -103,9 +95,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_ESWITCH_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_eswitch_get_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_eswitch_get_nl_policy,
@@ -117,9 +107,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_ESWITCH_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_eswitch_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_eswitch_set_nl_policy,
@@ -131,9 +119,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_DPIPE_TABLE_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_dpipe_table_get_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_dpipe_table_get_nl_policy,
@@ -144,9 +130,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RESOURCE_DUMP,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_resource_dump_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_resource_dump_nl_policy,
@@ -157,9 +141,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RELOAD,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_reload_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_reload_nl_policy,
@@ -171,9 +153,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PARAM_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_param_get_doit,
 +		.dumpit		= mlxdevm_nl_param_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -185,9 +165,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_PARAM_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_param_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_param_set_nl_policy,
@@ -199,9 +177,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_INFO_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_info_get_doit,
 +		.dumpit		= mlxdevm_nl_info_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -213,9 +189,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_FLASH_UPDATE,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_flash_update_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_flash_update_nl_policy,
@@ -227,9 +201,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_TRAP_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_trap_get_doit,
 +		.dumpit		= mlxdevm_nl_trap_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -241,9 +213,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_TRAP_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_trap_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_trap_set_nl_policy,
@@ -255,9 +225,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_TRAP_GROUP_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_trap_group_get_doit,
 +		.dumpit		= mlxdevm_nl_trap_group_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -270,9 +238,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_TRAP_GROUP_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
-+#endif
 +		.doit		= mlxdevm_nl_trap_group_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_trap_group_set_nl_policy,
@@ -284,9 +250,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RATE_GET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT,
-+#endif
 +		.doit		= mlxdevm_nl_rate_get_doit,
 +		.dumpit		= mlxdevm_nl_rate_get_dumpit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
@@ -298,9 +262,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RATE_SET,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT,
-+#endif
 +		.doit		= mlxdevm_nl_rate_set_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_rate_set_nl_policy,
@@ -312,9 +274,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RATE_NEW,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT,
-+#endif
 +		.doit		= mlxdevm_nl_rate_new_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_rate_new_nl_policy,
@@ -326,9 +286,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
 +	},
 +	{
 +		.cmd		= MLXDEVM_CMD_RATE_DEL,
-+#ifdef HAVE_GENL_OPS_VALIDATE
 +		.validate	= GENL_DONT_VALIDATE_STRICT,
-+#endif
 +		.doit		= mlxdevm_nl_rate_del_doit,
 +#ifdef HAVE_GENL_OPS_MAXATTR
 +		.policy		= mlxdevm_rate_del_nl_policy,

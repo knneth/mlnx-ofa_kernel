@@ -6,6 +6,8 @@ Change-Id: I96448adfe1b240a16fd6f06746b5f99d697716ba
  .../net/ethernet/mellanox/mlx5/core/en/rss.c  | 19 +++++++++++++++----
  1 file changed, 15 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.c
 @@ -160,8 +160,9 @@ err_free_rss:
@@ -33,7 +35,7 @@ Change-Id: I96448adfe1b240a16fd6f06746b5f99d697716ba
  {
  	if (indir)
  		memcpy(indir, rss->indir.table,
-@@ -588,12 +592,17 @@ void mlx5e_rss_get_rxfh(struct mlx5e_rss
+@@ -588,12 +592,17 @@ void mlx5e_rss_get_rxfh(struct mlx5e_rss *rss, u32 *indir, u8 *key, u8 *hfunc,
  	if (hfunc)
  		*hfunc = rss->hash.hfunc;
  
@@ -52,7 +54,7 @@ Change-Id: I96448adfe1b240a16fd6f06746b5f99d697716ba
  		       u32 *rqns, u32 *vhca_ids, unsigned int num_rqns)
  {
  	bool changed_indir = false;
-@@ -633,10 +642,12 @@ int mlx5e_rss_set_rxfh(struct mlx5e_rss
+@@ -633,10 +642,12 @@ int mlx5e_rss_set_rxfh(struct mlx5e_rss *rss, const u32 *indir,
  		       rss->indir.actual_table_size * sizeof(*rss->indir.table));
  	}
  

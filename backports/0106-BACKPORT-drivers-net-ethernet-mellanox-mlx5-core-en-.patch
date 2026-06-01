@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en/tc/post_meter.c     | 46 +++++++++++++++++++
  1 file changed, 46 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.c
 @@ -1,12 +1,20 @@
@@ -39,7 +41,7 @@ Subject: [PATCH] BACKPORT:
  };
  
  struct mlx5e_post_meter_mtu_table {
-@@ -154,6 +165,10 @@ mlx5e_post_meter_rate_rules_create(struc
+@@ -154,6 +165,10 @@ mlx5e_post_meter_rate_rules_create(struct mlx5e_priv *priv,
  	struct mlx5e_post_meter_rate_table *table = &post_meter->rate_steering_table;
  	struct mlx5_flow_handle *rule;
  	struct mlx5_flow_spec *spec;
@@ -50,7 +52,7 @@ Subject: [PATCH] BACKPORT:
  	int err;
  
  	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
-@@ -162,9 +177,20 @@ mlx5e_post_meter_rate_rules_create(struc
+@@ -162,9 +177,20 @@ mlx5e_post_meter_rate_rules_create(struct mlx5e_priv *priv,
  
  	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
  				    MLX5_FLOW_METER_COLOR_RED, MLX5_PACKET_COLOR_MASK);
@@ -71,7 +73,7 @@ Subject: [PATCH] BACKPORT:
  	if (IS_ERR(rule)) {
  		mlx5_core_warn(priv->mdev, "Failed to create post_meter exceed rule\n");
  		err = PTR_ERR(rule);
-@@ -175,9 +201,20 @@ mlx5e_post_meter_rate_rules_create(struc
+@@ -175,9 +201,20 @@ mlx5e_post_meter_rate_rules_create(struct mlx5e_priv *priv,
  
  	mlx5e_tc_match_to_reg_match(spec, PACKET_COLOR_TO_REG,
  				    MLX5_FLOW_METER_COLOR_GREEN, MLX5_PACKET_COLOR_MASK);
@@ -92,7 +94,7 @@ Subject: [PATCH] BACKPORT:
  	if (IS_ERR(rule)) {
  		mlx5_core_warn(priv->mdev, "Failed to create post_meter notexceed rule\n");
  		err = PTR_ERR(rule);
-@@ -202,8 +239,13 @@ mlx5e_post_meter_rate_rules_destroy(stru
+@@ -202,8 +239,13 @@ mlx5e_post_meter_rate_rules_destroy(struct mlx5_eswitch *esw,
  {
  	struct mlx5e_post_meter_rate_table *rate_table = &post_meter->rate_steering_table;
  
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static void
-@@ -345,6 +387,10 @@ mlx5e_post_meter_mtu_create(struct mlx5e
+@@ -345,6 +387,10 @@ mlx5e_post_meter_mtu_create(struct mlx5e_priv *priv,
  	struct mlx5_flow_handle *rule;
  	int err;
  

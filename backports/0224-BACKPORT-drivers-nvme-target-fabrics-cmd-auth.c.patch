@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fabrics-cmd-auth.c
  drivers/nvme/target/fabrics-cmd-auth.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/nvme/target/fabrics-cmd-auth.c b/drivers/nvme/target/fabrics-cmd-auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/fabrics-cmd-auth.c
 +++ b/drivers/nvme/target/fabrics-cmd-auth.c
 @@ -4,10 +4,18 @@
@@ -26,7 +28,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fabrics-cmd-auth.c
  #include <crypto/hash.h>
  #include <crypto/kpp.h>
  #include "nvmet.h"
-@@ -582,3 +590,4 @@ done:
+@@ -581,3 +589,4 @@ done:
  	}
  	nvmet_req_complete(req, status);
  }

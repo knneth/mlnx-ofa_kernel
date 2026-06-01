@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c   | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/fs_hws_pools.c
-@@ -256,7 +256,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_c
+@@ -256,7 +256,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_core_dev *dev, void *pool_ctx)
  	struct mlx5_flow_root_namespace *root_ns;
  	struct mlx5_fs_hws_mh_bulk *mh_bulk;
  	struct mlx5hws_context *ctx;
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (!pool_ctx)
  		return NULL;
-@@ -278,7 +278,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_c
+@@ -278,7 +278,7 @@ mlx5_fs_hws_mh_bulk_create(struct mlx5_core_dev *dev, void *pool_ctx)
  	if (mlx5_fs_bulk_init(dev, &mh_bulk->fs_bulk, bulk_len))
  		goto free_mh_bulk;
  

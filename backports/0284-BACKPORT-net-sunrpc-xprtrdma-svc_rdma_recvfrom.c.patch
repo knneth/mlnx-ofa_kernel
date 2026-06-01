@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 
 ---
- net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 470 ++++++++++++++++++++++++
- 1 file changed, 470 insertions(+)
+ net/sunrpc/xprtrdma/svc_rdma_recvfrom.c | 466 ++++++++++++++++++++++++
+ 1 file changed, 466 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
 @@ -92,7 +92,9 @@
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  static void svc_rdma_wc_receive(struct ib_cq *cq, struct ib_wc *wc);
  
-@@ -139,10 +143,12 @@ svc_rdma_recv_ctxt_alloc(struct svcxprt_
+@@ -139,10 +143,12 @@ svc_rdma_recv_ctxt_alloc(struct svcxprt_rdma *rdma)
  		goto fail2;
  
  	svc_rdma_recv_cid_init(rdma, &ctxt->rc_cid);
@@ -40,7 +42,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  	ctxt->rc_recv_wr.next = NULL;
  	ctxt->rc_recv_wr.wr_cqe = &ctxt->rc_cqe;
-@@ -195,6 +201,7 @@ void svc_rdma_recv_ctxts_destroy(struct
+@@ -195,6 +201,7 @@ void svc_rdma_recv_ctxts_destroy(struct svcxprt_rdma *rdma)
   *
   * Returns a recv_ctxt or (rarely) NULL if none are available.
   */
@@ -48,7 +50,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  struct svc_rdma_recv_ctxt *svc_rdma_recv_ctxt_get(struct svcxprt_rdma *rdma)
  {
  	struct svc_rdma_recv_ctxt *ctxt;
-@@ -208,6 +215,29 @@ struct svc_rdma_recv_ctxt *svc_rdma_recv
+@@ -208,6 +215,29 @@ struct svc_rdma_recv_ctxt *svc_rdma_recv_ctxt_get(struct svcxprt_rdma *rdma)
  	ctxt->rc_page_count = 0;
  	return ctxt;
  }
@@ -78,7 +80,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  /**
   * svc_rdma_recv_ctxt_put - Return recv_ctxt to free list
-@@ -218,21 +248,55 @@ struct svc_rdma_recv_ctxt *svc_rdma_recv
+@@ -218,21 +248,55 @@ struct svc_rdma_recv_ctxt *svc_rdma_recv_ctxt_get(struct svcxprt_rdma *rdma)
  void svc_rdma_recv_ctxt_put(struct svcxprt_rdma *rdma,
  			    struct svc_rdma_recv_ctxt *ctxt)
  {
@@ -134,7 +136,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  /**
   * svc_rdma_release_ctxt - Release transport-specific per-rqst resources
   * @xprt: the transport which owned the context
-@@ -251,7 +315,9 @@ void svc_rdma_release_ctxt(struct svc_xp
+@@ -251,7 +315,9 @@ void svc_rdma_release_ctxt(struct svc_xprt *xprt, void *vctxt)
  	if (ctxt)
  		svc_rdma_recv_ctxt_put(rdma, ctxt);
  }
@@ -144,7 +146,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  static bool svc_rdma_refresh_recvs(struct svcxprt_rdma *rdma,
  				   unsigned int wanted)
  {
-@@ -269,10 +335,14 @@ static bool svc_rdma_refresh_recvs(struc
+@@ -269,10 +335,14 @@ static bool svc_rdma_refresh_recvs(struct svcxprt_rdma *rdma,
  		if (!ctxt)
  			break;
  
@@ -159,7 +161,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	}
  	if (!recv_chain)
  		return true;
-@@ -283,7 +353,9 @@ static bool svc_rdma_refresh_recvs(struc
+@@ -283,7 +353,9 @@ static bool svc_rdma_refresh_recvs(struct svcxprt_rdma *rdma,
  	return true;
  
  err_free:
@@ -228,7 +230,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	while (total--) {
  		struct svc_rdma_recv_ctxt *ctxt;
  
-@@ -321,6 +432,21 @@ bool svc_rdma_post_recvs(struct svcxprt_
+@@ -321,6 +432,21 @@ bool svc_rdma_post_recvs(struct svcxprt_rdma *rdma)
  	}
  
  	return svc_rdma_refresh_recvs(rdma, rdma->sc_max_requests);
@@ -250,7 +252,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  }
  
  /**
-@@ -335,15 +461,20 @@ static void svc_rdma_wc_receive(struct i
+@@ -335,15 +461,20 @@ static void svc_rdma_wc_receive(struct ib_cq *cq, struct ib_wc *wc)
  	struct ib_cqe *cqe = wc->wr_cqe;
  	struct svc_rdma_recv_ctxt *ctxt;
  
@@ -271,7 +273,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	/* If receive posting fails, the connection is about to be
  	 * lost anyway. The server will not be able to send a reply
  	 * for this RPC, and the client will retransmit this RPC
-@@ -353,9 +484,18 @@ static void svc_rdma_wc_receive(struct i
+@@ -353,9 +484,18 @@ static void svc_rdma_wc_receive(struct ib_cq *cq, struct ib_wc *wc)
  	 * to reduce the likelihood of replayed requests once the
  	 * client reconnects.
  	 */
@@ -290,7 +292,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  	/* All wc fields are now known to be valid */
  	ctxt->rc_byte_len = wc->byte_len;
-@@ -370,13 +510,22 @@ static void svc_rdma_wc_receive(struct i
+@@ -370,13 +510,22 @@ static void svc_rdma_wc_receive(struct ib_cq *cq, struct ib_wc *wc)
  	return;
  
  flushed:
@@ -313,7 +315,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  }
  
  /**
-@@ -413,6 +562,18 @@ static void svc_rdma_build_arg_xdr(struc
+@@ -413,6 +562,18 @@ static void svc_rdma_build_arg_xdr(struct svc_rqst *rqstp,
  	arg->len = ctxt->rc_byte_len;
  }
  
@@ -332,7 +334,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  /**
   * xdr_count_read_segments - Count number of Read segments in Read list
   * @rctxt: Ingress receive context
-@@ -537,6 +698,92 @@ static bool xdr_count_write_chunks(struc
+@@ -537,6 +698,92 @@ static bool xdr_count_write_chunks(struct svc_rdma_recv_ctxt *rctxt, __be32 *p)
  	}
  	return true;
  }
@@ -425,7 +427,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  /* Sanity check the Write list.
   *
-@@ -555,11 +802,13 @@ static bool xdr_count_write_chunks(struc
+@@ -555,11 +802,13 @@ static bool xdr_count_write_chunks(struct svc_rdma_recv_ctxt *rctxt, __be32 *p)
   */
  static bool xdr_check_write_list(struct svc_rdma_recv_ctxt *rctxt)
  {
@@ -439,7 +441,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	if (!xdr_count_write_chunks(rctxt, p))
  		return false;
  	if (!pcl_alloc_write(rctxt, &rctxt->rc_write_pcl, p))
-@@ -567,6 +816,27 @@ static bool xdr_check_write_list(struct
+@@ -567,6 +816,27 @@ static bool xdr_check_write_list(struct svc_rdma_recv_ctxt *rctxt)
  
  	rctxt->rc_cur_result_payload = pcl_first_chunk(&rctxt->rc_write_pcl);
  	return true;
@@ -467,7 +469,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  }
  
  /* Sanity check the Reply chunk.
-@@ -589,6 +859,7 @@ static bool xdr_check_reply_chunk(struct
+@@ -589,6 +859,7 @@ static bool xdr_check_reply_chunk(struct svc_rdma_recv_ctxt *rctxt)
  	if (!p)
  		return false;
  
@@ -475,7 +477,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	if (!xdr_item_is_present(p))
  		return true;
  	if (!xdr_check_write_chunk(rctxt))
-@@ -596,6 +867,15 @@ static bool xdr_check_reply_chunk(struct
+@@ -596,6 +867,15 @@ static bool xdr_check_reply_chunk(struct svc_rdma_recv_ctxt *rctxt)
  
  	rctxt->rc_reply_pcl.cl_count = 1;
  	return pcl_alloc_write(rctxt, &rctxt->rc_reply_pcl, p);
@@ -491,7 +493,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  }
  
  /* RPC-over-RDMA Version One private extension: Remote Invalidation.
-@@ -608,6 +888,7 @@ static bool xdr_check_reply_chunk(struct
+@@ -608,6 +888,7 @@ static bool xdr_check_reply_chunk(struct svc_rdma_recv_ctxt *rctxt)
  static void svc_rdma_get_inv_rkey(struct svcxprt_rdma *rdma,
  				  struct svc_rdma_recv_ctxt *ctxt)
  {
@@ -499,7 +501,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	struct svc_rdma_segment *segment;
  	struct svc_rdma_chunk *chunk;
  	u32 inv_rkey;
-@@ -651,6 +932,55 @@ static void svc_rdma_get_inv_rkey(struct
+@@ -651,6 +932,55 @@ static void svc_rdma_get_inv_rkey(struct svcxprt_rdma *rdma,
  		}
  	}
  	ctxt->rc_inv_rkey = inv_rkey;
@@ -555,19 +557,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  }
  
  /**
-@@ -676,7 +1006,11 @@ static int svc_rdma_xdr_decode_req(struc
- 	unsigned int hdr_len;
- 
- 	rdma_argp = rq_arg->head[0].iov_base;
-+#ifdef HAVE_XDR_INIT_DECODE_RQST_ARG
- 	xdr_init_decode(&rctxt->rc_stream, rq_arg, rdma_argp, NULL);
-+#else
-+	xdr_init_decode(&rctxt->rc_stream, rq_arg, rdma_argp);
-+#endif
- 
- 	p = xdr_inline_decode(&rctxt->rc_stream,
- 			      rpcrdma_fixed_maxsz * sizeof(*p));
-@@ -686,8 +1020,12 @@ static int svc_rdma_xdr_decode_req(struc
+@@ -686,8 +1016,12 @@ static int svc_rdma_xdr_decode_req(struct xdr_buf *rq_arg,
  	if (*p != rpcrdma_version)
  		goto out_version;
  	p += 2;
@@ -580,7 +570,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	case rdma_msg:
  		break;
  	case rdma_nomsg:
-@@ -711,27 +1049,39 @@ static int svc_rdma_xdr_decode_req(struc
+@@ -711,27 +1045,39 @@ static int svc_rdma_xdr_decode_req(struct xdr_buf *rq_arg,
  	hdr_len = xdr_stream_pos(&rctxt->rc_stream);
  	rq_arg->head[0].iov_len -= hdr_len;
  	rq_arg->len -= hdr_len;
@@ -620,7 +610,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	return -EINVAL;
  }
  
-@@ -752,6 +1102,7 @@ static void svc_rdma_send_error(struct s
+@@ -752,6 +1098,7 @@ static void svc_rdma_send_error(struct svcxprt_rdma *rdma,
   * the RPC/RDMA header small and fixed in size, so it is
   * straightforward to check the RPC header's direction field.
   */
@@ -628,7 +618,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  static bool svc_rdma_is_reverse_direction_reply(struct svc_xprt *xprt,
  						struct svc_rdma_recv_ctxt *rctxt)
  {
-@@ -778,7 +1129,38 @@ static bool svc_rdma_is_reverse_directio
+@@ -778,7 +1125,38 @@ static bool svc_rdma_is_reverse_direction_reply(struct svc_xprt *xprt,
  
  	return true;
  }
@@ -667,7 +657,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  /* Finish constructing the RPC Call message in rqstp::rq_arg.
   *
   * The incoming RPC/RDMA message is an RDMA_MSG type message
-@@ -863,7 +1245,12 @@ static noinline void svc_rdma_read_compl
+@@ -863,7 +1241,12 @@ static noinline void svc_rdma_read_complete(struct svc_rqst *rqstp,
  	/* Transfer the Read chunk pages into @rqstp.rq_pages, replacing
  	 * the rq_pages that were already allocated for this rqstp.
  	 */
@@ -680,7 +670,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	for (i = 0; i < ctxt->rc_page_count; i++)
  		rqstp->rq_pages[i] = ctxt->rc_pages[i];
  
-@@ -892,8 +1279,40 @@ static noinline void svc_rdma_read_compl
+@@ -892,8 +1275,40 @@ static noinline void svc_rdma_read_complete(struct svc_rqst *rqstp,
  		svc_rdma_read_complete_pzrc(rqstp, ctxt);
  	}
  
@@ -721,7 +711,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  
  /**
   * svc_rdma_recvfrom - Receive an RPC call
-@@ -929,6 +1348,9 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -929,6 +1344,9 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
  	struct svcxprt_rdma *rdma_xprt =
  		container_of(xprt, struct svcxprt_rdma, sc_xprt);
  	struct svc_rdma_recv_ctxt *ctxt;
@@ -731,7 +721,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	int ret;
  
  	/* Prevent svc_xprt_release() from releasing pages in rq_pages
-@@ -937,15 +1359,23 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -937,15 +1355,23 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
  	rqstp->rq_respages = rqstp->rq_pages;
  	rqstp->rq_next_page = rqstp->rq_respages;
  
@@ -755,7 +745,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  		goto complete;
  	}
  	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
-@@ -956,8 +1386,10 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -956,8 +1382,10 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
  		clear_bit(XPT_DATA, &xprt->xpt_flags);
  	spin_unlock(&rdma_xprt->sc_rq_dto_lock);
  
@@ -766,7 +756,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  	if (!ctxt)
  		return 0;
  
-@@ -967,33 +1399,60 @@ int svc_rdma_recvfrom(struct svc_rqst *r
+@@ -967,33 +1395,60 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
  				   DMA_FROM_DEVICE);
  	svc_rdma_build_arg_xdr(rqstp, ctxt);
  
@@ -827,7 +817,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/svc_rdma_recvfrom.c
  out_readlist:
  	/* This @rqstp is about to be recycled. Save the work
  	 * already done constructing the Call message in rq_arg
-@@ -1007,10 +1466,21 @@ out_readlist:
+@@ -1007,10 +1462,21 @@ out_readlist:
  		if (ret == -EINVAL)
  			svc_rdma_send_error(rdma_xprt, ctxt, ret);
  		svc_rdma_recv_ctxt_put(rdma_xprt, ctxt);

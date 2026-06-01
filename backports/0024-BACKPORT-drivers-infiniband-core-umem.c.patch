@@ -2,20 +2,19 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 ---
- drivers/infiniband/core/umem.c | 414 ++++++++++++++++++++++++++++++++-
- 1 file changed, 410 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/umem.c | 311 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 307 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
-@@ -39,9 +39,17 @@
+@@ -39,9 +39,14 @@
  #include <linux/sched/mm.h>
  #include <linux/export.h>
  #include <linux/slab.h>
 +#ifdef HAVE_BASECODE_EXTRAS
 +#include <linux/scatterlist.h>
-+#endif
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+#include <linux/hugetlb.h>
 +#endif
  #include <linux/pagemap.h>
  #include <linux/count_zeros.h>
@@ -25,7 +24,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  #include "uverbs.h"
  
-@@ -51,23 +59,62 @@
+@@ -51,24 +56,62 @@
  
  static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
  {
@@ -41,13 +40,19 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +#ifdef HAVE_SG_APPEND_TABLE
  	if (dirty)
  		ib_dma_unmap_sgtable_attrs(dev, &umem->sgt_append.sgt,
- 					   DMA_BIDIRECTIONAL, 0);
+ 					   DMA_BIDIRECTIONAL,
++#ifdef HAVE_DMA_ATTR_REQUIRE_COHERENT
+ 					   DMA_ATTR_REQUIRE_COHERENT);
+-
++#else
++					   0);
++#endif
 +#else
 +	if (umem->nmap > 0)
 +		ib_dma_unmap_sg(dev, umem->sg_head.sgl, umem->sg_nents,
 +				DMA_BIDIRECTIONAL);
 +#endif
- 
++
 +#ifdef HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED
 +#ifdef HAVE_SG_APPEND_TABLE
  	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
@@ -67,11 +72,6 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +		unpin_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
 +#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
 +		put_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
-+#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS)
-+		if (umem->writable && dirty)
-+			put_user_pages_dirty_lock(&page, 1);
-+		else
-+			put_user_page(page);
 +#else
 +		if (!PageDirty(page) && umem->writable && dirty)
 +			set_page_dirty_lock(page);
@@ -88,7 +88,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  }
  
  /**
-@@ -98,6 +145,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -99,6 +142,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  
  	umem->iova = va = virt;
  
@@ -96,7 +96,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	if (umem->is_odp) {
  		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
  
-@@ -106,6 +154,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -107,6 +151,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  			return 0;
  		return page_size;
  	}
@@ -104,7 +104,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/* The best result is the smallest page size that results in the minimum
  	 * number of required pages. Compute the largest page size that could
-@@ -117,11 +166,16 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -118,11 +163,16 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  	/* offset into first SGL */
  	pgoff = umem->address & ~PAGE_MASK;
  
@@ -122,7 +122,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  		    end != sg_dma_address(sg)) {
  
  			curr_base = sg_dma_address(sg);
-@@ -155,6 +209,64 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -156,6 +206,64 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  }
  EXPORT_SYMBOL(ib_umem_find_best_pgsz);
  
@@ -187,7 +187,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  /**
   * __ib_umem_get - Pin and DMA map userspace memory.
   *
-@@ -164,20 +276,57 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -165,20 +273,55 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -205,11 +205,13 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  	struct ib_umem *umem;
  	struct page **page_list;
  	unsigned long lock_limit;
-+#if defined(HAVE_PINNED_VM) || defined(HAVE_ATOMIC_PINNED_VM)
  	unsigned long new_pinned;
-+#endif
  	unsigned long cur_base;
- 	unsigned long dma_attr = 0;
++#ifdef HAVE_DMA_ATTR_REQUIRE_COHERENT
+ 	unsigned long dma_attr = DMA_ATTR_REQUIRE_COHERENT;
++#else
++	unsigned long dma_attr = 0;
++#endif
  	struct mm_struct *mm;
  	unsigned long npages;
 +#ifdef HAVE_SG_APPEND_TABLE
@@ -228,10 +230,6 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
 +	unsigned long index;
 +#endif
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+	struct vm_area_struct **vma_list;
-+	int i;
-+#endif
 +
 +#ifndef HAVE_MMU_INTERVAL_NOTIFIER
 +	if (!udata)
@@ -245,83 +243,35 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -200,7 +349,15 @@ static struct ib_umem *__ib_umem_get(str
+@@ -201,7 +344,11 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
  	umem->ibdev      = device;
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	umem->ibdev = context->device;
-+#else
-+	umem->context = context;
-+#endif
 +#endif
  	umem->length     = size;
  	umem->address    = addr;
  	/*
-@@ -212,12 +369,24 @@ static struct ib_umem *__ib_umem_get(str
- 	umem->owning_mm = mm = current->mm;
- 	mmgrab(mm);
- 
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+	/* We assume the memory is from hugetlb until proved otherwise */
-+	umem->hugetlb   = 1;
-+#endif
- 	page_list = (struct page **) __get_free_page(GFP_KERNEL);
- 	if (!page_list) {
+@@ -218,7 +365,6 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  		ret = -ENOMEM;
  		goto umem_kfree;
  	}
 -
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+	/*
-+	 *       * if we can't alloc the vma_list, it's not so bad;
-+	 *                 * just assume the memory is not hugetlb memory
-+	 *                 */
-+	vma_list = (struct vm_area_struct **) __get_free_page(GFP_KERNEL);
-+	if (!vma_list)
-+		umem->hugetlb = 0;
-+#endif
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -226,31 +395,80 @@ static struct ib_umem *__ib_umem_get(str
+@@ -229,6 +375,7 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  
- 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
- 
-+#ifdef HAVE_ATOMIC_PINNED_VM
  	new_pinned = atomic64_add_return(npages, &mm->pinned_vm);
  	if (new_pinned > lock_limit && !capable(CAP_IPC_LOCK)) {
-+#else
-+	down_write(&mm->mmap_sem);
-+#ifdef HAVE_PINNED_VM
-+	if (check_add_overflow(mm->pinned_vm, npages, &new_pinned) ||
-+	    (new_pinned > lock_limit && !capable(CAP_IPC_LOCK))) {
-+#else
-+	current->mm->locked_vm += npages;
-+	if ((current->mm->locked_vm > lock_limit) && !capable(CAP_IPC_LOCK)) {
-+#endif /* HAVE_PINNED_VM */
-+#endif /* HAVE_ATOMIC_PINNED_VM */
 +
-+#ifdef HAVE_ATOMIC_PINNED_VM
  		atomic64_sub(npages, &mm->pinned_vm);
-+#else
-+		up_write(&mm->mmap_sem);
-+#ifndef HAVE_PINNED_VM
-+		current->mm->locked_vm -= npages;
-+#endif /* HAVE_PINNED_VM */
-+#endif /* HAVE_ATOMIC_PINNED_VM */
  		ret = -ENOMEM;
  		goto out;
- 	}
-+#ifndef HAVE_ATOMIC_PINNED_VM
-+#ifdef HAVE_PINNED_VM
-+	mm->pinned_vm = new_pinned;
-+#endif /* HAVE_PINNED_VM */
-+	up_write(&mm->mmap_sem);
-+#endif /* HAVE_ATOMIC_PINNED_VM */
+@@ -236,22 +383,46 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  
  	cur_base = addr & PAGE_MASK;
  
@@ -334,6 +284,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
  	if (umem->writable)
  		gup_flags |= FOLL_WRITE;
+-
 +#else
 +	if (!umem->writable)
 +		gup_flags |= FOLL_FORCE;
@@ -342,7 +293,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +#if !defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
 +	sg = umem->sg_head.sgl;
 +#endif
- 
++
 +#ifdef HAVE_SG_APPEND_TABLE
  	while (npages) {
  		cond_resched();
@@ -368,7 +319,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  			goto umem_release;
  		}
  
-@@ -278,8 +496,143 @@ static struct ib_umem *__ib_umem_get(str
+@@ -279,8 +450,115 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	}
  	goto out;
  
@@ -385,27 +336,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +			goto umem_release;
 +#else
 +		down_read(&mm->mmap_sem);
-+#ifdef HAVE_FOLL_LONGTERM
 +		ret = get_user_pages(cur_base,
 +				     min_t(unsigned long, npages,
 +					   PAGE_SIZE / sizeof (struct page *)),
 +				     gup_flags | FOLL_LONGTERM,
 +				     page_list, NULL);
-+#elif defined(HAVE_GET_USER_PAGES_LONGTERM)
-+		ret = get_user_pages_longterm(cur_base,
-+			min_t(unsigned long, npages,
-+			PAGE_SIZE / sizeof (struct page *)),
-+			gup_flags, page_list, NULL);
-+#else
-+		ret = get_user_pages(cur_base,
-+					min_t(unsigned long, npages,
-+					PAGE_SIZE / sizeof (struct page *)),
-+#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
-+				gup_flags, page_list, vma_list);
-+#else
-+				1, !umem->writable, page_list, vma_list);
-+#endif
-+#endif /*HAVE_FOLL_LONGTERM*/
 +
 +		if (ret < 0) {
 +#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
@@ -447,9 +382,6 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +			unpin_user_pages_dirty_lock(page_list, ret, 0);
 +#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
 +			put_user_pages_dirty_lock(page_list, ret, 0);
-+#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS)
-+			for (index = 0; index < ret; index++)
-+				put_user_page(page_list[index]);
 +#else
 +			for (index = 0; index < ret; index++)
 +				put_page(page_list[index]);
@@ -459,15 +391,6 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 +		}
 +#else
 +		&umem->sg_nents);
-+#endif
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+		/* Continue to hold the mmap_sem as vma_list access
-+		 *               * needs to be protected.
-+		 *                                */
-+		for (i = 0; i < ret && umem->hugetlb; i++) {
-+			if (vma_list && !is_vm_hugetlb_page(vma_list[i]))
-+				umem->hugetlb = 0;
-+		}
 +#endif
 +#ifndef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
 +		up_read(&mm->mmap_sem);
@@ -512,30 +435,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -300,8 +653,22 @@ umem_release:
- 		goto out;
- 	}
- vma:
-+#ifdef HAVE_ATOMIC_PINNED_VM
- 	atomic64_sub(ib_umem_num_pages(umem), &mm->pinned_vm);
-+#else
-+	down_write(&mm->mmap_sem);
-+#ifdef HAVE_PINNED_VM
-+	mm->pinned_vm -= ib_umem_num_pages(umem);
-+#else
-+	mm->locked_vm -= ib_umem_num_pages(umem);
-+#endif /* HAVE_PINNED_VM */
-+	up_write(&mm->mmap_sem);
-+#endif /* HAVE_ATOMIC_PINNED_VM */
- out:
-+#if !defined(HAVE_FOLL_LONGTERM) && !defined(HAVE_GET_USER_PAGES_LONGTERM)
-+	if (vma_list)
-+		free_page((unsigned long) vma_list);
-+#endif
- 	free_page((unsigned long) page_list);
- umem_kfree:
- 	if (ret) {
-@@ -311,19 +678,36 @@ umem_kfree:
+@@ -312,19 +590,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -572,7 +472,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -335,16 +719,34 @@ void ib_umem_release(struct ib_umem *ume
+@@ -336,10 +631,14 @@ void ib_umem_release(struct ib_umem *umem)
  {
  	if (!umem)
  		return;
@@ -587,27 +487,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
  
  	if (umem->is_peer)
  		return ib_peer_umem_release(umem);
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
- 	__ib_umem_release(umem->ibdev, umem, 1);
-+#else
-+	__ib_umem_release(umem->context->device, umem, 1);
-+#endif
- 
-+#ifdef HAVE_ATOMIC_PINNED_VM
- 	atomic64_sub(ib_umem_num_pages(umem), &umem->owning_mm->pinned_vm);
-+#else
-+	down_write(&umem->owning_mm->mmap_sem);
-+#ifdef HAVE_PINNED_VM
-+	umem->owning_mm->pinned_vm -= ib_umem_num_pages(umem);
-+#else
-+	umem->owning_mm->locked_vm -= ib_umem_num_pages(umem);
-+#endif /* HAVE_PINNED_VM */
-+	up_write(&umem->owning_mm->mmap_sem);
-+#endif /*HAVE_ATOMIC_PINNED_VM*/
- 	mmdrop(umem->owning_mm);
- 	kfree(umem);
- }
-@@ -372,8 +774,12 @@ int ib_umem_copy_from(void *dst, struct
+@@ -373,8 +672,12 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
  		return -EINVAL;
  	}
  

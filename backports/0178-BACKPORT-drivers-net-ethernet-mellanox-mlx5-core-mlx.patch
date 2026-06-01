@@ -1,15 +1,18 @@
-From: Valentine Fatiev <valentinef@nvidia.com>
+From: Stav Aviram <saviram@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 
+Change-Id: Ie1f135bd3ed995d6ea4abc90c6bf0bebdc352a28
 ---
- .../ethernet/mellanox/mlx5/core/mlx5_core.h   | 46 +++++++------------
- 1 file changed, 17 insertions(+), 29 deletions(-)
+ .../ethernet/mellanox/mlx5/core/mlx5_core.h   | 42 +++++++------------
+ 1 file changed, 15 insertions(+), 27 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 @@ -45,6 +45,10 @@
  
- #define DRIVER_VERSION	"26.01-1.0.0"
+ #define DRIVER_VERSION	"26.04-0.8.5"
  
 +#ifndef BITS_TO_BYTES
 +#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
@@ -54,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
  static inline struct device *mlx5_core_dma_dev(struct mlx5_core_dev *dev)
  {
  	return &dev->pdev->dev;
-@@ -365,7 +347,9 @@ int mlx5_attach_device(struct mlx5_core_
+@@ -366,7 +348,9 @@ int mlx5_attach_device(struct mlx5_core_dev *dev);
  void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend);
  int mlx5_register_device(struct mlx5_core_dev *dev);
  void mlx5_unregister_device(struct mlx5_core_dev *dev);
@@ -64,7 +67,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
  bool mlx5_dev_is_lightweight(struct mlx5_core_dev *dev);
  void mlx5_core_reps_aux_devs_remove(struct mlx5_core_dev *dev);
  
-@@ -378,7 +362,7 @@ int mlx5_set_mtppse(struct mlx5_core_dev
+@@ -379,7 +363,7 @@ int mlx5_set_mtppse(struct mlx5_core_dev *mdev, u8 pin, u8 arm, u8 mode);
  struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev);
  void mlx5_dm_cleanup(struct mlx5_core_dev *dev);
  
@@ -73,20 +76,9 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
  struct mlx5_st *mlx5_st_create(struct mlx5_core_dev *dev);
  void mlx5_st_destroy(struct mlx5_core_dev *dev);
  #else
-@@ -467,8 +451,8 @@ int mlx5_port_max_linkspeed(struct mlx5_
- 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
- 			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
- 
--int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw,
--			struct netlink_ext_ack *extack);
-+int mlx5_firmware_flash(struct mlx5_core_dev *dev, const struct firmware *fw
-+			, struct netlink_ext_ack *extack);
- int mlx5_fw_version_query(struct mlx5_core_dev *dev,
- 			  u32 *running_ver, u32 *stored_ver);
- 
-@@ -560,15 +544,19 @@ mlx5_sf_coredev_to_adev(struct mlx5_core
- int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
- void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
+@@ -563,15 +547,19 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
+ int mlx5_frag_buf_pools_init(struct mlx5_core_dev *dev);
+ void mlx5_frag_buf_pools_cleanup(struct mlx5_core_dev *dev);
  int mlx5_init_one(struct mlx5_core_dev *dev);
 -int mlx5_init_one_devl_locked(struct mlx5_core_dev *dev);
  void mlx5_uninit_one(struct mlx5_core_dev *dev);

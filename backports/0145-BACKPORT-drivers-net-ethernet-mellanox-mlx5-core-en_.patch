@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
  .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 22 +++++++++++++++++++
  1 file changed, 22 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 @@ -92,6 +92,10 @@ struct mlx5_rep_uplink_priv {
@@ -28,7 +30,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
  };
  
  static inline
-@@ -288,12 +294,28 @@ static inline bool mlx5e_eswitch_rep(con
+@@ -288,12 +294,28 @@ static inline bool mlx5e_eswitch_rep(const struct net_device *netdev)
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  

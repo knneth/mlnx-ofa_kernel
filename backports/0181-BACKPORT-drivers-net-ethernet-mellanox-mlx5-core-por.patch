@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
  .../net/ethernet/mellanox/mlx5/core/port.c    | 60 +++++++++++++++++++
  1 file changed, 60 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/port.c b/drivers/net/ethernet/mellanox/mlx5/core/port.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/port.c
-@@ -446,6 +446,7 @@ int mlx5_query_module_eeprom(struct mlx5
+@@ -445,6 +445,7 @@ int mlx5_query_module_eeprom(struct mlx5_core_dev *dev,
  	return mlx5_query_mcia(dev, &query, data);
  }
  
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
  int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
  				     struct mlx5_module_eeprom_query_params *params,
  				     u8 *data)
-@@ -464,6 +465,7 @@ int mlx5_query_module_eeprom_by_page(str
+@@ -463,6 +464,7 @@ int mlx5_query_module_eeprom_by_page(struct mlx5_core_dev *dev,
  
  	return mlx5_query_mcia(dev, params, data);
  }
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
  
  static int mlx5_query_port_pvlc(struct mlx5_core_dev *dev, u32 *pvlc,
  				int pvlc_size,  u8 local_port)
-@@ -1122,6 +1124,7 @@ out:
+@@ -1121,6 +1123,7 @@ out:
  	return err;
  }
  
@@ -31,7 +33,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
  /* speed in units of 1Mb */
  static const struct mlx5_link_info mlx5e_link_info[MLX5E_LINK_MODES_NUMBER] = {
  	[MLX5E_1000BASE_CX_SGMII]	= {.speed = 1000, .lanes = 1},
-@@ -1176,6 +1179,61 @@ mlx5e_ext_link_info[MLX5E_EXT_LINK_MODES
+@@ -1175,6 +1178,61 @@ mlx5e_ext_link_info[MLX5E_EXT_LINK_MODES_NUMBER] = {
  	[MLX5E_800GAUI_4_800GBASE_CR4_KR4]	= {.speed = 800000, .lanes = 4},
  	[MLX5E_1600GAUI_8_1600GBASE_CR8_KR8]	= {.speed = 1600000, .lanes = 8},
  };
@@ -93,7 +95,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/port.c
  
  int mlx5_port_query_eth_proto(struct mlx5_core_dev *dev, u8 port, bool ext,
  			      struct mlx5_port_eth_proto *eproto)
-@@ -1259,7 +1317,9 @@ u32 mlx5_port_info2linkmodes(struct mlx5
+@@ -1258,7 +1316,9 @@ u32 mlx5_port_info2linkmodes(struct mlx5_core_dev *mdev,
  					  force_legacy);
  	for (i = 0; i < max_size; ++i) {
  		if (table[i].speed == info->speed) {

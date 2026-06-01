@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
  1 file changed, 1 insertion(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
 @@ -6,6 +6,7 @@

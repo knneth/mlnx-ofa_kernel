@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/target/auth.c
 
 ---
- drivers/nvme/target/auth.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/nvme/target/auth.c | 39 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
+diff --git a/drivers/nvme/target/auth.c b/drivers/nvme/target/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/auth.c
 +++ b/drivers/nvme/target/auth.c
 @@ -4,6 +4,12 @@
@@ -20,7 +22,70 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/auth.c
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  #include <linux/module.h>
  #include <linux/init.h>
-@@ -607,3 +613,4 @@ out_free_digest:
+@@ -531,15 +537,40 @@ int nvmet_auth_ctrl_exponential(struct nvmet_req *req,
+ }
+ 
+ int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): pkey is now const */
++			    const u8 *pkey, int pkey_size)
++#else
+ 			    u8 *pkey, int pkey_size)
++#endif
+ {
+ 	struct nvmet_ctrl *ctrl = req->sq->ctrl;
+ 	int ret;
+ 
++#ifdef HAVE_NVME_AUTH_GEN_SESSION_KEY
++	/* Newer kernels (7.1+): session key is H(g^xy mod p), size is hash digest */
++	req->sq->dhchap_skey_len = nvme_auth_hmac_hash_len(ctrl->shash_id);
++#else
++	/* Older kernels: session key is raw DH shared secret */
+ 	req->sq->dhchap_skey_len = ctrl->dh_keysize;
++#endif
+ 	req->sq->dhchap_skey = kzalloc(req->sq->dhchap_skey_len, GFP_KERNEL);
+ 	if (!req->sq->dhchap_skey)
+ 		return -ENOMEM;
++#ifdef HAVE_NVME_AUTH_GEN_SESSION_KEY
++	/* Newer kernels (7.1+): hashes DH secret internally, needs hash_id */
++	ret = nvme_auth_gen_session_key(ctrl->dh_tfm,
++					pkey, pkey_size,
++					req->sq->dhchap_skey,
++					req->sq->dhchap_skey_len,
++					ctrl->shash_id);
++	if (ret)
++		pr_debug("failed to compute session key, err %d\n", ret);
++	else
++		pr_debug("%s: session key %*ph\n", __func__,
++			 (int)req->sq->dhchap_skey_len,
++			 req->sq->dhchap_skey);
++#else
+ 	ret = nvme_auth_gen_shared_secret(ctrl->dh_tfm,
+ 					  pkey, pkey_size,
+ 					  req->sq->dhchap_skey,
+@@ -550,6 +581,7 @@ int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
+ 		pr_debug("%s: shared secret %*ph\n", __func__,
+ 			 (int)req->sq->dhchap_skey_len,
+ 			 req->sq->dhchap_skey);
++#endif
+ 
+ 	return ret;
+ }
+@@ -557,7 +589,13 @@ int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
+ void nvmet_auth_insert_psk(struct nvmet_sq *sq)
+ {
+ 	int hash_len = nvme_auth_hmac_hash_len(sq->ctrl->shash_id);
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): digest type changed from u8* to char* */
++	u8 *psk, *tls_psk;
++	char *digest;
++#else
+ 	u8 *psk, *digest, *tls_psk;
++#endif
+ 	size_t psk_len;
+ 	int ret;
+ #ifdef CONFIG_NVME_TARGET_TCP_TLS
+@@ -607,3 +645,4 @@ out_free_digest:
  out_free_psk:
  	kfree_sensitive(psk);
  }

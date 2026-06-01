@@ -2,25 +2,22 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
 
 ---
- drivers/infiniband/hw/mlx5/main.c | 81 ++++++++++++++++++++++++++++++-
- 1 file changed, 80 insertions(+), 1 deletion(-)
+ drivers/infiniband/hw/mlx5/main.c | 92 ++++++++++++++++++++++++++++++-
+ 1 file changed, 90 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/main.c b/drivers/infiniband/hw/mlx5/main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/main.c
 +++ b/drivers/infiniband/hw/mlx5/main.c
-@@ -2332,6 +2332,12 @@ static void mlx5_ib_dealloc_ucontext(str
+@@ -2332,6 +2332,7 @@ static void mlx5_ib_dealloc_ucontext(struct ib_ucontext *ibcontext)
  	struct mlx5_ib_dev *dev = to_mdev(ibcontext->device);
  	struct mlx5_bfreg_info *bfregi;
  
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+	mutex_lock(&ibcontext->per_mm_list_lock);
-+	WARN_ON(!list_empty(&ibcontext->per_mm_list));
-+	mutex_unlock(&ibcontext->per_mm_list_lock);
-+#endif
 +
  	bfregi = &context->bfregi;
  	mlx5_ib_dealloc_transport_domain(dev, context->tdn, context->devx_uid);
  
-@@ -2390,9 +2396,11 @@ static int get_extended_index(unsigned l
+@@ -2390,9 +2391,11 @@ static int get_extended_index(unsigned long offset)
  }
  
  
@@ -32,7 +29,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  static inline char *mmap_cmd2str(enum mlx5_ib_mmap_cmd cmd)
  {
-@@ -2423,7 +2431,11 @@ static int mlx5_ib_mmap_clock_info_page(
+@@ -2423,7 +2426,11 @@ static int mlx5_ib_mmap_clock_info_page(struct mlx5_ib_dev *dev,
  
  	if (vma->vm_flags & (VM_WRITE | VM_EXEC))
  		return -EPERM;
@@ -44,7 +41,35 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  	if (!dev->mdev->clock_info)
  		return -EOPNOTSUPP;
-@@ -2647,7 +2659,11 @@ static int mlx5_ib_mmap(struct ib_uconte
+@@ -2432,6 +2439,7 @@ static int mlx5_ib_mmap_clock_info_page(struct mlx5_ib_dev *dev,
+ 			      virt_to_page(dev->mdev->clock_info));
+ }
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ static int phys_addr_to_bar(struct pci_dev *pdev, phys_addr_t pa)
+ {
+ 	resource_size_t start, end;
+@@ -2456,7 +2464,11 @@ static int phys_addr_to_bar(struct pci_dev *pdev, phys_addr_t pa)
+ }
+ 
+ static int mlx5_ib_mmap_get_pfns(struct rdma_user_mmap_entry *entry,
++#ifdef HAVE_PHYS_VEC
+ 				 struct phys_vec *phys_vec,
++#else
++				 struct dma_buf_phys_vec *phys_vec,
++#endif
+ 				 struct p2pdma_provider **provider)
+ {
+ 	struct mlx5_user_mmap_entry *mentry = to_mmmap(entry);
+@@ -2495,6 +2507,7 @@ mlx5_ib_pgoff_to_mmap_entry(struct ib_ucontext *ucontext, off_t pg_off)
+ 
+ 	return rdma_user_mmap_entry_get_pgoff(ucontext, entry_pgoff);
+ }
++#endif
+ 
+ static void mlx5_ib_free_var_mmap_entry(struct mlx5_user_mmap_entry *mentry,
+ 					struct mlx5_var_region *var_region)
+@@ -2724,7 +2737,11 @@ static int mlx5_ib_mmap(struct ib_ucontext *ibcontext, struct vm_area_struct *vm
  
  		if (vma->vm_flags & VM_WRITE)
  			return -EPERM;
@@ -56,7 +81,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  		/* Don't expose to user-space information it shouldn't have */
  		if (PAGE_SIZE > 4096)
-@@ -3637,6 +3653,7 @@ static void mlx5_eth_lag_cleanup(struct
+@@ -3714,6 +3731,7 @@ static void mlx5_eth_lag_cleanup(struct mlx5_ib_dev *dev)
  	}
  }
  
@@ -64,7 +89,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  static void mlx5_netdev_notifier_register(struct mlx5_roce *roce,
  					  struct net_device *netdev)
  {
-@@ -3696,6 +3713,30 @@ static void mlx5_mdev_netdev_untrack(str
+@@ -3773,6 +3791,30 @@ static void mlx5_mdev_netdev_untrack(struct mlx5_ib_dev *dev, u32 port_num)
  	mlx5_netdev_notifier_unregister(roce);
  }
  
@@ -95,7 +120,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  static int mlx5_enable_eth(struct mlx5_ib_dev *dev)
  {
  	int err;
-@@ -3809,7 +3850,11 @@ static void mlx5_ib_unbind_slave_port(st
+@@ -3886,7 +3928,11 @@ static void mlx5_ib_unbind_slave_port(struct mlx5_ib_dev *ibdev,
  	if (mpi->mdev_events.notifier_call)
  		mlx5_notifier_unregister(mpi->mdev, &mpi->mdev_events);
  	mpi->mdev_events.notifier_call = NULL;
@@ -107,7 +132,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	spin_lock(&port->mp.mpi_lock);
  
  	comps = mpi->mdev_refcnt;
-@@ -3868,7 +3913,16 @@ static bool mlx5_ib_bind_slave_port(stru
+@@ -3945,7 +3991,16 @@ static bool mlx5_ib_bind_slave_port(struct mlx5_ib_dev *ibdev,
  	if (err)
  		goto unbind;
  
@@ -124,7 +149,16 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  	mpi->mdev_events.notifier_call = mlx5_ib_event_slave_port;
  	mlx5_notifier_register(mpi->mdev, &mpi->mdev_events);
-@@ -4334,7 +4388,9 @@ static void mlx5_ib_stage_init_cleanup(s
+@@ -4222,7 +4277,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_VAR_OBJ_ALLOC)(
+ 		return PTR_ERR(entry);
+ 
+ 	mmap_offset = mlx5_entry_to_mmap_offset(entry);
+-	if (check_mul_overflow(entry->rdma_entry.npages, (u32)PAGE_SIZE, &length)) {
++	if (check_mul_overflow((u32)entry->rdma_entry.npages, (u32)PAGE_SIZE, &length)) {
+ 		rdma_user_mmap_entry_remove(&entry->rdma_entry);
+ 		return -EOVERFLOW;
+ 	}
+@@ -4444,7 +4499,9 @@ static void mlx5_ib_stage_init_cleanup(struct mlx5_ib_dev *dev)
  {
  	mlx5_ib_data_direct_cleanup(dev);
  	mlx5_ib_cleanup_multiport_master(dev);
@@ -134,7 +168,25 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	mutex_destroy(&dev->cap_mask_mutex);
  	WARN_ON(!xa_empty(&dev->sig_mrs));
  	WARN_ON(!bitmap_empty(dev->dm.memic_alloc_pages, MLX5_MAX_MEMIC_PAGES));
-@@ -4440,7 +4496,9 @@ static const struct ib_device_ops mlx5_i
+@@ -4509,13 +4566,17 @@ static int mlx5_ib_stage_init_init(struct mlx5_ib_dev *dev)
+ 	if (err)
+ 		goto err_mp;
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	err = pcim_p2pdma_init(mdev->pdev);
+ 	if (err && err != -EOPNOTSUPP)
+ 		goto err_dd;
++#endif
+ 
+ 	return 0;
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ err_dd:
+ 	mlx5_ib_data_direct_cleanup(dev);
++#endif
+ err_mp:
+ 	mlx5_ib_cleanup_multiport_master(dev);
+ err:
+@@ -4556,7 +4617,9 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
  	.destroy_qp = mlx5_ib_destroy_qp,
  	.destroy_srq = mlx5_ib_destroy_srq,
  	.detach_mcast = mlx5_ib_mcg_detach,
@@ -144,7 +196,25 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	.drain_rq = mlx5_ib_drain_rq,
  	.drain_sq = mlx5_ib_drain_sq,
  	.device_group = &mlx5_attr_group,
-@@ -4472,7 +4530,9 @@ static const struct ib_device_ops mlx5_i
+@@ -4567,13 +4630,17 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
+ 	.map_mr_sg_pi = mlx5_ib_map_mr_sg_pi,
+ 	.mmap = mlx5_ib_mmap,
+ 	.mmap_free = mlx5_ib_mmap_free,
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	.mmap_get_pfns = mlx5_ib_mmap_get_pfns,
++#endif
+ 	.modify_cq = mlx5_ib_modify_cq,
+ 	.modify_device = mlx5_ib_modify_device,
+ 	.modify_port = mlx5_ib_modify_port,
+ 	.modify_qp = mlx5_ib_modify_qp,
+ 	.modify_srq = mlx5_ib_modify_srq,
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	.pgoff_to_mmap_entry = mlx5_ib_pgoff_to_mmap_entry,
++#endif
+ 	.pre_destroy_cq = mlx5_ib_pre_destroy_cq,
+ 	.poll_cq = mlx5_ib_poll_cq,
+ 	.post_destroy_cq = mlx5_ib_post_destroy_cq,
+@@ -4590,7 +4657,9 @@ static const struct ib_device_ops mlx5_ib_dev_ops = {
  	.query_srq = mlx5_ib_query_srq,
  	.query_ucontext = mlx5_ib_query_ucontext,
  	.reg_user_mr = mlx5_ib_reg_user_mr,
@@ -154,7 +224,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	.req_notify_cq = mlx5_ib_arm_cq,
  	.rereg_user_mr = mlx5_ib_rereg_user_mr,
  	.resize_cq = mlx5_ib_resize_cq,
-@@ -4505,8 +4565,8 @@ static const struct ib_device_ops mlx5_i
+@@ -4623,8 +4692,8 @@ static const struct ib_device_ops mlx5_ib_dev_frontend_ns_context_ops = {
  
  static const struct ib_device_ops mlx5_ib_dev_sriov_ops = {
  	.get_vf_config = mlx5_ib_get_vf_config,
@@ -164,7 +234,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	.set_vf_guid = mlx5_ib_set_vf_guid,
  	.set_vf_link_state = mlx5_ib_set_vf_link_state,
  };
-@@ -4715,7 +4775,13 @@ static int mlx5_ib_roce_init(struct mlx5
+@@ -4873,7 +4942,13 @@ static int mlx5_ib_roce_init(struct mlx5_ib_dev *dev)
  		port_num = mlx5_core_native_port_num(dev->mdev) - 1;
  
  		/* Register only for native ports */
@@ -178,7 +248,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  
  		err = mlx5_enable_eth(dev);
  		if (err)
-@@ -4724,7 +4790,11 @@ static int mlx5_ib_roce_init(struct mlx5
+@@ -4882,7 +4957,11 @@ static int mlx5_ib_roce_init(struct mlx5_ib_dev *dev)
  
  	return 0;
  cleanup:
@@ -190,7 +260,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	return err;
  }
  
-@@ -4742,7 +4812,11 @@ static void mlx5_ib_roce_cleanup(struct
+@@ -4900,7 +4979,11 @@ static void mlx5_ib_roce_cleanup(struct mlx5_ib_dev *dev)
  		mlx5_disable_eth(dev);
  
  		port_num = mlx5_core_native_port_num(dev->mdev) - 1;
@@ -202,7 +272,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/main.c
  	}
  }
  
-@@ -5343,8 +5417,13 @@ static const struct auxiliary_device_id
+@@ -5501,8 +5584,13 @@ static const struct auxiliary_device_id mlx5r_id_table[] = {
  	{},
  };
  

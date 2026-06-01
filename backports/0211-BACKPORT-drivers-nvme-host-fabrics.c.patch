@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/fabrics.c
  drivers/nvme/host/fabrics.c | 37 +++++++++++++++++++++++++++++++++++--
  1 file changed, 35 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/host/fabrics.c b/drivers/nvme/host/fabrics.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fabrics.c
 +++ b/drivers/nvme/host/fabrics.c
-@@ -36,7 +36,6 @@ static struct nvmf_host *nvmf_host_alloc
+@@ -36,7 +36,6 @@ static struct nvmf_host *nvmf_host_alloc(const char *hostnqn, uuid_t *id)
  	kref_init(&host->ref);
  	uuid_copy(&host->id, id);
  	strscpy(host->nqn, hostnqn, NVMF_NQN_SIZE);

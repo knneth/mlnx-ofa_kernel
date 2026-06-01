@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  fs/fuse/dir.c | 151 +++++++++++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 149 insertions(+), 2 deletions(-)
 
+diff --git a/fs/fuse/dir.c b/fs/fuse/dir.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/dir.c
 +++ b/fs/fuse/dir.c
-@@ -195,10 +195,17 @@ static void fuse_lookup_init(struct fuse
+@@ -195,10 +195,17 @@ static void fuse_lookup_init(struct fuse_conn *fc, struct fuse_args *args,
   * the lookup once more.  If the lookup results in the same inode,
   * then refresh the attributes, timeouts and mark the dentry valid.
   */
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  	struct fuse_mount *fm;
  	struct fuse_inode *fi;
  	int ret;
-@@ -230,9 +237,17 @@ static int fuse_dentry_revalidate(struct
+@@ -230,9 +237,17 @@ static int fuse_dentry_revalidate(struct inode *dir, const struct qstr *name,
  
  		attr_version = fuse_get_attr_version(fm->fc);
  
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  		/* Zero nodeid is same as -ENOENT */
  		if (!ret && !outarg.nodeid)
  			ret = -ENOENT;
-@@ -266,7 +281,13 @@ static int fuse_dentry_revalidate(struct
+@@ -266,7 +281,13 @@ static int fuse_dentry_revalidate(struct inode *dir, const struct qstr *name,
  			if (test_bit(FUSE_I_INIT_RDPLUS, &fi->state))
  				return -ECHILD;
  		} else if (test_and_clear_bit(FUSE_I_INIT_RDPLUS, &fi->state)) {
@@ -57,7 +59,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  		}
  	}
  	ret = 1;
-@@ -466,29 +487,60 @@ static int get_security_context(struct d
+@@ -466,29 +487,60 @@ static int get_security_context(struct dentry *entry, umode_t mode,
  {
  	struct fuse_secctx *fctx;
  	struct fuse_secctx_header *header;
@@ -118,7 +120,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  	}
  
  	err = -ENOMEM;
-@@ -501,20 +553,32 @@ static int get_security_context(struct d
+@@ -501,20 +553,32 @@ static int get_security_context(struct dentry *entry, umode_t mode,
  	ptr += sizeof(*header);
  	if (nr_ctx) {
  		fctx = ptr;
@@ -165,7 +167,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  			    struct fuse_args *args, struct inode *dir,
  			    struct dentry *entry, umode_t mode)
  {
-@@ -792,11 +861,19 @@ static struct dentry *create_new_entry(s
+@@ -792,11 +861,19 @@ static struct dentry *create_new_entry(struct mnt_idmap *idmap, struct fuse_moun
  	struct fuse_forget_link *forget;
  
  	if (fuse_is_bad(dir))
@@ -185,7 +187,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  
  	memset(&outarg, 0, sizeof(outarg));
  	args->nodeid = get_node_id(dir);
-@@ -826,30 +903,50 @@ static struct dentry *create_new_entry(s
+@@ -826,30 +903,50 @@ static struct dentry *create_new_entry(struct mnt_idmap *idmap, struct fuse_moun
  			  &outarg.attr, ATTR_TIMEOUT(&outarg), 0, 0);
  	if (!inode) {
  		fuse_queue_forget(fm, forget, outarg.nodeid, 1);
@@ -236,7 +238,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  static int create_new_nondir(struct mnt_idmap *idmap, struct fuse_mount *fm,
                              struct fuse_args *args, struct inode *dir,
                              struct dentry *entry, umode_t mode)
-@@ -865,6 +962,7 @@ static int create_new_nondir(struct mnt_
+@@ -865,6 +962,7 @@ static int create_new_nondir(struct mnt_idmap *idmap, struct fuse_mount *fm,
  
         return PTR_ERR(create_new_entry(idmap, fm, args, dir, entry, mode));
  }
@@ -244,7 +246,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  
  static int fuse_mknod(struct mnt_idmap *idmap, struct inode *dir,
  		      struct dentry *entry, umode_t mode, dev_t rdev)
-@@ -886,7 +984,11 @@ static int fuse_mknod(struct mnt_idmap *
+@@ -886,7 +984,11 @@ static int fuse_mknod(struct mnt_idmap *idmap, struct inode *dir,
  	args.in_args[0].value = &inarg;
  	args.in_args[1].size = entry->d_name.len + 1;
  	args.in_args[1].value = entry->d_name.name;
@@ -256,7 +258,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  }
  
  static int fuse_create(struct mnt_idmap *idmap, struct inode *dir,
-@@ -913,7 +1015,12 @@ static int fuse_tmpfile(struct mnt_idmap
+@@ -913,7 +1015,12 @@ static int fuse_tmpfile(struct mnt_idmap *idmap, struct inode *dir,
  	return err;
  }
  
@@ -270,7 +272,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  		      struct dentry *entry, umode_t mode)
  {
  	struct fuse_mkdir_in inarg;
-@@ -949,7 +1056,11 @@ static int fuse_symlink(struct mnt_idmap
+@@ -949,7 +1056,11 @@ static int fuse_symlink(struct mnt_idmap *idmap, struct inode *dir,
  	args.in_args[1].value = entry->d_name.name;
  	args.in_args[2].size = len;
  	args.in_args[2].value = link;
@@ -282,7 +284,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  }
  
  void fuse_flush_time_update(struct inode *inode)
-@@ -1112,7 +1223,11 @@ static int fuse_rename2(struct mnt_idmap
+@@ -1112,7 +1223,11 @@ static int fuse_rename2(struct mnt_idmap *idmap, struct inode *olddir,
  		if (fc->no_rename2 || fc->minor < 23)
  			return -EINVAL;
  
@@ -294,7 +296,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  					 olddir, oldent, newdir, newent, flags,
  					 FUSE_RENAME2,
  					 sizeof(struct fuse_rename2_in));
-@@ -1121,7 +1236,11 @@ static int fuse_rename2(struct mnt_idmap
+@@ -1121,7 +1236,11 @@ static int fuse_rename2(struct mnt_idmap *idmap, struct inode *olddir,
  			err = -EINVAL;
  		}
  	} else {
@@ -306,7 +308,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  					 FUSE_RENAME,
  					 sizeof(struct fuse_rename_in));
  	}
-@@ -1146,7 +1265,15 @@ static int fuse_link(struct dentry *entr
+@@ -1146,7 +1265,15 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
  	args.in_args[0].value = &inarg;
  	args.in_args[1].size = newent->d_name.len + 1;
  	args.in_args[1].value = newent->d_name.name;
@@ -322,7 +324,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  	if (!err)
  		fuse_update_ctime_in_cache(inode);
  	else if (err == -EINTR)
-@@ -1499,7 +1626,9 @@ static int fuse_access(struct inode *ino
+@@ -1499,7 +1626,9 @@ static int fuse_access(struct inode *inode, int mask)
  	 * we have fc->default_permissions = 1 and access
  	 * permission checks are done on the kernel side.
  	 */
@@ -332,7 +334,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  
  	if (fm->fc->no_access)
  		return 0;
-@@ -1651,7 +1780,11 @@ static const char *fuse_get_link(struct
+@@ -1651,7 +1780,11 @@ static const char *fuse_get_link(struct dentry *dentry, struct inode *inode,
  		goto out_err;
  
  	if (fc->cache_symlinks)
@@ -344,7 +346,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  
  	err = -ECHILD;
  	if (!dentry)
-@@ -1897,12 +2030,22 @@ int fuse_flush_times(struct inode *inode
+@@ -1897,12 +2030,22 @@ int fuse_flush_times(struct inode *inode, struct fuse_file *ff)
  	memset(&outarg, 0, sizeof(outarg));
  
  	inarg.valid = FATTR_MTIME;
@@ -367,7 +369,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/dir.c
  	}
  	if (ff) {
  		inarg.valid |= FATTR_FH;
-@@ -2041,7 +2184,11 @@ int fuse_do_setattr(struct mnt_idmap *id
+@@ -2041,7 +2184,11 @@ int fuse_do_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
  	/* the kernel maintains i_mtime locally */
  	if (trust_local_cmtime) {
  		if (attr->ia_valid & ATTR_MTIME)

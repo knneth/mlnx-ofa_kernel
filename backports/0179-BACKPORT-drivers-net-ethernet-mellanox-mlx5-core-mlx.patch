@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
  drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.h
-@@ -136,4 +136,4 @@ static void mlx5_devm_port_cleanup(struc
+@@ -136,4 +136,4 @@ static void mlx5_devm_port_cleanup(struct mlx5_eswitch *esw, struct mlx5_vport *
  {
  }
  #endif

@@ -927,10 +927,9 @@ static void mlx5e_set_inner_ttc_params(struct mlx5e_flow_steering *fs,
 
 static bool mlx5e_ipsec_rss_supported(struct mlx5_core_dev *mdev)
 {
-	/* Disable ipsec rss in ofed 26.01 for a performance degradation:
-	 * https://redmine.mellanox.com/issues/4856715
-	 */
-	return false;
+	return MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, ipsec_next_header) &&
+	       MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, outer_l4_type_ext) &&
+	       MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, inner_l4_type_ext);
 }
 
 void mlx5e_set_ttc_params(struct mlx5e_flow_steering *fs,
@@ -1437,7 +1436,7 @@ static void mlx5e_fs_tc_free(struct mlx5e_flow_steering *fs)
 
 struct mlx5e_tc_table *mlx5e_fs_get_tc(struct mlx5e_flow_steering *fs)
 {
-	return fs->tc;
+	return fs ? fs->tc : NULL;
 }
 
 #ifdef CONFIG_MLX5_EN_RXNFC

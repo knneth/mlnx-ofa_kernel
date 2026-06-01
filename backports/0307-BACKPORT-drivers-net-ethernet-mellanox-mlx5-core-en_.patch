@@ -6,6 +6,8 @@ Change-Id: Id5f0947477efa882f37a1c8ced9d4893fa555cd6
  .../ethernet/mellanox/mlx5/core/en_stats.h    | 52 ++++++++++++++++++-
  1 file changed, 51 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 @@ -33,6 +33,10 @@
@@ -19,7 +21,7 @@ Change-Id: Id5f0947477efa882f37a1c8ced9d4893fa555cd6
  #define MLX5E_READ_CTR64_CPU(ptr, dsc, i) \
  	(*(u64 *)((char *)ptr + dsc[i].offset))
  #define MLX5E_READ_CTR64_BE(ptr, dsc, i) \
-@@ -116,10 +120,19 @@ void mlx5e_stats_update_ndo_stats(struct
+@@ -116,10 +120,19 @@ void mlx5e_stats_update_ndo_stats(struct mlx5e_priv *priv);
  
  void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
  			   struct ethtool_pause_stats *pause_stats);
@@ -39,7 +41,7 @@ Change-Id: Id5f0947477efa882f37a1c8ced9d4893fa555cd6
  void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
  			     struct ethtool_eth_phy_stats *phy_stats);
  void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
-@@ -129,10 +142,15 @@ void mlx5e_stats_eth_ctrl_get(struct mlx
+@@ -129,10 +142,15 @@ void mlx5e_stats_eth_ctrl_get(struct mlx5e_priv *priv,
  void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
  			  struct ethtool_rmon_stats *rmon,
  			  const struct ethtool_rmon_hist_range **ranges);

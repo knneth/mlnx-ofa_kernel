@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  drivers/nvme/target/fc.c | 11 +++++++----
  1 file changed, 7 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/nvme/target/fc.c b/drivers/nvme/target/fc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/fc.c
 +++ b/drivers/nvme/target/fc.c
 @@ -2,6 +2,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  #ifdef pr_fmt
  #undef pr_fmt
  #endif
-@@ -1158,7 +1159,7 @@ nvmet_fc_alloc_target_assoc(struct nvmet
+@@ -1158,7 +1159,7 @@ nvmet_fc_alloc_target_assoc(struct nvmet_fc_tgtport *tgtport, void *hosthandle)
  	return assoc;
  
  out_ida:
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  out_free_assoc:
  	kfree(assoc);
  	return NULL;
-@@ -1605,7 +1606,11 @@ nvmet_fc_free_pending_reqs(struct nvmet_
+@@ -1605,7 +1606,11 @@ nvmet_fc_free_pending_reqs(struct nvmet_fc_tgtport *tgtport)
  
  	iod = tgtport->iod;
  	for (i = 0; i < NVMET_LS_CTX_COUNT; iod++, i++)
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  
  	/*
  	 * After this point the connection is lost and thus any pending
-@@ -2104,11 +2109,9 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+@@ -2104,11 +2109,9 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_fcp_iod *fod)
  {
  	struct scatterlist *sg;
  	unsigned int nent;
@@ -48,7 +50,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  	fod->data_sg = sg;
  	fod->data_sg_cnt = nent;
  	fod->data_sg_cnt = fc_dma_map_sg(fod->tgtport->dev, sg, nent,
-@@ -2118,7 +2121,6 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+@@ -2118,7 +2121,6 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_fcp_iod *fod)
  	fod->next_sg = fod->data_sg;
  
  	return 0;

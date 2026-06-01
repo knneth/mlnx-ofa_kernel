@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
 
 ---
- drivers/infiniband/core/uverbs_main.c | 40 +++++++++++++++++++++++----
- 1 file changed, 35 insertions(+), 5 deletions(-)
+ drivers/infiniband/core/uverbs_main.c | 49 ++++++++++++++++++++++++---
+ 1 file changed, 44 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/infiniband/core/uverbs_main.c b/drivers/infiniband/core/uverbs_main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
 @@ -29,6 +29,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
   * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
   * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   * SOFTWARE.
-@@ -79,14 +80,18 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -79,14 +80,18 @@ static int ib_uverbs_add_one(struct ib_device *device);
  static void ib_uverbs_remove_one(struct ib_device *device, void *client_data);
  static struct ib_client uverbs_client;
  
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  	.name = "infiniband_verbs",
  	.devnode = uverbs_devnode,
  };
-@@ -103,7 +108,6 @@ struct ib_ucontext *ib_uverbs_get_uconte
+@@ -103,7 +108,6 @@ struct ib_ucontext *ib_uverbs_get_ucontext_file(struct ib_uverbs_file *ufile)
  	 * get_context, we get NULL or valid ucontext.
  	 */
  	struct ib_ucontext *ucontext = smp_load_acquire(&ufile->ucontext);
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  	if (!srcu_dereference(ufile->device->ib_dev,
  			      &ufile->device->disassociate_srcu))
  		return ERR_PTR(-EIO);
-@@ -356,14 +360,20 @@ const struct file_operations uverbs_even
+@@ -356,14 +360,20 @@ const struct file_operations uverbs_event_fops = {
  	.poll    = ib_uverbs_comp_event_poll,
  	.release = uverbs_uobject_fd_release,
  	.fasync  = ib_uverbs_comp_event_fasync,
@@ -65,7 +67,20 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  };
  
  void ib_uverbs_comp_handler(struct ib_cq *cq, void *cq_context)
-@@ -820,7 +830,6 @@ static vm_fault_t rdma_umap_fault(struct
+@@ -756,7 +766,12 @@ out_zap:
+ 	 * point, so zap it.
+ 	 */
+ 	vma->vm_private_data = NULL;
++#ifdef HAVE_ZAP_SPECIAL_VMA_RANGE
++/* Newer kernels (7.1+): zap_vma_ptes renamed to zap_special_vma_range */
++	zap_special_vma_range(vma, vma->vm_start, vma->vm_end - vma->vm_start);
++#else
+ 	zap_vma_ptes(vma, vma->vm_start, vma->vm_end - vma->vm_start);
++#endif
+ }
+ 
+ static void rdma_umap_close(struct vm_area_struct *vma)
+@@ -820,7 +835,6 @@ static vm_fault_t rdma_umap_fault(struct vm_fault *vmf)
  
  	return ret;
  }
@@ -73,7 +88,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  static const struct vm_operations_struct rdma_umap_ops = {
  	.open = rdma_umap_open,
  	.close = rdma_umap_close,
-@@ -868,7 +877,11 @@ void uverbs_user_mmap_disassociate(struc
+@@ -868,7 +882,11 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
  		 * at a time to get the lock ordering right. Typically there
  		 * will only be one mm, so no big deal.
  		 */
@@ -85,7 +100,22 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  		mutex_lock(&ufile->umap_lock);
  		list_for_each_entry_safe (priv, next_priv, &ufile->umaps,
  					  list) {
-@@ -887,7 +900,11 @@ void uverbs_user_mmap_disassociate(struc
+@@ -878,8 +896,14 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
+ 				continue;
+ 			list_del_init(&priv->list);
+ 
++#ifdef HAVE_ZAP_SPECIAL_VMA_RANGE
++/* Newer kernels (7.1+): zap_vma_ptes renamed to zap_special_vma_range */
++			zap_special_vma_range(vma, vma->vm_start,
++					      vma->vm_end - vma->vm_start);
++#else
+ 			zap_vma_ptes(vma, vma->vm_start,
+ 				     vma->vm_end - vma->vm_start);
++#endif
+ 
+ 			if (priv->entry) {
+ 				rdma_user_mmap_entry_put(priv->entry);
+@@ -887,7 +911,11 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
  			}
  		}
  		mutex_unlock(&ufile->umap_lock);
@@ -97,7 +127,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  		mmput(mm);
  	}
  
-@@ -994,7 +1011,11 @@ static int ib_uverbs_open(struct inode *
+@@ -994,7 +1022,11 @@ static int ib_uverbs_open(struct inode *inode, struct file *filp)
  
  	setup_ufile_idr_uobject(file);
  
@@ -109,7 +139,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  
  err_module:
  	module_put(ib_dev->ops.owner);
-@@ -1029,6 +1050,9 @@ static const struct file_operations uver
+@@ -1029,6 +1061,9 @@ static const struct file_operations uverbs_fops = {
  	.write	 = ib_uverbs_write,
  	.open	 = ib_uverbs_open,
  	.release = ib_uverbs_close,
@@ -119,7 +149,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  	.unlocked_ioctl = ib_uverbs_ioctl,
  	.compat_ioctl = compat_ptr_ioctl,
  };
-@@ -1039,6 +1063,9 @@ static const struct file_operations uver
+@@ -1039,6 +1074,9 @@ static const struct file_operations uverbs_mmap_fops = {
  	.mmap    = ib_uverbs_mmap,
  	.open	 = ib_uverbs_open,
  	.release = ib_uverbs_close,
@@ -129,7 +159,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  	.unlocked_ioctl = ib_uverbs_ioctl,
  	.compat_ioctl = compat_ptr_ioctl,
  };
-@@ -1243,7 +1270,6 @@ static void ib_uverbs_free_hw_resources(
+@@ -1243,7 +1281,6 @@ static void ib_uverbs_free_hw_resources(struct ib_uverbs_device *uverbs_dev,
  
  		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
  		kref_put(&file->ref, ib_uverbs_release_file);
@@ -137,14 +167,12 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_main.c
  		mutex_lock(&uverbs_dev->lists_mutex);
  	}
  	mutex_unlock(&uverbs_dev->lists_mutex);
-@@ -1347,7 +1373,11 @@ static void __exit ib_uverbs_cleanup(voi
+@@ -1347,7 +1384,9 @@ static void __exit ib_uverbs_cleanup(void)
  	unregister_chrdev_region(dynamic_uverbs_dev,
  				 IB_UVERBS_NUM_DYNAMIC_MINOR);
  	ib_cleanup_ucaps();
 +#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
  	mmu_notifier_synchronize();
-+#endif
 +#endif
  }
  

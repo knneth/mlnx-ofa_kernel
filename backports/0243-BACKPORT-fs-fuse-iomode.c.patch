@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  fs/fuse/iomode.c | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
+diff --git a/fs/fuse/iomode.c b/fs/fuse/iomode.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/iomode.c
 +++ b/fs/fuse/iomode.c
 @@ -112,6 +112,7 @@ unlock:
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  /* Takes uncached_io inode mode reference to be dropped on file release */
  static int fuse_file_uncached_io_open(struct inode *inode,
  				      struct fuse_file *ff,
-@@ -128,6 +129,7 @@ static int fuse_file_uncached_io_open(st
+@@ -128,6 +129,7 @@ static int fuse_file_uncached_io_open(struct inode *inode,
  	ff->iomode = IOM_UNCACHED;
  	return 0;
  }
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  
  void fuse_inode_uncached_io_end(struct fuse_inode *fi)
  {
-@@ -165,6 +167,7 @@ static void fuse_file_uncached_io_releas
+@@ -165,6 +167,7 @@ static void fuse_file_uncached_io_release(struct fuse_file *ff,
  	(FOPEN_PASSTHROUGH | FOPEN_DIRECT_IO | FOPEN_PARALLEL_DIRECT_WRITES | \
  	 FOPEN_NOFLUSH)
  
@@ -31,7 +33,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  static int fuse_file_passthrough_open(struct inode *inode, struct file *file)
  {
  	struct fuse_file *ff = file->private_data;
-@@ -192,12 +195,15 @@ static int fuse_file_passthrough_open(st
+@@ -192,12 +195,15 @@ static int fuse_file_passthrough_open(struct inode *inode, struct file *file)
  
  	return err;
  }
@@ -47,7 +49,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  	int err;
  
  	/*
-@@ -212,8 +218,10 @@ int fuse_file_io_open(struct file *file,
+@@ -212,8 +218,10 @@ int fuse_file_io_open(struct file *file, struct inode *inode)
  	 * which is already open for passthrough.
  	 */
  	err = -EINVAL;
@@ -58,7 +60,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/iomode.c
  
  	/*
  	 * FOPEN_PARALLEL_DIRECT_WRITES requires FOPEN_DIRECT_IO.
-@@ -230,12 +238,18 @@ int fuse_file_io_open(struct file *file,
+@@ -230,12 +238,18 @@ int fuse_file_io_open(struct file *file, struct inode *inode)
  	 * so we put the inode in caching mode to prevent parallel dio.
  	 */
  	if ((ff->open_flags & FOPEN_DIRECT_IO) &&

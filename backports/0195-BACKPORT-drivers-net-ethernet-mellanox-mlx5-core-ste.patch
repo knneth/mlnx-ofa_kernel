@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c    | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
 @@ -6,7 +6,11 @@
@@ -20,7 +22,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static u16
-@@ -409,7 +413,11 @@ int mlx5hws_bwc_queue_poll(struct mlx5hw
+@@ -409,7 +413,11 @@ int mlx5hws_bwc_queue_poll(struct mlx5hws_context *ctx,
  			   bool drain)
  {
  	unsigned long timeout = jiffies +

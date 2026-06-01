@@ -1,0 +1,39 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_std_types_dmabuf.c
+
+Change-Id: Ie86b141be3a73cc177375dcff63c473d7f155b3e
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/infiniband/core/uverbs_std_types_dmabuf.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/infiniband/core/uverbs_std_types_dmabuf.c b/drivers/infiniband/core/uverbs_std_types_dmabuf.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/uverbs_std_types_dmabuf.c
++++ b/drivers/infiniband/core/uverbs_std_types_dmabuf.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ #include <linux/dma-buf-mapping.h>
+ #include <linux/pci-p2pdma.h>
+ #include <linux/dma-resv.h>
+@@ -169,7 +170,12 @@ static void uverbs_dmabuf_fd_destroy_uobj(struct ib_uobject *uobj,
+ 	if (!uverbs_dmabuf->revoked) {
+ 		uverbs_dmabuf->revoked = true;
+ 		list_del(&uverbs_dmabuf->dmabufs_elm);
++#ifdef HAVE_DMA_BUF_INVALIDATE_MAPPINGS
++/* Newer kernels (7.1+): dma_buf_move_notify renamed */
++		dma_buf_invalidate_mappings(uverbs_dmabuf->dmabuf);
++#else
+ 		dma_buf_move_notify(uverbs_dmabuf->dmabuf);
++#endif
+ 		dma_resv_wait_timeout(uverbs_dmabuf->dmabuf->resv,
+ 				      DMA_RESV_USAGE_BOOKKEEP, false,
+ 				      MAX_SCHEDULE_TIMEOUT);
+@@ -200,3 +206,4 @@ const struct uapi_definition uverbs_def_obj_dmabuf[] = {
+ 				      UAPI_DEF_OBJ_NEEDS_FN(pgoff_to_mmap_entry),
+ 	{}
+ };
++#endif	/* HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF */

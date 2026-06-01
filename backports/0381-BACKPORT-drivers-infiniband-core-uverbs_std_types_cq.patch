@@ -6,9 +6,11 @@ Change-Id: I85f4ce1ffce0d4b06d92e2b61ed497035eaee1a4
  drivers/infiniband/core/uverbs_std_types_cq.c | 12 ++++++++++--
  1 file changed, 10 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/core/uverbs_std_types_cq.c b/drivers/infiniband/core/uverbs_std_types_cq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_std_types_cq.c
 +++ b/drivers/infiniband/core/uverbs_std_types_cq.c
-@@ -66,16 +66,18 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+@@ -66,16 +66,18 @@ static int UVERBS_HANDLER(UVERBS_METHOD_CQ_CREATE)(
  		typeof(*obj), uevent.uobject);
  	struct ib_uverbs_completion_event_file *ev_file = NULL;
  	struct ib_device *ib_dev = attrs->context->device;
@@ -29,7 +31,7 @@ Change-Id: I85f4ce1ffce0d4b06d92e2b61ed497035eaee1a4
  	int ret;
  
  	if ((!ib_dev->ops.create_cq && !ib_dev->ops.create_cq_umem) || !ib_dev->ops.destroy_cq)
-@@ -135,11 +137,16 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+@@ -135,11 +137,16 @@ static int UVERBS_HANDLER(UVERBS_METHOD_CQ_CREATE)(
  			goto err_event_file;
  		}
  
@@ -46,7 +48,7 @@ Change-Id: I85f4ce1ffce0d4b06d92e2b61ed497035eaee1a4
  	} else if (uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_FD)) {
  
  		ret = uverbs_get_raw_fd(&buffer_fd, attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_FD);
-@@ -167,6 +174,7 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+@@ -167,6 +174,7 @@ static int UVERBS_HANDLER(UVERBS_METHOD_CQ_CREATE)(
  			goto err_event_file;
  		}
  		umem = &umem_dmabuf->umem;

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 @@ -3,8 +3,10 @@

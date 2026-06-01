@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action.c
-@@ -1224,7 +1224,7 @@ hws_action_create_modify_header_hws(stru
+@@ -1224,7 +1224,7 @@ hws_action_create_modify_header_hws(struct mlx5hws_action *action,
  		action[i].modify_header.nop_locations = nop_locations;
  		action[i].modify_header.num_of_actions = new_num_actions;
  

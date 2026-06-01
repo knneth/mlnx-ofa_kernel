@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h | 9 ++++++++-
  1 file changed, 8 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.h
 @@ -4,13 +4,20 @@

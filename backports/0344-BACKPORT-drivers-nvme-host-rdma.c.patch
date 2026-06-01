@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
 
 Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
 ---
- drivers/nvme/host/rdma.c | 95 +++++++++++++++++++++++++++++++++++++---
- 1 file changed, 90 insertions(+), 5 deletions(-)
+ drivers/nvme/host/rdma.c | 67 +++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 62 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/nvme/host/rdma.c b/drivers/nvme/host/rdma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/rdma.c
 +++ b/drivers/nvme/host/rdma.c
 @@ -16,13 +16,16 @@
@@ -25,7 +27,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  
  #include <rdma/ib_verbs.h>
  #include <rdma/rdma_cm.h>
-@@ -167,6 +170,15 @@ static void nvme_rdma_complete_rq(struct
+@@ -167,6 +170,15 @@ static void nvme_rdma_complete_rq(struct request *rq);
  static const struct blk_mq_ops nvme_rdma_mq_ops;
  static const struct blk_mq_ops nvme_rdma_admin_mq_ops;
  
@@ -41,7 +43,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  static inline int nvme_rdma_queue_idx(struct nvme_rdma_queue *queue)
  {
  	return queue - queue->ctrl->queues;
-@@ -801,11 +813,13 @@ static int nvme_rdma_configure_admin_que
+@@ -801,11 +813,13 @@ static int nvme_rdma_configure_admin_queue(struct nvme_rdma_ctrl *ctrl,
  	ctrl->device = ctrl->queues[0].device;
  	ctrl->ctrl.numa_node = ibdev_to_node(ctrl->device->dev);
  
@@ -55,34 +57,16 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  
  	ctrl->max_fr_pages = nvme_rdma_get_max_fr_pages(ctrl->device->dev,
  							pi_capable);
-@@ -1254,9 +1268,13 @@ static void nvme_rdma_dma_unmap_req(stru
- 	if (blk_integrity_rq(rq)) {
- 		ib_dma_unmap_sg(ibdev, req->metadata_sgl->sg_table.sgl,
+@@ -1256,7 +1270,7 @@ static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
  				req->metadata_sgl->nents, rq_dma_dir(rq));
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
  		sg_free_table_chained(&req->metadata_sgl->sg_table,
  				      NVME_INLINE_METADATA_SG_CNT);
 -	}
-+#else
-+		sg_free_table_chained(&req->metadata_sgl->sg_table, true);
-+#endif
 +}
  
  #ifdef CONFIG_NVFS
  	if (nvme_rdma_nvfs_unmap_data(ibdev, rq))
-@@ -1265,7 +1283,11 @@ static void nvme_rdma_dma_unmap_req(stru
- 
- 	ib_dma_unmap_sg(ibdev, req->data_sgl.sg_table.sgl, req->data_sgl.nents,
- 			rq_dma_dir(rq));
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 	sg_free_table_chained(&req->data_sgl.sg_table, NVME_INLINE_SG_CNT);
-+#else
-+	sg_free_table_chained(&req->data_sgl.sg_table, true);
-+#endif
- }
- 
- static void nvme_rdma_unmap_data(struct nvme_rdma_queue *queue,
-@@ -1392,7 +1414,9 @@ static void nvme_rdma_set_sig_domain(str
+@@ -1392,7 +1406,9 @@ static void nvme_rdma_set_sig_domain(struct blk_integrity *bi,
  {
  	domain->sig_type = IB_SIG_TYPE_T10_DIF;
  	domain->sig.dif.bg_type = IB_T10DIF_CRC;
@@ -92,7 +76,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
  	if (control & NVME_RW_PRINFO_PRCHK_REF)
  		domain->sig.dif.ref_remap = true;
-@@ -1454,9 +1478,12 @@ static int nvme_rdma_map_sg_pi(struct nv
+@@ -1454,9 +1470,12 @@ static int nvme_rdma_map_sg_pi(struct nvme_rdma_queue *queue,
  	struct ib_reg_wr *wr = &req->reg_wr;
  	struct request *rq = blk_mq_rq_from_pdu(req);
  	struct nvme_ns *ns = rq->q->queuedata;
@@ -107,23 +91,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  	u32 xfer_len;
  	int nr;
  
-@@ -1513,9 +1540,15 @@ static int nvme_rdma_dma_map_req(struct
- 	int ret;
- 
- 	req->data_sgl.sg_table.sgl = (struct scatterlist *)(req + 1);
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 	ret = sg_alloc_table_chained(&req->data_sgl.sg_table,
- 			blk_rq_nr_phys_segments(rq), req->data_sgl.sg_table.sgl,
- 			NVME_INLINE_SG_CNT);
-+#else
-+	ret = sg_alloc_table_chained(&req->data_sgl.sg_table,
-+			blk_rq_nr_phys_segments(rq),
-+			req->data_sgl.sg_table.sgl);
-+#endif
- 	if (ret)
- 		return -ENOMEM;
- 
-@@ -1530,7 +1563,11 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1530,7 +1549,11 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  	}
          }
  #endif
@@ -135,11 +103,9 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  
  	*count = ib_dma_map_sg(ibdev, req->data_sgl.sg_table.sgl,
  			       req->data_sgl.nents, rq_dma_dir(rq));
-@@ -1542,17 +1579,33 @@ static int nvme_rdma_dma_map_req(struct
- 	if (blk_integrity_rq(rq)) {
+@@ -1543,7 +1566,11 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  		req->metadata_sgl->sg_table.sgl =
  			(struct scatterlist *)(req->metadata_sgl + 1);
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
  		ret = sg_alloc_table_chained(&req->metadata_sgl->sg_table,
 +#ifdef HAVE_BLK_RQ_INTEGRITY_MAP_USER
  				rq->nr_integrity_segments,
@@ -148,13 +114,8 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
 +#endif
  				req->metadata_sgl->sg_table.sgl,
  				NVME_INLINE_METADATA_SG_CNT);
-+#else
-+	ret = sg_alloc_table_chained(&req->metadata_sgl->sg_table,
-+			blk_rq_count_integrity_sg(rq->q, rq->bio),
-+			req->metadata_sgl->sg_table.sgl);
-+#endif
  		if (unlikely(ret)) {
- 			ret = -ENOMEM;
+@@ -1551,8 +1578,14 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  			goto out_unmap_sg;
  		}
  
@@ -169,29 +130,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  		*pi_count = ib_dma_map_sg(ibdev,
  					  req->metadata_sgl->sg_table.sgl,
  					  req->metadata_sgl->nents,
-@@ -1566,13 +1619,21 @@ static int nvme_rdma_dma_map_req(struct
- 	return 0;
- 
- out_free_pi_table:
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 	sg_free_table_chained(&req->metadata_sgl->sg_table,
- 			      NVME_INLINE_METADATA_SG_CNT);
-+#else
-+		sg_free_table_chained(&req->metadata_sgl->sg_table, true);
-+#endif
- out_unmap_sg:
- 	ib_dma_unmap_sg(ibdev, req->data_sgl.sg_table.sgl, req->data_sgl.nents,
- 			rq_dma_dir(rq));
- out_free_table:
-+#ifdef HAVE_SG_ALLOC_TABLE_CHAINED_NENTS_FIRST_CHUNK_PARAM
- 	sg_free_table_chained(&req->data_sgl.sg_table, NVME_INLINE_SG_CNT);
-+#else
-+	sg_free_table_chained(&req->data_sgl.sg_table, true);
-+#endif
- 	return ret;
- }
- 
-@@ -1583,7 +1644,7 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1583,7 +1616,7 @@ static int nvme_rdma_map_data(struct nvme_rdma_queue *queue,
  	struct nvme_rdma_device *dev = queue->device;
  	struct ib_device *ibdev = dev->dev;
  	int pi_count = 0;
@@ -200,7 +139,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  
  	req->num_sge = 1;
  	refcount_set(&req->ref, 2); /* send and recv completions */
-@@ -2022,7 +2083,12 @@ static void nvme_rdma_complete_timed_out
+@@ -2022,7 +2055,12 @@ static void nvme_rdma_complete_timed_out(struct request *rq)
  	nvmf_complete_timed_out_request(rq);
  }
  
@@ -214,7 +153,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  {
  	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
  	struct nvme_rdma_queue *queue = req->queue;
-@@ -2142,11 +2208,23 @@ unmap_qe:
+@@ -2142,11 +2180,23 @@ unmap_qe:
  	return ret;
  }
  
@@ -238,7 +177,7 @@ Change-Id: Ib8a521a967ae29bbe06221f053c323cf77064840
  }
  
  static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
-@@ -2195,11 +2273,18 @@ static void nvme_rdma_complete_rq(struct
+@@ -2195,11 +2245,18 @@ static void nvme_rdma_complete_rq(struct request *rq)
  	nvme_complete_rq(rq);
  }
  

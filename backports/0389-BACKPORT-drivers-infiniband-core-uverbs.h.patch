@@ -1,0 +1,52 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs.h
+
+Change-Id: I56ae2ab2e250211704db4e3caa8a151d478f66cd
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/infiniband/core/uverbs.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/infiniband/core/uverbs.h b/drivers/infiniband/core/uverbs.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/uverbs.h
++++ b/drivers/infiniband/core/uverbs.h
+@@ -133,17 +133,23 @@ struct ib_uverbs_completion_event_file {
+ 	struct ib_uverbs_event_queue		ev_queue;
+ };
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ struct ib_uverbs_dmabuf_file {
+ 	struct ib_uobject uobj;
+ 	struct dma_buf *dmabuf;
+ 	struct list_head dmabufs_elm;
+ 	struct rdma_user_mmap_entry *mmap_entry;
++#ifdef HAVE_PHYS_VEC
+ 	struct phys_vec phys_vec;
++#else
++	struct dma_buf_phys_vec phys_vec;
++#endif
+ 	struct p2pdma_provider *provider;
+ 	struct kref kref;
+ 	struct completion comp;
+ 	u8 revoked :1;
+ };
++#endif
+ 
+ struct ib_uverbs_event {
+ 	union {
+@@ -303,6 +309,7 @@ void copy_port_attr_to_resp(struct ib_port_attr *attr,
+ 			    struct ib_uverbs_query_port_resp *resp,
+ 			    struct ib_device *ib_dev, u8 port_num);
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ static inline void ib_uverbs_dmabuf_done(struct kref *kref)
+ {
+ 	struct ib_uverbs_dmabuf_file *priv =
+@@ -310,5 +317,6 @@ static inline void ib_uverbs_dmabuf_done(struct kref *kref)
+ 
+ 	complete(&priv->comp);
+ }
++#endif
+ 
+ #endif /* UVERBS_H */

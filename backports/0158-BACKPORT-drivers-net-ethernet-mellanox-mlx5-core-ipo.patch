@@ -3,12 +3,36 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 
 ---
- .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 33 ++++++++++++++++---
- 1 file changed, 28 insertions(+), 5 deletions(-)
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 59 +++++++++++++++++--
+ 1 file changed, 54 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
-@@ -48,11 +48,17 @@ static int mlx5i_change_mtu(struct net_d
+@@ -45,14 +45,44 @@ static int mlx5i_open(struct net_device *netdev);
+ static int mlx5i_close(struct net_device *netdev);
+ static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu);
+ 
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++int mlx5i_hwtstamp_set(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config,
++		       struct netlink_ext_ack *extack)
++{
++	struct mlx5e_priv *epriv = mlx5i_epriv(dev);
++
++	return mlx5e_hwtstamp_set(epriv, config, extack);
++}
++
++int mlx5i_hwtstamp_get(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config)
++{
++	struct mlx5e_priv *epriv = mlx5i_epriv(dev);
++
++	return mlx5e_hwtstamp_get(epriv, config);
++}
++#endif
++
  static const struct net_device_ops mlx5i_netdev_ops = {
  	.ndo_open                = mlx5i_open,
  	.ndo_stop                = mlx5i_close,
@@ -21,16 +45,21 @@ Subject: [PATCH] BACKPORT:
 +       .ndo_uninit              = mlx5i_dev_cleanup,
 +       .ndo_change_mtu          = mlx5i_change_mtu,
 +
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++	.ndo_hwtstamp_get         = mlx5i_hwtstamp_get,
++	.ndo_hwtstamp_set         = mlx5i_hwtstamp_set,
++#else
 +#ifdef HAVE_NDO_ETH_IOCTL
  	.ndo_eth_ioctl            = mlx5i_ioctl,
 +#else
 +	.ndo_do_ioctl		  = mlx5i_ioctl,
 +#endif
++#endif	/* HAVE_NDO_HWTSTAMP_GET_SET */
 +
  };
  
  /* IPoIB mlx5 netdev profile */
-@@ -86,7 +92,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -86,7 +116,12 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
  	mlx5e_set_netdev_mtu_boundaries(priv);
  	netdev->mtu = netdev->max_mtu;
  
@@ -44,7 +73,7 @@ Subject: [PATCH] BACKPORT:
  	mlx5i_build_nic_params(mdev, &priv->channels.params);
  
  	mlx5e_timestamp_init(priv);
-@@ -103,8 +114,10 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -103,8 +138,10 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
  
  	netdev->netdev_ops = &mlx5i_netdev_ops;
  	netdev->ethtool_ops = &mlx5i_ethtool_ops;
@@ -55,7 +84,7 @@ Subject: [PATCH] BACKPORT:
  
  	return 0;
  }
-@@ -379,7 +392,9 @@ static int mlx5i_create_flow_steering(st
+@@ -379,7 +416,9 @@ static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -65,7 +94,7 @@ Subject: [PATCH] BACKPORT:
  	}
  
  	err = mlx5e_create_ttc_table(priv->fs, priv->rx_res);
-@@ -543,13 +558,21 @@ int mlx5i_dev_init(struct net_device *de
+@@ -543,13 +582,21 @@ int mlx5i_dev_init(struct net_device *dev)
  {
  	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
  	struct mlx5i_priv    *ipriv  = priv->ppriv;
@@ -87,3 +116,19 @@ Subject: [PATCH] BACKPORT:
  
  	/* Add QPN to net-device mapping to HT */
  	mlx5i_pkey_add_qpn(dev, ipriv->qpn);
+@@ -557,6 +604,7 @@ int mlx5i_dev_init(struct net_device *dev)
+ 	return 0;
+ }
+ 
++#ifndef HAVE_NDO_HWTSTAMP_GET_SET
+ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+ {
+ 	struct mlx5e_priv *priv = mlx5i_epriv(dev);
+@@ -570,6 +618,7 @@ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+ 		return -EOPNOTSUPP;
+ 	}
+ }
++#endif
+ 
+ void mlx5i_dev_cleanup(struct net_device *dev)
+ {

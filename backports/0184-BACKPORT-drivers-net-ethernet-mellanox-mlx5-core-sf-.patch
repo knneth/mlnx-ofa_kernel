@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/sf/dev/driver.c        | 47 +++++++++++++++++++
  1 file changed, 47 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 @@ -10,6 +10,7 @@
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink *devlink)
  {
  	struct mlx5_sf_peer_devlink_event_ctx event_ctx = {
-@@ -23,6 +24,19 @@ static int mlx5_core_peer_devlink_set(st
+@@ -23,6 +24,19 @@ static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink
  						&event_ctx);
  	return ret == NOTIFY_OK ? event_ctx.err : 0;
  }
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT:
  
  static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxiliary_device_id *id)
  {
-@@ -31,6 +45,9 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -31,6 +45,9 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  	struct devlink *devlink;
  	int err;
  
@@ -46,7 +48,7 @@ Subject: [PATCH] BACKPORT:
  	devlink = mlx5_devlink_alloc(&adev->dev);
  	if (!devlink)
  		return -ENOMEM;
-@@ -45,10 +62,12 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -45,10 +62,12 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  	mdev->priv.adev_idx = adev->id;
  	sf_dev->mdev = mdev;
  
@@ -59,7 +61,7 @@ Subject: [PATCH] BACKPORT:
  
  	err = mlx5_mdev_init(mdev, MLX5_SF_PROF);
  	if (err) {
-@@ -71,26 +90,38 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -71,16 +90,20 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  		goto remap_err;
  	}
  
@@ -80,9 +82,10 @@ Subject: [PATCH] BACKPORT:
  		err = mlx5_init_one(mdev);
  	if (err) {
  		mlx5_core_warn(mdev, "mlx5_init_one err=%d\n", err);
- 		goto init_one_err;
+@@ -88,10 +111,18 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  	}
  
+ 	mlx5_vhca_debugfs_init(mdev);
 +#if defined(HAVE_DEVLINK_REGISTER_GET_1_PARAMS) && !defined(HAVE_DEVL_REGISTER)
 +	devlink_register(devlink);
 +#endif
@@ -98,7 +101,7 @@ Subject: [PATCH] BACKPORT:
  	iounmap(mdev->iseg);
  remap_err:
  	mlx5_mdev_uninit(mdev);
-@@ -108,13 +139,24 @@ static void mlx5_sf_dev_remove(struct au
+@@ -109,13 +140,24 @@ static void mlx5_sf_dev_remove(struct auxiliary_device *adev)
  	devlink = priv_to_devlink(mdev);
  	set_bit(MLX5_BREAK_FW_WAIT, &mdev->intf_state);
  	mlx5_drain_health_wq(mdev);
@@ -123,7 +126,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static void mlx5_sf_dev_shutdown(struct auxiliary_device *adev)
-@@ -132,7 +174,12 @@ static const struct auxiliary_device_id
+@@ -133,7 +175,12 @@ static const struct auxiliary_device_id mlx5_sf_dev_id_table[] = {
  	{ },
  };
  

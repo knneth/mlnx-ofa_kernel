@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  fs/fuse/virtio_fs.c | 92 +++++++++++++++++++++++++++++++++++++++++++--
  1 file changed, 89 insertions(+), 3 deletions(-)
 
+diff --git a/fs/fuse/virtio_fs.c b/fs/fuse/virtio_fs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/virtio_fs.c
 +++ b/fs/fuse/virtio_fs.c
 @@ -9,6 +9,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  #include <linux/memremap.h>
  #include <linux/module.h>
  #include <linux/virtio.h>
-@@ -1032,7 +1035,9 @@ static void virtio_fs_end_notify(struct
+@@ -1017,7 +1020,9 @@ static void virtio_fs_end_notify(struct virtio_fs_req *fs_req)
  		virtio_fs_notify_send_ack(fs, fs_req->req.out.h.unique, err);
  		break;
  	case FUSE_NOTIFY_RETRIEVE:
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	case FUSE_NOTIFY_POLL:
  	default:
  		break;
-@@ -1414,7 +1419,10 @@ static void virtio_fs_requests_done_work
+@@ -1399,7 +1404,10 @@ static void virtio_fs_requests_done_work(struct work_struct *work)
  static void virtio_fs_map_queues(struct virtio_device *vdev, struct virtio_fs *fs)
  {
  	const struct cpumask *mask, *masks;
@@ -39,7 +41,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  
  	/* First attempt to map using existing transport layer affinities
  	 * e.g. PCIe MSI-X
-@@ -1434,7 +1442,13 @@ static void virtio_fs_map_queues(struct
+@@ -1419,7 +1427,13 @@ static void virtio_fs_map_queues(struct virtio_device *vdev, struct virtio_fs *f
  	return;
  fallback:
  	/* Attempt to map evenly in groups over the CPUs */
@@ -53,7 +55,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	/* If even this fails we default to all CPUs use first request queue */
  	if (!masks) {
  		for_each_possible_cpu(cpu)
-@@ -1443,7 +1457,13 @@ fallback:
+@@ -1428,7 +1442,13 @@ fallback:
  	}
  
  	for (q = 0; q < fs->num_request_queues; q++) {
@@ -67,7 +69,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  			fs->mq_map[cpu] = q + VQ_REQUEST;
  	}
  	kfree(masks);
-@@ -1499,7 +1519,12 @@ static void virtio_fs_cleanup_vqs(struct
+@@ -1484,7 +1504,12 @@ static void virtio_fs_cleanup_vqs(struct virtio_device *vdev)
  static int virtio_fs_setup_vqs(struct virtio_device *vdev,
  			       struct virtio_fs *fs, bool alloc_reqs)
  {
@@ -80,7 +82,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	unsigned int info_idx = 0;
  	struct virtqueue **vqs;
  	unsigned int vq_nvqs;
-@@ -1508,33 +1533,59 @@ static int virtio_fs_setup_vqs(struct vi
+@@ -1493,33 +1518,59 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
  
  	vq_nvqs = 1 + fs->notify_enabled + fs->num_request_queues;
  	vqs = kmalloc_array(vq_nvqs, sizeof(vqs[VQ_HIPRIO]), GFP_KERNEL);
@@ -140,7 +142,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	if (ret < 0)
  		goto out;
  
-@@ -1553,7 +1604,12 @@ static int virtio_fs_setup_vqs(struct vi
+@@ -1538,7 +1589,12 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
  			goto out_del_vqs;
  	}
  
@@ -153,7 +155,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	kfree(vqs);
  	return 0;
  
-@@ -1561,7 +1617,12 @@ out_del_vqs:
+@@ -1546,7 +1602,12 @@ out_del_vqs:
  	virtio_reset_device(vdev);
  	virtio_fs_cleanup_vqs(vdev);
  out:
@@ -166,7 +168,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  	kfree(vqs);
  	return ret;
  }
-@@ -1639,7 +1700,11 @@ err:
+@@ -1624,7 +1685,11 @@ err:
   */
  static long virtio_fs_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
  				    long nr_pages, enum dax_access_mode mode,
@@ -178,7 +180,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  {
  	struct virtio_fs *fs = dax_get_private(dax_dev);
  	phys_addr_t offset = PFN_PHYS(pgoff);
-@@ -1647,8 +1712,16 @@ static long virtio_fs_direct_access(stru
+@@ -1632,8 +1697,16 @@ static long virtio_fs_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
  
  	if (kaddr)
  		*kaddr = fs->window_kaddr + offset;
@@ -196,7 +198,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  
  	return nr_pages > max_nr_pages ? max_nr_pages : nr_pages;
  }
-@@ -1856,6 +1929,7 @@ static int virtio_fs_restore(struct virt
+@@ -1841,6 +1914,7 @@ static int virtio_fs_restore(struct virtio_device *vdev)
  }
  #endif /* CONFIG_PM_SLEEP */
  
@@ -204,7 +206,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  static int virtio_fs_reset_prepare(struct virtio_device *vdev)
  {
  	struct virtio_fs *fs = vdev->priv;
-@@ -1894,6 +1968,7 @@ static int virtio_fs_reset_done(struct v
+@@ -1879,6 +1953,7 @@ static int virtio_fs_reset_done(struct virtio_device *vdev)
  
  	return 0;
  }
@@ -212,7 +214,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  
  static const struct virtio_device_id id_table[] = {
  	{ VIRTIO_ID_FS, VIRTIO_DEV_ANY_ID },
-@@ -1915,8 +1990,10 @@ static struct virtio_driver virtio_fs_dr
+@@ -1900,8 +1975,10 @@ static struct virtio_driver virtio_fs_driver = {
  	.freeze			= virtio_fs_freeze,
  	.restore		= virtio_fs_restore,
  #endif
@@ -223,7 +225,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  };
  
  #define FUSE_REQ_ID_STEP (1ULL << 1)
-@@ -2611,7 +2688,9 @@ static void virtio_fs_conn_resend(struct
+@@ -2596,7 +2673,9 @@ static void virtio_fs_conn_resend(struct fuse_conn *fc)
  		list_for_each_entry_safe(fs_req, next, &fsvq->processing, entry) {
  			__virtio_fs_get_request(fs_req);
  			/* mark the request as resend request */
@@ -233,7 +235,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/virtio_fs.c
  			list_move_tail(&fs_req->entry, &fsvq->queued_reqs);
  		}
  
-@@ -2827,7 +2906,14 @@ static int __init virtio_fs_init(void)
+@@ -2812,7 +2891,14 @@ static int __init virtio_fs_init(void)
  {
  	int ret;
  

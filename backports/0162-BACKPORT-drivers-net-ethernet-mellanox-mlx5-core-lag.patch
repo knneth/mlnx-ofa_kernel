@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c b/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/debugfs.c
-@@ -107,6 +107,9 @@ static int mapping_show(struct seq_file
+@@ -107,6 +107,9 @@ static int mapping_show(struct seq_file *file, void *priv)
  	bool lag_active;
  	int i, idx = 0;
  	int num_ports;
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT:
  
  	ldev = mlx5_lag_dev(dev);
  	mutex_lock(&ldev->lock);
-@@ -141,6 +144,9 @@ static int members_show(struct seq_file
+@@ -141,6 +144,9 @@ static int members_show(struct seq_file *file, void *priv)
  	struct mlx5_core_dev *dev = file->private;
  	struct mlx5_lag *ldev;
  	int i;

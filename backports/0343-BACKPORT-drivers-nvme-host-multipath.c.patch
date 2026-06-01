@@ -3,12 +3,14 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/multipath.c
 
 Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
 ---
- drivers/nvme/host/multipath.c | 296 ++++++++++++++++++++++++++++++++++
- 1 file changed, 296 insertions(+)
+ drivers/nvme/host/multipath.c | 292 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 292 insertions(+)
 
+diff --git a/drivers/nvme/host/multipath.c b/drivers/nvme/host/multipath.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/multipath.c
 +++ b/drivers/nvme/host/multipath.c
-@@ -111,7 +111,11 @@ void nvme_mpath_unfreeze(struct nvme_sub
+@@ -111,7 +111,11 @@ void nvme_mpath_unfreeze(struct nvme_subsystem *subsys)
  	lockdep_assert_held(&subsys->lock);
  	list_for_each_entry(h, &subsys->nsheads, entry)
  		if (h->disk)
@@ -20,7 +22,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  }
  
  void nvme_mpath_wait_freeze(struct nvme_subsystem *subsys)
-@@ -155,11 +159,17 @@ void nvme_failover_req(struct request *r
+@@ -155,11 +159,17 @@ void nvme_failover_req(struct request *req)
  
  	spin_lock_irqsave(&ns->head->requeue_lock, flags);
  	for (bio = req->bio; bio; bio = bio->bi_next) {
@@ -38,7 +40,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  		/*
  		 * The alternate request queue that we may end up submitting
  		 * the bio to may be frozen temporarily, in this case REQ_NOWAIT
-@@ -177,6 +187,7 @@ void nvme_failover_req(struct request *r
+@@ -177,6 +187,7 @@ void nvme_failover_req(struct request *req)
  	kblockd_schedule_work(&ns->head->requeue_work);
  }
  
@@ -46,7 +48,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  void nvme_mpath_start_request(struct request *rq)
  {
  	struct nvme_ns *ns = rq->q->queuedata;
-@@ -193,8 +204,14 @@ void nvme_mpath_start_request(struct req
+@@ -193,8 +204,14 @@ void nvme_mpath_start_request(struct request *rq)
  		return;
  
  	nvme_req(rq)->flags |= NVME_MPATH_IO_STATS;
@@ -61,7 +63,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  }
  EXPORT_SYMBOL_GPL(nvme_mpath_start_request);
  
-@@ -207,10 +224,17 @@ void nvme_mpath_end_request(struct reque
+@@ -207,10 +224,17 @@ void nvme_mpath_end_request(struct request *rq)
  
  	if (!(nvme_req(rq)->flags & NVME_MPATH_IO_STATS))
  		return;
@@ -79,7 +81,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  void nvme_kick_requeue_lists(struct nvme_ctrl *ctrl)
  {
-@@ -220,11 +244,16 @@ void nvme_kick_requeue_lists(struct nvme
+@@ -220,11 +244,16 @@ void nvme_kick_requeue_lists(struct nvme_ctrl *ctrl)
  	srcu_idx = srcu_read_lock(&ctrl->srcu);
  	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
  				 srcu_read_lock_held(&ctrl->srcu)) {
@@ -96,7 +98,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	}
  	srcu_read_unlock(&ctrl->srcu, srcu_idx);
  }
-@@ -475,6 +504,7 @@ inline struct nvme_ns *nvme_find_path(st
+@@ -475,6 +504,7 @@ inline struct nvme_ns *nvme_find_path(struct nvme_ns_head *head)
  	}
  }
  
@@ -104,7 +106,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  static bool nvme_available_path(struct nvme_ns_head *head)
  {
  	struct nvme_ns *ns;
-@@ -507,12 +537,31 @@ static bool nvme_available_path(struct n
+@@ -507,12 +537,31 @@ static bool nvme_available_path(struct nvme_ns_head *head)
  	 */
  	return nvme_mpath_queue_if_no_path(head);
  }
@@ -136,7 +138,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	int srcu_idx;
  
  	/*
-@@ -520,18 +569,44 @@ static void nvme_ns_head_submit_bio(stru
+@@ -520,18 +569,44 @@ static void nvme_ns_head_submit_bio(struct bio *bio)
  	 * different queue via blk_steal_bios(), so we need to use the bio_split
  	 * pool from the original queue to allocate the bvecs from.
  	 */
@@ -181,7 +183,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	} else if (nvme_available_path(head)) {
  		dev_warn_ratelimited(dev, "no usable path - requeuing I/O\n");
  
-@@ -545,20 +620,37 @@ static void nvme_ns_head_submit_bio(stru
+@@ -545,20 +620,37 @@ static void nvme_ns_head_submit_bio(struct bio *bio)
  	}
  
  	srcu_read_unlock(&head->srcu, srcu_idx);
@@ -219,7 +221,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  static int nvme_ns_head_get_unique_id(struct gendisk *disk, u8 id[16],
  		enum blk_unique_id type)
  {
-@@ -573,6 +665,7 @@ static int nvme_ns_head_get_unique_id(st
+@@ -573,6 +665,7 @@ static int nvme_ns_head_get_unique_id(struct gendisk *disk, u8 id[16],
  	srcu_read_unlock(&head->srcu, srcu_idx);
  	return ret;
  }
@@ -227,7 +229,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  #ifdef CONFIG_BLK_DEV_ZONED
  static int nvme_ns_head_report_zones(struct gendisk *disk, sector_t sector,
-@@ -595,14 +688,22 @@ static int nvme_ns_head_report_zones(str
+@@ -595,14 +688,22 @@ static int nvme_ns_head_report_zones(struct gendisk *disk, sector_t sector,
  
  const struct block_device_operations nvme_ns_head_ops = {
  	.owner		= THIS_MODULE,
@@ -250,7 +252,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	.pr_ops		= &nvme_pr_ops,
  };
  
-@@ -630,8 +731,12 @@ static const struct file_operations nvme
+@@ -630,8 +731,12 @@ static const struct file_operations nvme_ns_head_chr_fops = {
  	.release	= nvme_ns_head_chr_release,
  	.unlocked_ioctl	= nvme_ns_head_chr_ioctl,
  	.compat_ioctl	= compat_ptr_ioctl,
@@ -263,7 +265,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  };
  
  static int nvme_add_ns_head_cdev(struct nvme_ns_head *head)
-@@ -648,6 +753,7 @@ static int nvme_add_ns_head_cdev(struct
+@@ -648,6 +753,7 @@ static int nvme_add_ns_head_cdev(struct nvme_ns_head *head)
  	return ret;
  }
  
@@ -271,7 +273,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  static void nvme_partition_scan_work(struct work_struct *work)
  {
  	struct nvme_ns_head *head =
-@@ -661,6 +767,7 @@ static void nvme_partition_scan_work(str
+@@ -661,6 +767,7 @@ static void nvme_partition_scan_work(struct work_struct *work)
  	bdev_disk_changed(head->disk, false);
  	mutex_unlock(&head->disk->open_mutex);
  }
@@ -279,7 +281,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  static void nvme_requeue_work(struct work_struct *work)
  {
-@@ -676,7 +783,11 @@ static void nvme_requeue_work(struct wor
+@@ -676,7 +783,11 @@ static void nvme_requeue_work(struct work_struct *work)
  		next = bio->bi_next;
  		bio->bi_next = NULL;
  
@@ -291,7 +293,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	}
  }
  
-@@ -716,13 +827,23 @@ static void nvme_remove_head_work(struct
+@@ -716,13 +827,23 @@ static void nvme_remove_head_work(struct work_struct *work)
  
  int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
  {
@@ -315,7 +317,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	INIT_DELAYED_WORK(&head->remove_work, nvme_remove_head_work);
  	head->delayed_removal_secs = 0;
  
-@@ -741,16 +862,84 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -741,16 +862,80 @@ int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
  			return 0;
  	}
  
@@ -360,15 +362,11 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
 +	q = blk_alloc_queue(ctrl->numa_node);
 +#else
 +#ifdef HAVE_BLK_QUEUE_MAKE_REQUEST
-+#ifdef HAVE_BLK_ALLOC_QUEUE_NODE_3_ARGS
-+	q = blk_alloc_queue_node(GFP_KERNEL, NUMA_NO_NODE, NULL);
-+#else
 +#ifdef HAVE_BLK_ALLOC_QUEUE_RH
 +	q = blk_alloc_queue_rh(nvme_ns_head_make_request, ctrl->numa_node);
 +#else
 +	q = blk_alloc_queue_node(GFP_KERNEL, ctrl->numa_node);
 +#endif // ALLOC_QUEUE_RH
-+#endif // ALLOC_QUEUE_NODE_3_ARGS
 +#else
 +	q = blk_alloc_queue(nvme_ns_head_make_request, ctrl->numa_node);
 +#endif // QUEUE_MAKE_REQUEST
@@ -400,7 +398,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	head->disk->fops = &nvme_ns_head_ops;
  	head->disk->private_data = head;
  
-@@ -762,17 +951,65 @@ int nvme_mpath_alloc_disk(struct nvme_ct
+@@ -762,17 +947,65 @@ int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
  	 * Defer the partition scan to a different context that does not block
  	 * scan_work.
  	 */
@@ -466,7 +464,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  	if (!head->disk)
  		return;
-@@ -783,17 +1020,26 @@ static void nvme_mpath_set_live(struct n
+@@ -783,17 +1016,26 @@ static void nvme_mpath_set_live(struct nvme_ns *ns)
  	 * head.
  	 */
  	if (!test_and_set_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
@@ -493,7 +491,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  	mutex_lock(&head->lock);
  	if (nvme_path_is_optimized(ns)) {
-@@ -829,7 +1075,11 @@ static int nvme_parse_ana_log(struct nvm
+@@ -829,7 +1071,11 @@ static int nvme_parse_ana_log(struct nvme_ctrl *ctrl, void *data,
  			return -EINVAL;
  
  		nr_nsids = le32_to_cpu(desc->nnsids);
@@ -505,7 +503,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  		if (WARN_ON_ONCE(desc->grpid == 0))
  			return -EINVAL;
-@@ -877,6 +1127,7 @@ static void nvme_update_ns_ana_state(str
+@@ -877,6 +1123,7 @@ static void nvme_update_ns_ana_state(struct nvme_ana_group_desc *desc,
  	if (nvme_state_is_live(ns->ana_state) &&
  	    nvme_ctrl_state(ns->ctrl) == NVME_CTRL_LIVE)
  		nvme_mpath_set_live(ns);
@@ -513,7 +511,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	else {
  		/*
  		 * Add sysfs link from multipath head gendisk node to path
-@@ -896,6 +1147,7 @@ static void nvme_update_ns_ana_state(str
+@@ -896,6 +1143,7 @@ static void nvme_update_ns_ana_state(struct nvme_ana_group_desc *desc,
  		if (test_bit(NVME_NSHEAD_DISK_LIVE, &ns->head->flags))
  			nvme_mpath_add_sysfs_link(ns->head);
  	}
@@ -521,7 +519,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  }
  
  static int nvme_update_ana_state(struct nvme_ctrl *ctrl,
-@@ -967,7 +1219,12 @@ static int nvme_read_ana_log(struct nvme
+@@ -967,7 +1215,12 @@ static int nvme_read_ana_log(struct nvme_ctrl *ctrl)
  	if (nr_change_groups)
  		mod_timer(&ctrl->anatt_timer, ctrl->anatt * HZ * 2 + jiffies);
  	else
@@ -534,7 +532,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  out_unlock:
  	mutex_unlock(&ctrl->ana_lock);
  	return error;
-@@ -1007,7 +1264,11 @@ void nvme_mpath_stop(struct nvme_ctrl *c
+@@ -1007,7 +1260,11 @@ void nvme_mpath_stop(struct nvme_ctrl *ctrl)
  {
  	if (!nvme_ctrl_use_ana(ctrl))
  		return;
@@ -546,7 +544,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	cancel_work_sync(&ctrl->ana_work);
  }
  
-@@ -1177,6 +1438,7 @@ static int nvme_lookup_ana_group_desc(st
+@@ -1177,6 +1434,7 @@ static int nvme_lookup_ana_group_desc(struct nvme_ctrl *ctrl,
  	return -ENXIO; /* just break out of the loop */
  }
  
@@ -554,7 +552,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  void nvme_mpath_add_sysfs_link(struct nvme_ns_head *head)
  {
  	struct device *target;
-@@ -1184,6 +1446,7 @@ void nvme_mpath_add_sysfs_link(struct nv
+@@ -1184,6 +1442,7 @@ void nvme_mpath_add_sysfs_link(struct nvme_ns_head *head)
  	struct nvme_ns *ns;
  	struct kobject *kobj;
  
@@ -562,7 +560,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  	/*
  	 * Ensure head disk node is already added otherwise we may get invalid
  	 * kobj for head disk node
-@@ -1255,6 +1518,7 @@ void nvme_mpath_remove_sysfs_link(struct
+@@ -1255,6 +1514,7 @@ void nvme_mpath_remove_sysfs_link(struct nvme_ns *ns)
  			dev_name(target));
  	clear_bit(NVME_NS_SYSFS_ATTR_LINK, &ns->flags);
  }
@@ -570,7 +568,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  
  void nvme_mpath_add_disk(struct nvme_ns *ns, __le32 anagrpid)
  {
-@@ -1280,10 +1544,29 @@ void nvme_mpath_add_disk(struct nvme_ns
+@@ -1280,10 +1540,29 @@ void nvme_mpath_add_disk(struct nvme_ns *ns, __le32 anagrpid)
  		ns->ana_state = NVME_ANA_OPTIMIZED;
  		nvme_mpath_set_live(ns);
  	}
@@ -600,7 +598,7 @@ Change-Id: I6957c3d7a7321daa49a353b087727dbb49254ac2
  #endif
  }
  
-@@ -1333,8 +1616,21 @@ void nvme_mpath_put_disk(struct nvme_ns_
+@@ -1333,8 +1612,21 @@ void nvme_mpath_put_disk(struct nvme_ns_head *head)
  	/* make sure all pending bios are cleaned up */
  	kblockd_schedule_work(&head->requeue_work);
  	flush_work(&head->requeue_work);

@@ -2,47 +2,22 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 
 ---
- .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 291 +++++++++++++++++-
- 1 file changed, 284 insertions(+), 7 deletions(-)
+ .../ethernet/mellanox/mlx5/core/en/rep/tc.c   | 135 +++++++++++++++++-
+ 1 file changed, 128 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
-@@ -25,8 +25,9 @@
- struct mlx5e_rep_indr_block_priv {
+@@ -26,7 +26,6 @@ struct mlx5e_rep_indr_block_priv {
  	struct net_device *netdev;
  	struct mlx5e_rep_priv *rpriv;
-+#if defined( HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
  	enum flow_block_binder_type binder_type;
 -
-+#endif
  	struct list_head list;
  };
  
-@@ -128,8 +129,13 @@ unlock:
- 	mlx5e_put_flow_list(priv, &flow_list);
- }
- 
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
- static int
-+#if defined( HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
- mlx5e_rep_setup_tc_cls_flower(struct mlx5e_priv *priv,
-+#else
-+mlx5e_rep_setup_tc_cls_flower(struct net_device *dev,
-+#endif
- 			      struct flow_cls_offload *cls_flower, int flags)
- {
- 	switch (cls_flower->command) {
-@@ -146,7 +152,9 @@ mlx5e_rep_setup_tc_cls_flower(struct mlx
- 		return -EOPNOTSUPP;
- 	}
- }
-+#endif /* defined(HAVE_TC_FLOWER_OFFLOAD) */
- 
-+#ifdef HAVE_TC_CLSMATCHALL_STATS
- static void mlx5e_tc_stats_matchall(struct mlx5e_priv *priv,
- 				    struct tc_cls_matchall_offload *ma)
- {
-@@ -157,8 +165,14 @@ static void mlx5e_tc_stats_matchall(stru
+@@ -157,8 +156,14 @@ static void mlx5e_tc_stats_matchall(struct mlx5e_priv *priv,
  	dpkts = priv->stats.rep_stats.vport_rx_packets - rpriv->prev_vf_vport_stats.rx_packets;
  	dbytes = priv->stats.rep_stats.vport_rx_bytes - rpriv->prev_vf_vport_stats.rx_bytes;
  	mlx5e_stats_copy_rep_stats(&rpriv->prev_vf_vport_stats, &priv->stats.rep_stats);
@@ -57,133 +32,47 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  }
  
  static
-@@ -177,6 +191,9 @@ int mlx5e_rep_setup_tc_cls_matchall(stru
- 		return -EOPNOTSUPP;
+@@ -178,6 +183,7 @@ int mlx5e_rep_setup_tc_cls_matchall(struct mlx5e_priv *priv,
  	}
  }
-+#endif /* HAVE_TC_CLSMATCHALL_STATS */
-+
-+#if defined(HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
  
++
  static int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
  				 void *cb_priv)
-@@ -190,13 +207,76 @@ static int mlx5e_rep_setup_tc_cb(enum tc
- 	switch (type) {
- 	case TC_SETUP_CLSFLOWER:
- 		return mlx5e_rep_setup_tc_cls_flower(priv, type_data, flags);
-+#ifdef HAVE_TC_CLSMATCHALL_STATS
- 	case TC_SETUP_CLSMATCHALL:
- 		return mlx5e_rep_setup_tc_cls_matchall(priv, type_data);
-+#endif
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
-+
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
-+static LIST_HEAD(mlx5e_rep_block_cb_list);
-+#endif
-+
-+#ifndef HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE
-+static int mlx5e_rep_setup_tc_block(struct net_device *dev,
-+				    struct tc_block_offload *f)
-+{
-+	struct mlx5e_priv *priv = netdev_priv(dev);
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
-+	struct flow_block_cb *block_cb;
-+#endif
-+
-+	if (f->binder_type != FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
-+		return -EOPNOTSUPP;
-+
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
-+	f->driver_block_list = &mlx5e_rep_block_cb_list;
-+#endif
-+
-+	switch (f->command) {
-+	case TC_BLOCK_BIND:
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
-+		block_cb = flow_block_cb_alloc(mlx5e_rep_setup_tc_cb, priv, priv, NULL);
-+#else
-+		return tcf_block_cb_register(f->block, mlx5e_rep_setup_tc_cb,
-+#ifdef HAVE_TC_BLOCK_OFFLOAD_EXTACK
-+					     priv, priv, f->extack);
-+#else
-+
-+					     priv, priv);
-+#endif
-+#endif /* HAVE_FLOW_CLS_OFFLOAD */
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
-+                if (IS_ERR(block_cb)) {
-+                        return -ENOENT;
-+                }
-+                flow_block_cb_add(block_cb, f);
-+                list_add_tail(&block_cb->driver_list, f->driver_block_list);
-+                return 0;
-+#endif
-+	case TC_BLOCK_UNBIND:
-+#ifndef HAVE_FLOW_CLS_OFFLOAD
-+		tcf_block_cb_unregister(f->block, mlx5e_rep_setup_tc_cb, priv);
-+#else
-+		block_cb = flow_block_cb_lookup(f->block, mlx5e_rep_setup_tc_cb, priv);
-+		if (!block_cb)
-+			return -ENOENT;
-+
-+		flow_block_cb_remove(block_cb, f);
-+		list_del(&block_cb->driver_list);
-+#endif
-+		return 0;
- 	default:
- 		return -EOPNOTSUPP;
+ {
+@@ -197,6 +203,10 @@ static int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
  	}
  }
-+#endif /* HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE */
-+#endif /* HAVE_TC_BLOCK_OFFLOAD */
  
++static LIST_HEAD(mlx5e_rep_block_cb_list);
++
++
 +#ifdef HAVE_TC_SETUP_FT
  static int mlx5e_rep_setup_ft_cb(enum tc_setup_type type, void *type_data,
  				 void *cb_priv)
  {
-@@ -241,32 +321,86 @@ static int mlx5e_rep_setup_ft_cb(enum tc
+@@ -241,6 +251,7 @@ static int mlx5e_rep_setup_ft_cb(enum tc_setup_type type, void *type_data,
  		return -EOPNOTSUPP;
  	}
  }
 +#endif
  
-+#if defined(HAVE_TC_FLOWER_OFFLOAD) || defined(HAVE_FLOW_CLS_OFFLOAD)
  static LIST_HEAD(mlx5e_rep_block_tc_cb_list);
  static LIST_HEAD(mlx5e_rep_block_ft_cb_list);
- int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
+@@ -248,8 +259,8 @@ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
  		       void *type_data)
  {
-+#ifdef HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE
  	struct mlx5e_priv *priv = netdev_priv(dev);
 -	struct flow_block_offload *f = type_data;
-+#endif
  
-+#if !defined(HAVE_TC_BLOCK_OFFLOAD) && ! defined(HAVE_FLOW_BLOCK_OFFLOAD)
-+	unsigned long flags = MLX5_TC_FLAG(INGRESS) | MLX5_TC_FLAG(ESW_OFFLOAD);
-+#endif
-+#ifdef HAVE_UNLOCKED_DRIVER_CB
 +	struct flow_block_offload *f = type_data;
  	f->unlocked_driver_cb = true;
-+#endif
  
  	switch (type) {
-+#if defined(HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
- 	case TC_SETUP_BLOCK:
-+#ifdef HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE
- 		return flow_block_cb_setup_simple(type_data,
+@@ -258,16 +269,19 @@ int mlx5e_rep_setup_tc(struct net_device *dev, enum tc_setup_type type,
  						  &mlx5e_rep_block_tc_cb_list,
  						  mlx5e_rep_setup_tc_cb,
  						  priv, priv, true);
-+#else
-+		return mlx5e_rep_setup_tc_block(dev, type_data);
-+#endif /* HAVE_FLOW_BLOCK_CB_SETUP_SIMPLE */
-+#else /* HAVE_TC_BLOCK_OFFLOAD || HAVE_FLOW_BLOCK_OFFLOAD */
-+	case TC_SETUP_CLSFLOWER:
-+		return mlx5e_rep_setup_tc_cls_flower(dev, type_data, flags);
-+#endif /* HAVE_TC_BLOCK_OFFLOAD || HAVE_FLOW_BLOCK_OFFLOAD */
 +#ifdef HAVE_TC_SETUP_FT
  	case TC_SETUP_FT:
  		return flow_block_cb_setup_simple(type_data,
@@ -191,56 +80,16 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  						  mlx5e_rep_setup_ft_cb,
  						  priv, priv, true);
 +#endif /* HAVE_TC_SETUP_FT */
-+	default:
-+		return -EOPNOTSUPP;
-+	}
-+}
-+#endif
-+
-+#ifdef HAVE_TC_SETUP_CB_EGDEV_REGISTER
-+#ifdef HAVE_TC_BLOCK_OFFLOAD
-+int mlx5e_rep_setup_tc_cb_egdev(enum tc_setup_type type, void *type_data,
-+				void *cb_priv)
-+{
-+	unsigned long flags = MLX5_TC_FLAG(EGRESS) | MLX5_TC_FLAG(ESW_OFFLOAD);
-+	struct mlx5e_priv *priv = cb_priv;
-+
-+#ifdef HAVE_TC_INDR_API
-+	/* some rhel kernels have indirect offload and egdev,
-+	 * so dont use egdev. e.g. rhel8.0
-+	 */
-+	return -EOPNOTSUPP;
-+#endif
-+
-+	switch (type) {
-+	case TC_SETUP_CLSFLOWER:
-+		return mlx5e_rep_setup_tc_cls_flower(priv, type_data, flags);
  	default:
  		return -EOPNOTSUPP;
  	}
  }
-+#else
-+int mlx5e_rep_setup_tc_cb(enum tc_setup_type type, void *type_data,
-+			  void *cb_priv)
-+{
-+	struct net_device *dev = cb_priv;
-+
-+	return mlx5e_setup_tc(dev, type, type_data);
-+}
-+#endif
-+#endif
  
++
  int mlx5e_rep_tc_init(struct mlx5e_rep_priv *rpriv)
  {
-@@ -312,6 +446,7 @@ int mlx5e_rep_tc_event_port_affinity(str
- 	return NOTIFY_OK;
- }
- 
-+#if defined( HAVE_TC_BLOCK_OFFLOAD) || defined(HAVE_FLOW_BLOCK_OFFLOAD)
- static struct mlx5e_rep_indr_block_priv *
- mlx5e_rep_indr_block_priv_lookup(struct mlx5e_rep_priv *rpriv,
- 				 struct net_device *netdev,
-@@ -377,6 +512,7 @@ static int mlx5e_rep_indr_setup_tc_cb(en
+ 	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
+@@ -377,6 +391,7 @@ static int mlx5e_rep_indr_setup_tc_cb(enum tc_setup_type type,
  	}
  }
  
@@ -248,53 +97,27 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  static int mlx5e_rep_indr_setup_ft_cb(enum tc_setup_type type,
  				      void *type_data, void *indr_priv)
  {
-@@ -422,7 +558,9 @@ static int mlx5e_rep_indr_setup_ft_cb(en
+@@ -422,6 +437,7 @@ static int mlx5e_rep_indr_setup_ft_cb(enum tc_setup_type type,
  		return -EOPNOTSUPP;
  	}
  }
 +#endif
  
-+#ifdef HAVE_FLOW_BLOCK_CB_ALLOC
  static void mlx5e_rep_indr_block_unbind(void *cb_priv)
  {
- 	struct mlx5e_rep_indr_block_priv *indr_priv = cb_priv;
-@@ -430,6 +568,7 @@ static void mlx5e_rep_indr_block_unbind(
- 	list_del(&indr_priv->list);
- 	kfree(indr_priv);
- }
-+#endif
- 
- static LIST_HEAD(mlx5e_block_cb_list);
- 
-@@ -488,14 +627,22 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -488,7 +504,7 @@ mlx5e_rep_indr_setup_block(struct net_device *netdev, struct Qdisc *sch,
  			   void *data,
  			   void (*cleanup)(struct flow_block_cb *block_cb))
  {
 -	struct mlx5e_rep_indr_block_priv *indr_priv;
 +	struct mlx5e_rep_indr_block_priv *indr_priv = NULL;
-+#ifdef HAVE_FLOW_BLOCK_CB_ALLOC
  	struct flow_block_cb *block_cb;
-+#else
-+	int err = 0;
-+#endif
  
  	if (!mlx5e_rep_check_indr_block_supported(rpriv, netdev, f))
- 		return -EOPNOTSUPP;
- 
-+#ifdef HAVE_UNLOCKED_DRIVER_CB
- 	f->unlocked_driver_cb = true;
-+#endif
-+#ifdef HAVE_FLOW_BLOCK_OFFLOAD
- 	f->driver_block_list = &mlx5e_block_cb_list;
-+#endif
- 
- 	switch (f->command) {
- 	case FLOW_BLOCK_BIND:
-@@ -513,10 +660,16 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -513,10 +529,15 @@ mlx5e_rep_indr_setup_block(struct net_device *netdev, struct Qdisc *sch,
  		list_add(&indr_priv->list,
  			 &rpriv->uplink_priv.tc_indr_block_priv_list);
  
-+#ifdef HAVE_FLOW_BLOCK_CB_ALLOC
 +#ifdef HAVE_FLOW_INDR_BLOCK_CB_ALLOC
  		block_cb = flow_indr_block_cb_alloc(setup_cb, indr_priv, indr_priv,
  						    mlx5e_rep_indr_block_unbind,
@@ -307,50 +130,23 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  		if (IS_ERR(block_cb)) {
  			list_del(&indr_priv->list);
  			kfree(indr_priv);
-@@ -526,17 +679,42 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -526,6 +547,7 @@ mlx5e_rep_indr_setup_block(struct net_device *netdev, struct Qdisc *sch,
  		list_add_tail(&block_cb->driver_list, &mlx5e_block_cb_list);
  
  		return 0;
-+#else
-+		err = tcf_block_cb_register(f->block,
-+					    mlx5e_rep_indr_setup_tc_cb,
-+					    indr_priv, indr_priv
-+#ifdef HAVE_TC_BLOCK_OFFLOAD_EXTACK
-+					    , f->extack
-+#endif
-+					   );
-+		if (err) {
-+			list_del(&indr_priv->list);
-+			kfree(indr_priv);
-+		}
-+
-+		return err;
-+#endif
 +
  	case FLOW_BLOCK_UNBIND:
  		indr_priv = mlx5e_rep_indr_block_priv_lookup(rpriv, netdev, f->binder_type);
  		if (!indr_priv)
- 			return -ENOENT;
- 
-+#ifdef HAVE_FLOW_BLOCK_CB_ALLOC
- 		block_cb = flow_block_cb_lookup(f->block, setup_cb, indr_priv);
- 		if (!block_cb)
- 			return -ENOENT;
+@@ -537,6 +559,7 @@ mlx5e_rep_indr_setup_block(struct net_device *netdev, struct Qdisc *sch,
  
  		flow_indr_block_cb_remove(block_cb, f);
  		list_del(&block_cb->driver_list);
-+#else
-+		tcf_block_cb_unregister(f->block,
-+					mlx5e_rep_indr_setup_tc_cb,
-+					indr_priv);
-+		list_del(&indr_priv->list);
-+		kfree(indr_priv);
-+#endif
 +
  		return 0;
  	default:
  		return -EOPNOTSUPP;
-@@ -544,6 +722,7 @@ mlx5e_rep_indr_setup_block(struct net_de
+@@ -544,6 +567,7 @@ mlx5e_rep_indr_setup_block(struct net_device *netdev, struct Qdisc *sch,
  	return 0;
  }
  
@@ -358,7 +154,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  static int
  mlx5e_rep_indr_replace_act(struct mlx5e_rep_priv *rpriv,
  			   struct flow_offload_action *fl_act)
-@@ -641,6 +820,7 @@ mlx5e_rep_indr_setup_act(struct mlx5e_re
+@@ -641,6 +665,7 @@ mlx5e_rep_indr_setup_act(struct mlx5e_rep_priv *rpriv,
  		return -EOPNOTSUPP;
  	}
  }
@@ -366,7 +162,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  
  static int
  mlx5e_rep_indr_no_dev_setup(struct mlx5e_rep_priv *rpriv,
-@@ -651,19 +831,36 @@ mlx5e_rep_indr_no_dev_setup(struct mlx5e
+@@ -651,19 +676,36 @@ mlx5e_rep_indr_no_dev_setup(struct mlx5e_rep_priv *rpriv,
  		return -EOPNOTSUPP;
  
  	switch (type) {
@@ -385,7 +181,6 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 -			    enum tc_setup_type type, void *type_data,
 -			    void *data,
 -			    void (*cleanup)(struct flow_block_cb *block_cb))
--{
 +#else
 +int mlx5e_rep_indr_setup_cb(struct net_device *netdev, void *cb_priv,
 +#endif
@@ -395,7 +190,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 +			    void (*cleanup)(struct flow_block_cb *block_cb)
 +#endif
 +			    )
-+{
+ {
 +#ifndef HAVE_FLOW_INDR_BLOCK_BIND_CB_T_7_PARAMS
 +	struct Qdisc *sch = NULL;
 +#endif
@@ -407,7 +202,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  	if (!netdev)
  		return mlx5e_rep_indr_no_dev_setup(cb_priv, type, data);
  
-@@ -672,15 +869,78 @@ int mlx5e_rep_indr_setup_cb(struct net_d
+@@ -672,15 +714,78 @@ int mlx5e_rep_indr_setup_cb(struct net_device *netdev, struct Qdisc *sch, void *
  		return mlx5e_rep_indr_setup_block(netdev, sch, cb_priv, type_data,
  						  mlx5e_rep_indr_setup_tc_cb,
  						  data, cleanup);
@@ -486,7 +281,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
  int mlx5e_rep_tc_netdevice_event_register(struct mlx5e_rep_priv *rpriv)
  {
  	struct mlx5_rep_uplink_priv *uplink_priv = &rpriv->uplink_priv;
-@@ -688,14 +948,31 @@ int mlx5e_rep_tc_netdevice_event_registe
+@@ -688,14 +793,30 @@ int mlx5e_rep_tc_netdevice_event_register(struct mlx5e_rep_priv *rpriv)
  	/* init indirect block notifications */
  	INIT_LIST_HEAD(&uplink_priv->tc_indr_block_priv_list);
  
@@ -515,7 +310,6 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.c
 -}
 +#endif
 + }
-+#endif /* HAVE_TC_BLOCK_OFFLOAD || HAVE_FLOW_BLOCK_OFFLOAD */
  
  void mlx5e_rep_tc_receive(struct mlx5_cqe64 *cqe, struct mlx5e_rq *rq,
  			  struct sk_buff *skb)

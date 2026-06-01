@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/port.h
  include/linux/mlx5/port.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/include/linux/mlx5/port.h b/include/linux/mlx5/port.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/mlx5/port.h
 +++ b/include/linux/mlx5/port.h
 @@ -33,6 +33,7 @@

@@ -6,6 +6,8 @@ Change-Id: Ibb2c3fc1550f6de36c9f0e27c6484397d051283f
  drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.h
 @@ -46,7 +46,7 @@ struct l2addr_node {

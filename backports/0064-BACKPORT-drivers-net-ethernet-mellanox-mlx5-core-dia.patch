@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 
 ---
- .../mlx5/core/diag/en_tc_tracepoint.h         | 32 +++++++++++++++++++
- 1 file changed, 32 insertions(+)
+ .../mlx5/core/diag/en_tc_tracepoint.h         | 24 +++++++++++++++++++
+ 1 file changed, 24 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 @@ -1,6 +1,7 @@
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  #undef TRACE_SYSTEM
  #define TRACE_SYSTEM mlx5
  
-@@ -27,10 +28,18 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+@@ -27,10 +28,18 @@ DECLARE_EVENT_CLASS(mlx5e_flower_template,
  		    TP_ARGS(f),
  		    TP_STRUCT__entry(__field(void *, cookie)
  				     __field(unsigned int, num)
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT:
  			__entry->num = (f->rule ?
  				f->rule->action.num_entries : 0);
  			if (__entry->num)
-@@ -38,6 +47,15 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+@@ -38,6 +47,15 @@ DECLARE_EVENT_CLASS(mlx5e_flower_template,
  						 f->rule->action.entries,
  						 f->rule->action.num_entries);
  			),
@@ -51,35 +53,7 @@ Subject: [PATCH] BACKPORT:
  		    TP_printk("cookie=%p actions= %s\n",
  			      __entry->cookie, __entry->num ?
  				      __parse_action(__get_dynamic_array(ids),
-@@ -59,19 +77,27 @@ TRACE_EVENT(mlx5e_stats_flower,
- 	    TP_PROTO(const struct flow_cls_offload *f),
- 	    TP_ARGS(f),
- 	    TP_STRUCT__entry(__field(void *, cookie)
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
- 			     __field(u64, bytes)
- 			     __field(u64, packets)
- 			     __field(u64, lastused)
-+#endif
- 			     ),
- 	    TP_fast_assign(__entry->cookie = (void *)f->cookie;
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
- 		__entry->bytes = f->stats.bytes;
- 		__entry->packets = f->stats.pkts;
- 		__entry->lastused = f->stats.lastused;
-+#endif
- 		),
-+#ifdef HAVE_FLOW_CLS_OFFLOAD
- 	    TP_printk("cookie=%p bytes=%llu packets=%llu lastused=%llu\n",
- 		      __entry->cookie, __entry->bytes,
- 		      __entry->packets, __entry->lastused
- 		      )
-+#else
-+		    TP_printk("cookie=%p\n", __entry->cookie)
-+#endif
- );
- 
- TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
-@@ -86,7 +112,11 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+@@ -86,7 +104,11 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
  			struct in6_addr *pin6;
  			__be32 *p32;
  
@@ -91,7 +65,7 @@ Subject: [PATCH] BACKPORT:
  			__entry->neigh_used = neigh_used;
  
  			p32 = (__be32 *)__entry->v4;
-@@ -112,3 +142,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+@@ -112,3 +134,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
  #undef TRACE_INCLUDE_FILE
  #define TRACE_INCLUDE_FILE en_tc_tracepoint
  #include <trace/define_trace.h>

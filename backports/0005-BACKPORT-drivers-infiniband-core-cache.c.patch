@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
  drivers/infiniband/core/cache.c | 17 ++++++++++++++++-
  1 file changed, 16 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/cache.c b/drivers/infiniband/core/cache.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cache.c
 +++ b/drivers/infiniband/core/cache.c
-@@ -1362,9 +1362,17 @@ struct net_device *rdma_read_gid_attr_nd
+@@ -1362,9 +1362,17 @@ struct net_device *rdma_read_gid_attr_ndev_rcu(const struct ib_gid_attr *attr)
  EXPORT_SYMBOL(rdma_read_gid_attr_ndev_rcu);
  
  static int get_lower_dev_vlan(struct net_device *lower_dev,
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
  
  	if (is_vlan_dev(lower_dev))
  		*vlan_id = vlan_dev_vlan_id(lower_dev);
-@@ -1390,9 +1398,11 @@ static int get_lower_dev_vlan(struct net
+@@ -1390,9 +1398,11 @@ static int get_lower_dev_vlan(struct net_device *lower_dev,
  int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			    u16 *vlan_id, u8 *smac)
  {
@@ -37,7 +39,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cache.c
  	struct net_device *ndev;
  
  	rcu_read_lock();
-@@ -1413,7 +1423,12 @@ int rdma_read_gid_l2_fields(const struct
+@@ -1413,7 +1423,12 @@ int rdma_read_gid_l2_fields(const struct ib_gid_attr *attr,
  			 * the lower vlan device for this gid entry.
  			 */
  			netdev_walk_all_lower_dev_rcu(attr->ndev,

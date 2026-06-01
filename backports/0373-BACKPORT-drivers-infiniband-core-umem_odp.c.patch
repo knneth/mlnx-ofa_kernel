@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 
 Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 ---
- drivers/infiniband/core/umem_odp.c | 1481 ++++++++++++++++++++++++++++
- 1 file changed, 1481 insertions(+)
+ drivers/infiniband/core/umem_odp.c | 1239 ++++++++++++++++++++++++++++
+ 1 file changed, 1239 insertions(+)
 
+diff --git a/drivers/infiniband/core/umem_odp.c b/drivers/infiniband/core/umem_odp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/umem_odp.c
 +++ b/drivers/infiniband/core/umem_odp.c
 @@ -30,6 +30,7 @@
@@ -16,7 +18,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
  #include <linux/types.h>
  #include <linux/sched.h>
  #include <linux/sched/mm.h>
-@@ -467,3 +468,1483 @@ clear:
+@@ -467,3 +468,1241 @@ clear:
  	}
  }
  EXPORT_SYMBOL(ib_umem_odp_unmap_dma_pages);
@@ -82,11 +84,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	struct rb_node *node;
 +
 +	down_read(&per_mm->umem_rwsem);
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	if (!per_mm->mn.users)
-+#else
-+	if (!per_mm->active)
-+#endif
 +		goto out;
 +
 +	for (node = rb_first_cached(&per_mm->umem_tree); node;
@@ -100,11 +98,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +		 */
 +		ib_umem_notifier_start_account(umem_odp);
 +		complete_all(&umem_odp->notifier_completion);
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +		umem_odp->umem.ibdev->ops.invalidate_range(
-+#else
-+		umem_odp->umem.context->device->ops.invalidate_range(
-+#endif
 +			umem_odp, ib_umem_start(umem_odp),
 +			ib_umem_end(umem_odp));
 +	}
@@ -117,11 +111,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +					     u64 start, u64 end, void *cookie)
 +{
 +	ib_umem_notifier_start_account(item);
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	item->umem.ibdev->ops.invalidate_range(item, start, end);
-+#else
-+	item->umem.context->device->ops.invalidate_range(item, start, end);
-+#endif
 +	return 0;
 +}
 +
@@ -129,43 +119,23 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +static int ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 +				const struct mmu_notifier_range *range)
 +#else
-+#ifdef HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE
-+ static int ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
-+                                                   struct mm_struct *mm,
-+                                                   unsigned long start,
-+                                                   unsigned long end,
-+                                                   bool blockable)
-+#else
 +static void ib_umem_notifier_invalidate_range_start(struct mmu_notifier *mn,
 +                                                   struct mm_struct *mm,
 +                                                   unsigned long start,
 +                                                   unsigned long end)
-+#endif
 +#endif /*HAVE_MMU_NOTIFIER_RANGE_STRUCT*/
 +{
 +	struct ib_ucontext_per_mm *per_mm =
 +		container_of(mn, struct ib_ucontext_per_mm, mn);
 +
-+#if defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)
-+	int rc;
-+#ifdef HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE
-+	if (mmu_notifier_range_blockable(range))
-+#else
 +#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
-+	if (range->blockable)
-+#else
-+        if (blockable)
-+#endif
-+#endif
++	int rc;
++	if (mmu_notifier_range_blockable(range))
 +		down_read(&per_mm->umem_rwsem);
 +	else if (!down_read_trylock(&per_mm->umem_rwsem))
 +		return -EAGAIN;
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	if (!per_mm->mn.users) {
-+#else
-+	if (!per_mm->active) {
-+#endif
 +		up_read(&per_mm->umem_rwsem);
 +		/*
 +		 * At this point users is permanently zero and visible to this
@@ -175,7 +145,6 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +		return 0;
 +	}
 +
-+#ifdef HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE
 +	rc = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, range->start,
 +					   range->end,
 +					   invalidate_range_start_trampoline,
@@ -183,20 +152,8 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +					   NULL);
 +	if (rc)
 +		up_read(&per_mm->umem_rwsem);
-+#else
-+#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
-+	rc = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, range->start,
-+					    range->end,
-+					    invalidate_range_start_trampoline,
-+					    range->blockable, NULL);
-+#else
-+	rc = rbt_ib_umem_for_each_in_range(&per_mm->umem_tree, start, end,
-+					    invalidate_range_start_trampoline,
-+				             blockable, NULL);
-+#endif
-+#endif //HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE
 +	return rc;
-+#else /*defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)*/ 
++#else /* defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT) */ 
 +
 +	//ib_ucontext_notifier_start_account(context);
 +	down_read(&per_mm->umem_rwsem);
@@ -236,11 +193,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	struct ib_ucontext_per_mm *per_mm =
 +		container_of(mn, struct ib_ucontext_per_mm, mn);
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	if (unlikely(!per_mm->mn.users))
-+#else
-+	if (unlikely(!per_mm->active))
-+#endif
 +		return;
 +
 +	rbt_ib_umem_for_each_in_range(&per_mm->umem_tree,
@@ -251,156 +204,41 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +					 start,
 +					 end,
 +#endif/*HAVE_MMU_NOTIFIER_RANGE_STRUCT*/
-+#if defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)
++#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
 +				      invalidate_range_end_trampoline, true, NULL);
 +#else
 +				      invalidate_range_end_trampoline, NULL);
-+#endif/* defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT) */
++#endif/* defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT) */
 +	up_read(&per_mm->umem_rwsem);
 +}
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +static struct mmu_notifier *ib_umem_alloc_notifier(struct mm_struct *mm)
-+#else
-+static const struct mmu_notifier_ops ib_umem_notifiers = {
-+	.release                    = ib_umem_notifier_release,
-+	.invalidate_range_start     = ib_umem_notifier_invalidate_range_start,
-+	.invalidate_range_end       = ib_umem_notifier_invalidate_range_end,
-+};
-+
-+static void remove_umem_from_per_mm(struct ib_umem_odp *umem_odp)
-+{
-+	struct ib_ucontext_per_mm *per_mm = umem_odp->per_mm;
-+
-+	down_write(&per_mm->umem_rwsem);
-+	interval_tree_remove(&umem_odp->interval_tree, &per_mm->umem_tree);
-+	complete_all(&umem_odp->notifier_completion);
-+	up_write(&per_mm->umem_rwsem);
-+}
-+
-+static struct ib_ucontext_per_mm *alloc_per_mm(struct ib_ucontext *ctx,
-+					       struct mm_struct *mm)
-+#endif
 +{
 +	struct ib_ucontext_per_mm *per_mm;
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+	int ret;
-+#endif
 +	per_mm = kzalloc(sizeof(*per_mm), GFP_KERNEL);
 +	if (!per_mm)
 +		return ERR_PTR(-ENOMEM);
 +
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+	per_mm->context = ctx;
-+	per_mm->mm = mm;
-+#endif
 +        per_mm->umem_tree = RB_ROOT_CACHED;
 +	init_rwsem(&per_mm->umem_rwsem);
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	WARN_ON(mm != current->mm);
-+#else
-+	per_mm->active = true;
-+#endif
 +	rcu_read_lock();
 +	per_mm->tgid = get_task_pid(current->group_leader, PIDTYPE_PID);
 +	rcu_read_unlock();
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	return &per_mm->mn;
-+#else
-+	WARN_ON(mm != current->mm);
-+
-+	per_mm->mn.ops = &ib_umem_notifiers;
-+	ret = mmu_notifier_register(&per_mm->mn, per_mm->mm);
-+	if (ret) {
-+		dev_err(&ctx->device->dev,
-+			"Failed to register mmu_notifier %d\n", ret);
-+		goto out_pid;
-+	}
-+
-+	list_add(&per_mm->ucontext_list, &ctx->per_mm_list);
-+	return per_mm;
-+
-+out_pid:
-+	put_pid(per_mm->tgid);
-+	kfree(per_mm);
-+	return ERR_PTR(ret);
 +}
 +
-+static struct ib_ucontext_per_mm *get_per_mm(struct ib_umem_odp *umem_odp)
-+{
-+	struct ib_ucontext *ctx = umem_odp->umem.context;
-+	struct ib_ucontext_per_mm *per_mm;
-+
-+	lockdep_assert_held(&ctx->per_mm_list_lock);
-+
-+	/*
-+	 * Generally speaking we expect only one or two per_mm in this list,
-+	 * so no reason to optimize this search today.
-+	 */
-+	list_for_each_entry(per_mm, &ctx->per_mm_list, ucontext_list) {
-+		if (per_mm->mm == umem_odp->umem.owning_mm)
-+			return per_mm;
-+	}
-+
-+	return alloc_per_mm(ctx, umem_odp->umem.owning_mm);
-+#ifdef HAVE_MMU_NOTIFIER_CALL_SRCU
-+}
-+
-+static void free_per_mm(struct rcu_head *rcu)
-+{
-+	kfree(container_of(rcu, struct ib_ucontext_per_mm, rcu));
-+#endif
-+#endif
-+}
-+
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +static void ib_umem_free_notifier(struct mmu_notifier *mn)
-+#else
-+static void put_per_mm(struct ib_umem_odp *umem_odp)
-+#endif
 +{
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct ib_ucontext_per_mm *per_mm =
 +		container_of(mn, struct ib_ucontext_per_mm, mn);
-+#else
-+	struct ib_ucontext_per_mm *per_mm = umem_odp->per_mm;
-+	struct ib_ucontext *ctx = umem_odp->umem.context;
-+	bool need_free;
-+
-+	mutex_lock(&ctx->per_mm_list_lock);
-+	umem_odp->per_mm = NULL;
-+	per_mm->odp_mrs_count--;
-+	need_free = per_mm->odp_mrs_count == 0;
-+	if (need_free)
-+		list_del(&per_mm->ucontext_list);
-+	mutex_unlock(&ctx->per_mm_list_lock);
-+
-+	if (!need_free)
-+		return;
-+
-+	down_write(&per_mm->umem_rwsem);
-+	per_mm->active = false;
-+	up_write(&per_mm->umem_rwsem);
-+#endif
 +	WARN_ON(!RB_EMPTY_ROOT(&per_mm->umem_tree.rb_root));
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+#ifdef HAVE_MMU_NOTIFIER_UNREGISTER_NO_RELEASE
-+	mmu_notifier_unregister_no_release(&per_mm->mn, per_mm->mm);
-+#else
-+	mmu_notifier_unregister(&per_mm->mn, per_mm->mm);
-+#endif
-+#endif
 +
 +	put_pid(per_mm->tgid);
-+#if defined(HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER) || !defined(HAVE_MMU_NOTIFIER_CALL_SRCU)
 +	kfree(per_mm);
-+#else
-+	mmu_notifier_call_srcu(&per_mm->rcu, free_per_mm);
-+#endif
 +}
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +static const struct mmu_notifier_ops ib_umem_notifiers = {
 +	.release                    = ib_umem_notifier_release,
 +	.invalidate_range_start     = ib_umem_notifier_invalidate_range_start,
@@ -410,17 +248,9 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +};
 +
 +static inline int ib_init_umem_odp(struct ib_umem_odp *umem_odp)
-+#else
-+static inline int ib_init_umem_odp(struct ib_umem_odp *umem_odp,
-+				   struct ib_ucontext_per_mm *per_mm)
-+#endif
 +{
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct ib_ucontext_per_mm *per_mm;
 +	struct mmu_notifier *mn;
-+#else
-+	struct ib_ucontext *ctx = umem_odp->umem.context;
-+#endif
 +#endif
 +	int ret;
 +
@@ -554,29 +384,13 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +#else
 +	}
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	mn = mmu_notifier_get(&ib_umem_notifiers, umem_odp->umem.owning_mm);
 +	if (IS_ERR(mn)) {
 +		ret = PTR_ERR(mn);
 +		goto out_dma_list;
-+#else
-+	mutex_lock(&ctx->per_mm_list_lock);
-+	if (!per_mm) {
-+		per_mm = get_per_mm(umem_odp);
-+		if (IS_ERR(per_mm)) {
-+			ret = PTR_ERR(per_mm);
-+			goto out_unlock;
-+		}
-+#endif
 +	}
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	umem_odp->per_mm = per_mm =
 +		container_of(mn, struct ib_ucontext_per_mm, mn);
-+#else
-+	umem_odp->per_mm = per_mm;
-+	per_mm->odp_mrs_count++;
-+	mutex_unlock(&ctx->per_mm_list_lock);
-+#endif
 +#endif
 +#ifndef HAVE_MMU_INTERVAL_NOTIFIER
 +	mutex_init(&umem_odp->umem_mutex);
@@ -595,12 +409,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +
 +	return 0;
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +out_dma_list:
-+#else
-+out_unlock:
-+	mutex_unlock(&ctx->per_mm_list_lock);
-+#endif
 +	kvfree(umem_odp->dma_list);
 +out_page_list:
 +	kvfree(umem_odp->page_list);
@@ -650,11 +459,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
 +	umem->ibdev = device;
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	umem->ibdev = context->device;
-+#else
-+	umem->context = context;
-+#endif
 +#endif
 +	umem->writable = ib_access_writable(access);
 +	umem->owning_mm = current->mm;
@@ -665,11 +470,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	umem_odp->tgid = get_task_pid(current->group_leader, PIDTYPE_PID);
 +	ret = ib_init_umem_odp(umem_odp, NULL);
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	ret = ib_init_umem_odp(umem_odp);
-+#else
-+	ret = ib_init_umem_odp(umem_odp, NULL);
-+#endif
 +#endif
 +	if (ret) {
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
@@ -717,11 +518,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	if (!odp_data)
 +		return ERR_PTR(-ENOMEM);
 +	umem = &odp_data->umem;
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	umem->ibdev = root->umem.ibdev;
-+#else
-+	umem->context    = root->umem.context;
-+#endif
 +	umem->length     = size;
 +	umem->address    = addr;
 +	umem->writable   = root->umem.writable;
@@ -743,11 +540,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	odp_data->tgid = get_pid(root->tgid);
 +	ret = ib_init_umem_odp(odp_data, ops);
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	ret = ib_init_umem_odp(odp_data);
-+#else
-+	ret = ib_init_umem_odp(odp_data, root->per_mm);
-+#endif
 +#endif
 +	if (ret)
 +		goto out_tgid;
@@ -816,11 +609,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
 +	umem_odp->umem.ibdev = device;
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	umem_odp->umem.ibdev = context->device;
-+#else
-+	umem_odp->umem.context = context;
-+#endif
 +#endif
 +	umem_odp->umem.length = size;
 +	umem_odp->umem.address = addr;
@@ -847,11 +636,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	umem_odp->tgid = get_task_pid(current->group_leader, PIDTYPE_PID);
 +	ret = ib_init_umem_odp(umem_odp, ops);
 +#else
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	ret = ib_init_umem_odp(umem_odp);
-+#else
-+	ret = ib_init_umem_odp(umem_odp, NULL);
-+#endif
 +#endif
 +	if (ret)
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
@@ -874,7 +659,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +
 +void ib_umem_odp_release(struct ib_umem_odp *umem_odp)
 +{
-+#if !defined(HAVE_MMU_INTERVAL_NOTIFIER) && defined(HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER)
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
 +	struct ib_ucontext_per_mm *per_mm = umem_odp->per_mm;
 +
 +#endif
@@ -889,9 +674,6 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +		ib_umem_odp_unmap_dma_pages(umem_odp, ib_umem_start(umem_odp),
 +					    ib_umem_end(umem_odp));
 +		mutex_unlock(&umem_odp->umem_mutex);
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+		remove_umem_from_per_mm(umem_odp);
-+#endif
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
 +		mmu_interval_notifier_remove(&umem_odp->notifier);
 +#endif
@@ -902,14 +684,10 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +		kvfree(umem_odp->page_list);
 +#endif
 +	}
-+#ifndef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
-+	put_per_mm(umem_odp);
-+#endif
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
 +	put_pid(umem_odp->tgid);
 +#else
 +
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	down_write(&per_mm->umem_rwsem);
 +	if (!umem_odp->is_implicit_odp) {
 +		interval_tree_remove(&umem_odp->interval_tree,
@@ -926,7 +704,6 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	 */
 +	mmu_notifier_put(&per_mm->mn);
 +	up_write(&per_mm->umem_rwsem);
-+#endif
 +
 +	mmdrop(umem_odp->umem.owning_mm);
 +#endif
@@ -1147,12 +924,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +		u64 access_mask,
 +		unsigned long current_seq)
 +{
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct ib_device *dev = umem_odp->umem.ibdev;
-+#else
-+	struct ib_ucontext *context = umem_odp->umem.context;
-+	struct ib_device *dev = context->device;
-+#endif
 +	dma_addr_t dma_addr;
 +	int ret = 0;
 +
@@ -1200,11 +972,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	}
 +
 +out:
-+#ifdef HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS
-+	put_user_page(page);
-+#else
 +	put_page(page);
-+#endif
 +	return ret;
 +}
 +
@@ -1344,11 +1112,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +					ret = -EFAULT;
 +					break;
 +				}
-+#ifdef HAVE_PUT_USER_PAGES_DIRTY_LOCK_2_PARAMS
-+				put_user_page(local_page_list[j]);
-+#else
 +				put_page(local_page_list[j]);
-+#endif
 +				continue;
 +			}
 +
@@ -1411,11 +1175,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +#endif
 +	int idx;
 +	u64 addr;
-+#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct ib_device *dev = umem_odp->umem.ibdev;
-+#else
-+	struct ib_device *dev = umem_odp->umem.context->device;
-+#endif
 +
 +	lockdep_assert_held(&umem_odp->umem_mutex);
 +
@@ -1472,7 +1232,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +int rbt_ib_umem_for_each_in_range(struct rb_root_cached *root,
 +				  u64 start, u64 last,
 +				  umem_call_back cb,
-+#if defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)
++#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
 +				  bool blockable,
 +#endif
 +				  void *cookie)
@@ -1487,7 +1247,7 @@ Change-Id: I028437ddb6695cbfd3dfd74fcd21ba8b0d9e631f
 +	for (node = interval_tree_iter_first(root, start, last - 1);
 +			node; node = next) {
 +		/* TODO move the blockable decision up to the callback */
-+#if defined(HAVE_UMEM_NOTIFIER_PARAM_BLOCKABLE) || defined(HAVE_MMU_NOTIFIER_RANGE_STRUCT)
++#ifdef HAVE_MMU_NOTIFIER_RANGE_STRUCT
 +		if (!blockable)
 +			return -EAGAIN;
 +#endif

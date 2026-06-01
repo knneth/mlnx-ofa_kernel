@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw.c
  drivers/net/ethernet/mellanox/mlx5/core/fw.c | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fw.c b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
-@@ -729,8 +729,8 @@ static const struct mlxfw_dev_ops mlx5_m
+@@ -729,8 +729,8 @@ static const struct mlxfw_dev_ops mlx5_mlxfw_dev_ops = {
  };
  
  int mlx5_firmware_flash(struct mlx5_core_dev *dev,
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/fw.c
  {
  	struct mlx5_mlxfw_dev mlx5_mlxfw_dev = {
  		.mlxfw_dev = {
-@@ -751,7 +751,7 @@ int mlx5_firmware_flash(struct mlx5_core
+@@ -751,7 +751,7 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
  	}
  
  	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev,

@@ -2,23 +2,22 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
-@@ -6,8 +6,9 @@
- 
+@@ -7,7 +7,6 @@
  #include <net/pkt_cls.h>
  #include <linux/mlx5/fs.h>
-+#ifdef HAVE_NET_TC_CT_H
  #include <net/tc_act/tc_ct.h>
 -
-+#endif
  #include "en.h"
  
  struct mlx5_flow_attr;
-@@ -15,6 +16,9 @@ struct mlx5e_tc_mod_hdr_acts;
+@@ -15,6 +14,9 @@ struct mlx5e_tc_mod_hdr_acts;
  struct mlx5_rep_uplink_priv;
  struct mlx5e_tc_flow;
  struct mlx5e_priv;
@@ -28,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
  
  struct mlx5_fs_chains;
  struct mlx5_tc_ct_priv;
-@@ -143,6 +147,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(cons
+@@ -143,6 +145,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_ru
  
  #else /* CONFIG_MLX5_TC_CT */
  

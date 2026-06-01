@@ -6,9 +6,11 @@ Change-Id: Id856bcf5890d39786197dba63ff1204d92943a72
  drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h b/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mlx5.h
-@@ -52,7 +52,11 @@ static inline struct net_device *mlx5_up
+@@ -52,7 +52,11 @@ static inline struct net_device *mlx5_uplink_netdev_get(struct mlx5_core_dev *md
  
  	mutex_lock(&mlx5e_res->uplink_netdev_lock);
  	netdev = mlx5e_res->uplink_netdev;
@@ -20,7 +22,7 @@ Change-Id: Id856bcf5890d39786197dba63ff1204d92943a72
  	mutex_unlock(&mlx5e_res->uplink_netdev_lock);
  	return netdev;
  }
-@@ -60,7 +64,11 @@ static inline struct net_device *mlx5_up
+@@ -60,7 +64,11 @@ static inline struct net_device *mlx5_uplink_netdev_get(struct mlx5_core_dev *md
  static inline void mlx5_uplink_netdev_put(struct mlx5_core_dev *mdev,
  					  struct net_device *netdev)
  {

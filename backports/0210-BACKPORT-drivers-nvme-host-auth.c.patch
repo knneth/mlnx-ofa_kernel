@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/host/auth.c
 
 ---
- drivers/nvme/host/auth.c | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ drivers/nvme/host/auth.c | 42 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/host/auth.c b/drivers/nvme/host/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/auth.c
 +++ b/drivers/nvme/host/auth.c
 @@ -2,7 +2,7 @@
@@ -16,7 +18,89 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/auth.c
  #include <linux/crc32.h>
  #include <linux/base64.h>
  #include <linux/prandom.h>
-@@ -1166,3 +1166,4 @@ void __exit nvme_exit_auth(void)
+@@ -638,7 +638,13 @@ static int nvme_auth_dhchap_exponential(struct nvme_ctrl *ctrl,
+ 	}
+ 
+ gen_sesskey:
++#ifdef HAVE_NVME_AUTH_GEN_SESSION_KEY
++	/* Newer kernels (7.1+): session key is H(g^xy mod p), size is hash digest */
++	chap->sess_key_len = chap->hash_len;
++#else
++	/* Older kernels: session key is raw DH shared secret */
+ 	chap->sess_key_len = chap->host_key_len;
++#endif
+ 	chap->sess_key = kmalloc(chap->sess_key_len, GFP_KERNEL);
+ 	if (!chap->sess_key) {
+ 		chap->sess_key_len = 0;
+@@ -646,6 +652,21 @@ gen_sesskey:
+ 		return -ENOMEM;
+ 	}
+ 
++#ifdef HAVE_NVME_AUTH_GEN_SESSION_KEY
++	/* Newer kernels (7.1+): hashes DH secret internally, needs hash_id */
++	ret = nvme_auth_gen_session_key(chap->dh_tfm,
++					chap->ctrl_key, chap->ctrl_key_len,
++					chap->sess_key, chap->sess_key_len,
++					chap->hash_id);
++	if (ret) {
++		dev_dbg(ctrl->device,
++			"failed to generate session key, error %d\n", ret);
++		chap->status = NVME_AUTH_DHCHAP_FAILURE_INCORRECT_PAYLOAD;
++		return ret;
++	}
++	dev_dbg(ctrl->device, "session key %*ph\n",
++		(int)chap->sess_key_len, chap->sess_key);
++#else
+ 	ret = nvme_auth_gen_shared_secret(chap->dh_tfm,
+ 					  chap->ctrl_key, chap->ctrl_key_len,
+ 					  chap->sess_key, chap->sess_key_len);
+@@ -657,6 +678,7 @@ gen_sesskey:
+ 	}
+ 	dev_dbg(ctrl->device, "shared secret %*ph\n",
+ 		(int)chap->sess_key_len, chap->sess_key);
++#endif
+ 	return 0;
+ }
+ 
+@@ -708,7 +730,13 @@ EXPORT_SYMBOL_GPL(nvme_auth_revoke_tls_key);
+ static int nvme_auth_secure_concat(struct nvme_ctrl *ctrl,
+ 				   struct nvme_dhchap_queue_context *chap)
+ {
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): digest type changed from u8* to char* */
++	u8 *psk, *tls_psk;
++	char *digest;
++#else
+ 	u8 *psk, *digest, *tls_psk;
++#endif
+ 	struct key *tls_key;
+ 	size_t psk_len;
+ 	int ret = 0;
+@@ -1071,12 +1099,23 @@ int nvme_auth_init_ctrl(struct nvme_ctrl *ctrl)
+ 	INIT_WORK(&ctrl->dhchap_auth_work, nvme_ctrl_auth_work);
+ 	if (!ctrl->opts)
+ 		return 0;
++#ifdef HAVE_NVME_AUTH_PARSE_KEY
++	/* Newer kernels (7.1+): function renamed to nvme_auth_parse_key */
++	ret = nvme_auth_parse_key(ctrl->opts->dhchap_secret, &ctrl->host_key);
++#else
+ 	ret = nvme_auth_generate_key(ctrl->opts->dhchap_secret,
+ 			&ctrl->host_key);
++#endif
+ 	if (ret)
+ 		return ret;
++#ifdef HAVE_NVME_AUTH_PARSE_KEY
++	/* Newer kernels (7.1+): function renamed to nvme_auth_parse_key */
++	ret = nvme_auth_parse_key(ctrl->opts->dhchap_ctrl_secret,
++				  &ctrl->ctrl_key);
++#else
+ 	ret = nvme_auth_generate_key(ctrl->opts->dhchap_ctrl_secret,
+ 			&ctrl->ctrl_key);
++#endif
+ 	if (ret)
+ 		goto err_free_dhchap_secret;
+ 
+@@ -1166,3 +1205,4 @@ void __exit nvme_exit_auth(void)
  	kmem_cache_destroy(nvme_chap_buf_cache);
  	destroy_workqueue(nvme_auth_wq);
  }

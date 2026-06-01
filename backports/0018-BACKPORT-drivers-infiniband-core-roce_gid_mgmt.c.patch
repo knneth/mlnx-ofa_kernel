@@ -2,44 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
 
 ---
- drivers/infiniband/core/roce_gid_mgmt.c | 97 +++++++++++++++++--------
- 1 file changed, 65 insertions(+), 32 deletions(-)
+ drivers/infiniband/core/roce_gid_mgmt.c | 88 ++++++++++++++++---------
+ 1 file changed, 56 insertions(+), 32 deletions(-)
 
+diff --git a/drivers/infiniband/core/roce_gid_mgmt.c b/drivers/infiniband/core/roce_gid_mgmt.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/roce_gid_mgmt.c
 +++ b/drivers/infiniband/core/roce_gid_mgmt.c
-@@ -334,7 +334,9 @@ static void bond_delete_netdev_default_g
- static void enum_netdev_ipv4_ips(struct ib_device *ib_dev,
- 				 u32 port, struct net_device *ndev)
- {
-+#ifndef HAVE_FOR_IFA
- 	const struct in_ifaddr *ifa;
-+#endif
- 	struct in_device *in_dev;
- 	struct sin_list {
- 		struct list_head	list;
-@@ -354,7 +356,11 @@ static void enum_netdev_ipv4_ips(struct
- 		return;
- 	}
- 
-+#ifndef HAVE_FOR_IFA
- 	in_dev_for_each_ifa_rcu(ifa, in_dev) {
-+#else
-+	for_ifa(in_dev) {
-+#endif
- 		struct sin_list *entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
- 
- 		if (!entry)
-@@ -364,6 +370,9 @@ static void enum_netdev_ipv4_ips(struct
- 		entry->ip.sin_addr.s_addr = ifa->ifa_address;
- 		list_add_tail(&entry->list, &sin_list);
- 	}
-+#ifdef HAVE_FOR_IFA
-+	endfor_ifa(in_dev);
-+#endif
- 
- 	rcu_read_unlock();
- 
-@@ -375,6 +384,7 @@ static void enum_netdev_ipv4_ips(struct
+@@ -375,6 +375,7 @@ static void enum_netdev_ipv4_ips(struct ib_device *ib_dev,
  	}
  }
  
@@ -47,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  static void enum_netdev_ipv6_ips(struct ib_device *ib_dev,
  				 u32 port, struct net_device *ndev)
  {
-@@ -420,13 +430,15 @@ static void enum_netdev_ipv6_ips(struct
+@@ -420,13 +421,15 @@ static void enum_netdev_ipv6_ips(struct ib_device *ib_dev,
  		kfree(sin6_iter);
  	}
  }
@@ -65,7 +35,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  }
  
  static void add_netdev_ips(struct ib_device *ib_dev, u32 port,
-@@ -441,27 +453,6 @@ static void del_netdev_ips(struct ib_dev
+@@ -441,27 +444,6 @@ static void del_netdev_ips(struct ib_device *ib_dev, u32 port,
  	ib_cache_gid_del_all_netdev_gids(ib_dev, port, cookie);
  }
  
@@ -93,7 +63,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  static void add_default_gids(struct ib_device *ib_dev, u32 port,
  			     struct net_device *rdma_ndev, void *cookie)
  {
-@@ -560,10 +551,18 @@ struct upper_list {
+@@ -560,10 +542,18 @@ struct upper_list {
  };
  
  static int netdev_upper_walk(struct net_device *upper,
@@ -113,7 +83,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  
  	if (!entry)
  		return 0;
-@@ -582,14 +581,24 @@ static void handle_netdev_upper(struct i
+@@ -582,14 +572,24 @@ static void handle_netdev_upper(struct ib_device *ib_dev, u32 port,
  						      struct net_device *ndev))
  {
  	struct net_device *ndev = cookie;
@@ -139,7 +109,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  	rcu_read_unlock();
  
  	handle_netdev(ib_dev, port, ndev);
-@@ -694,11 +703,32 @@ static const struct netdev_event_work_cm
+@@ -694,11 +694,32 @@ static const struct netdev_event_work_cmd add_cmd = {
  	.filter	= is_eth_port_of_netdev_filter
  };
  
@@ -175,7 +145,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  static void
  ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
  		  struct netdev_event_work_cmd *cmds)
-@@ -714,9 +744,9 @@ ndev_event_unlink(struct netdev_notifier
+@@ -714,9 +735,9 @@ ndev_event_unlink(struct netdev_notifier_changeupper_info *changeupper_info,
  	cmds[1] = add_cmd;
  }
  
@@ -188,7 +158,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  };
  
  static void
-@@ -780,8 +810,10 @@ static int netdevice_event(struct notifi
+@@ -780,8 +801,10 @@ static int netdevice_event(struct notifier_block *this, unsigned long event,
  			};
  	static const struct netdev_event_work_cmd bonding_event_ips_del_cmd = {
  		.cb = del_netdev_upper_ips, .filter = upper_device_filter};
@@ -200,7 +170,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/roce_gid_mgmt.c
  
  	if (ndev->type != ARPHRD_ETHER)
  		return NOTIFY_DONE;
-@@ -925,6 +957,7 @@ static struct notifier_block nb_inet6add
+@@ -925,6 +948,7 @@ static struct notifier_block nb_inet6addr = {
  	.notifier_call = inet6addr_event
  };
  

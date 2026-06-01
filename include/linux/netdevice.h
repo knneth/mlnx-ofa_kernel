@@ -14,11 +14,6 @@
 #define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
 	        alloc_netdev_mqs(sizeof_priv, name, name_assign_type, setup, 1, 1)
 
-/* supports eipoib flags */
-#ifndef IFF_EIPOIB_VIF
-#define IFF_EIPOIB_VIF  0x800       /* IPoIB VIF intf(eg ib0.x, ib1.x etc.), using IFF_DONT_BRIDGE */
-#endif
-
 #ifndef SET_ETHTOOL_OPS
 #define SET_ETHTOOL_OPS(netdev,ops) \
     ( (netdev)->ethtool_ops = (ops) )

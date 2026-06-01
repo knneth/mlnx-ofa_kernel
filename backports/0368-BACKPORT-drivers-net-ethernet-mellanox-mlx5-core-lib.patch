@@ -7,6 +7,8 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  .../mellanox/mlx5/core/lib/nv_param.c         | 99 ++++++++++++++++---
  1 file changed, 88 insertions(+), 11 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/nv_param.c
 @@ -200,7 +200,12 @@ static const char *const
@@ -22,7 +24,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
-@@ -241,8 +246,12 @@ mlx5_nv_param_devlink_cqe_compress_valid
+@@ -241,8 +246,12 @@ mlx5_nv_param_devlink_cqe_compress_validate(struct devlink *devlink, u32 id,
  
  static int
  mlx5_nv_param_devlink_cqe_compress_set(struct devlink *devlink, u32 id,
@@ -37,7 +39,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
-@@ -257,7 +266,13 @@ mlx5_nv_param_devlink_cqe_compress_set(s
+@@ -257,7 +266,13 @@ mlx5_nv_param_devlink_cqe_compress_set(struct devlink *devlink, u32 id,
  
  	err = mlx5_nv_param_read_sw_offload_conf(dev, mnvda, sizeof(mnvda));
  	if (err) {
@@ -52,7 +54,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "Failed to read sw_offload_conf mnvda reg");
  		return err;
  	}
-@@ -302,7 +317,12 @@ static int mlx5_nv_param_read_per_host_p
+@@ -302,7 +317,12 @@ static int mlx5_nv_param_read_per_host_pf_conf(struct mlx5_core_dev *dev,
  }
  
  static int mlx5_devlink_enable_sriov_get(struct devlink *devlink, u32 id,
@@ -65,7 +67,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
-@@ -345,8 +365,12 @@ static int mlx5_devlink_enable_sriov_get
+@@ -345,8 +365,12 @@ static int mlx5_devlink_enable_sriov_get(struct devlink *devlink, u32 id,
  }
  
  static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
@@ -80,7 +82,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
-@@ -356,7 +380,13 @@ static int mlx5_devlink_enable_sriov_set
+@@ -356,7 +380,13 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  
  	err = mlx5_nv_param_read_global_pci_cap(dev, mnvda, sizeof(mnvda));
  	if (err) {
@@ -95,7 +97,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "Failed to read global PCI capability");
  		return err;
  	}
-@@ -366,14 +396,26 @@ static int mlx5_devlink_enable_sriov_set
+@@ -366,14 +396,26 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  				  per_pf_total_vf_supported);
  
  	if (!MLX5_GET(nv_global_pci_cap, cap, sriov_support)) {
@@ -124,7 +126,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "SRIOV is not per PF on this device");
  		return -EOPNOTSUPP;
  	}
-@@ -381,7 +423,13 @@ static int mlx5_devlink_enable_sriov_set
+@@ -381,7 +423,13 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  	memset(mnvda, 0, sizeof(mnvda));
  	err = mlx5_nv_param_read_global_pci_conf(dev, mnvda, sizeof(mnvda));
  	if (err) {
@@ -139,7 +141,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "Unable to read global PCI configuration");
  		return err;
  	}
-@@ -395,7 +443,13 @@ static int mlx5_devlink_enable_sriov_set
+@@ -395,7 +443,13 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  
  	err = mlx5_nv_param_write(dev, mnvda, sizeof(mnvda));
  	if (err) {
@@ -154,7 +156,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "Unable to write global PCI configuration");
  		return err;
  	}
-@@ -404,7 +458,13 @@ static int mlx5_devlink_enable_sriov_set
+@@ -404,7 +458,13 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  	memset(mnvda, 0, sizeof(mnvda));
  	err = mlx5_nv_param_read_per_host_pf_conf(dev, mnvda, sizeof(mnvda));
  	if (err) {
@@ -169,7 +171,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				   "Unable to read per host PF configuration");
  		return err;
  	}
-@@ -412,8 +472,14 @@ static int mlx5_devlink_enable_sriov_set
+@@ -412,8 +472,14 @@ static int mlx5_devlink_enable_sriov_set(struct devlink *devlink, u32 id,
  	return mlx5_nv_param_write(dev, mnvda, sizeof(mnvda));
  }
  
@@ -184,7 +186,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	u32 mnvda[MLX5_ST_SZ_DW(mnvda_reg)] = {};
-@@ -530,15 +596,18 @@ static int mlx5_devlink_total_vfs_valida
+@@ -530,15 +596,18 @@ static int mlx5_devlink_total_vfs_validate(struct devlink *devlink, u32 id,
  
  	return 0;
  }
@@ -203,7 +205,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  	DEVLINK_PARAM_DRIVER(MLX5_DEVLINK_PARAM_ID_CQE_COMPRESSION_TYPE,
  			     "cqe_compress_type", DEVLINK_PARAM_TYPE_STRING,
  			     BIT(DEVLINK_PARAM_CMODE_PERMANENT),
-@@ -552,7 +621,11 @@ int mlx5_nv_param_register_dl_params(str
+@@ -552,7 +621,11 @@ int mlx5_nv_param_register_dl_params(struct devlink *devlink)
  	if (!mlx5_core_is_pf(devlink_priv(devlink)))
  		return 0;
  
@@ -215,7 +217,7 @@ Change-Id: Ib790c9078f629b9323cafeecdcf0352804a7dc21
  				    ARRAY_SIZE(mlx5_nv_param_devlink_params));
  }
  
-@@ -561,7 +634,11 @@ void mlx5_nv_param_unregister_dl_params(
+@@ -561,7 +634,11 @@ void mlx5_nv_param_unregister_dl_params(struct devlink *devlink)
  	if (!mlx5_core_is_pf(devlink_priv(devlink)))
  		return;
  

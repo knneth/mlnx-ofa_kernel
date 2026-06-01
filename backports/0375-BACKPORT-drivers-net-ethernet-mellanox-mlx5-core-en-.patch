@@ -7,6 +7,8 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  .../mellanox/mlx5/core/en/pcie_cong_event.c   | 35 ++++++++++++++++---
  1 file changed, 31 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c b/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/pcie_cong_event.c
 @@ -43,6 +43,15 @@ struct mlx5e_pcie_cong_event {
@@ -25,7 +27,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  
  static const struct counter_desc mlx5e_pcie_cong_stats_desc[] = {
  	{ MLX5E_DECLARE_STAT(struct mlx5e_pcie_cong_stats,
-@@ -68,19 +77,23 @@ static MLX5E_DECLARE_STATS_GRP_OP_UPDATE
+@@ -68,19 +77,23 @@ static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(pcie_cong) {}
  
  static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(pcie_cong)
  {
@@ -51,7 +53,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  		u32 ctr = MLX5E_READ_CTR32_CPU(&priv->cong_event->stats,
  					       mlx5e_pcie_cong_stats_desc,
  					       i);
-@@ -248,6 +261,7 @@ static int mlx5e_pcie_cong_event_handler
+@@ -248,6 +261,7 @@ static int mlx5e_pcie_cong_event_handler(struct notifier_block *nb,
  	return NOTIFY_OK;
  }
  
@@ -59,7 +61,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  static int
  mlx5e_pcie_cong_get_thresh_config(struct mlx5_core_dev *dev,
  				  struct mlx5e_pcie_cong_thresh *config)
-@@ -260,12 +274,16 @@ mlx5e_pcie_cong_get_thresh_config(struct
+@@ -260,12 +274,16 @@ mlx5e_pcie_cong_get_thresh_config(struct mlx5_core_dev *dev,
  	};
  	struct devlink *devlink = priv_to_devlink(dev);
  	union devlink_param_value val[4];
@@ -78,7 +80,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  		if (err)
  			return err;
  	}
-@@ -298,10 +316,13 @@ mlx5e_thresh_config_validate(struct mlx5
+@@ -298,10 +316,13 @@ mlx5e_thresh_config_validate(struct mlx5_core_dev *mdev,
  
  	return err;
  }
@@ -92,7 +94,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  	struct mlx5e_pcie_cong_event *cong_event;
  	struct mlx5_core_dev *mdev = priv->mdev;
  	int err;
-@@ -309,6 +330,7 @@ int mlx5e_pcie_cong_event_init(struct ml
+@@ -309,6 +330,7 @@ int mlx5e_pcie_cong_event_init(struct mlx5e_priv *priv)
  	if (!mlx5_pcie_cong_event_supported(mdev))
  		return 0;
  
@@ -100,7 +102,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  	err = mlx5e_pcie_cong_get_thresh_config(mdev, &thresh_config);
  	if (WARN_ON(err))
  		return err;
-@@ -318,6 +340,7 @@ int mlx5e_pcie_cong_event_init(struct ml
+@@ -318,6 +340,7 @@ int mlx5e_pcie_cong_event_init(struct mlx5e_priv *priv)
  		mlx5_core_err(mdev, "PCIe congestion event feature disabled\n");
  		return err;
  	}
@@ -108,7 +110,7 @@ Change-Id: I35f34e21da1a8068b7872c95e1bfb4181625e647
  
  	cong_event = kvzalloc_node(sizeof(*cong_event), GFP_KERNEL,
  				   mdev->priv.numa_node);
-@@ -330,7 +353,11 @@ int mlx5e_pcie_cong_event_init(struct ml
+@@ -330,7 +353,11 @@ int mlx5e_pcie_cong_event_init(struct mlx5e_priv *priv)
  
  	cong_event->priv = priv;
  

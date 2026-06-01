@@ -6,9 +6,11 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  .../ethernet/mellanox/mlx5/core/lib/clock.c   | 172 +++++++++++++++++-
  1 file changed, 165 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.c
-@@ -102,8 +102,12 @@ static void mlx5_clock_lockdep_assert(st
+@@ -102,8 +102,12 @@ static void mlx5_clock_lockdep_assert(struct mlx5_clock *clock)
  {
  	if (!clock->shared)
  		return;
@@ -22,7 +24,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  }
  
  static struct mlx5_core_dev *mlx5_clock_mdev_get(struct mlx5_clock *clock)
-@@ -194,6 +198,7 @@ static s32 mlx5_clock_getmaxphase(struct
+@@ -194,6 +198,7 @@ static s32 mlx5_clock_getmaxphase(struct mlx5_core_dev *mdev)
  			     MLX5_MTUTC_OPERATION_ADJUST_TIME_MAX;
  }
  
@@ -30,7 +32,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  static s32 mlx5_ptp_getmaxphase(struct ptp_clock_info *ptp)
  {
  	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
-@@ -207,6 +212,7 @@ static s32 mlx5_ptp_getmaxphase(struct p
+@@ -207,6 +212,7 @@ static s32 mlx5_ptp_getmaxphase(struct ptp_clock_info *ptp)
  
  	return ret;
  }
@@ -38,7 +40,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  static bool mlx5_is_mtutc_time_adj_cap(struct mlx5_core_dev *mdev, s64 delta)
  {
-@@ -273,11 +279,15 @@ static int mlx5_mtctr_read(struct mlx5_c
+@@ -273,11 +279,15 @@ static int mlx5_mtctr_read(struct mlx5_core_dev *mdev,
  		return -EINVAL;
  
  	host = MLX5_GET64(mtctr_reg, out, first_clock_timestamp);
@@ -54,7 +56,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	*device = MLX5_GET64(mtctr_reg, out, second_clock_timestamp);
  
  	return 0;
-@@ -306,6 +316,7 @@ static int mlx5_mtctr_syncdevicetime(kti
+@@ -306,6 +316,7 @@ static int mlx5_mtctr_syncdevicetime(ktime_t *device_time,
  	return 0;
  }
  
@@ -62,7 +64,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  static int
  mlx5_mtctr_syncdevicecyclestime(ktime_t *device_time,
  				struct system_counterval_t *sys_counterval,
-@@ -322,6 +333,7 @@ mlx5_mtctr_syncdevicecyclestime(ktime_t
+@@ -322,6 +333,7 @@ mlx5_mtctr_syncdevicecyclestime(ktime_t *device_time,
  
  	return 0;
  }
@@ -86,7 +88,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  #endif /* CONFIG_X86 */
  
  static u64 mlx5_read_time(struct mlx5_core_dev *dev,
-@@ -401,7 +415,13 @@ static u64 mlx5_read_time(struct mlx5_co
+@@ -401,7 +415,13 @@ static u64 mlx5_read_time(struct mlx5_core_dev *dev,
  			   (u64)timer_l | (u64)timer_h1 << 32;
  }
  
@@ -100,7 +102,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  {
  	struct mlx5_timer *timer = container_of(cc, struct mlx5_timer, cycles);
  	struct mlx5_clock *clock = container_of(timer, struct mlx5_clock, timer);
-@@ -552,8 +572,9 @@ struct timespec64 mlx5_ptp_gettimex_real
+@@ -552,8 +572,9 @@ struct timespec64 mlx5_ptp_gettimex_real_time(struct mlx5_core_dev *mdev,
  	return ts;
  }
  
@@ -120,7 +122,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  static int mlx5_ptp_getcyclesx(struct ptp_clock_info *ptp,
  			       struct timespec64 *ts,
  			       struct ptp_system_timestamp *sts)
-@@ -591,6 +613,7 @@ static int mlx5_ptp_getcyclesx(struct pt
+@@ -591,6 +613,7 @@ static int mlx5_ptp_getcyclesx(struct ptp_clock_info *ptp,
  	mlx5_clock_unlock(clock);
  	return 0;
  }
@@ -136,7 +138,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  static int mlx5_ptp_adjphase(struct ptp_clock_info *ptp, s32 delta)
  {
  	struct mlx5_clock *clock = container_of(ptp, struct mlx5_clock, ptp_info);
-@@ -654,6 +678,7 @@ static int mlx5_ptp_adjphase(struct ptp_
+@@ -654,6 +678,7 @@ static int mlx5_ptp_adjphase(struct ptp_clock_info *ptp, s32 delta)
  
  	return err;
  }
@@ -144,7 +146,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_ppm)
  {
-@@ -661,6 +686,7 @@ static int mlx5_ptp_freq_adj_real_time(s
+@@ -661,6 +686,7 @@ static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_p
  
  	MLX5_SET(mtutc_reg, in, operation, MLX5_MTUTC_OPERATION_ADJUST_FREQ_UTC);
  
@@ -152,7 +154,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	if (MLX5_CAP_MCAM_FEATURE(mdev, mtutc_freq_adj_units) &&
  	    scaled_ppm <= S32_MAX && scaled_ppm >= S32_MIN) {
  		/* HW scaled_ppm support on mlx5 devices only supports a 32-bit value */
-@@ -671,10 +697,54 @@ static int mlx5_ptp_freq_adj_real_time(s
+@@ -671,10 +697,54 @@ static int mlx5_ptp_freq_adj_real_time(struct mlx5_core_dev *mdev, long scaled_p
  		MLX5_SET(mtutc_reg, in, freq_adj_units, MLX5_MTUTC_FREQ_ADJ_UNITS_PPB);
  		MLX5_SET(mtutc_reg, in, freq_adjustment, scaled_ppm_to_ppb(scaled_ppm));
  	}
@@ -242,7 +244,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  static int mlx5_extts_configure(struct ptp_clock_info *ptp,
  				struct ptp_clock_request *rq,
-@@ -722,6 +820,16 @@ static int mlx5_extts_configure(struct p
+@@ -722,6 +820,16 @@ static int mlx5_extts_configure(struct ptp_clock_info *ptp,
  	int pin = -1;
  	int err = 0;
  
@@ -259,7 +261,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	/* Reject requests to enable time stamping on both edges. */
  	if ((rq->extts.flags & PTP_STRICT_FLAGS) &&
  	    (rq->extts.flags & PTP_ENABLE_FEATURE) &&
-@@ -731,7 +839,12 @@ static int mlx5_extts_configure(struct p
+@@ -731,7 +839,12 @@ static int mlx5_extts_configure(struct ptp_clock_info *ptp,
  	if (rq->extts.index >= clock->ptp_info.n_pins)
  		return -EINVAL;
  
@@ -272,7 +274,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	if (pin < 0)
  		return -EBUSY;
  
-@@ -815,13 +928,12 @@ static u64 perout_conf_real_time(s64 sec
+@@ -815,13 +928,12 @@ static u64 perout_conf_real_time(s64 sec, u32 nsec)
  static int perout_conf_1pps(struct mlx5_core_dev *mdev, struct ptp_clock_request *rq,
  			    u64 *time_stamp, bool real_time)
  {
@@ -287,7 +289,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	if ((ns >> 1) != 500000000LL)
  		return -EINVAL;
  
-@@ -840,18 +952,22 @@ static int mlx5_perout_conf_out_pulse_du
+@@ -840,18 +952,22 @@ static int mlx5_perout_conf_out_pulse_duration(struct mlx5_core_dev *mdev,
  	u32 out_pulse_duration;
  	struct timespec64 ts;
  
@@ -310,7 +312,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  	if (out_pulse_duration < pps_info->min_out_pulse_duration_ns ||
  	    out_pulse_duration > MLX5_MAX_PULSE_DURATION) {
-@@ -892,6 +1008,15 @@ static int perout_conf_npps_real_time(st
+@@ -892,6 +1008,15 @@ static int perout_conf_npps_real_time(struct mlx5_core_dev *mdev, struct ptp_clo
  	return 0;
  }
  
@@ -326,7 +328,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  static int mlx5_perout_configure(struct ptp_clock_info *ptp,
  				 struct ptp_clock_request *rq,
  				 int on)
-@@ -914,7 +1039,11 @@ static int mlx5_perout_configure(struct
+@@ -914,7 +1039,11 @@ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
  		return -EINVAL;
  
  	field_select = MLX5_MTPPS_FS_ENABLE;
@@ -338,7 +340,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	if (pin < 0)
  		return -EBUSY;
  
-@@ -927,6 +1056,16 @@ static int mlx5_perout_configure(struct
+@@ -927,6 +1056,16 @@ static int mlx5_perout_configure(struct ptp_clock_info *ptp,
  		goto unlock;
  	}
  
@@ -355,7 +357,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	if (on) {
  		pin_mode = MLX5_PIN_MODE_OUT;
  		pattern = MLX5_OUT_PATTERN_PERIODIC;
-@@ -1034,9 +1173,18 @@ static const struct ptp_clock_info mlx5_
+@@ -1034,9 +1173,18 @@ static const struct ptp_clock_info mlx5_ptp_clock_info = {
  	.n_per_out	= 0,
  	.n_pins		= 0,
  	.pps		= 0,
@@ -374,7 +376,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	.adjtime	= mlx5_ptp_adjtime,
  	.gettimex64	= mlx5_ptp_gettimex,
  	.settime64	= mlx5_ptp_settime,
-@@ -1094,12 +1242,15 @@ static void mlx5_init_pin_config(struct
+@@ -1094,12 +1242,15 @@ static void mlx5_init_pin_config(struct mlx5_core_dev *mdev)
  	clock->ptp_info.verify = mlx5_ptp_verify;
  	clock->ptp_info.pps = 1;
  
@@ -390,7 +392,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  	for (i = 0; i < clock->ptp_info.n_pins; i++) {
  		snprintf(clock->ptp_info.pin_config[i].name,
-@@ -1151,7 +1302,7 @@ static void ts_next_sec(struct timespec6
+@@ -1151,7 +1302,7 @@ static void ts_next_sec(struct timespec64 *ts)
  static u64 perout_conf_next_event_timer(struct mlx5_core_dev *mdev,
  					struct mlx5_clock *clock)
  {
@@ -399,7 +401,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	s64 target_ns;
  
  	mlx5_ptp_gettimex(&clock->ptp_info, &ts, NULL);
-@@ -1247,7 +1398,6 @@ static void mlx5_init_overflow_period(st
+@@ -1247,7 +1398,6 @@ static void mlx5_init_overflow_period(struct mlx5_core_dev *mdev)
  	 */
  	overflow_cycles = div64_u64(~0ULL >> 1, timer->cycles.mult);
  	overflow_cycles = min(overflow_cycles, div_u64(timer->cycles.mask, 3));
@@ -407,7 +409,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  	ns = cyclecounter_cyc2ns(&timer->cycles, overflow_cycles,
  				 frac, &frac);
  	do_div(ns, NSEC_PER_SEC / HZ);
-@@ -1308,7 +1458,9 @@ static void mlx5_init_timer_max_freq_adj
+@@ -1308,7 +1458,9 @@ static void mlx5_init_timer_max_freq_adjustment(struct mlx5_core_dev *mdev)
  static void mlx5_init_timer_clock(struct mlx5_core_dev *mdev)
  {
  	struct mlx5_clock *clock = mdev->clock;
@@ -417,7 +419,7 @@ Change-Id: Iafebadc0143a784c3083404ff98a78a3c7234c29
  
  	/* Configure the PHC */
  	clock->ptp_info = mlx5_ptp_clock_info;
-@@ -1316,21 +1468,27 @@ static void mlx5_init_timer_clock(struct
+@@ -1316,21 +1468,27 @@ static void mlx5_init_timer_clock(struct mlx5_core_dev *mdev)
  	if (MLX5_CAP_MCAM_REG(mdev, mtutc))
  		mlx5_init_timer_max_freq_adjustment(mdev);
  

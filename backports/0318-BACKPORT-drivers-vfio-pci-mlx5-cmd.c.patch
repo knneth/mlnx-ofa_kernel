@@ -6,6 +6,8 @@ Change-Id: I0b7cc0ea055c5e407ef32a0ca83d533f58f3c795
  drivers/vfio/pci/mlx5/cmd.c | 58 +++++++++++++++++++++++++++++++++++++
  1 file changed, 58 insertions(+)
 
+diff --git a/drivers/vfio/pci/mlx5/cmd.c b/drivers/vfio/pci/mlx5/cmd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/vfio/pci/mlx5/cmd.c
 +++ b/drivers/vfio/pci/mlx5/cmd.c
 @@ -3,6 +3,7 @@
@@ -16,7 +18,7 @@ Change-Id: I0b7cc0ea055c5e407ef32a0ca83d533f58f3c795
  #include "cmd.h"
  
  enum { CQ_OK = 0, CQ_EMPTY = -1, CQ_POLL_ERR = -2 };
-@@ -497,7 +498,11 @@ static int mlx5vf_add_pages(struct page
+@@ -497,7 +498,11 @@ static int mlx5vf_add_pages(struct page ***page_list, unsigned int npages)
  		return -ENOMEM;
  
  	for (;;) {
@@ -28,7 +30,7 @@ Change-Id: I0b7cc0ea055c5e407ef32a0ca83d533f58f3c795
  					  *page_list + done);
  		if (!filled)
  			goto err;
-@@ -908,6 +913,54 @@ void mlx5fv_cmd_clean_migf_resources(str
+@@ -908,6 +913,54 @@ void mlx5fv_cmd_clean_migf_resources(struct mlx5_vf_migration_file *migf)
  	mlx5vf_cmd_dealloc_pd(migf);
  }
  
@@ -83,7 +85,7 @@ Change-Id: I0b7cc0ea055c5e407ef32a0ca83d533f58f3c795
  static int mlx5vf_create_tracker(struct mlx5_core_dev *mdev,
  				 struct mlx5vf_pci_core_device *mvdev,
  				 struct rb_root_cached *ranges, u32 nnodes)
-@@ -930,7 +983,11 @@ static int mlx5vf_create_tracker(struct
+@@ -930,7 +983,11 @@ static int mlx5vf_create_tracker(struct mlx5_core_dev *mdev,
  	int i;
  
  	if (num_ranges > max_num_range) {

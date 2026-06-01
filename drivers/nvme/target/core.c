@@ -476,6 +476,14 @@ int nvmet_enable_port(struct nvmet_port *port, struct nvmet_subsys *subsys)
 					       NVMET_MIN_QUEUE_SIZE,
 					       NVMET_MAX_QUEUE_SIZE);
 
+	/*
+	 * If the transport didn't set the mdts properly, then clamp it to the
+	 * target limits. Also set default values in case the transport didn't
+	 * set it at all.
+	 */
+	if (port->mdts < 0 || port->mdts > NVMET_MAX_MDTS)
+		port->mdts = 0;
+
 	port->enabled = true;
 	port->offload = subsys->offloadble;
 	port->tr_ops = ops;

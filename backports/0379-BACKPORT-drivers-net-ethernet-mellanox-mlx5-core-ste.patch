@@ -4,12 +4,22 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: Ie221e78f9c68bb8a5f13e1256f362d350dae2aef
 ---
- .../ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c  | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ .../mellanox/mlx5/core/steering/sws/dr_dbg.c        | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
-@@ -7,6 +7,16 @@
+@@ -2,11 +2,24 @@
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
+ #include <linux/debugfs.h>
++#ifdef HAVE_LINUX_HEX_H
++#include <linux/hex.h>
++#endif
+ #include <linux/kernel.h>
+ #include <linux/seq_file.h>
  #include <linux/version.h>
  #include "dr_types.h"
  

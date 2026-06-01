@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
  drivers/infiniband/ulp/ipoib/ipoib_cm.c | 19 ++++++++++++-------
  1 file changed, 12 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_cm.c b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_cm.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
-@@ -465,7 +465,6 @@ static int ipoib_cm_req_handler(struct i
+@@ -465,7 +465,6 @@ static int ipoib_cm_req_handler(struct ib_cm_id *cm_id,
  		ret = PTR_ERR(p->qp);
  		goto err_qp;
  	}
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
  	psn = get_random_u32() & 0xffffff;
  	ret = ipoib_cm_modify_rx_qp(dev, cm_id, p->qp, psn);
  	if (ret)
-@@ -1154,19 +1153,19 @@ static int ipoib_cm_tx_init(struct ipoib
+@@ -1154,19 +1153,19 @@ static int ipoib_cm_tx_init(struct ipoib_cm_tx *p, u32 qpn,
  			    struct sa_path_rec *pathrec)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(p->dev);
@@ -41,7 +43,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
  	if (IS_ERR(p->qp)) {
  		ret = PTR_ERR(p->qp);
  		ipoib_warn(priv, "failed to create tx qp: %d\n", ret);
-@@ -1597,7 +1596,9 @@ int ipoib_cm_dev_init(struct net_device
+@@ -1597,7 +1596,9 @@ int ipoib_cm_dev_init(struct net_device *dev)
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	int max_srq_sge, i;
@@ -51,7 +53,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_cm.c
  
  	INIT_LIST_HEAD(&priv->cm.passive_ids);
  	INIT_LIST_HEAD(&priv->cm.reap_list);
-@@ -1651,8 +1652,12 @@ int ipoib_cm_dev_init(struct net_device
+@@ -1651,8 +1652,12 @@ int ipoib_cm_dev_init(struct net_device *dev)
  		}
  	}
  

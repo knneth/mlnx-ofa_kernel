@@ -2,24 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
 
 ---
- net/mlxdevm/port.c | 51 ++++++++++++++++++++++++++++++++++++++--------
- 1 file changed, 43 insertions(+), 8 deletions(-)
+ net/mlxdevm/port.c | 47 ++++++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 39 insertions(+), 8 deletions(-)
 
+diff --git a/net/mlxdevm/port.c b/net/mlxdevm/port.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/port.c
 +++ b/net/mlxdevm/port.c
-@@ -509,7 +509,11 @@ mlxdevm_nl_port_function_attrs_put(struc
- 	bool msg_updated = false;
- 	int err;
- 
-+#ifdef HAVE_NLA_NEST_START_NOFLAG
- 	function_attr = nla_nest_start_noflag(msg, MLXDEVM_ATTR_PORT_FUNCTION);
-+#else
-+	function_attr = nla_nest_start(msg, MLXDEVM_ATTR_PORT_FUNCTION);
-+#endif
- 	if (!function_attr)
- 		return -EMSGSIZE;
- 
-@@ -609,15 +613,18 @@ static void mlxdevm_port_notify(struct m
+@@ -609,15 +609,18 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
  				enum mlxdevm_command cmd)
  {
  	struct mlxdevm *mlxdevm = mlxdevm_port->mlxdevm;
@@ -38,7 +28,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -631,9 +638,10 @@ static void mlxdevm_port_notify(struct m
+@@ -631,9 +634,10 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
  	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
  	mlxdevm_nl_obj_desc_port_set(&desc, mlxdevm_port);
  	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
@@ -50,7 +40,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  static void devlink_ports_notify(struct devlink *devlink,
  				 enum devlink_command cmd)
  {
-@@ -657,9 +665,18 @@ void devlink_ports_notify_unregister(str
+@@ -657,9 +661,18 @@ void devlink_ports_notify_unregister(struct devlink *devlink)
  
  int mlxdevm_nl_port_get_doit(struct sk_buff *skb, struct genl_info *info)
  {
@@ -70,7 +60,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
-@@ -940,8 +957,17 @@ static int mlxdevm_port_function_set(str
+@@ -940,8 +953,17 @@ static int mlxdevm_port_function_set(struct mlxdevm_port *port,
  
  int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
  {
@@ -89,7 +79,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  
  	if (info->attrs[MLXDEVM_ATTR_PORT_TYPE]) {
  		enum mlxdevm_port_type port_type;
-@@ -1012,7 +1038,7 @@ int mlxdevm_nl_port_new_doit(struct sk_b
+@@ -1012,7 +1034,7 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
  	struct netlink_ext_ack *extack = info->extack;
  	struct mlxdevm_port_new_attrs new_attrs = {};
  	struct mlxdevm *mlxdevm = info->user_ptr[0];
@@ -98,7 +88,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  	unsigned int new_index;
  	struct sk_buff *msg;
  	int err;
-@@ -1051,21 +1077,22 @@ int mlxdevm_nl_port_new_doit(struct sk_b
+@@ -1051,21 +1073,22 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
  	if (err)
  		return err;
  
@@ -124,7 +114,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
  	return 0;
  
  err_out_msg_free:
-@@ -1077,9 +1104,17 @@ err_out_port_del:
+@@ -1077,9 +1100,17 @@ err_out_port_del:
  
  int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info)
  {

@@ -3,12 +3,14 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/passthru.c
 
 Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
 ---
- drivers/nvme/target/passthru.c | 106 ++++++++++++++++++++++++++++++++-
- 1 file changed, 105 insertions(+), 1 deletion(-)
+ drivers/nvme/target/passthru.c | 113 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 111 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/target/passthru.c b/drivers/nvme/target/passthru.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/passthru.c
 +++ b/drivers/nvme/target/passthru.c
-@@ -105,15 +105,35 @@ static u16 nvmet_passthru_override_id_ct
+@@ -105,15 +105,35 @@ static u16 nvmet_passthru_override_id_ctrl(struct nvmet_req *req)
  	 * which depends on the host's memory fragmentation. To solve this,
  	 * ensure mdts is limited to the pages equal to the number of segments.
  	 */
@@ -44,7 +46,7 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
  
  	page_shift = NVME_CAP_MPSMIN(ctrl->cap) + 12;
  
-@@ -221,10 +241,26 @@ static void nvmet_passthru_execute_cmd_w
+@@ -221,10 +241,26 @@ static void nvmet_passthru_execute_cmd_work(struct work_struct *w)
  	struct nvme_ctrl *ctrl = nvme_req(rq)->ctrl;
  	struct nvme_ns *ns = rq->q->queuedata;
  	u32 effects;
@@ -71,7 +73,7 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
  	if (status == NVME_SC_SUCCESS &&
  	    req->cmd->common.opcode == nvme_admin_identify) {
  		switch (req->cmd->identify.cns) {
-@@ -238,8 +274,12 @@ static void nvmet_passthru_execute_cmd_w
+@@ -238,8 +274,12 @@ static void nvmet_passthru_execute_cmd_work(struct work_struct *w)
  			status = nvmet_passthru_override_id_descs(req);
  			break;
  		}
@@ -84,13 +86,19 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
  
  	req->cqe->result = nvme_req(rq)->result;
  	nvmet_req_complete(req, status);
-@@ -249,43 +289,92 @@ static void nvmet_passthru_execute_cmd_w
+@@ -249,43 +289,97 @@ static void nvmet_passthru_execute_cmd_work(struct work_struct *w)
  		nvme_passthru_end(ctrl, ns, effects, req->cmd, status);
  }
  
 +#ifdef HAVE_RQ_END_IO_RET
  static enum rq_end_io_ret nvmet_passthru_req_done(struct request *rq,
- 						  blk_status_t blk_status)
+-						  blk_status_t blk_status)
++						  blk_status_t blk_status
++#ifdef HAVE_RQ_END_IO_FN_3_ARGS
++/* Newer kernels (7.0+): io_comp_batch parameter added */
++						  , const struct io_comp_batch *iob
++#endif
++						  )
 +#else
 +static void nvmet_passthru_req_done(struct request *rq,
 +				    blk_status_t blk_status)
@@ -159,8 +167,8 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
  				sg->length)
  			goto out_bio_put;
 +#endif
- 	}
- 
++	}
++
 +#ifdef HAVE_BIO_ADD_PC_PAGE
 +#ifdef HAVE_BLK_RQ_BIO_PREP
 +	blk_rq_bio_prep(rq, bio, req->sg_cnt);
@@ -169,15 +177,15 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
 +	if (unlikely(ret)) {
 +	        bio_put(bio);
 +	        return ret;
-+	}
+ 	}
 +#endif
-+
+ 
 +	return 0;
 +#else
  	ret = blk_rq_append_bio(rq, bio);
  	if (ret)
  		goto out_bio_put;
-@@ -294,6 +383,7 @@ static int nvmet_passthru_map_sg(struct
+@@ -294,6 +388,7 @@ static int nvmet_passthru_map_sg(struct nvmet_req *req, struct request *rq)
  out_bio_put:
  	nvmet_req_bio_put(req, bio);
  	return ret;
@@ -185,7 +193,7 @@ Change-Id: I8adca4709222b324841187cc21fa0b0de5a9357a
  }
  
  static void nvmet_passthru_execute_cmd(struct nvmet_req *req)
-@@ -353,9 +443,23 @@ static void nvmet_passthru_execute_cmd(s
+@@ -353,9 +448,23 @@ static void nvmet_passthru_execute_cmd(struct nvmet_req *req)
  		req->p.rq = rq;
  		queue_work(nvmet_wq, &req->p.work);
  	} else {

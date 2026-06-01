@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/verbs.c
  drivers/infiniband/core/verbs.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/infiniband/core/verbs.c b/drivers/infiniband/core/verbs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/verbs.c
 +++ b/drivers/infiniband/core/verbs.c
-@@ -2073,7 +2073,11 @@ int ib_get_eth_speed(struct ib_device *d
+@@ -2018,7 +2018,11 @@ int ib_get_eth_speed(struct ib_device *dev, u32 port_num, u16 *speed, u8 *width)
  				netdev->name, netdev_speed);
  	}
  

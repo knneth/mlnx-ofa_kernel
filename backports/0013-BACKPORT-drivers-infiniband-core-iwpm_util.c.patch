@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwpm_util.c
  drivers/infiniband/core/iwpm_util.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/iwpm_util.c b/drivers/infiniband/core/iwpm_util.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/iwpm_util.c
 +++ b/drivers/infiniband/core/iwpm_util.c
-@@ -644,7 +644,7 @@ int iwpm_send_mapinfo(u8 nl_client, int
+@@ -644,7 +644,7 @@ int iwpm_send_mapinfo(u8 nl_client, int iwpm_pid)
  	int i = 0, nlmsg_bytes = 0;
  	unsigned long flags;
  	const char *err_str = "";

@@ -18,11 +18,7 @@ static const struct nla_policy mirred_policy_compat[TCA_MIRRED_MAX + 1] = {
 static inline bool is_tcf_mirred_compat(const struct tc_action *a)
 {
 #ifdef CONFIG_NET_CLS_ACT
-#ifdef HAVE_TC_ACTION_OPS_HAS_ID
 	if (a->ops && a->ops->id == TCA_ACT_MIRRED)
-#else
-	if (a->ops && a->ops->type == TCA_ACT_MIRRED)
-#endif
 		return true;
 #endif
 	return false;

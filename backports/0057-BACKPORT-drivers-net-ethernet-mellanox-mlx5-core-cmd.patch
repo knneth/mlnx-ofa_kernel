@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
  drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 11 +++++++++--
  1 file changed, 9 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
-@@ -1808,7 +1808,6 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1808,7 +1808,6 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
  				set_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state);
  				cmd_ent_put(ent);
  			}
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
  			ent->ts2 = ktime_get_ns();
  			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
  			dump_command(dev, ent, 0);
-@@ -2428,7 +2427,11 @@ static void create_msg_cache(struct mlx5
+@@ -2428,7 +2427,11 @@ static void create_msg_cache(struct mlx5_core_dev *dev)
  
  static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
  {
@@ -28,7 +30,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/cmd.c
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
  		return -ENOMEM;
-@@ -2443,7 +2446,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2443,7 +2446,11 @@ static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
  
  	dma_free_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
  			  cmd->alloc_dma);

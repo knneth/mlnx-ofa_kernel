@@ -2,12 +2,24 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
 ---
- drivers/infiniband/core/addr.c | 25 ++++++++++++++++++++++---
- 1 file changed, 22 insertions(+), 3 deletions(-)
+ drivers/infiniband/core/addr.c | 33 ++++++++++++++++++++++++++++++---
+ 1 file changed, 30 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/addr.c b/drivers/infiniband/core/addr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
-@@ -49,6 +49,10 @@
+@@ -41,7 +41,9 @@
+ #include <net/neighbour.h>
+ #include <net/route.h>
+ #include <net/netevent.h>
++#ifdef HAVE_NET_IPV6_STUBS_H
+ #include <net/ipv6_stubs.h>
++#endif
+ #include <net/ip6_route.h>
+ #include <rdma/ib_addr.h>
+ #include <rdma/ib_cache.h>
+@@ -49,6 +51,10 @@
  #include <rdma/ib.h>
  #include <rdma/rdma_netlink.h>
  #include <net/netlink.h>
@@ -18,7 +30,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  
  #include "core_priv.h"
  
-@@ -165,7 +169,11 @@ static int ib_nl_ip_send_msg(struct rdma
+@@ -165,7 +171,11 @@ static int ib_nl_ip_send_msg(struct rdma_dev_addr *dev_addr,
  	}
  
  	/* Construct the family header first */
@@ -31,7 +43,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  	header->ifindex = dev_addr->bound_dev_if;
  	nla_put(skb, attrtype, size, daddr);
  
-@@ -237,11 +245,20 @@ rdma_find_ndev_for_src_ip_rcu(struct net
+@@ -237,11 +247,20 @@ rdma_find_ndev_for_src_ip_rcu(struct net *net, const struct sockaddr *src_in)
  
  	switch (src_in->sa_family) {
  	case AF_INET:
@@ -52,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  		break;
  #if IS_ENABLED(CONFIG_IPV6)
  	case AF_INET6:
-@@ -406,6 +423,8 @@ static int addr6_resolve(struct sockaddr
+@@ -409,12 +428,20 @@ static int addr6_resolve(struct sockaddr *src_sock,
  	struct flowi6 fl6;
  	struct dst_entry *dst;
  
@@ -61,7 +73,19 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  	memset(&fl6, 0, sizeof fl6);
  	fl6.daddr = dst_in->sin6_addr;
  	fl6.saddr = src_in->sin6_addr;
-@@ -423,7 +442,7 @@ static int addr6_resolve(struct sockaddr
+ 	fl6.flowi6_oif = addr->bound_dev_if;
+ 
++#ifndef HAVE_NET_IPV6_STUBS_H
++/* Newer kernels (7.1+): ipv6_stub removed, use direct call */
++	dst = ip6_dst_lookup_flow(addr->net, NULL, &fl6, NULL);
++#else
++/* Older kernels: use ipv6_stub indirection */
+ 	dst = ipv6_stub->ipv6_dst_lookup_flow(addr->net, NULL, &fl6, NULL);
++#endif
+ 	if (IS_ERR(dst))
+ 		return PTR_ERR(dst);
+ 
+@@ -426,7 +453,7 @@ static int addr6_resolve(struct sockaddr *src_sock,
  	*pdst = dst;
  	return 0;
  }
@@ -70,7 +94,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  static int addr6_resolve(struct sockaddr *src_sock,
  			 const struct sockaddr *dst_sock,
  			 struct rdma_dev_addr *addr,
-@@ -431,7 +450,7 @@ static int addr6_resolve(struct sockaddr
+@@ -434,7 +461,7 @@ static int addr6_resolve(struct sockaddr *src_sock,
  {
  	return -EADDRNOTAVAIL;
  }

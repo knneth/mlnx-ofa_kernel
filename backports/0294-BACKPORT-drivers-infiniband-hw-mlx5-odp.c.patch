@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/odp.c
 
 Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
 ---
- drivers/infiniband/hw/mlx5/odp.c | 178 ++++++++++++++++++++++++++++++-
- 1 file changed, 176 insertions(+), 2 deletions(-)
+ drivers/infiniband/hw/mlx5/odp.c | 176 ++++++++++++++++++++++++++++++-
+ 1 file changed, 174 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/odp.c b/drivers/infiniband/hw/mlx5/odp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/odp.c
 +++ b/drivers/infiniband/hw/mlx5/odp.c
 @@ -31,12 +31,21 @@
@@ -30,7 +32,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  #include "mlx5_ib.h"
  #include "cmd.h"
-@@ -155,6 +164,7 @@ static void populate_ksm(struct mlx5_ksm
+@@ -155,6 +164,7 @@ static void populate_ksm(struct mlx5_ksm *pksm, size_t idx, size_t nentries,
  	}
  }
  
@@ -38,7 +40,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  static int populate_mtt(__be64 *pas, size_t start, size_t nentries,
  			struct mlx5_ib_mr *mr, int flags)
  {
-@@ -202,6 +212,45 @@ int mlx5_odp_populate_xlt(void *xlt, siz
+@@ -202,6 +212,45 @@ int mlx5_odp_populate_xlt(void *xlt, size_t idx, size_t nentries,
  	}
  }
  
@@ -84,7 +86,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  /*
   * This must be called after the mr has been removed from implicit_children.
   * NOTE: The MR does not necessarily have to be
-@@ -262,26 +311,40 @@ static void destroy_unused_implicit_chil
+@@ -262,26 +311,38 @@ static void destroy_unused_implicit_child_mr(struct mlx5_ib_mr *mr)
  	queue_work(system_unbound_wq, &mr->odp_destroy.work);
  }
  
@@ -113,11 +115,9 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	u64 addr;
  
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
-+#ifdef HAVE_MMU_NOTIFIER_RANGE_BLOCKABLE
  	if (!mmu_notifier_range_blockable(range))
  		return false;
 -
-+#endif
 +#endif /* HAVE_MMU_INTERVAL_NOTIFIER */
  	mutex_lock(&umem_odp->umem_mutex);
 +#ifdef HAVE_MMU_INTERVAL_NOTIFIER
@@ -126,7 +126,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	/*
  	 * If npages is zero then umem_odp->private may not be setup yet. This
  	 * does not complete until after the first page is mapped for DMA.
-@@ -292,8 +355,13 @@ static bool mlx5_ib_invalidate_range(str
+@@ -292,8 +353,13 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
  	if (!mr)
  		goto out;
  
@@ -140,7 +140,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  	/*
  	 * Iteration one - zap the HW's MTTs. The notifiers_count ensures that
-@@ -309,7 +377,12 @@ static bool mlx5_ib_invalidate_range(str
+@@ -309,7 +375,12 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
  		 * estimate the cost of another UMR vs. the cost of bigger
  		 * UMR.
  		 */
@@ -153,7 +153,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  			if (!in_block) {
  				blk_start_idx = idx;
  				in_block = 1;
-@@ -351,12 +424,16 @@ static bool mlx5_ib_invalidate_range(str
+@@ -351,12 +422,16 @@ static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
  		destroy_unused_implicit_child_mr(mr);
  out:
  	mutex_unlock(&umem_odp->umem_mutex);
@@ -170,7 +170,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  static void internal_fill_odp_caps(struct mlx5_ib_dev *dev)
  {
-@@ -474,7 +551,12 @@ static struct mlx5_ib_mr *implicit_get_c
+@@ -474,7 +549,12 @@ static struct mlx5_ib_mr *implicit_get_child_mr(struct mlx5_ib_mr *imr,
  
  	odp = ib_umem_odp_alloc_child(to_ib_umem_odp(imr->umem),
  				      idx * mlx5_imr_mtt_size,
@@ -183,7 +183,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	if (IS_ERR(odp))
  		return ERR_CAST(odp);
  
-@@ -601,6 +683,7 @@ free_in:
+@@ -601,6 +681,7 @@ free_in:
  }
  
  struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
@@ -191,7 +191,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  					     int access_flags)
  {
  	struct mlx5_ib_dev *dev = to_mdev(pd->ibpd.device);
-@@ -611,7 +694,11 @@ struct mlx5_ib_mr *mlx5_ib_alloc_implici
+@@ -611,7 +692,11 @@ struct mlx5_ib_mr *mlx5_ib_alloc_implicit_mr(struct mlx5_ib_pd *pd,
  	if (!mlx5r_umr_can_load_pas(dev, mlx5_imr_mtt_entries * PAGE_SIZE))
  		return ERR_PTR(-EOPNOTSUPP);
  
@@ -203,7 +203,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	if (IS_ERR(umem_odp))
  		return ERR_CAST(umem_odp);
  
-@@ -693,11 +780,23 @@ static int pagefault_real_mr(struct mlx5
+@@ -693,11 +778,23 @@ static int pagefault_real_mr(struct mlx5_ib_mr *mr, struct ib_umem_odp *odp,
  			     u64 user_va, size_t bcnt, u32 *bytes_mapped,
  			     u32 flags)
  {
@@ -227,7 +227,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	u32 xlt_flags = MLX5_IB_UPD_XLT_ATOMIC;
  
  	if (flags & MLX5_PF_FLAGS_ENABLE)
-@@ -708,20 +807,72 @@ static int pagefault_real_mr(struct mlx5
+@@ -708,20 +805,72 @@ static int pagefault_real_mr(struct mlx5_ib_mr *mr, struct ib_umem_odp *odp,
  
  	page_shift = odp->page_shift;
  	start_idx = (user_va - ib_umem_start(odp)) >> page_shift;
@@ -301,7 +301,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  	if (ret < 0) {
  		if (ret != -EAGAIN)
-@@ -740,6 +891,20 @@ static int pagefault_real_mr(struct mlx5
+@@ -740,6 +889,20 @@ static int pagefault_real_mr(struct mlx5_ib_mr *mr, struct ib_umem_odp *odp,
  	return np << (page_shift - PAGE_SHIFT);
  
  out:
@@ -322,7 +322,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  	return ret;
  }
  
-@@ -829,6 +994,7 @@ out:
+@@ -829,6 +992,7 @@ out:
  	return ret;
  }
  
@@ -330,7 +330,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
  			       u32 *bytes_mapped, u32 flags)
  {
-@@ -884,6 +1050,7 @@ static int pagefault_dmabuf_mr(struct ml
+@@ -884,6 +1048,7 @@ static int pagefault_dmabuf_mr(struct mlx5_ib_mr *mr, size_t bcnt,
  
  	return ib_umem_num_pages(mr->umem);
  }
@@ -338,7 +338,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  /*
   * Returns:
-@@ -902,8 +1069,10 @@ static int pagefault_mr(struct mlx5_ib_m
+@@ -902,8 +1067,10 @@ static int pagefault_mr(struct mlx5_ib_mr *mr, u64 io_virt, size_t bcnt,
  	if (unlikely(io_virt < mr->ibmr.iova) && !permissive_fault)
  		return -EFAULT;
  
@@ -349,7 +349,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  	if (!odp->is_implicit_odp) {
  		u64 offset = io_virt < mr->ibmr.iova ? 0 : io_virt - mr->ibmr.iova;
-@@ -938,6 +1107,7 @@ int mlx5_ib_init_odp_mr(struct mlx5_ib_m
+@@ -938,6 +1105,7 @@ int mlx5_ib_init_odp_mr(struct mlx5_ib_mr *mr)
  	return ret >= 0 ? 0 : ret;
  }
  
@@ -357,7 +357,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  int mlx5_ib_init_dmabuf_mr(struct mlx5_ib_mr *mr)
  {
  	int ret;
-@@ -947,6 +1117,7 @@ int mlx5_ib_init_dmabuf_mr(struct mlx5_i
+@@ -947,6 +1115,7 @@ int mlx5_ib_init_dmabuf_mr(struct mlx5_ib_mr *mr)
  
  	return ret >= 0 ? 0 : ret;
  }
@@ -365,7 +365,7 @@ Change-Id: I1424c503ac809f76f6b61004726fd1686c88ca11
  
  struct pf_frame {
  	struct pf_frame *next;
-@@ -1896,6 +2067,9 @@ int mlx5_odp_init_mkey_cache(struct mlx5
+@@ -1896,6 +2065,9 @@ int mlx5_odp_init_mkey_cache(struct mlx5_ib_dev *dev)
  
  static const struct ib_device_ops mlx5_ib_dev_odp_ops = {
  	.advise_mr = mlx5_ib_advise_mr,

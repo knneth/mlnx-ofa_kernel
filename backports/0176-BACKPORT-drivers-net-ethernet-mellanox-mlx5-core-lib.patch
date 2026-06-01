@@ -2,30 +2,17 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/lib/tout.c   | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c | 1 +
+ 1 file changed, 1 insertion(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
-@@ -52,6 +52,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
+@@ -52,6 +52,7 @@ void mlx5_tout_cleanup(struct mlx5_core_dev *dev)
  	kfree(dev->timeouts);
  }
  
-+#ifndef HAVE_INT_POW
-+static u64 int_pow(u64 base, unsigned int exp)
-+{
-+	u64 result = 1;
-+
-+	while (exp) {
-+		if (exp & 1)
-+			result *= base;
-+		exp >>= 1;
-+		base *= base;
-+	}
-+
-+	return result;
-+}
-+#endif
 +
  /* Time register consists of two fields to_multiplier(time out multiplier)
   * and to_value(time out value). to_value is the quantity of the time units and

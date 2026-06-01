@@ -40,6 +40,7 @@ putils:=$(pname)-utils
 
 pversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 prel := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-\(.\+\)/\2/p')
+dkms_version := $(pversion)-$(prel)
 
 export INSTALL_MOD_DIR:=updates
 export INSTALL_MOD_PATH:=$(CURDIR)/debian/$(pdkms)
@@ -63,6 +64,7 @@ override_dh_auto_clean:
 
 override_dh_auto_configure:
 	ofed_scripts/ofed_patch.sh
+	if [ ! -f compat/configure ]; then cd compat && ./autogen.sh; fi
 	# backup clean sources
 	/bin/rm -rf source || true
 	mkdir -p source
@@ -75,7 +77,7 @@ endif
 
 mod_dev_dir = /usr/src/ofa_kernel/$(deb_arch)/$(kernelver)
 override_dh_auto_build:
-	sed -e 's/@VERSION@/$(pversion)/' -e '/^PACKAGE_NAME=/s/=.*/="$(pname)"/'  <dkms.conf >debian/dkms.conf
+	sed -e 's/@VERSION@/$(dkms_version)/' -e '/^PACKAGE_NAME=/s/=.*/="$(pname)"/'  <dkms.conf >debian/dkms.conf
 ifneq ($(WITH_DKMS),1)
 	make distclean || true
 	make -j$(NJOBS)
@@ -94,20 +96,20 @@ endif
 
 ifeq ($(WITH_DKMS),1)
 	# For dkms
-	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(pversion)
-	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
-	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(pversion) || true
-	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(pversion)
-	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/configure
-	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/makefile
-	cd debian/$(pdkms)/usr/src/$(pname)-$(pversion); ln -s ofed_scripts/Makefile
-	cd debian/$(pdkms)/usr/src; ln -snf $(pname)-$(pversion) ofa_kernel-$(pversion)
+	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(dkms_version)
+	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version) || true
+	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(dkms_version) || true
+	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
+	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/configure
+	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/makefile
+	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/Makefile
+	cd debian/$(pdkms)/usr/src; ln -snf $(pname)-$(dkms_version) ofa_kernel-$(pversion)
 endif
 	#
 	# Sources for building stuff over MLNX_OFED
@@ -183,7 +185,7 @@ endif
 	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
+	install -m 0755 source/ofed_scripts/openibd			debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/mlnx-bf.conf	debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d

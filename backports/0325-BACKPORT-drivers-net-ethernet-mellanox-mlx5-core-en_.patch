@@ -6,6 +6,8 @@ Change-Id: I5ea602fc11854607817f74469599badfd6e703cd
  drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 10 +++++++++-
  1 file changed, 9 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 @@ -142,6 +142,7 @@ err_close_tises:
@@ -16,7 +18,7 @@ Change-Id: I5ea602fc11854607817f74469599badfd6e703cd
  static unsigned int
  mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
  {
-@@ -153,6 +154,7 @@ mlx5e_get_devlink_param_num_doorbells(st
+@@ -153,6 +154,7 @@ mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
  	err = devl_param_driverinit_value_get(devlink, param_id, &val);
  	return err ? MLX5_DEFAULT_NUM_DOORBELLS : val.vu32;
  }
@@ -24,7 +26,7 @@ Change-Id: I5ea602fc11854607817f74469599badfd6e703cd
  
  int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
  {
-@@ -178,8 +180,13 @@ int mlx5e_create_mdev_resources(struct m
+@@ -178,8 +180,13 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
  		goto err_dealloc_transport_domain;
  	}
  

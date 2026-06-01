@@ -3,6 +3,12 @@
 
 #include "internal.h"
 
+static uint32_t cmd_get_syndrome(uint32_t *out)
+{
+	/* Assumption: syndrome is always the second u32 */
+	return be32_to_cpu((__be32)out[1]);
+}
+
 static enum mlx5_ifc_flow_destination_type
 hws_cmd_dest_type_to_ifc_dest_type(enum mlx5_flow_destination_type type)
 {
@@ -611,8 +617,9 @@ int mlx5hws_cmd_stc_modify(struct mlx5_core_dev *mdev,
 
 	ret = mlx5_cmd_exec(mdev, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		mlx5_core_err(mdev, "Failed to modify STC FW action_type %d\n",
-			      stc_attr->action_type);
+		mlx5_core_err(mdev, "Failed to modify STC FW action_type %d (syndrome: %#x)\n",
+			      stc_attr->action_type,
+			      cmd_get_syndrome(out));
 
 	return ret;
 }

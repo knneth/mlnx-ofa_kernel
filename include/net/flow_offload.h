@@ -161,7 +161,6 @@ enum flow_action_id {
 	FLOW_ACTION_CT,
 	FLOW_ACTION_CT_METADATA,
 };
-#define HAVE_FLOW_ACTION_CT 1
 
 /* This is mirroring enum pedit_header_type definition for easy mapping between
  * tc pedit action. Legacy TCA_PEDIT_KEY_EX_HDR_TYPE_NETWORK is mapped to
@@ -279,14 +278,6 @@ static inline void flow_stats_update(struct flow_stats *flow_stats,
 }
 #endif /* HAVE_FLOW_RULE_MATCH_CVLAN */
 
-#ifndef HAVE_FLOW_RULE_MATCH_META
-struct flow_match_meta {
-	struct flow_dissector_key_meta *key, *mask;
-};
-
-void flow_rule_match_meta(const struct flow_rule *rule,
-			  struct flow_match_meta *out);
-#endif /* HAVE_FLOW_RULE_MATCH_META */
 
 #define FLOW_ACTION_UNDEFINED_IN_KERNEL 100
 
@@ -295,26 +286,13 @@ void flow_rule_match_meta(const struct flow_rule *rule,
 #define FLOW_ACTION_JUMP (FLOW_ACTION_UNDEFINED_IN_KERNEL + 2)
 #endif
 
-#ifndef HAVE_FLOW_ACTION_MPLS
-#define FLOW_ACTION_MPLS_PUSH (FLOW_ACTION_UNDEFINED_IN_KERNEL + 3)
-#define FLOW_ACTION_MPLS_POP (FLOW_ACTION_UNDEFINED_IN_KERNEL + 4)
-#endif
 
-#ifndef HAVE_FLOW_ACTION_REDIRECT_INGRESS
-#define FLOW_ACTION_REDIRECT_INGRESS (FLOW_ACTION_UNDEFINED_IN_KERNEL + 5)
-#endif
 
-#ifndef HAVE_FLOW_ACTION_PTYPE
-#define FLOW_ACTION_PTYPE (FLOW_ACTION_UNDEFINED_IN_KERNEL + 6)
-#endif
 
 #ifndef HAVE_FLOW_ACTION_PRIORITY
 #define FLOW_ACTION_PRIORITY (FLOW_ACTION_UNDEFINED_IN_KERNEL + 7)
 #endif
 
-#ifndef HAVE_FLOW_ACTION_CT
-#define FLOW_ACTION_CT (FLOW_ACTION_UNDEFINED_IN_KERNEL + 8)
-#endif
 
 #ifndef HAVE_FLOW_ACTION_VLAN_PUSH_ETH
 #define FLOW_ACTION_VLAN_PUSH_ETH (FLOW_ACTION_UNDEFINED_IN_KERNEL + 9)
@@ -339,27 +317,11 @@ tc_cls_flower_offload_flow_rule(struct tc_cls_flower_offload *flow_cmd)
 }
 #endif /* HAVE_TC_SETUP_FLOW_ACTION */
 
-#ifndef HAVE_FLOW_SETUP_CB_T
-enum tc_setup_type;
-typedef int flow_setup_cb_t(enum tc_setup_type type, void *type_data,
-					    void *cb_priv);
-#endif
 
 #ifndef HAVE_FLOW_INDR_BLOCK_CB_ALLOC
 #define flow_indr_block_cb_remove flow_block_cb_remove
 #endif
 
-#ifndef HAVE_FLOW_BLOCK_CB
-struct flow_block_cb {
-	struct list_head        driver_list;
-	struct list_head        list;
-	flow_setup_cb_t         *cb;
-	void                    *cb_ident;
-	void                    *cb_priv;
-	void                    (*release)(void *cb_priv);
-	unsigned int            refcnt;
-};
-#endif
 
 #ifndef HAVE_ENCAP_CTRL_FLAG_HELPERS
 #include <linux/netlink.h>

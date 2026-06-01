@@ -6,6 +6,8 @@ Change-Id: Ic4b4e6b1a2be600b8760750b5363682e5b4ef2db
  drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h | 16 +++++++++++++++-
  1 file changed, 15 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
 @@ -45,6 +45,7 @@
@@ -45,7 +47,7 @@ Change-Id: Ic4b4e6b1a2be600b8760750b5363682e5b4ef2db
  void mlx5e_xdp_mpwqe_complete(struct mlx5e_xdpsq *sq);
  bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq);
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
-@@ -156,7 +170,6 @@ static inline void mlx5e_xmit_xdp_doorbe
+@@ -156,7 +170,6 @@ static inline void mlx5e_xmit_xdp_doorbell(struct mlx5e_xdpsq *sq)
  		sq->doorbell_cseg = NULL;
  	}
  }
@@ -53,7 +55,7 @@ Change-Id: Ic4b4e6b1a2be600b8760750b5363682e5b4ef2db
  /* Enable inline WQEs to shift some load from a congested HCA (HW) to
   * a less congested cpu (SW).
   */
-@@ -238,3 +251,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_inf
+@@ -238,3 +251,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_info_fifo *fifo)
  	return fifo->xi[(*fifo->cc)++ & fifo->mask];
  }
  #endif

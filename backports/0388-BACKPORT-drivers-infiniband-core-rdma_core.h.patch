@@ -1,0 +1,23 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.h
+
+Change-Id: I82bc53da460c4b1958acdf56647c1cf5c1747570
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/infiniband/core/rdma_core.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/infiniband/core/rdma_core.h b/drivers/infiniband/core/rdma_core.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/rdma_core.h
++++ b/drivers/infiniband/core/rdma_core.h
+@@ -156,7 +156,9 @@ extern const struct uapi_definition uverbs_def_obj_counters[];
+ extern const struct uapi_definition uverbs_def_obj_cq[];
+ extern const struct uapi_definition uverbs_def_obj_device[];
+ extern const struct uapi_definition uverbs_def_obj_dm[];
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ extern const struct uapi_definition uverbs_def_obj_dmabuf[];
++#endif
+ extern const struct uapi_definition uverbs_def_obj_dmah[];
+ extern const struct uapi_definition uverbs_def_obj_flow_action[];
+ extern const struct uapi_definition uverbs_def_obj_intf[];

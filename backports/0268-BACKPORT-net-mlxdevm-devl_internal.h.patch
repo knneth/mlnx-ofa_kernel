@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: net/mlxdevm/devl_internal.h
 
 ---
- net/mlxdevm/devl_internal.h | 33 ++++++++++++++++++++++++++++++++-
- 1 file changed, 32 insertions(+), 1 deletion(-)
+ net/mlxdevm/devl_internal.h | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
 
+diff --git a/net/mlxdevm/devl_internal.h b/net/mlxdevm/devl_internal.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/devl_internal.h
 +++ b/net/mlxdevm/devl_internal.h
 @@ -55,18 +55,27 @@ struct mlxdevm {
@@ -35,11 +37,10 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/devl_internal.h
  
  /* devlink instances are open to the access from the user space after
   * devlink_register() call. Such logical barrier allows us to have certain
-@@ -167,6 +176,13 @@ mlxdevm_get_from_attrs_lock(struct net *
+@@ -167,6 +176,12 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
  int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
  		      mlxdevm_nl_dump_one_func_t *dump_one);
  
-+#ifdef HAVE_NETLINK_CALLBACK_HAS_CTX
 +#ifndef HAVE_NL_ASSERT_CTX_FITS
 +#define NL_ASSERT_CTX_FITS(type_name)                      \
 +	BUILD_BUG_ON(sizeof(type_name) >                        \
@@ -49,27 +50,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/devl_internal.h
  static inline struct mlxdevm_nl_dump_state *
  mlxdevm_dump_state(struct netlink_callback *cb)
  {
-@@ -174,6 +190,19 @@ mlxdevm_dump_state(struct netlink_callba
- 
- 	return (struct mlxdevm_nl_dump_state *)cb->ctx;
- }
-+#else
-+#define NL_ASSERT_CTX_FITS(type_name)                      \
-+	BUILD_BUG_ON(sizeof(type_name) >                        \
-+	sizeof_field(struct netlink_callback, args))
-+
-+static inline struct mlxdevm_nl_dump_state *
-+mlxdevm_dump_state(struct netlink_callback *cb)
-+{
-+	NL_ASSERT_CTX_FITS(struct mlxdevm_nl_dump_state);
-+
-+	return (struct mlxdevm_nl_dump_state *)cb->args;
-+}
-+#endif
- 
- static inline int
- mlxdevm_nl_put_handle(struct sk_buff *msg, struct mlxdevm *mlxdevm)
-@@ -226,6 +255,7 @@ static inline void mlxdevm_nl_obj_desc_p
+@@ -226,6 +241,7 @@ static inline void mlxdevm_nl_obj_desc_port_set(struct mlxdevm_obj_desc *desc,
  
  int mlxdevm_nl_notify_filter(struct sock *dsk, struct sk_buff *skb, void *data);
  
@@ -77,7 +58,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/devl_internal.h
  static inline void mlxdevm_nl_notify_send_desc(struct mlxdevm *mlxdevm,
  					       struct sk_buff *msg,
  					       struct mlxdevm_obj_desc *desc)
-@@ -245,8 +275,9 @@ static inline void mlxdevm_nl_notify_sen
+@@ -245,8 +261,9 @@ static inline void mlxdevm_nl_notify_send(struct mlxdevm *mlxdevm,
  	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
  	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
  }

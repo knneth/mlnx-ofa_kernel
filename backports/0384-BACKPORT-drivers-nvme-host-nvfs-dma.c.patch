@@ -4,26 +4,31 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/nvfs-dma.c
 Change-Id: I879792c34af42dea64bef3266a40501847885487
 Signed-off-by: Israel Rukshin <israelr@nvidia.com>
 ---
- drivers/nvme/host/nvfs-dma.c | 38 ++++++++++++++++++++++++++++++++++++
- 1 file changed, 38 insertions(+)
+ drivers/nvme/host/nvfs-dma.c | 41 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
 
+diff --git a/drivers/nvme/host/nvfs-dma.c b/drivers/nvme/host/nvfs-dma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/nvfs-dma.c
 +++ b/drivers/nvme/host/nvfs-dma.c
-@@ -12,10 +12,13 @@
+@@ -12,10 +12,16 @@
   * more details.
   */
  #ifdef CONFIG_NVFS
 +#ifdef HAVE_BLK_MQ_DMA_H
  #define NVFS_USE_DMA_ITER_API
-+#endif
  #define MODULE_PREFIX nvme_v2
++#else
++#define MODULE_PREFIX nvme_v1
++#endif
++
  #include "nvfs.h"
  
 +#ifdef HAVE_BLK_MQ_DMA_H
  struct nvfs_dma_rw_blk_iter_ops *nvfs_ops = NULL;
  
  atomic_t nvfs_shutdown = ATOMIC_INIT(1);
-@@ -48,4 +51,39 @@ void UNREGISTER_FUNC(void)
+@@ -48,4 +54,39 @@ void UNREGISTER_FUNC(void)
          nvfs_ops = NULL;
  }
  EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);

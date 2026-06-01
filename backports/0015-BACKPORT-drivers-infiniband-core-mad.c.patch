@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
 
 ---
- drivers/infiniband/core/mad.c | 40 ++++++++++++++++++++++++++++-------
- 1 file changed, 32 insertions(+), 8 deletions(-)
+ drivers/infiniband/core/mad.c | 34 ++++++++++++++++++++++++++--------
+ 1 file changed, 26 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/infiniband/core/mad.c b/drivers/infiniband/core/mad.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/mad.c
 +++ b/drivers/infiniband/core/mad.c
 @@ -54,6 +54,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  #define CREATE_TRACE_POINTS
  #include <trace/events/ib_mad.h>
  
-@@ -74,6 +75,7 @@ static void create_mad_addr_info(struct
+@@ -74,6 +75,7 @@ static void create_mad_addr_info(struct ib_mad_send_wr_private *mad_send_wr,
  	entry->dlid = rdma_ah_get_dlid(&attr);
  }
  #endif
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  
  static int mad_sendq_size = IB_MAD_QP_SEND_SIZE;
  static int mad_recvq_size = IB_MAD_QP_RECV_SIZE;
-@@ -515,7 +517,9 @@ struct ib_mad_agent *ib_register_mad_age
+@@ -515,7 +517,9 @@ struct ib_mad_agent *ib_register_mad_agent(struct ib_device *device,
  	}
  	spin_unlock_irq(&port_priv->reg_lock);
  
@@ -33,7 +35,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  	return &mad_agent_priv->agent;
  error6:
  	spin_unlock_irq(&port_priv->reg_lock);
-@@ -541,9 +545,11 @@ static void unregister_mad_agent(struct
+@@ -541,9 +545,11 @@ static void unregister_mad_agent(struct ib_mad_agent_private *mad_agent_priv)
  {
  	struct ib_mad_port_private *port_priv;
  
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  	/*
  	 * Canceling all sends results in dropping received response
  	 * MADs, preventing us from queuing additional work
-@@ -681,7 +687,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -681,7 +687,9 @@ static int handle_outgoing_dr_smp(struct ib_mad_agent_private *mad_agent_priv,
  	if (opa && smp->class_version == OPA_SM_CLASS_VERSION) {
  		u32 opa_drslid;
  
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  
  		if ((opa_get_smp_direction(opa_smp)
  		     ? opa_smp->route.dr.dr_dlid : opa_smp->route.dr.dr_slid) ==
-@@ -708,8 +716,9 @@ static int handle_outgoing_dr_smp(struct
+@@ -708,8 +716,9 @@ static int handle_outgoing_dr_smp(struct ib_mad_agent_private *mad_agent_priv,
  		    opa_smi_check_local_returning_smp(opa_smp, device) == IB_SMI_DISCARD)
  			goto out;
  	} else {
@@ -66,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  		if ((ib_get_smp_direction(smp) ? smp->dr_dlid : smp->dr_slid) ==
  		     IB_LID_PERMISSIVE &&
  		     smi_handle_dr_smp_send(smp, rdma_cap_ib_switch(device), port_num) ==
-@@ -1085,7 +1094,9 @@ int ib_send_mad(struct ib_mad_send_wr_pr
+@@ -1085,7 +1094,9 @@ int ib_send_mad(struct ib_mad_send_wr_private *mad_send_wr)
  
  	spin_lock_irqsave(&qp_info->send_queue.lock, flags);
  	if (qp_info->send_queue.count < qp_info->send_queue.max_active) {
@@ -84,7 +86,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  	return mad_agent;
  }
  
-@@ -2186,7 +2196,9 @@ static enum smi_action handle_ib_smi(con
+@@ -2186,7 +2196,9 @@ static enum smi_action handle_ib_smi(const struct ib_mad_port_private *port_priv
  	enum smi_forward_action retsmi;
  	struct ib_smp *smp = (struct ib_smp *)recv->mad;
  
@@ -94,7 +96,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  
  	if (smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
-@@ -2272,9 +2284,9 @@ handle_opa_smi(struct ib_mad_port_privat
+@@ -2272,9 +2284,9 @@ handle_opa_smi(struct ib_mad_port_private *port_priv,
  {
  	enum smi_forward_action retsmi;
  	struct opa_smp *smp = (struct opa_smp *)recv->mad;
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  	if (opa_smi_handle_dr_smp_recv(smp,
  				   rdma_cap_ib_switch(port_priv->device),
  				   port_num,
-@@ -2395,10 +2407,10 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2395,10 +2407,10 @@ static void ib_mad_recv_done(struct ib_cq *cq, struct ib_wc *wc)
  	/* Validate MAD */
  	if (!validate_mad((const struct ib_mad_hdr *)recv->mad, qp_info, opa))
  		goto out;
@@ -119,7 +121,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  	mad_size = recv->mad_size;
  	response = alloc_mad_private(mad_size, GFP_KERNEL);
  	if (!response)
-@@ -2445,7 +2457,9 @@ static void ib_mad_recv_done(struct ib_c
+@@ -2445,7 +2457,9 @@ static void ib_mad_recv_done(struct ib_cq *cq, struct ib_wc *wc)
  
  	mad_agent = find_mad_agent(port_priv, (const struct ib_mad_hdr *)recv->mad);
  	if (mad_agent) {
@@ -129,7 +131,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  		ib_mad_complete_recv(mad_agent, &recv->header.recv_wc);
  		/*
  		 * recv is freed up in error cases in ib_mad_complete_recv
-@@ -2587,10 +2601,10 @@ static void ib_mad_send_done(struct ib_c
+@@ -2587,10 +2601,10 @@ static void ib_mad_send_done(struct ib_cq *cq, struct ib_wc *wc)
  				   mad_list);
  	send_queue = mad_list->mad_queue;
  	qp_info = send_queue->qp_info;
@@ -152,7 +154,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  		ret = ib_post_send(qp_info->qp, &queued_send_wr->send_wr.wr,
  				   NULL);
  		if (ret) {
-@@ -2667,7 +2683,9 @@ static bool ib_mad_send_error(struct ib_
+@@ -2667,7 +2683,9 @@ static bool ib_mad_send_error(struct ib_mad_port_private *port_priv,
  		if (mad_send_wr->retry) {
  			/* Repost send */
  			mad_send_wr->retry = 0;
@@ -162,21 +164,3 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/mad.c
  			ret = ib_post_send(qp_info->qp, &mad_send_wr->send_wr.wr,
  					   NULL);
  			if (!ret)
-@@ -3396,11 +3414,17 @@ static struct attribute *sa_cc_default_a
- 	NULL
- };
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(sa_cc_default);
-+#endif
- 
- static struct kobj_type sa_cc_type = {
- 	.sysfs_ops = &sa_cc_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = sa_cc_default_groups
-+#else
-+	.default_attrs = sa_cc_default_attrs
-+#endif
- };
- 
- static void cleanup_sa_cc_sysfs_ports(struct sa_cc_data *cc_obj)

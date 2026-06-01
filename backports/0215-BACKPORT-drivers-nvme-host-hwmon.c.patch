@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/hwmon.c
  drivers/nvme/host/hwmon.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/nvme/host/hwmon.c b/drivers/nvme/host/hwmon.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/hwmon.c
 +++ b/drivers/nvme/host/hwmon.c
-@@ -187,7 +187,11 @@ static umode_t nvme_hwmon_is_visible(con
+@@ -187,7 +187,11 @@ static umode_t nvme_hwmon_is_visible(const void *_data,
  	return 0;
  }
  

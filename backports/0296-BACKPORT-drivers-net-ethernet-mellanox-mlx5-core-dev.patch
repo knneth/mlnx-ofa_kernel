@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 
 Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
 ---
- .../net/ethernet/mellanox/mlx5/core/devlink.h | 65 +++++++++++++++++++
- 1 file changed, 65 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/devlink.h | 59 +++++++++++++++++++
+ 1 file changed, 59 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 @@ -23,10 +23,15 @@ enum mlx5_devlink_param_id {
@@ -24,20 +26,7 @@ Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
  	MLX5_DEVLINK_PARAM_ID_CQE_COMPRESSION_TYPE
  };
  
-@@ -46,6 +51,7 @@ struct mlx5_devlink_trap_event_ctx {
- 	int err;
- };
- 
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
- struct mlx5_core_dev;
- void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_buff *skb,
- 			      struct devlink_port *dl_port);
-@@ -54,53 +60,91 @@ int mlx5_devlink_traps_get_action(struct
- 				  enum devlink_trap_action *action);
- int mlx5_devlink_traps_register(struct devlink *devlink);
- void mlx5_devlink_traps_unregister(struct devlink *devlink);
-+#endif
- 
+@@ -58,17 +63,28 @@ void mlx5_devlink_traps_unregister(struct devlink *devlink);
  int mlx5_devlink_info_get(struct devlink *devlink, struct devlink_info_req *req,
  			  struct netlink_ext_ack *extack);
  int mlx5_devlink_flash_update(struct devlink *devlink,
@@ -49,7 +38,6 @@ Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
 +#endif
  			      struct netlink_ext_ack *extack);
  
-+#ifdef HAVE_DEVLINK_HAS_RELOAD_UP_DOWN
  int mlx5_devlink_reload_down(struct devlink *devlink,
 +#ifdef HAVE_DEVLINK_RELOAD_DOWN_SUPPORT_RELOAD_ACTION
  			     bool netns_change,
@@ -65,12 +53,9 @@ Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
                             enum devlink_reload_limit limit, u32 *actions_performed,
 +#endif
                             struct netlink_ext_ack *extack);
-+#endif
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
  int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_trap *trap,
- 			   void *trap_ctx);
- void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink_trap *trap,
+@@ -77,30 +93,52 @@ void mlx5_devlink_trap_fini(struct devlink *devlink, const struct devlink_trap *
  			    void *trap_ctx);
  int mlx5_devlink_trap_action_set(struct devlink *devlink,
  				 const struct devlink_trap *trap,
@@ -79,7 +64,6 @@ Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
  				 struct netlink_ext_ack *extack);
 +#else
 +				 enum devlink_trap_action action);
-+#endif
 +#endif
  
  struct devlink *mlx5_devlink_alloc(struct device *dev);
@@ -124,7 +108,7 @@ Change-Id: I73727be61f17656efc0083b07ab55d70d4893c0a
  int mlx5_devlink_hairpin_num_queues_validate(struct devlink *devlink, u32 id,
  					     union devlink_param_value val,
  					     struct netlink_ext_ack *extack);
-@@ -113,22 +157,43 @@ int mlx5_devlink_enable_rdma_validate(st
+@@ -113,22 +151,43 @@ int mlx5_devlink_enable_rdma_validate(struct devlink *devlink, u32 id,
  int mlx5_devlink_max_uc_list_validate(struct devlink *devlink, u32 id,
  				      union devlink_param_value val,
  				      struct netlink_ext_ack *extack);

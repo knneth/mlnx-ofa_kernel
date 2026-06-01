@@ -13,11 +13,6 @@ static inline void ethtool_puts(u8 **data, const char *str)
 }
 #endif
 
-#ifndef ETH_MODULE_SFF_8436_MAX_LEN
-#define ETH_MODULE_SFF_8636_MAX_LEN     640
-#define ETH_MODULE_SFF_8436_MAX_LEN     640
-#endif
-
 #ifndef HAVE_ETHTOOL_PAUSE_STATS
 struct ethtool_pause_stats {
 	u64 tx_pause_frames;
@@ -43,7 +38,7 @@ struct ethtool_rmon_stats {
 #endif
 
 /* check whether ethtool_fec_config_bits is defined, but without LLRS bit */
-#ifndef ETHTOOL_FEC_LLRS
+#ifndef HAVE_ETHTOOL_FEC_LLRS
 #define ETHTOOL_FEC_LLRS_BIT		(ETHTOOL_FEC_BASER_BIT + 1)
 #define ETHTOOL_FEC_LLRS		(1 << ETHTOOL_FEC_LLRS_BIT)
 #endif /* ETHTOOL_FEC_LLRS */
@@ -51,39 +46,8 @@ struct ethtool_rmon_stats {
 #define SPEED_25000 25000
 #define SPEED_50000 50000
 #define SPEED_100000 100000
-#ifndef ETHTOOL_LINK_MODE_25000baseCR_Full_BIT
-#define ETHTOOL_LINK_MODE_25000baseCR_Full_BIT 31
-#define ETHTOOL_LINK_MODE_25000baseKR_Full_BIT 32
-#define ETHTOOL_LINK_MODE_25000baseSR_Full_BIT 33
-#define ETHTOOL_LINK_MODE_50000baseCR2_Full_BIT 34
-#define ETHTOOL_LINK_MODE_50000baseKR2_Full_BIT 35
-#define ETHTOOL_LINK_MODE_100000baseKR4_Full_BIT 36
-#define ETHTOOL_LINK_MODE_100000baseSR4_Full_BIT 37
-#define ETHTOOL_LINK_MODE_100000baseCR4_Full_BIT 38
-#define ETHTOOL_LINK_MODE_100000baseLR4_ER4_Full_BIT 39
-#endif
-#ifndef ETHTOOL_LINK_MODE_50000baseSR2_Full_BIT
-#define ETHTOOL_LINK_MODE_50000baseSR2_Full_BIT 40
-#endif
-#ifndef ETHTOOL_LINK_MODE_1000baseX_Full_BIT
-#define ETHTOOL_LINK_MODE_1000baseX_Full_BIT 41
-#define ETHTOOL_LINK_MODE_10000baseCR_Full_BIT 42
-#define ETHTOOL_LINK_MODE_10000baseSR_Full_BIT 43
-#define ETHTOOL_LINK_MODE_10000baseLR_Full_BIT 44
-#define ETHTOOL_LINK_MODE_10000baseLRM_Full_BIT 45
-#define ETHTOOL_LINK_MODE_10000baseER_Full_BIT 46
-#endif
-#ifndef ETHTOOL_LINK_MODE_2500baseT_Full_BIT
-#define ETHTOOL_LINK_MODE_2500baseT_Full_BIT 47
-#define ETHTOOL_LINK_MODE_5000baseT_Full_BIT 48
-#endif
-#ifndef ETHTOOL_LINK_MODE_FEC_NONE_BIT
-#define ETHTOOL_LINK_MODE_FEC_NONE_BIT 49
-#define ETHTOOL_LINK_MODE_FEC_RS_BIT 50
-#define ETHTOOL_LINK_MODE_FEC_BASER_BIT 51
-#endif
 
-#ifndef ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT
+#ifndef HAVE_ETHTOOL_LINK_MODE_400000baseKR8_Full_BIT
 #define ETHTOOL_LINK_MODE_50000baseKR_Full_BIT 52
 #define ETHTOOL_LINK_MODE_50000baseSR_Full_BIT 53
 #define ETHTOOL_LINK_MODE_50000baseCR_Full_BIT 54
@@ -110,7 +74,7 @@ struct ethtool_rmon_stats {
 #define ETHTOOL_LINK_MODE_FEC_LLRS_BIT 74
 #endif
 
-#ifndef ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT
+#ifndef HAVE_ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT
 #define ETHTOOL_LINK_MODE_FEC_LLRS_BIT                    74
 #define ETHTOOL_LINK_MODE_100000baseKR_Full_BIT           75
 #define ETHTOOL_LINK_MODE_100000baseSR_Full_BIT           76
@@ -129,16 +93,7 @@ struct ethtool_rmon_stats {
 #define ETHTOOL_LINK_MODE_400000baseCR4_Full_BIT          89
 #endif
 
-#ifndef SPEED_400000
-#define SPEED_400000 400000
-#endif
-
-#ifndef ETHTOOL_LINK_MODE_100baseFX_Half_BIT
-#define ETHTOOL_LINK_MODE_100baseFX_Half_BIT 90
-#define ETHTOOL_LINK_MODE_100baseFX_Full_BIT 91
-#endif
-
-#ifndef SPEED_800000
+#ifndef HAVE_SPEED_800000
 #define SPEED_800000 800000
 #define ETHTOOL_LINK_MODE_800000baseCR8_Full_BIT          93
 #define ETHTOOL_LINK_MODE_800000baseKR8_Full_BIT          94
@@ -148,7 +103,7 @@ struct ethtool_rmon_stats {
 #define ETHTOOL_LINK_MODE_800000baseVR8_Full_BIT          98
 #endif
 
-#ifndef ETHTOOL_LINK_MODE_200000baseCR_Full_BIT
+#ifndef HAVE_ETHTOOL_LINK_MODE_200000baseCR_Full_BIT
 #define ETHTOOL_LINK_MODE_200000baseCR_Full_BIT		  103
 #define ETHTOOL_LINK_MODE_200000baseKR_Full_BIT		  104
 #define ETHTOOL_LINK_MODE_200000baseDR_Full_BIT		  105
@@ -169,7 +124,7 @@ struct ethtool_rmon_stats {
 #define ETHTOOL_LINK_MODE_800000baseVR4_Full_BIT	  120
 #endif
 
-#ifndef SPEED_1600000
+#ifndef HAVE_SPEED_1600000
 #define SPEED_1600000 1600000
 #define ETHTOOL_LINK_MODE_1600000baseCR8_Full_BIT	  121
 #define ETHTOOL_LINK_MODE_1600000baseKR8_Full_BIT	  122

@@ -7,9 +7,11 @@ Change-Id: I96a02127771da97d0ddc52156d0d4d04b6b39c70
  .../ethernet/mellanox/mlx5/core/en_accel/en_accel.h    | 10 +++++++++-
  1 file changed, 9 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
-@@ -136,7 +136,11 @@ static inline bool mlx5e_accel_tx_begin(
+@@ -136,7 +136,11 @@ static inline bool mlx5e_accel_tx_begin(struct net_device *dev,
  
  #ifdef CONFIG_MLX5_EN_TLS
  	/* May send WQEs. */
@@ -21,7 +23,7 @@ Change-Id: I96a02127771da97d0ddc52156d0d4d04b6b39c70
  		if (unlikely(!mlx5e_ktls_handle_tx_skb(dev, sq, skb,
  						       &state->tls)))
  			return false;
-@@ -191,7 +195,7 @@ static inline unsigned int mlx5e_accel_t
+@@ -191,7 +195,7 @@ static inline unsigned int mlx5e_accel_tx_ids_len(struct mlx5e_txqsq *sq,
  static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
  				       struct sk_buff *skb,
  				       struct mlx5e_accel_tx_state *accel,
@@ -30,7 +32,7 @@ Change-Id: I96a02127771da97d0ddc52156d0d4d04b6b39c70
  {
  #ifdef CONFIG_MLX5_EN_PSP
  	if (mlx5e_psp_is_offload_state(&accel->psp_st))
-@@ -200,7 +204,11 @@ static inline void mlx5e_accel_tx_eseg(s
+@@ -200,7 +204,11 @@ static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
  
  #ifdef CONFIG_MLX5_EN_IPSEC
  	if (xfrm_offload(skb))

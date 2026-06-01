@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 78 ++++++++++++++++++-
  1 file changed, 77 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 @@ -14,6 +14,14 @@ struct mlx5e_dump_wqe {
@@ -58,7 +60,7 @@ Subject: [PATCH] BACKPORT:
  	if (priv_tx->create_err) {
  		kfree(priv_tx);
  		return;
-@@ -457,7 +478,9 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -457,7 +478,9 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	struct mlx5e_ktls_offload_context_tx *priv_tx;
  	struct mlx5e_tls_tx_pool *pool;
  	struct tls_context *tls_ctx;
@@ -68,7 +70,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5e_priv *priv;
  	int err;
  
-@@ -469,6 +492,13 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -469,6 +492,13 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	if (IS_ERR(priv_tx))
  		return PTR_ERR(priv_tx);
  
@@ -82,7 +84,7 @@ Subject: [PATCH] BACKPORT:
  	switch (crypto_info->cipher_type) {
  	case TLS_CIPHER_AES_GCM_128:
  		priv_tx->crypto_info.crypto_info_128 =
-@@ -485,6 +515,7 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -485,6 +515,7 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  		goto err_pool_push;
  	}
  
@@ -90,7 +92,7 @@ Subject: [PATCH] BACKPORT:
  	dek = mlx5_ktls_create_key(priv->tls->dek_pool, crypto_info);
  	if (IS_ERR(dek)) {
  		err = PTR_ERR(dek);
-@@ -492,12 +523,24 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -492,12 +523,24 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	}
  
  	priv_tx->dek = dek;
@@ -115,7 +117,7 @@ Subject: [PATCH] BACKPORT:
  	atomic64_inc(&priv_tx->sw_stats->tx_tls_ctx);
  
  	return 0;
-@@ -518,7 +561,9 @@ void mlx5e_ktls_del_tx(struct net_device
+@@ -518,7 +561,9 @@ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
  	pool = priv->tls->tx_pool;
  
  	atomic64_inc(&priv_tx->sw_stats->tx_tls_del);
@@ -125,7 +127,7 @@ Subject: [PATCH] BACKPORT:
  	pool_push(pool, priv_tx);
  }
  
-@@ -535,6 +580,7 @@ static void tx_fill_wi(struct mlx5e_txqs
+@@ -535,6 +580,7 @@ static void tx_fill_wi(struct mlx5e_txqsq *sq,
  	};
  }
  
@@ -133,7 +135,7 @@ Subject: [PATCH] BACKPORT:
  static bool
  mlx5e_ktls_tx_offload_test_and_clear_pending(struct mlx5e_ktls_offload_context_tx *priv_tx)
  {
-@@ -544,7 +590,7 @@ mlx5e_ktls_tx_offload_test_and_clear_pen
+@@ -544,7 +590,7 @@ mlx5e_ktls_tx_offload_test_and_clear_pending(struct mlx5e_ktls_offload_context_t
  
  	return ret;
  }
@@ -142,7 +144,7 @@ Subject: [PATCH] BACKPORT:
  static void
  post_static_params(struct mlx5e_txqsq *sq,
  		   struct mlx5e_ktls_offload_context_tx *priv_tx,
-@@ -558,7 +604,11 @@ post_static_params(struct mlx5e_txqsq *s
+@@ -558,7 +604,11 @@ post_static_params(struct mlx5e_txqsq *sq,
  	wqe = MLX5E_TLS_FETCH_SET_STATIC_PARAMS_WQE(sq, pi);
  	mlx5e_ktls_build_static_params(wqe, sq->pc, sq->sqn, &priv_tx->crypto_info,
  				       priv_tx->tisn,
@@ -154,7 +156,7 @@ Subject: [PATCH] BACKPORT:
  				       0, fence, TLS_OFFLOAD_CTX_DIR_TX);
  	tx_fill_wi(sq, pi, num_wqebbs, 0, NULL);
  	sq->pc += num_wqebbs;
-@@ -744,7 +794,13 @@ tx_post_resync_dump(struct mlx5e_txqsq *
+@@ -744,7 +794,13 @@ tx_post_resync_dump(struct mlx5e_txqsq *sq, skb_frag_t *frag, u32 tisn)
  	dseg->addr       = cpu_to_be64(dma_addr);
  	dseg->lkey       = sq->mkey_be;
  	dseg->byte_count = cpu_to_be32(fsz);
@@ -168,7 +170,7 @@ Subject: [PATCH] BACKPORT:
  
  	tx_fill_wi(sq, pi, MLX5E_KTLS_DUMP_WQEBBS, fsz, skb_frag_page(frag));
  	sq->pc += MLX5E_KTLS_DUMP_WQEBBS;
-@@ -837,7 +893,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -837,7 +893,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
  	int datalen;
  	u32 seq;
  
@@ -180,7 +182,7 @@ Subject: [PATCH] BACKPORT:
  	if (!datalen)
  		return true;
  
-@@ -854,7 +914,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -854,7 +914,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
  
  	priv_tx = mlx5e_get_ktls_tx_priv_ctx(tls_ctx);
  
@@ -192,7 +194,7 @@ Subject: [PATCH] BACKPORT:
  		mlx5e_ktls_tx_post_param_wqes(sq, priv_tx, false, false);
  
  	seq = ntohl(tcp_hdr(skb)->seq);
-@@ -908,13 +972,16 @@ static void mlx5e_tls_tx_debugfs_init(st
+@@ -908,13 +972,16 @@ static void mlx5e_tls_tx_debugfs_init(struct mlx5e_tls *tls,
  
  int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  {
@@ -209,7 +211,7 @@ Subject: [PATCH] BACKPORT:
  	/* DEK pool could be used by either or both of TX and RX. But we have to
  	 * put the creation here to avoid syndrome when doing devlink reload.
  	 */
-@@ -922,6 +989,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -922,6 +989,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  	if (IS_ERR(dek_pool))
  		return PTR_ERR(dek_pool);
  	tls->dek_pool = dek_pool;
@@ -217,7 +219,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (!mlx5e_is_ktls_tx(priv->mdev))
  		return 0;
-@@ -937,14 +1005,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -937,14 +1005,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  	return 0;
  
  err_tx_pool_init:
@@ -238,7 +240,7 @@ Subject: [PATCH] BACKPORT:
  
  	debugfs_remove_recursive(priv->tls->debugfs.dfs_tx);
  	priv->tls->debugfs.dfs_tx = NULL;
-@@ -952,7 +1026,9 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
+@@ -952,7 +1026,9 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
  	mlx5e_tls_tx_pool_cleanup(priv->tls->tx_pool);
  	priv->tls->tx_pool = NULL;
  

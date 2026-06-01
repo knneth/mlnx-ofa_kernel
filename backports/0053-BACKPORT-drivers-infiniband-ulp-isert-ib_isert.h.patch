@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/isert/ib_isert.h
  drivers/infiniband/ulp/isert/ib_isert.h | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/isert/ib_isert.h b/drivers/infiniband/ulp/isert/ib_isert.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/isert/ib_isert.h
 +++ b/drivers/infiniband/ulp/isert/ib_isert.h
 @@ -11,6 +11,23 @@

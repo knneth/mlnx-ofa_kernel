@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/Makefile
  drivers/net/ethernet/mellanox/mlx5/core/Makefile | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/Makefile b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -11,6 +11,10 @@ subdir-ccflags-y += -I$(CWD)/net/mlxdevm
+@@ -9,6 +9,10 @@ subdir-ccflags-y += -I$(CWD)/net/mlxdevm
  
  ccflags-y += -Wframe-larger-than=2048
  

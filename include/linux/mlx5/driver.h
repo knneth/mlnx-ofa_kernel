@@ -354,9 +354,11 @@ struct mlx5_cmd_mailbox {
 	struct mlx5_cmd_mailbox *next;
 };
 
+struct mlx5_dma_pool_page;
 struct mlx5_buf_list {
 	void		       *buf;
 	dma_addr_t		map;
+	struct mlx5_dma_pool_page *frag_page;
 };
 
 struct mlx5_frag_buf {
@@ -637,6 +639,7 @@ enum {
 	MLX5E_CONG_PROTOCOL_NUM,
 };
 
+struct mlx5_frag_buf_node_pools;
 struct mlx5_ft_pool;
 struct mlx5_priv {
 	/* IRQ table valid only for real pci devices PF or VF */
@@ -660,14 +663,16 @@ struct mlx5_priv {
 
 	struct mlx5_debugfs_entries dbg;
 
-	/* start: alloc staff */
+	/* start: alloc stuff */
 	/* protect buffer allocation according to numa node */
 	struct mutex            alloc_mutex;
 	int                     numa_node;
 
 	struct mutex            pgdir_mutex;
 	struct list_head        pgdir_list;
-	/* end: alloc staff */
+
+	struct mlx5_frag_buf_node_pools **frag_buf_node_pools;
+	/* end: alloc stuff */
 
 	struct mlx5_adev       **adev;
 	int			adev_idx;
@@ -1461,12 +1466,12 @@ static inline bool mlx5_rl_is_supported(struct mlx5_core_dev *dev)
 static inline int mlx5_core_is_mp_slave(struct mlx5_core_dev *dev)
 {
 	return MLX5_CAP_GEN(dev, affiliate_nic_vport_criteria) &&
-	       MLX5_CAP_GEN(dev, num_vhca_ports) <= 1;
+	       MLX5_CAP_GEN_MAX(dev, num_vhca_ports) <= 1;
 }
 
 static inline int mlx5_core_is_mp_master(struct mlx5_core_dev *dev)
 {
-	return MLX5_CAP_GEN(dev, num_vhca_ports) > 1;
+	return MLX5_CAP_GEN_MAX(dev, num_vhca_ports) > 1;
 }
 
 static inline int mlx5_core_mp_enabled(struct mlx5_core_dev *dev)

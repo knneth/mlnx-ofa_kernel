@@ -7,9 +7,11 @@ Signed-off-by: Mark Zhang <markzhang@nvidia.com>
  drivers/infiniband/core/uverbs_std_types_mr.c | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/infiniband/core/uverbs_std_types_mr.c b/drivers/infiniband/core/uverbs_std_types_mr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_std_types_mr.c
 +++ b/drivers/infiniband/core/uverbs_std_types_mr.c
-@@ -363,8 +363,13 @@ static int UVERBS_HANDLER(UVERBS_METHOD_
+@@ -363,8 +363,13 @@ static int UVERBS_HANDLER(UVERBS_METHOD_REG_MR)(
  							iova, fd, access_flags,
  							dmah, attrs);
  	else

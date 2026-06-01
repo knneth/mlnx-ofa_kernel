@@ -6,6 +6,8 @@ Change-Id: I733523d58e9b3c40c6dddb51cf6c877a868b76e0
  include/linux/sunrpc/svc_rdma.h | 69 +++++++++++++++++++++++++++++++--
  1 file changed, 66 insertions(+), 3 deletions(-)
 
+diff --git a/include/linux/sunrpc/svc_rdma.h b/include/linux/sunrpc/svc_rdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/sunrpc/svc_rdma.h
 +++ b/include/linux/sunrpc/svc_rdma.h
 @@ -42,13 +42,20 @@
@@ -136,7 +138,7 @@ Change-Id: I733523d58e9b3c40c6dddb51cf6c877a868b76e0
  extern void svc_rdma_reply_chunk_release(struct svcxprt_rdma *rdma,
  					 struct svc_rdma_send_ctxt *ctxt);
  extern int svc_rdma_send_write_list(struct svcxprt_rdma *rdma,
-@@ -287,6 +323,18 @@ extern int svc_rdma_prepare_reply_chunk(
+@@ -287,6 +323,18 @@ extern int svc_rdma_prepare_reply_chunk(struct svcxprt_rdma *rdma,
  extern int svc_rdma_process_read_list(struct svcxprt_rdma *rdma,
  				      struct svc_rqst *rqstp,
  				      struct svc_rdma_recv_ctxt *head);
@@ -163,7 +165,7 @@ Change-Id: I733523d58e9b3c40c6dddb51cf6c877a868b76e0
  extern int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  			      struct svc_rdma_send_ctxt *ctxt);
  extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
-@@ -301,14 +350,28 @@ extern int svc_rdma_map_reply_msg(struct
+@@ -301,14 +350,28 @@ extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
  				  const struct svc_rdma_pcl *write_pcl,
  				  const struct svc_rdma_pcl *reply_pcl,
  				  const struct xdr_buf *xdr);

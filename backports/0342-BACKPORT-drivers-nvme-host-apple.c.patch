@@ -6,9 +6,11 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  drivers/nvme/host/apple.c | 35 +++++++++++++++++++++++++++++++++++
  1 file changed, 35 insertions(+)
 
+diff --git a/drivers/nvme/host/apple.c b/drivers/nvme/host/apple.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/apple.c
 +++ b/drivers/nvme/host/apple.c
-@@ -231,7 +231,11 @@ static unsigned int apple_nvme_queue_dep
+@@ -231,7 +231,11 @@ static unsigned int apple_nvme_queue_depth(struct apple_nvme_queue *q)
  	return anv->hw->max_queue_depth;
  }
  
@@ -20,7 +22,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  {
  	struct apple_nvme *anv = cookie;
  
-@@ -556,7 +560,11 @@ static blk_status_t apple_nvme_map_data(
+@@ -556,7 +560,11 @@ static blk_status_t apple_nvme_map_data(struct apple_nvme *anv,
  	if (!iod->sg)
  		return BLK_STS_RESOURCE;
  	sg_init_table(iod->sg, blk_rq_nr_phys_segments(req));
@@ -32,7 +34,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  	if (!iod->nents)
  		goto out_free_sg;
  
-@@ -682,7 +690,11 @@ static bool apple_nvme_handle_cq(struct
+@@ -682,7 +690,11 @@ static bool apple_nvme_handle_cq(struct apple_nvme_queue *q, bool force)
  
  	found = apple_nvme_poll_cq(q, &iob);
  
@@ -44,7 +46,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  		apple_nvme_complete_batch(&iob);
  
  	return found;
-@@ -912,7 +924,12 @@ static void apple_nvme_disable(struct ap
+@@ -912,7 +924,12 @@ static void apple_nvme_disable(struct apple_nvme *anv, bool shutdown)
  	}
  }
  
@@ -57,7 +59,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  {
  	struct apple_nvme_iod *iod = blk_mq_rq_to_pdu(req);
  	struct apple_nvme_queue *q = iod->q;
-@@ -1613,7 +1630,11 @@ static int apple_nvme_probe(struct platf
+@@ -1613,7 +1630,11 @@ static int apple_nvme_probe(struct platform_device *pdev)
  	if (ret)
  		goto out_put_ctrl;
  
@@ -82,7 +84,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  {
  	struct apple_nvme *anv = platform_get_drvdata(pdev);
  
-@@ -1651,6 +1677,11 @@ static void apple_nvme_remove(struct pla
+@@ -1651,6 +1677,11 @@ static void apple_nvme_remove(struct platform_device *pdev)
  	}
  
  	apple_nvme_detach_genpd(anv);
@@ -94,7 +96,7 @@ Change-Id: If2b5e934a8ba7687a75c9f54b3dd30f64ca86375
  }
  
  static void apple_nvme_shutdown(struct platform_device *pdev)
-@@ -1715,7 +1746,11 @@ static struct platform_driver apple_nvme
+@@ -1715,7 +1746,11 @@ static struct platform_driver apple_nvme_driver = {
  		.pm = pm_sleep_ptr(&apple_nvme_pm_ops),
  	},
  	.probe = apple_nvme_probe,

@@ -2,12 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
 
 ---
- drivers/fwctl/main.c | 128 +++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 122 insertions(+), 6 deletions(-)
+ drivers/fwctl/main.c | 58 +++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 52 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/fwctl/main.c b/drivers/fwctl/main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/fwctl/main.c
 +++ b/drivers/fwctl/main.c
-@@ -2,17 +2,51 @@
+@@ -2,17 +2,46 @@
  /*
   * Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
   */
@@ -33,11 +35,6 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
 +#ifndef HAVE_KVFREE_IN_SLAB_H
 +#include <linux/mm.h>
 +#endif
-+#ifndef HAVE_CHECK_ZEROED_USER
-+#include <linux/uaccess.h>
-+#include <linux/bitops.h>
-+#include <linux/nospec.h>
-+#endif
  #include <uapi/fwctl/fwctl.h>
  
 +#ifndef HAVE_SLAB_NO_OBJ_EXT
@@ -59,7 +56,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  enum {
  	FWCTL_MAX_DEVICES = 4096,
  	MAX_RPC_LEN = SZ_2M,
-@@ -67,8 +101,13 @@ static int fwctl_cmd_info(struct fwctl_u
+@@ -67,8 +96,13 @@ static int fwctl_cmd_info(struct fwctl_ucmd *ucmd)
  			       cmd->device_data_len))
  			return -EFAULT;
  	} else if (cmd->device_data_len) {
@@ -73,7 +70,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  		if (IS_ERR(driver_info))
  			return PTR_ERR(driver_info);
  
-@@ -88,6 +127,13 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -88,6 +122,13 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
  	struct fwctl_device *fwctl = ucmd->uctx->fwctl;
  	struct fwctl_rpc *cmd = ucmd->cmd;
  	size_t out_len;
@@ -87,7 +84,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  
  	if (cmd->in_len > MAX_RPC_LEN || cmd->out_len > MAX_RPC_LEN)
  		return -EMSGSIZE;
-@@ -114,15 +160,14 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -114,15 +155,14 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
  		return -EOPNOTSUPP;
  	}
  
@@ -105,7 +102,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  	if (IS_ERR(outbuf))
  		return PTR_ERR(outbuf);
  	if (outbuf == inbuf) {
-@@ -131,7 +176,7 @@ static int fwctl_cmd_rpc(struct fwctl_uc
+@@ -131,7 +171,7 @@ static int fwctl_cmd_rpc(struct fwctl_ucmd *ucmd)
  	}
  
  	if (copy_to_user(u64_to_user_ptr(cmd->out), outbuf,
@@ -114,80 +111,15 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  		return -EFAULT;
  
  	cmd->out_len = out_len;
-@@ -151,6 +196,72 @@ struct fwctl_ioctl_op {
+@@ -151,6 +191,7 @@ struct fwctl_ioctl_op {
  	int (*execute)(struct fwctl_ucmd *ucmd);
  };
  
-+#ifndef HAVE_CHECK_ZEROED_USER
-+static int backport_check_zeroed_user(const void __user *from, size_t size)
-+{
-+	unsigned long val;
-+	uintptr_t align = (uintptr_t) from % sizeof(unsigned long);
-+
-+	if (unlikely(size == 0))
-+		return 1;
-+
-+	from -= align;
-+	size += align;
-+
-+	if (!user_access_begin(from, size))
-+		return -EFAULT;
-+
-+	unsafe_get_user(val, (unsigned long __user *) from, err_fault);
-+	if (align)
-+		val &= ~aligned_byte_mask(align);
-+
-+	while (size > sizeof(unsigned long)) {
-+		if (unlikely(val))
-+			goto done;
-+
-+		from += sizeof(unsigned long);
-+		size -= sizeof(unsigned long);
-+
-+		unsafe_get_user(val, (unsigned long __user *) from, err_fault);
-+	}
-+
-+	if (size < sizeof(unsigned long))
-+		val &= aligned_byte_mask(size);
-+
-+done:
-+	user_access_end();
-+	return (val == 0);
-+err_fault:
-+	user_access_end();
-+	return -EFAULT;
-+}
-+
-+static __always_inline __must_check int
-+copy_struct_from_user(void *dst, size_t ksize, const void __user *src,
-+		      size_t usize)
-+{
-+	size_t size = min(ksize, usize);
-+	size_t rest = max(ksize, usize) - size;
-+
-+	/* Double check if ksize is larger than a known object size. */
-+	if (WARN_ON_ONCE(ksize > __builtin_object_size(dst, 1)))
-+		return -E2BIG;
-+
-+	/* Deal with trailing bytes. */
-+	if (usize < ksize) {
-+		memset(dst + size, 0, rest);
-+	} else if (usize > ksize) {
-+		int ret = backport_check_zeroed_user(src + size, rest);
-+		if (ret <= 0)
-+			return ret ?: -E2BIG;
-+	}
-+	/* Copy the interoperable parts of the struct. */
-+	if (copy_from_user(dst, src, size))
-+		return -EFAULT;
-+	return 0;
-+}
-+#endif
 +
  #define IOCTL_OP(_ioctl, _fn, _struct, _last)                               \
  	[_IOC_NR(_ioctl) - FWCTL_CMD_BASE] = {                              \
  		.size = sizeof(_struct) +                                   \
-@@ -209,13 +320,13 @@ static int fwctl_fops_open(struct inode
+@@ -209,13 +250,13 @@ static int fwctl_fops_open(struct inode *inode, struct file *filp)
  	struct fwctl_device *fwctl =
  		container_of(inode->i_cdev, struct fwctl_device, cdev);
  	int ret;
@@ -203,7 +135,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  	if (!uctx)
  		return -ENOMEM;
  
-@@ -230,6 +341,7 @@ static int fwctl_fops_open(struct inode
+@@ -230,6 +271,7 @@ static int fwctl_fops_open(struct inode *inode, struct file *filp)
  
  	get_device(&fwctl->dev);
  	filp->private_data = no_free_ptr(uctx);
@@ -211,7 +143,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/main.c
  	return 0;
  }
  
-@@ -278,7 +390,11 @@ static void fwctl_device_release(struct
+@@ -278,7 +320,11 @@ static void fwctl_device_release(struct device *device)
  	kfree(fwctl);
  }
  

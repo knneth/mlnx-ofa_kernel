@@ -6,10 +6,12 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
-@@ -3,9 +3,15 @@
- 
+@@ -4,9 +4,15 @@
+ #include <linux/iopoll.h>
  #include <linux/math64.h>
  #include "lib/aso.h"
 +#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT:
  
  #define MLX5_START_COLOR_SHIFT 28
  #define MLX5_METER_MODE_SHIFT 24
-@@ -365,8 +371,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_
+@@ -361,8 +367,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_dev *dev)
  	struct mlx5e_flow_meters *flow_meters;
  	struct mlx5e_flow_meter_handle *meter;
  
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT:
  		return ERR_PTR(-EOPNOTSUPP);
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -410,9 +418,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev
+@@ -406,9 +414,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev *mdev, struct mlx5e_flow_meter_params *p
  	struct mlx5e_flow_meters *flow_meters;
  	struct mlx5e_flow_meter_handle *meter;
  
@@ -47,7 +49,7 @@ Subject: [PATCH] BACKPORT:
  
  	mutex_lock(&flow_meters->sync_lock);
  	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
-@@ -484,12 +494,16 @@ int
+@@ -480,12 +490,16 @@ int
  mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
  		      struct mlx5e_flow_meter_params *params)
  {
@@ -64,7 +66,7 @@ Subject: [PATCH] BACKPORT:
  		return -EOPNOTSUPP;
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -505,8 +519,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_
+@@ -501,8 +515,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_dev *mdev, struct mlx5e_flow_meter_param
  	struct mlx5e_flow_meter_handle *meter;
  	int err;
  
@@ -75,7 +77,7 @@ Subject: [PATCH] BACKPORT:
  		return ERR_PTR(-EOPNOTSUPP);
  
  	mutex_lock(&flow_meters->sync_lock);
-@@ -552,11 +568,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv
+@@ -548,11 +564,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv *priv,
  	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
  		return ERR_PTR(-EOPNOTSUPP);
  

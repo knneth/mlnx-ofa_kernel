@@ -6,6 +6,8 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  drivers/nvme/target/tcp.c | 142 ++++++++++++++++++++++++++++++++++++--
  1 file changed, 138 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/nvme/target/tcp.c b/drivers/nvme/target/tcp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/tcp.c
 +++ b/drivers/nvme/target/tcp.c
 @@ -3,6 +3,9 @@
@@ -35,7 +37,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  #include <linux/inet.h>
  #include <linux/llist.h>
  #include <trace/events/sock.h>
-@@ -366,17 +373,28 @@ static void nvmet_tcp_build_pdu_iovec(st
+@@ -366,17 +373,28 @@ static void nvmet_tcp_build_pdu_iovec(struct nvmet_tcp_cmd *cmd)
  	while (length) {
  		u32 iov_len = min_t(u32, length, sg->length - sg_offset);
  
@@ -64,7 +66,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  }
  
  static void nvmet_tcp_fatal_error(struct nvmet_tcp_queue *queue)
-@@ -611,17 +629,25 @@ static void nvmet_tcp_execute_request(st
+@@ -611,17 +629,25 @@ static void nvmet_tcp_execute_request(struct nvmet_tcp_cmd *cmd)
  
  static int nvmet_try_send_data_pdu(struct nvmet_tcp_cmd *cmd)
  {
@@ -90,7 +92,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	if (ret <= 0)
  		return ret;
  
-@@ -642,21 +668,37 @@ static int nvmet_try_send_data(struct nv
+@@ -642,21 +668,37 @@ static int nvmet_try_send_data(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  	int ret;
  
  	while (cmd->cur_sg) {
@@ -128,7 +130,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  		if (ret <= 0)
  			return ret;
  
-@@ -692,13 +734,26 @@ static int nvmet_try_send_data(struct nv
+@@ -692,13 +734,26 @@ static int nvmet_try_send_data(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  		bool last_in_batch)
  {
@@ -155,7 +157,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  		msg.msg_flags |= MSG_MORE;
  	else
  		msg.msg_flags |= MSG_EOR;
-@@ -706,6 +761,7 @@ static int nvmet_try_send_response(struc
+@@ -706,6 +761,7 @@ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  	bvec_set_virt(&bvec, (void *)cmd->rsp_pdu + cmd->offset, left);
  	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
  	ret = sock_sendmsg(cmd->queue->sock, &msg);
@@ -163,7 +165,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	if (ret <= 0)
  		return ret;
  	cmd->offset += ret;
-@@ -722,13 +778,26 @@ static int nvmet_try_send_response(struc
+@@ -722,13 +778,26 @@ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  
  static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  {
@@ -190,7 +192,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  		msg.msg_flags |= MSG_MORE;
  	else
  		msg.msg_flags |= MSG_EOR;
-@@ -736,6 +805,7 @@ static int nvmet_try_send_r2t(struct nvm
+@@ -736,6 +805,7 @@ static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  	bvec_set_virt(&bvec, (void *)cmd->r2t_pdu + cmd->offset, left);
  	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
  	ret = sock_sendmsg(cmd->queue->sock, &msg);
@@ -198,7 +200,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	if (ret <= 0)
  		return ret;
  	cmd->offset += ret;
-@@ -1106,6 +1176,7 @@ static inline bool nvmet_tcp_pdu_valid(u
+@@ -1106,6 +1176,7 @@ static inline bool nvmet_tcp_pdu_valid(u8 type)
  	return false;
  }
  
@@ -206,7 +208,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  static int nvmet_tcp_tls_record_ok(struct nvmet_tcp_queue *queue,
  		struct msghdr *msg, char *cbuf)
  {
-@@ -1140,11 +1211,16 @@ static int nvmet_tcp_tls_record_ok(struc
+@@ -1140,11 +1211,16 @@ static int nvmet_tcp_tls_record_ok(struct nvmet_tcp_queue *queue,
  	}
  	return ret;
  }
@@ -238,7 +240,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	queue->offset += len;
  	queue->left -= len;
  	if (queue->left)
-@@ -1217,19 +1294,25 @@ static void nvmet_tcp_prep_recv_ddgst(st
+@@ -1217,19 +1294,25 @@ static void nvmet_tcp_prep_recv_ddgst(struct nvmet_tcp_cmd *cmd)
  static int nvmet_tcp_try_recv_data(struct nvmet_tcp_queue *queue)
  {
  	struct nvmet_tcp_cmd  *cmd = queue->cmd;
@@ -264,7 +266,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  
  		cmd->pdu_recv += len;
  		cmd->rbytes_done += len;
-@@ -1266,12 +1349,13 @@ static int nvmet_tcp_try_recv_ddgst(stru
+@@ -1266,12 +1349,13 @@ static int nvmet_tcp_try_recv_ddgst(struct nvmet_tcp_queue *queue)
  			iov.iov_len, msg.msg_flags);
  	if (unlikely(len < 0))
  		return len;
@@ -279,7 +281,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	queue->offset += len;
  	queue->left -= len;
  	if (queue->left)
-@@ -1363,10 +1447,12 @@ static void nvmet_tcp_release_queue(stru
+@@ -1363,10 +1447,12 @@ static void nvmet_tcp_release_queue(struct kref *kref)
  static void nvmet_tcp_schedule_release_queue(struct nvmet_tcp_queue *queue)
  {
  	spin_lock_bh(&queue->state_lock);
@@ -292,7 +294,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	if (queue->state != NVMET_TCP_Q_DISCONNECTING) {
  		queue->state = NVMET_TCP_Q_DISCONNECTING;
  		kref_put(&queue->kref, nvmet_tcp_release_queue);
-@@ -1560,6 +1646,9 @@ static void nvmet_tcp_free_cmd_data_in_b
+@@ -1560,6 +1646,9 @@ static void nvmet_tcp_free_cmd_data_in_buffers(struct nvmet_tcp_queue *queue)
  
  static void nvmet_tcp_release_queue_work(struct work_struct *w)
  {
@@ -302,7 +304,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	struct nvmet_tcp_queue *queue =
  		container_of(w, struct nvmet_tcp_queue, release_work);
  
-@@ -1583,7 +1672,12 @@ static void nvmet_tcp_release_queue_work
+@@ -1583,7 +1672,12 @@ static void nvmet_tcp_release_queue_work(struct work_struct *w)
  	fput(queue->sock->file);
  	nvmet_tcp_free_cmds(queue);
  	ida_free(&nvmet_tcp_queue_ida, queue->idx);
@@ -315,7 +317,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	kfree(queue);
  }
  
-@@ -1591,7 +1685,9 @@ static void nvmet_tcp_data_ready(struct
+@@ -1591,7 +1685,9 @@ static void nvmet_tcp_data_ready(struct sock *sk)
  {
  	struct nvmet_tcp_queue *queue;
  
@@ -325,7 +327,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  
  	read_lock_bh(&sk->sk_callback_lock);
  	queue = sk->sk_user_data;
-@@ -1681,8 +1777,19 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1681,8 +1777,19 @@ static int nvmet_tcp_set_queue_sock(struct nvmet_tcp_queue *queue)
  		sock_set_priority(sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -345,7 +347,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  
  	ret = 0;
  	write_lock_bh(&sock->sk->sk_callback_lock);
-@@ -1990,8 +2097,9 @@ static void nvmet_tcp_listen_data_ready(
+@@ -1990,8 +2097,9 @@ static void nvmet_tcp_listen_data_ready(struct sock *sk)
  {
  	struct nvmet_tcp_port *port;
  
@@ -356,7 +358,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  	read_lock_bh(&sk->sk_callback_lock);
  	port = sk->sk_user_data;
  	if (!port)
-@@ -2008,6 +2116,9 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -2008,6 +2116,9 @@ static int nvmet_tcp_add_port(struct nvmet_port *nport)
  	struct nvmet_tcp_port *port;
  	__kernel_sa_family_t af;
  	int ret;
@@ -366,7 +368,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -2051,11 +2162,28 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -2051,11 +2162,28 @@ static int nvmet_tcp_add_port(struct nvmet_port *nport)
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);
@@ -396,7 +398,7 @@ Change-Id: Iea0fbde8c3e86a333a7bb5c846168a082d31cd1e
  			sizeof(port->addr));
  	if (ret) {
  		pr_err("failed to bind port socket %d\n", ret);
-@@ -2156,7 +2284,13 @@ static void nvmet_tcp_disc_port_addr(str
+@@ -2156,7 +2284,13 @@ static void nvmet_tcp_disc_port_addr(struct nvmet_req *req,
  {
  	struct nvmet_tcp_port *port = nport->priv;
  

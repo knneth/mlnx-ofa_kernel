@@ -1,0 +1,30 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+
+Change-Id: Iee1917faa60d74a6767beac0ccce41faa8a830d7
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+@@ -88,7 +88,15 @@ struct net_device *mlx5i_pkey_get_netdev(struct net_device *netdev, u32 qpn);
+ /* Shared ndo functions */
+ int mlx5i_dev_init(struct net_device *dev);
+ void mlx5i_dev_cleanup(struct net_device *dev);
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
++int mlx5i_hwtstamp_set(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config,
++		       struct netlink_ext_ack *extack);
++int mlx5i_hwtstamp_get(struct net_device *dev,
++		       struct kernel_hwtstamp_config *config);
++#else
+ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
++#endif
+ 
+ /* Parent profile functions */
+ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev);

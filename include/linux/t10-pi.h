@@ -20,7 +20,6 @@
  * Type 3 defines the contents of the guard tag only
  */
 
-#ifndef HAVE_T10_PI_PREPARE
 #if defined(CONFIG_BLK_DEV_INTEGRITY) && !defined(HAVE_EXT_PI_REF_TAG)
 static inline void t10_pi_prepare(struct request *rq, u8 protection_type)
 {
@@ -110,6 +109,5 @@ static inline void t10_pi_prepare(struct request *rq, u8 protection_type)
 {
 }
 #endif
-#endif /* HAVE_T10_PI_PREPARE */
 
 #endif /* _COMPAT_LINUX_T10_PI_H */

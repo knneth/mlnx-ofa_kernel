@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.h
  net/mlxdevm/netlink_gen.h | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/net/mlxdevm/netlink_gen.h b/net/mlxdevm/netlink_gen.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/netlink_gen.h
 +++ b/net/mlxdevm/netlink_gen.h
-@@ -21,9 +21,17 @@ extern const struct nla_policy devlink_d
+@@ -21,9 +21,17 @@ extern const struct nla_policy devlink_dl_selftest_id_nl_policy[DEVLINK_ATTR_SEL
  #endif
  
  /* Ops table for mlxdevm */
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.h
  			struct genl_info *info);
  int mlxdevm_nl_pre_doit_port(const struct genl_split_ops *ops,
  			     struct sk_buff *skb, struct genl_info *info);
-@@ -36,7 +44,11 @@ int devlink_nl_pre_doit_port_optional(co
+@@ -36,7 +44,11 @@ int devlink_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
  #endif
  
  void

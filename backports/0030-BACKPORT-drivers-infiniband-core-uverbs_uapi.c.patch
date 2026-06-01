@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_uapi.c
 
 ---
- drivers/infiniband/core/uverbs_uapi.c | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ drivers/infiniband/core/uverbs_uapi.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/uverbs_uapi.c b/drivers/infiniband/core/uverbs_uapi.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_uapi.c
 +++ b/drivers/infiniband/core/uverbs_uapi.c
 @@ -567,7 +567,7 @@ again:
@@ -16,3 +18,13 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/uverbs_uapi.c
  			}
  			continue;
  		}
+@@ -631,7 +631,9 @@ static const struct uapi_definition uverbs_core_api[] = {
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_cq),
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_device),
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_dm),
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_dmabuf),
++#endif
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_dmah),
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_flow_action),
+ 	UAPI_DEF_CHAIN(uverbs_def_obj_intf),

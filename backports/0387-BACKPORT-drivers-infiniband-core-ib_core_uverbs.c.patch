@@ -1,0 +1,81 @@
+From: Mark Zhang <markzhang@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/ib_core_uverbs.c
+
+Change-Id: I18aac1aaf7188886a6aa368d3265bcb65904679b
+Signed-off-by: Mark Zhang <markzhang@nvidia.com>
+---
+ drivers/infiniband/core/ib_core_uverbs.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/infiniband/core/ib_core_uverbs.c b/drivers/infiniband/core/ib_core_uverbs.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/ib_core_uverbs.c
++++ b/drivers/infiniband/core/ib_core_uverbs.c
+@@ -5,12 +5,16 @@
+  * Copyright 2019 Marvell. All rights reserved.
+  */
+ #include <linux/xarray.h>
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ #include <linux/dma-buf.h>
+ #include <linux/dma-resv.h>
++#endif
+ #include "uverbs.h"
+ #include "core_priv.h"
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ MODULE_IMPORT_NS("DMA_BUF");
++#endif
+ 
+ #ifndef pgprot_decrypted
+ #define pgprot_decrypted(prot)	(prot)
+@@ -238,20 +242,30 @@ EXPORT_SYMBOL(rdma_user_mmap_entry_put);
+  */
+ void rdma_user_mmap_entry_remove(struct rdma_user_mmap_entry *entry)
+ {
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	struct ib_uverbs_dmabuf_file *uverbs_dmabuf, *tmp;
+ 
++#endif
+ 	if (!entry)
+ 		return;
+ 
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	mutex_lock(&entry->dmabufs_lock);
++#endif
+ 	xa_lock(&entry->ucontext->mmap_xa);
+ 	entry->driver_removed = true;
+ 	xa_unlock(&entry->ucontext->mmap_xa);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	list_for_each_entry_safe(uverbs_dmabuf, tmp, &entry->dmabufs, dmabufs_elm) {
+ 		dma_resv_lock(uverbs_dmabuf->dmabuf->resv, NULL);
+ 		list_del(&uverbs_dmabuf->dmabufs_elm);
+ 		uverbs_dmabuf->revoked = true;
++#ifdef HAVE_DMA_BUF_INVALIDATE_MAPPINGS
++/* Newer kernels (7.1+): dma_buf_move_notify renamed */
++		dma_buf_invalidate_mappings(uverbs_dmabuf->dmabuf);
++#else
+ 		dma_buf_move_notify(uverbs_dmabuf->dmabuf);
++#endif
+ 		dma_resv_wait_timeout(uverbs_dmabuf->dmabuf->resv,
+ 				      DMA_RESV_USAGE_BOOKKEEP, false,
+ 				      MAX_SCHEDULE_TIMEOUT);
+@@ -260,6 +274,8 @@ void rdma_user_mmap_entry_remove(struct rdma_user_mmap_entry *entry)
+ 		wait_for_completion(&uverbs_dmabuf->comp);
+ 	}
+ 	mutex_unlock(&entry->dmabufs_lock);
++
++#endif
+ 	kref_put(&entry->ref, rdma_user_mmap_entry_free);
+ }
+ EXPORT_SYMBOL(rdma_user_mmap_entry_remove);
+@@ -299,8 +315,10 @@ int rdma_user_mmap_entry_insert_range(struct ib_ucontext *ucontext,
+ 		return -EINVAL;
+ 
+ 	kref_init(&entry->ref);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	INIT_LIST_HEAD(&entry->dmabufs);
+ 	mutex_init(&entry->dmabufs_lock);
++#endif
+ 
+ 	entry->ucontext = ucontext;
+ 

@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_transport_srp.c
  drivers/scsi/scsi_transport_srp.c | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/drivers/scsi/scsi_transport_srp.c b/drivers/scsi/scsi_transport_srp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/scsi/scsi_transport_srp.c
 +++ b/drivers/scsi/scsi_transport_srp.c
-@@ -485,7 +485,11 @@ static void __srp_start_tl_fail_timers(s
+@@ -485,7 +485,11 @@ static void __srp_start_tl_fail_timers(struct srp_rport *rport)
  	    srp_rport_set_state(rport, SRP_RPORT_BLOCKED) == 0) {
  		pr_debug("%s new state: %d\n", dev_name(&shost->shost_gendev),
  			 rport->state);
@@ -19,7 +21,7 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_transport_srp.c
  		if (fast_io_fail_tmo >= 0)
  			queue_delayed_work(system_long_wq,
  					   &rport->fast_io_fail_work,
-@@ -553,7 +557,11 @@ int srp_reconnect_rport(struct srp_rport
+@@ -553,7 +557,11 @@ int srp_reconnect_rport(struct srp_rport *rport)
  		 * later is ok though, scsi_internal_device_unblock_nowait()
  		 * treats SDEV_TRANSPORT_OFFLINE like SDEV_BLOCK.
  		 */
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: drivers/scsi/scsi_transport_srp.c
  {
  	struct scsi_device *sdev = scmd->device;
  	struct Scsi_Host *shost = sdev->host;
-@@ -616,7 +628,11 @@ enum scsi_timeout_action srp_timed_out(s
+@@ -616,7 +628,11 @@ enum scsi_timeout_action srp_timed_out(struct scsi_cmnd *scmd)
  	return rport && rport->fast_io_fail_tmo < 0 &&
  		rport->dev_loss_tmo < 0 &&
  		i->f->reset_timer_if_blocked && scsi_device_blocked(sdev) ?

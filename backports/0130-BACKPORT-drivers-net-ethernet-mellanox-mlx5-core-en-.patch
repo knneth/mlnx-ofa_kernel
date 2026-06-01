@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
  drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
 @@ -4,6 +4,8 @@
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.h
  #include "en.h"
  
  /* TX data path */
-@@ -12,4 +14,5 @@ int mlx5e_xsk_wakeup(struct net_device *
+@@ -12,4 +14,5 @@ int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags);
  
  bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget);
  

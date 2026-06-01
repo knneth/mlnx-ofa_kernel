@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  .../net/ethernet/mellanox/mlx5/core/lag/lag.c | 101 ++++++++++++++++++
  1 file changed, 101 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
 @@ -51,6 +51,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  static int get_port_sel_mode(enum mlx5_lag_mode mode, unsigned long flags)
  {
  	if (test_bit(MLX5_LAG_MODE_FLAG_HASH_BASED, &flags))
-@@ -175,6 +176,9 @@ static void mlx5_infer_tx_disabled(struc
+@@ -175,6 +176,9 @@ static void mlx5_infer_tx_disabled(struct lag_tracker *tracker, struct mlx5_lag
  				   u8 *ports, int *num_disabled)
  {
  	int i;
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	*num_disabled = 0;
  	mlx5_ldev_for_each(i, 0, ldev)
-@@ -187,6 +191,9 @@ void mlx5_infer_tx_enabled(struct lag_tr
+@@ -187,6 +191,9 @@ void mlx5_infer_tx_enabled(struct lag_tracker *tracker, struct mlx5_lag *ldev,
  			   u8 *ports, int *num_enabled)
  {
  	int i;
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	*num_enabled = 0;
  	mlx5_ldev_for_each(i, 0, ldev)
-@@ -224,6 +231,9 @@ static void mlx5_lag_print_mapping(struc
+@@ -224,6 +231,9 @@ static void mlx5_lag_print_mapping(struct mlx5_core_dev *dev,
  		buf[written - 2] = 0;
  		mlx5_core_info(dev, "lag map active ports: %s\n", buf);
  	} else {
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  		mlx5_ldev_for_each(i, 0, ldev) {
  			for (j  = 0; j < ldev->buckets; j++) {
  				idx = i * ldev->buckets + j;
-@@ -247,10 +257,17 @@ static void mlx5_ldev_free(struct kref *
+@@ -247,10 +257,17 @@ static void mlx5_ldev_free(struct kref *ref)
  	struct mlx5_lag *ldev = container_of(ref, struct mlx5_lag, ref);
  	struct net *net;
  	int i;
@@ -63,7 +65,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  	}
  
  	mlx5_ldev_for_each(i, 0, ldev) {
-@@ -302,7 +319,11 @@ static struct mlx5_lag *mlx5_lag_dev_all
+@@ -302,7 +319,11 @@ static struct mlx5_lag *mlx5_lag_dev_alloc(struct mlx5_core_dev *dev)
  
  	ldev->nb.notifier_call = mlx5_lag_netdev_event;
  	write_pnet(&ldev->net, mlx5_core_net(dev));
@@ -75,7 +77,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  		ldev->nb.notifier_call = NULL;
  		mlx5_core_err(dev, "Failed to register LAG netdev notifier\n");
  	}
-@@ -323,6 +344,9 @@ int mlx5_lag_dev_get_netdev_idx(struct m
+@@ -323,6 +344,9 @@ int mlx5_lag_dev_get_netdev_idx(struct mlx5_lag *ldev,
  				struct net_device *ndev)
  {
  	int i;
@@ -85,7 +87,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev)
  		if (ldev->pf[i].netdev == ndev)
-@@ -334,6 +358,9 @@ int mlx5_lag_dev_get_netdev_idx(struct m
+@@ -334,6 +358,9 @@ int mlx5_lag_dev_get_netdev_idx(struct mlx5_lag *ldev,
  int mlx5_lag_get_dev_index_by_seq(struct mlx5_lag *ldev, int seq)
  {
  	int i, num = 0;
@@ -95,7 +97,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (!ldev)
  		return -ENOENT;
-@@ -349,6 +376,9 @@ int mlx5_lag_get_dev_index_by_seq(struct
+@@ -349,6 +376,9 @@ int mlx5_lag_get_dev_index_by_seq(struct mlx5_lag *ldev, int seq)
  int mlx5_lag_num_devs(struct mlx5_lag *ldev)
  {
  	int i, num = 0;
@@ -105,7 +107,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (!ldev)
  		return 0;
-@@ -363,6 +393,9 @@ int mlx5_lag_num_devs(struct mlx5_lag *l
+@@ -363,6 +393,9 @@ int mlx5_lag_num_devs(struct mlx5_lag *ldev)
  int mlx5_lag_num_netdevs(struct mlx5_lag *ldev)
  {
  	int i, num = 0;
@@ -115,7 +117,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (!ldev)
  		return 0;
-@@ -402,6 +435,9 @@ static void mlx5_infer_tx_affinity_mappi
+@@ -402,6 +435,9 @@ static void mlx5_infer_tx_affinity_mapping(struct lag_tracker *tracker,
  	u32 rand;
  	int i;
  	int j;
@@ -125,7 +127,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		if (tracker->netdev_state[i].tx_enabled &&
-@@ -438,6 +474,9 @@ static void mlx5_infer_tx_affinity_mappi
+@@ -438,6 +474,9 @@ static void mlx5_infer_tx_affinity_mapping(struct lag_tracker *tracker,
  static bool mlx5_lag_has_drop_rule(struct mlx5_lag *ldev)
  {
  	int i;
@@ -135,7 +137,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev)
  		if (ldev->pf[i].has_drop)
-@@ -448,6 +487,9 @@ static bool mlx5_lag_has_drop_rule(struc
+@@ -448,6 +487,9 @@ static bool mlx5_lag_has_drop_rule(struct mlx5_lag *ldev)
  static void mlx5_lag_drop_rule_cleanup(struct mlx5_lag *ldev)
  {
  	int i;
@@ -145,7 +147,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		if (!ldev->pf[i].has_drop)
-@@ -537,6 +579,9 @@ static struct net_device *mlx5_lag_activ
+@@ -537,6 +579,9 @@ static struct net_device *mlx5_lag_active_backup_get_netdev(struct mlx5_core_dev
  	struct mlx5_lag *ldev;
  	unsigned long flags;
  	int i, last_idx;
@@ -155,7 +157,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	spin_lock_irqsave(&lag_lock, flags);
  	ldev = mlx5_lag_dev(dev);
-@@ -572,6 +617,9 @@ void mlx5_modify_lag(struct mlx5_lag *ld
+@@ -572,6 +617,9 @@ void mlx5_modify_lag(struct mlx5_lag *ldev,
  	int err;
  	int i;
  	int j;
@@ -165,7 +167,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (first_idx < 0)
  		return;
-@@ -731,6 +779,9 @@ static int mlx5_lag_create_single_fdb(st
+@@ -731,6 +779,9 @@ static int mlx5_lag_create_single_fdb(struct mlx5_lag *ldev)
  	struct mlx5_core_dev *dev0;
  	int i, j;
  	int err;
@@ -175,7 +177,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (first_idx < 0)
  		return -EINVAL;
-@@ -866,6 +917,9 @@ int mlx5_deactivate_lag(struct mlx5_lag
+@@ -866,6 +917,9 @@ int mlx5_deactivate_lag(struct mlx5_lag *ldev)
  	struct mlx5_core_dev *dev0;
  	int err;
  	int i;
@@ -185,7 +187,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (first_idx < 0)
  		return -EINVAL;
-@@ -916,6 +970,9 @@ bool mlx5_lag_check_prereq(struct mlx5_l
+@@ -916,6 +970,9 @@ bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
  #endif
  	bool roce_support;
  	int i;
@@ -195,7 +197,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (first_idx < 0 || mlx5_lag_num_devs(ldev) != ldev->ports)
  		return false;
-@@ -949,6 +1006,9 @@ bool mlx5_lag_check_prereq(struct mlx5_l
+@@ -949,6 +1006,9 @@ bool mlx5_lag_check_prereq(struct mlx5_lag *ldev)
  void mlx5_lag_add_devices(struct mlx5_lag *ldev)
  {
  	int i;
@@ -205,7 +207,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		if (ldev->pf[i].dev->priv.flags &
-@@ -963,6 +1023,9 @@ void mlx5_lag_add_devices(struct mlx5_la
+@@ -963,6 +1023,9 @@ void mlx5_lag_add_devices(struct mlx5_lag *ldev)
  void mlx5_lag_remove_devices(struct mlx5_lag *ldev)
  {
  	int i;
@@ -215,7 +217,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		if (ldev->pf[i].dev->priv.flags &
-@@ -982,6 +1045,9 @@ void mlx5_disable_lag(struct mlx5_lag *l
+@@ -982,6 +1045,9 @@ void mlx5_disable_lag(struct mlx5_lag *ldev)
  	bool roce_lag;
  	int err;
  	int i;
@@ -225,7 +227,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (idx < 0)
  		return;
-@@ -1018,6 +1084,9 @@ bool mlx5_lag_shared_fdb_supported(struc
+@@ -1018,6 +1084,9 @@ bool mlx5_lag_shared_fdb_supported(struct mlx5_lag *ldev)
  	int idx = mlx5_lag_get_dev_index_by_seq(ldev, MLX5_LAG_P1);
  	struct mlx5_core_dev *dev;
  	int i;
@@ -235,7 +237,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (idx < 0)
  		return false;
-@@ -1049,6 +1118,9 @@ static bool mlx5_lag_is_roce_lag(struct
+@@ -1049,6 +1118,9 @@ static bool mlx5_lag_is_roce_lag(struct mlx5_lag *ldev)
  {
  	bool roce_lag = true;
  	int i;
@@ -245,7 +247,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(i, 0, ldev)
  		roce_lag = roce_lag && !mlx5_sriov_is_enabled(ldev->pf[i].dev);
-@@ -1082,6 +1154,9 @@ mlx5_lag_sum_devices_speed(struct mlx5_l
+@@ -1082,6 +1154,9 @@ mlx5_lag_sum_devices_speed(struct mlx5_lag *ldev, u32 *sum_speed,
  	int pf_idx;
  	u32 speed;
  	int ret;
@@ -255,7 +257,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	*sum_speed = 0;
  	mlx5_ldev_for_each(pf_idx, 0, ldev) {
-@@ -1171,6 +1246,9 @@ void mlx5_lag_set_vports_agg_speed(struc
+@@ -1153,6 +1228,9 @@ void mlx5_lag_set_vports_agg_speed(struct mlx5_lag *ldev)
  	struct mlx5_core_dev *mdev;
  	u32 speed;
  	int pf_idx;
@@ -265,7 +267,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (ldev->mode == MLX5_LAG_MODE_MPESW) {
  		if (mlx5_lag_sum_devices_oper_speed(ldev, &speed))
-@@ -1202,6 +1280,9 @@ void mlx5_lag_reset_vports_speed(struct
+@@ -1184,6 +1262,9 @@ void mlx5_lag_reset_vports_speed(struct mlx5_lag *ldev)
  	u32 speed;
  	int pf_idx;
  	int ret;
@@ -275,7 +277,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	mlx5_ldev_for_each(pf_idx, 0, ldev) {
  		mdev = ldev->pf[pf_idx].dev;
-@@ -1231,6 +1312,9 @@ static void mlx5_do_bond(struct mlx5_lag
+@@ -1213,6 +1294,9 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
  	bool do_bond, roce_lag;
  	int err;
  	int i;
@@ -285,7 +287,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (idx < 0)
  		return;
-@@ -1282,6 +1366,7 @@ static void mlx5_do_bond(struct mlx5_lag
+@@ -1264,6 +1348,7 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
  			dev0->priv.flags &= ~MLX5_PRIV_FLAGS_DISABLE_IB_ADEV;
  			mlx5_rescan_drivers_locked(dev0);
  
@@ -293,7 +295,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  			mlx5_ldev_for_each(i, 0, ldev) {
  				err = mlx5_eswitch_reload_ib_reps(ldev->pf[i].dev->priv.eswitch);
  				if (err)
-@@ -1298,6 +1383,7 @@ static void mlx5_do_bond(struct mlx5_lag
+@@ -1280,6 +1365,7 @@ static void mlx5_do_bond(struct mlx5_lag *ldev)
  				mlx5_core_err(dev0, "Failed to enable lag\n");
  				return;
  			}
@@ -301,7 +303,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  		}
  		if (tracker.tx_type == NETDEV_LAG_TX_TYPE_ACTIVEBACKUP) {
  			ndev = mlx5_lag_active_backup_get_netdev(dev0);
-@@ -1385,6 +1471,9 @@ static int mlx5_handle_changeupper_event
+@@ -1367,6 +1453,9 @@ static int mlx5_handle_changeupper_event(struct mlx5_lag *ldev,
  	int num_slaves = 0;
  	int changed = 0;
  	int i, idx = -1;
@@ -311,7 +313,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	if (!netif_is_lag_master(upper))
  		return 0;
-@@ -1650,6 +1739,9 @@ static void mlx5_ldev_remove_netdev(stru
+@@ -1632,6 +1721,9 @@ static void mlx5_ldev_remove_netdev(struct mlx5_lag *ldev,
  {
  	unsigned long flags;
  	int i;
@@ -321,7 +323,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	spin_lock_irqsave(&lag_lock, flags);
  	mlx5_ldev_for_each(i, 0, ldev) {
-@@ -1995,6 +2087,9 @@ u8 mlx5_lag_get_slave_port(struct mlx5_c
+@@ -1976,6 +2068,9 @@ u8 mlx5_lag_get_slave_port(struct mlx5_core_dev *dev,
  	unsigned long flags;
  	u8 port = 0;
  	int i;
@@ -331,7 +333,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	spin_lock_irqsave(&lag_lock, flags);
  	ldev = mlx5_lag_dev(dev);
-@@ -2034,6 +2129,9 @@ struct mlx5_core_dev *mlx5_lag_get_next_
+@@ -2015,6 +2110,9 @@ struct mlx5_core_dev *mlx5_lag_get_next_peer_mdev(struct mlx5_core_dev *dev, int
  	struct mlx5_lag *ldev;
  	unsigned long flags;
  	int idx;
@@ -341,7 +343,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lag/lag.c
  
  	spin_lock_irqsave(&lag_lock, flags);
  	ldev = mlx5_lag_dev(dev);
-@@ -2072,6 +2170,9 @@ int mlx5_lag_query_cong_counters(struct
+@@ -2053,6 +2151,9 @@ int mlx5_lag_query_cong_counters(struct mlx5_core_dev *dev,
  	unsigned long flags;
  	int num_ports;
  	void *out;

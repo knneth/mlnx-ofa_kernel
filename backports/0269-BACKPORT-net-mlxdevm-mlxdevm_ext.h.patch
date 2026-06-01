@@ -6,9 +6,11 @@ Change-Id: Id60923ebd27cebaae0392c1fe4a8f2f567239065
  include/net/mlxdevm.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/include/net/mlxdevm.h b/include/net/mlxdevm.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/net/mlxdevm.h
 +++ b/include/net/mlxdevm.h
-@@ -697,6 +697,9 @@ struct mlxdevm_flash_update_params {
+@@ -695,6 +695,9 @@ struct mlxdevm_flash_update_params {
  	const struct firmware *fw;
  	const char *component;
  	u32 overwrite_mask;

@@ -40,22 +40,26 @@
 %global MADEYE %(if ( echo %{configure_options} | grep "with-madeye-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 
 %global WINDRIVER %(if (grep -qiE "Wind River" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-%global POWERKVM %(if (grep -qiE "powerkvm" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 %global BLUENIX %(if (grep -qiE "Bluenix" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
-%global XENSERVER65 %(if (grep -qiE "XenServer.*6\.5" /etc/issue /etc/*release* 2>/dev/null); then echo -n '1'; else echo -n '0'; fi)
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 %global KMOD_PREAMBLE "%{_vendor}" != "openEuler"
 
+%if 0%{?suse_version} >= 1600
+%global modules_dir /usr/lib/modules
+%else
+%global modules_dir /lib/modules
+%endif
+
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
 # This seems to break only this package and not other kernel packages.
-%if "%{_vendor}" == "azl" || (0%{?rhel} >= 10) || (0%{?amzn} == 2023)
+%if "%{_vendor}" == "azl" || (0%{?rhel} >= 10) || (0%{?amzn} == 2023) || (0%{?tencentos})
 %global _hardened_cflags %{nil}
 %endif
 
 # WA: Centos Stream 10 and amazonlinux 2023 kernel doesn't support PIC mode, so we removed the following flags
-%if (0%{?rhel} >= 10) || (0%{?amzn} == 2023)
+%if (0%{?rhel} >= 10) || (0%{?amzn} == 2023) || (0%{?tencentos})
 %global _hardening_gcc_ldflags %{nil}
 %global _gcc_lto_cflags %{nil}
 %global _legacy_options -fcommon -fno-exceptions
@@ -83,7 +87,7 @@
 %global kernel_version %{KVERSION}
 %global krelver %(echo -n %{KVERSION} | sed -e 's/-/_/g')
 # take path to kernel sources if provided, otherwise look in default location (for non KMP rpms).
-%{!?K_SRC: %global K_SRC /lib/modules/%{KVERSION}/build}
+%{!?K_SRC: %global K_SRC %{modules_dir}/%{KVERSION}/build}
 
 # Select packages to build
 
@@ -92,16 +96,17 @@
 %global build_oiscsi %(if ( echo %{configure_options} | grep "with-iscsi-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 %global build_mlx5 %(if ( echo %{configure_options} | grep "with-mlx5-mod" > /dev/null ); then echo -n '1'; else echo -n '0'; fi)
 
-%{!?LIB_MOD_DIR: %global LIB_MOD_DIR /lib/modules/%{KVERSION}/updates}
+%{!?LIB_MOD_DIR: %global LIB_MOD_DIR %{modules_dir}/%{KVERSION}/updates}
 
 %{!?IB_CONF_DIR: %global IB_CONF_DIR /etc/infiniband}
 
-%{!?KERNEL_SOURCES: %global KERNEL_SOURCES /lib/modules/%{KVERSION}/source}
+%{!?KERNEL_SOURCES: %global KERNEL_SOURCES %{modules_dir}/%{KVERSION}/source}
 
 %{!?_name: %global _name mlnx-ofa_kernel}
-%{!?_version: %global _version 26.01}
-%{!?_release: %global _release OFED.26.01.1.0.0.1}
+%{!?_version: %global _version 26.04}
+%{!?_release: %global _release OFED.26.04.0.8.5.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
+%global dkms_version %{version}-%{_release}
 
 %global utils_pname %{_name}
 %global devel_pname %{_name}-devel
@@ -140,6 +145,7 @@ Requires: lsof
 # For the symlink /etc/init.d -> /etc/rc.d/init.d that conflicts with openibd
 Requires: chkconfig
 %endif
+BuildRequires: automake
 %if "%{KMP}" == "1"
 BuildRequires: %kernel_module_package_buildreqs
 BuildRequires: /usr/bin/perl
@@ -152,7 +158,7 @@ Requires: systemd-sysvcompat
 %description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.01-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
 
 
 %if %{with building_kmods}
@@ -160,9 +166,9 @@ The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-o
 %if "%{KMP}" == "1"
 %global kernel_release() $(make -s -C %{1} kernelrelease M=$PWD)
 # prep file list for kmp rpm
-%(cat > %{_builddir}/kmp.files << EOF
+%(mkdir -p %{_builddir}; cat > %{_builddir}/kmp.files << EOF
 %defattr(644,root,root,755)
-/lib/modules/%2-%1
+%{modules_dir}/%2-%1
 %if %{IS_RHEL_VENDOR}
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
 %endif
@@ -198,7 +204,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.01-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -229,7 +235,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.01-1.0.0.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
 %endif # end building_kmods
 
 %package source
@@ -254,7 +260,7 @@ Obsoletes: kmod-mlnx-ofa_kernel < %{version}-%{release}, mlnx-ofa_kernel-modules
 %endif
 Provides:  mlnx-ofa_kernel-devel = %{version}-%{release}
 Obsoletes: mlnx-ofa_kernel-devel < %{version}-%{release}
-Requires: %{name}-source = %{version}
+Requires: %{name}-source = %{version}-%{release}
 Requires: dkms >= 3.2
 %description dkms
 DKMS package for %{name}
@@ -275,7 +281,7 @@ kernels at install time.
 %if "%{WITH_MOD_SIGN}" == "1"
 # call module sign script
 %global __modsign_install_post \
-    %{_builddir}/$NAME-$VERSION/source/ofed_scripts/tools/sign-modules %{buildroot}/lib/modules/ %{kernel_source default} || exit 1 \
+    %{_builddir}/$NAME-$VERSION/source/ofed_scripts/tools/sign-modules %{buildroot}%{modules_dir} %{kernel_source default} || exit 1 \
 %{nil}
 
 %global __debug_package 1
@@ -294,11 +300,9 @@ kernels at install time.
 %endif # end of setup module sign scripts
 #
 %if "%{_vendor}" == "suse"
+%if %{suse_version} < 1600
 %debug_package
 %endif
-
-%if %{IS_RHEL_VENDOR}
-%global __find_requires %{nil}
 %endif
 
 # set modules dir
@@ -322,6 +326,7 @@ kernels at install time.
 %prep
 %setup -n %{_name}-%{_version}
 ofed_scripts/ofed_patch.sh
+if [ ! -f compat/configure ]; then (cd compat && ./autogen.sh); fi
 set -- *
 mkdir source
 mv "$@" source/
@@ -336,7 +341,7 @@ export CONF_OPTIONS="%{configure_options}"
 for flavor in %flavors_to_build; do
 	export KSRC=%{kernel_source $flavor}
 	export KVERSION=%{kernel_release $KSRC}
-	export LIB_MOD_DIR=/lib/modules/$KVERSION/$INSTALL_MOD_DIR
+	export LIB_MOD_DIR=%{modules_dir}/$KVERSION/$INSTALL_MOD_DIR
 	rm -rf obj/$flavor
 	cp -a source obj/$flavor
 	cd $PWD/obj/$flavor
@@ -368,6 +373,9 @@ for flavor in %flavors_to_build; do
 	cp -ar include/ %{_builddir}/src/$NAME/$flavor
 	cp -ar config* %{_builddir}/src/$NAME/$flavor
 	cp -ar compat*  %{_builddir}/src/$NAME/$flavor
+	find %{_builddir}/src/$NAME/$flavor -name \*.o -o -name \*.ko | xargs -r rm -f
+	rm -rf %{_builddir}/src/$NAME/$flavor/compat/modtest
+
 	cp -ar ofed_scripts %{_builddir}/src/$NAME/$flavor
 
 	modsyms=`find . -name Module.symvers -o -name Modules.symvers`
@@ -382,7 +390,7 @@ for flavor in %flavors_to_build; do
 	fi
 	cp -a %{_builddir}/src/$NAME/$flavor %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/$KVERSION
 	# Cleanup unnecessary kernel-generated module dependency files.
-	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+	find $INSTALL_MOD_PATH%{modules_dir} -iname 'modules.*' -exec rm {} \;
 	cd -
 done
 
@@ -416,9 +424,11 @@ mkdir -p %{buildroot}%{_datadir}/dkms/modules_to_force_install
 echo "%{name}" > %{buildroot}%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 # copy sources
-mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}
-cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}/source
-ln -s ofa_kernel-%{version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{version}
+mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}
+cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}/source
+ln -s ofa_kernel-%{dkms_version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{dkms_version}
+sed -i -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
+	%{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}/source/dkms.conf
 # Fix path of BACKPORT_INCLUDES
 sed -i -e "s@=-I.*backport_includes@=-I/usr/src/ofa_kernel-$VERSION/backport_includes@" %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}/configure.mk.kernel || true
 rm -rf %{_builddir}/src
@@ -537,19 +547,6 @@ if [ ! -e "/.dockerenv" ] && ! (grep -q docker /proc/self/cgroup 2>/dev/null); t
 	fi
 fi
 
-# Make IPoIB interfaces be unmanaged on XenServer
-if (grep -qi xenserver /etc/issue /etc/*-release 2>/dev/null); then
-	IPOIB_PNUM=$(lspci -d 15b3: 2>/dev/null | wc -l 2>/dev/null)
-	IPOIB_PNUM=$(($IPOIB_PNUM * 2))
-	for i in $(seq 1 $IPOIB_PNUM)
-	do
-		uuid=$(xe pif-list 2>/dev/null | grep -B2 ib${i} | grep uuid | cut -d : -f 2 | sed -e 's/ //g')
-		if [ "X${uuid}" != "X" ]; then
-			xe pif-forget uuid=${uuid} >/dev/null 2>&1 || true
-		fi
-	done
-fi
-
 fi # 1 : closed
 # END of post
 
@@ -628,13 +625,20 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ -L "${ver_dir}/source" ] || continue
 	old_ver="${ver_dir%/}"
 	old_ver="${old_ver##*/}"
-	[ "${old_ver}" != "%{version}" ] || continue
-	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
+	[ "${old_ver}" != "%{dkms_version}" ] || continue
+	rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms install %{name}/%{version}
+%if 0%{?oraclelinux}
+	toolset=$(awk 'match($0,/gcc \(GCC\) ([0-9]+)\./,a){print "gcc-toolset-" a[1]}' /proc/version)
+	if [ -n "$toolset" ]; then
+		echo "build_environment=/opt/rh/${toolset}/enable" > /etc/dkms/framework.conf.d/build_environment.conf
+	fi
+%endif
+/usr/sbin/dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
+/usr/sbin/dkms install %{name}/%{dkms_version}
 
 %preun dkms
-/usr/sbin/dkms remove  %{name}/%{version} --all || :
+/usr/sbin/dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null || :
 
 %postun dkms
 if [ $1 -eq 0 ]; then
@@ -686,7 +690,6 @@ done
 %_datadir/mlnx_ofed/mod_load_funcs
 %config(noreplace) /etc/modprobe.d/mlnx.conf
 %config(noreplace) /etc/modprobe.d/mlnx-bf.conf
-%{_sbindir}/*
 /lib/udev/rules.d/83-mlnx-sf-name.rules
 /lib/udev/rules.d/90-ib.rules
 /bin/mlnx_interface_mgr.sh
@@ -704,7 +707,7 @@ done
 %if %{with building_kmods}
 %if "%{KMP}" != "1"
 %files -n %{non_kmp_pname}
-/lib/modules/%{KVERSION}/%{install_mod_dir}/
+%{modules_dir}/%{KVERSION}/%{install_mod_dir}/
 %if %{IS_RHEL_VENDOR}
 %if ! 0%{?fedora}
 %config(noreplace) %{_sysconfdir}/depmod.d/zz01-%{_name}-*.conf
@@ -722,9 +725,9 @@ done
 
 %files source
 %defattr(-,root,root,-)
-%dir %{_prefix}/src/ofa_kernel-%{version}
-%{_prefix}/src/ofa_kernel-%version/source
-%{_prefix}/src/mlnx-ofa_kernel-%version
+%dir %{_prefix}/src/ofa_kernel-%{dkms_version}
+%{_prefix}/src/ofa_kernel-%{dkms_version}/source
+%{_prefix}/src/mlnx-ofa_kernel-%{dkms_version}
 
 %files dkms
 # None - all files are in the package -source

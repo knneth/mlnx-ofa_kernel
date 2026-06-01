@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
 
 ---
- drivers/nvme/target/nvmet.h | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
+ drivers/nvme/target/nvmet.h | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
 
+diff --git a/drivers/nvme/target/nvmet.h b/drivers/nvme/target/nvmet.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/nvmet.h
 +++ b/drivers/nvme/target/nvmet.h
 @@ -23,6 +23,16 @@
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
  	struct block_device	*bdev;
  	struct pci_dev		*pdev;
  	struct file		*file;
-@@ -632,7 +646,9 @@ u32 nvmet_connect_cmd_data_len(struct nv
+@@ -633,7 +647,9 @@ u32 nvmet_connect_cmd_data_len(struct nvmet_req *req);
  void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
  u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
  u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
@@ -46,7 +48,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
  u32 nvmet_admin_cmd_data_len(struct nvmet_req *req);
  u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
  u32 nvmet_discovery_cmd_data_len(struct nvmet_req *req);
-@@ -806,9 +822,11 @@ void nvmet_file_ns_revalidate(struct nvm
+@@ -808,9 +824,11 @@ void nvmet_file_ns_revalidate(struct nvmet_ns *ns);
  bool nvmet_ns_revalidate(struct nvmet_ns *ns);
  u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts);
  
@@ -58,3 +60,32 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/nvmet.h
  void nvmet_bdev_execute_zone_mgmt_recv(struct nvmet_req *req);
  void nvmet_bdev_execute_zone_mgmt_send(struct nvmet_req *req);
  void nvmet_bdev_execute_zone_append(struct nvmet_req *req);
+@@ -850,6 +868,7 @@ static inline bool nvmet_is_pci_ctrl(struct nvmet_ctrl *ctrl)
+ 	return ctrl->port->disc_addr.trtype == NVMF_TRTYPE_PCI;
+ }
+ 
++#ifdef HAVE_NVME_TARGET_MDTS
+ /* Limit MDTS according to port config or transport capability */
+ static inline u8 nvmet_ctrl_mdts(struct nvmet_req *req)
+ {
+@@ -862,6 +881,7 @@ static inline u8 nvmet_ctrl_mdts(struct nvmet_req *req)
+ 	       return min_not_zero(ctrl->ops->get_mdts(ctrl), mdts);
+        return mdts;
+ }
++#endif
+ 
+ #ifdef CONFIG_NVME_TARGET_PASSTHRU
+ void nvmet_passthru_subsys_free(struct nvmet_subsys *subsys);
+@@ -1017,7 +1037,12 @@ static inline bool nvmet_has_auth(struct nvmet_ctrl *ctrl, struct nvmet_sq *sq)
+ int nvmet_auth_ctrl_exponential(struct nvmet_req *req,
+ 				u8 *buf, int buf_size);
+ int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
++#ifdef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
++/* Newer kernels (7.1+): pkey is now const */
++			    const u8 *buf, int buf_size);
++#else
+ 			    u8 *buf, int buf_size);
++#endif
+ void nvmet_auth_insert_psk(struct nvmet_sq *sq);
+ #else
+ static inline u8 nvmet_setup_auth(struct nvmet_ctrl *ctrl,

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en_accel/ktls.h        | 23 +++++++++++++++----
  1 file changed, 19 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 @@ -13,10 +13,16 @@
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT:
  
  static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
  {
-@@ -53,12 +59,19 @@ static inline bool mlx5e_ktls_type_check
+@@ -53,12 +59,19 @@ static inline bool mlx5e_ktls_type_check(struct mlx5_core_dev *mdev,
  void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv);
  int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
  void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5e_tls_debugfs debugfs;
  };
  
-@@ -103,16 +118,16 @@ static inline void mlx5e_ktls_build_netd
+@@ -103,16 +118,16 @@ static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
  {
  }
  

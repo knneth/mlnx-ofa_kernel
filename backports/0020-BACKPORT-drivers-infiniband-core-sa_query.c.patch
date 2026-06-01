@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
  drivers/infiniband/core/sa_query.c | 9 ++++++---
  1 file changed, 6 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/sa_query.c b/drivers/infiniband/core/sa_query.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/sa_query.c
 +++ b/drivers/infiniband/core/sa_query.c
-@@ -770,7 +770,11 @@ static void ib_nl_set_path_rec_attrs(str
+@@ -770,7 +770,11 @@ static void ib_nl_set_path_rec_attrs(struct sk_buff *skb,
  	query->mad_buf->context[1] = NULL;
  
  	/* Construct the family header first */
@@ -20,7 +22,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/sa_query.c
  	strscpy_pad(header->device_name,
  		    dev_name(&query->port->agent->device->dev),
  		    LS_DEVICE_NAME_MAX);
-@@ -1059,9 +1063,8 @@ int ib_nl_handle_set_timeout(struct sk_b
+@@ -1059,9 +1063,8 @@ int ib_nl_handle_set_timeout(struct sk_buff *skb,
  	int ret;
  
  	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||

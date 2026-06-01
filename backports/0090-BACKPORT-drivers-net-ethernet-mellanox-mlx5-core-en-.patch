@@ -3,46 +3,20 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 14 +++++++++++++-
- 1 file changed, 13 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/sysfs.c
-@@ -279,11 +279,17 @@ static const struct sysfs_ops rep_sysfs_
- 	.store  = rep_attr_store
- };
- 
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- ATTRIBUTE_GROUPS(rep);
-+#endif
- 
- static struct kobj_type rep_type = {
- 	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_groups
-+#else
-+	.default_attrs = rep_attrs
-+#endif
- };
- 
- static struct attribute *rep_paging_attrs[] = {
-@@ -291,12 +297,18 @@ static struct attribute *rep_paging_attr
+@@ -291,8 +291,8 @@ static struct attribute *rep_paging_attrs[] = {
  	&attr_num_pages.attr,
  	NULL,
  };
 -ATTRIBUTE_GROUPS(rep_paging);
  
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
 +ATTRIBUTE_GROUPS(rep_paging);
-+#endif
  
  static struct kobj_type rep_paging = {
  	.sysfs_ops     = &rep_sysfs_ops,
-+#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
- 	.default_groups = rep_paging_groups
-+#else
-+	.default_attrs = rep_paging_attrs
-+#endif
- };
- 
- void mlx5_rep_sysfs_init(struct mlx5e_rep_priv *rpriv)

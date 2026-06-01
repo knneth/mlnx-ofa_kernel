@@ -6,9 +6,11 @@ Change-Id: If5fa352d3fb49a2b534fc63baab8a30d5dfd5a2b
  drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
-@@ -227,6 +227,7 @@ int mlx5_mpfs_enable(struct mlx5_core_de
+@@ -227,6 +227,7 @@ int mlx5_mpfs_enable(struct mlx5_core_dev *dev)
  	struct l2table_node *l2addr;
  	struct hlist_node *n;
  	int err = 0;
@@ -16,7 +18,7 @@ Change-Id: If5fa352d3fb49a2b534fc63baab8a30d5dfd5a2b
  
  	if (!mpfs)
  		return -ENODEV;
-@@ -268,6 +269,7 @@ void mlx5_mpfs_disable(struct mlx5_core_
+@@ -268,6 +269,7 @@ void mlx5_mpfs_disable(struct mlx5_core_dev *dev)
  {
  	struct mlx5_mpfs *mpfs = dev->priv.mpfs;
  	struct l2table_node *l2addr;

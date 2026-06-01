@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+CURRENT_KERNEL=$(uname -r)
+# In containers uname -r is the host kernel, so check for the parent directory
+# first, in order to avoid warnings in containers.
+if [ -d "/lib/modules/$CURRENT_KERNEL" ] &&
+   [ ! -e "/lib/modules/$CURRENT_KERNEL/build/include" ]; then
+    cat >&2 <<EOF
+
+WARNING: linux-headers for the currently running kernel ($CURRENT_KERNEL)
+         are not installed. DKMS modules were NOT built for this kernel.
+
+         The OFED kernel drivers will NOT be available until you either:
+           1. Install the matching linux-headers for $CURRENT_KERNEL
+              and then rebuild with:
+                dkms autoinstall
+           2. Or reboot into a kernel that has DKMS modules installed
+              (run 'dkms status' to see which).
+
+EOF
+fi
+
+exit 0

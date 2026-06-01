@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_fs.c
-@@ -2768,6 +2768,7 @@ int mlx5e_accel_ipsec_fs_init(struct mlx
+@@ -2768,6 +2768,7 @@ int mlx5e_accel_ipsec_fs_init(struct mlx5e_ipsec *ipsec,
  	struct mlx5_flow_namespace *ns, *ns_esw;
  	int err = -ENOMEM;
  
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  	ns = mlx5_get_flow_namespace(ipsec->mdev,
  				     MLX5_FLOW_NAMESPACE_EGRESS_IPSEC);
  	if (!ns)
-@@ -2850,6 +2851,7 @@ void mlx5e_accel_ipsec_fs_modify(struct
+@@ -2850,6 +2851,7 @@ void mlx5e_accel_ipsec_fs_modify(struct mlx5e_ipsec_sa_entry *sa_entry)
  	memcpy(sa_entry, &sa_entry_shadow, sizeof(*sa_entry));
  }
  
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT:
  bool mlx5e_ipsec_fs_tunnel_allowed(struct mlx5e_ipsec_sa_entry *sa_entry)
  {
  	struct mlx5e_ipsec *ipsec = sa_entry->ipsec;
-@@ -2869,6 +2871,7 @@ bool mlx5e_ipsec_fs_tunnel_allowed(struc
+@@ -2869,6 +2871,7 @@ bool mlx5e_ipsec_fs_tunnel_allowed(struct mlx5e_ipsec_sa_entry *sa_entry)
  
  	return mlx5_eswitch_block_encap(ipsec->mdev, from_fdb);
  }

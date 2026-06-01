@@ -3,12 +3,24 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
 
 Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
 ---
- drivers/nvme/target/core.c | 16 ++++++++++++++--
- 1 file changed, 14 insertions(+), 2 deletions(-)
+ drivers/nvme/target/core.c | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/target/core.c b/drivers/nvme/target/core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/core.c
 +++ b/drivers/nvme/target/core.c
-@@ -678,7 +678,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+@@ -7,6 +7,9 @@
+ #undef pr_fmt
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#ifdef HAVE_LINUX_HEX_H
++#include <linux/hex.h>
++#endif
+ #include <linux/module.h>
+ #include <linux/random.h>
+ #include <linux/rculist.h>
+@@ -678,7 +681,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns *ns)
  		nvmet_bdev_ns_revalidate(ns);
  	else
  		nvmet_file_ns_revalidate(ns);
@@ -16,7 +28,7 @@ Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
  	return oldsize != ns->size;
  }
  
-@@ -740,7 +739,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+@@ -740,7 +742,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
  
  	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
  		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
@@ -25,7 +37,7 @@ Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
  	if (subsys->offloadble) {
  		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
  		if (!ns->pdev) {
-@@ -926,10 +925,20 @@ static void nvmet_update_sq_head(struct
+@@ -926,10 +928,20 @@ static void nvmet_update_sq_head(struct nvmet_req *req)
  	if (req->sq->size) {
  		u32 old_sqhd, new_sqhd;
  
@@ -46,7 +58,7 @@ Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
  	}
  	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
  }
-@@ -1317,9 +1326,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1317,9 +1329,11 @@ static u16 nvmet_parse_io_cmd(struct nvmet_req *req)
  			ret = nvmet_bdev_parse_io_cmd(req);
  		break;
  	case NVME_CSI_ZNS:
@@ -58,7 +70,7 @@ Change-Id: I52cb6c4af6c6299daa4cc9f7e58878515570ceca
  			ret = NVME_SC_INVALID_IO_CMD_SET;
  		break;
  	default:
-@@ -1914,6 +1925,7 @@ init_pr_fail:
+@@ -1914,6 +1928,7 @@ init_pr_fail:
  	mutex_unlock(&subsys->lock);
  	nvmet_stop_keep_alive_timer(ctrl);
  	ida_free(&cntlid_ida, ctrl->cntlid);

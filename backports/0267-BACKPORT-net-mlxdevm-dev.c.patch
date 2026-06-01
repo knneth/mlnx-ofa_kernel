@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  net/mlxdevm/dev.c | 40 ++++++++++++++++++++++++++++++++++++++++
  1 file changed, 40 insertions(+)
 
+diff --git a/net/mlxdevm/dev.c b/net/mlxdevm/dev.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/dev.c
 +++ b/net/mlxdevm/dev.c
-@@ -217,7 +217,9 @@ static void mlxdevm_notify(struct mlxdev
+@@ -217,7 +217,9 @@ static void mlxdevm_notify(struct mlxdevm *mlxdevm, enum mlxdevm_command cmd)
  		return;
  	}
  
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  }
  
  int mlxdevm_nl_get_doit(struct sk_buff *skb, struct genl_info *info)
-@@ -381,6 +383,24 @@ void devlink_remote_reload_actions_perfo
+@@ -381,6 +383,24 @@ void devlink_remote_reload_actions_performed(struct devlink *devlink,
  EXPORT_SYMBOL_GPL(devlink_remote_reload_actions_performed);
  #endif
  
@@ -42,7 +44,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  static struct net *mlxdevm_netns_get(struct sk_buff *skb,
  				     struct genl_info *info)
  {
-@@ -399,7 +419,11 @@ static struct net *mlxdevm_netns_get(str
+@@ -399,7 +419,11 @@ static struct net *mlxdevm_netns_get(struct sk_buff *skb,
  	} else if (netns_fd_attr) {
  		net = get_net_ns_by_fd(nla_get_u32(netns_fd_attr));
  	} else if (netns_id_attr) {
@@ -54,7 +56,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  				       nla_get_u32(netns_id_attr));
  		if (!net)
  			net = ERR_PTR(-EINVAL);
-@@ -537,8 +561,15 @@ int mlxdevm_nl_reload_doit(struct sk_buf
+@@ -537,8 +561,15 @@ int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
  		return err;
  	}
  
@@ -70,7 +72,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  
  	if (!mlxdevm_reload_action_is_supported(mlxdevm, action)) {
  		NL_SET_ERR_MSG(info->extack, "Requested reload action is not supported by the driver");
-@@ -1020,7 +1051,9 @@ static void __mlxdevm_flash_update_notif
+@@ -1020,7 +1051,9 @@ static void __mlxdevm_flash_update_notify(struct mlxdevm *mlxdevm,
  	if (err)
  		goto out_free_msg;
  
@@ -80,7 +82,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  	return;
  
  out_free_msg:
-@@ -1153,7 +1186,11 @@ int mlxdevm_nl_flash_update_doit(struct
+@@ -1153,7 +1186,11 @@ int mlxdevm_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
  	if (!mlxdevm->ops->flash_update)
  		return -EOPNOTSUPP;
  
@@ -92,7 +94,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/dev.c
  		return -EINVAL;
  
  	ret = mlxdevm_flash_component_get(mlxdevm,
-@@ -1179,6 +1216,9 @@ int mlxdevm_nl_flash_update_doit(struct
+@@ -1179,6 +1216,9 @@ int mlxdevm_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
  
  	nla_file_name = info->attrs[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME];
  	file_name = nla_data(nla_file_name);

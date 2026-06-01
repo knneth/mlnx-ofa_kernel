@@ -2,12 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 ---
- drivers/fwctl/mlx5/main.c | 7 ++++++-
- 1 file changed, 6 insertions(+), 1 deletion(-)
+ drivers/fwctl/mlx5/main.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
+diff --git a/drivers/fwctl/mlx5/main.c b/drivers/fwctl/mlx5/main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
-@@ -382,6 +382,7 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -382,6 +382,7 @@ static int mlx5ctl_probe(struct auxiliary_device *adev,
  	if (ret)
  		return ret;
  	auxiliary_set_drvdata(adev, no_free_ptr(mcdev));
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
  	return 0;
  }
  
-@@ -397,7 +398,12 @@ static const struct auxiliary_device_id
+@@ -397,7 +398,12 @@ static const struct auxiliary_device_id mlx5ctl_id_table[] = {
  	{.name = MLX5_ADEV_NAME ".fwctl",},
  	{}
  };

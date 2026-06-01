@@ -3,16 +3,17 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
 
 Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
 ---
- .../net/ethernet/mellanox/mlx5/core/en/trap.c | 57 +++++++++++++++++++
- 1 file changed, 57 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en/trap.c | 55 +++++++++++++++++++
+ 1 file changed, 55 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
-@@ -1,6 +1,15 @@
+@@ -1,6 +1,14 @@
  // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
  /* Copyright (c) 2020 Mellanox Technologies */
  
-+#ifdef HAVE_DEVLINK_TRAP_SUPPORT
 +
 +#ifdef HAVE_NET_PAGE_POOL_OLD_H
 +#include <net/page_pool.h>
@@ -24,7 +25,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  #include "en/txrx.h"
  #include "en/params.h"
  #include "en/trap.h"
-@@ -52,7 +61,9 @@ static void mlx5e_init_trap_rq(struct ml
+@@ -52,7 +60,9 @@ static void mlx5e_init_trap_rq(struct mlx5e_trap *t, struct mlx5e_params *params
  	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
  	rq->stats        = &priv->trap_stats.rq;
  	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
@@ -34,7 +35,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	mlx5e_rq_set_trap_handlers(rq, params);
  }
  
-@@ -150,7 +161,15 @@ static struct mlx5e_trap *mlx5e_open_tra
+@@ -150,7 +160,15 @@ static struct mlx5e_trap *mlx5e_open_trap(struct mlx5e_priv *priv)
  	t->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey);
  	t->stats    = &priv->trap_stats.ch;
  
@@ -50,7 +51,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  
  	err = mlx5e_open_trap_rq(priv, t);
  	if (unlikely(err))
-@@ -165,7 +184,13 @@ static struct mlx5e_trap *mlx5e_open_tra
+@@ -165,7 +183,13 @@ static struct mlx5e_trap *mlx5e_open_trap(struct mlx5e_priv *priv)
  err_close_trap_rq:
  	mlx5e_close_trap_rq(&t->rq);
  err_napi_del:
@@ -64,7 +65,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	kvfree(t);
  	return ERR_PTR(err);
  }
-@@ -174,13 +199,25 @@ void mlx5e_close_trap(struct mlx5e_trap
+@@ -174,13 +198,25 @@ void mlx5e_close_trap(struct mlx5e_trap *trap)
  {
  	mlx5e_tir_destroy(&trap->tir);
  	mlx5e_close_trap_rq(&trap->rq);
@@ -90,7 +91,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	mlx5e_activate_rq(&trap->rq);
  	mlx5e_trigger_napi_sched(&trap->napi);
  }
-@@ -190,7 +227,13 @@ void mlx5e_deactivate_trap(struct mlx5e_
+@@ -190,7 +226,13 @@ void mlx5e_deactivate_trap(struct mlx5e_priv *priv)
  	struct mlx5e_trap *trap = priv->en_trap;
  
  	mlx5e_deactivate_rq(&trap->rq);
@@ -104,7 +105,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  }
  
  static struct mlx5e_trap *mlx5e_add_trap_queue(struct mlx5e_priv *priv)
-@@ -237,11 +280,13 @@ static int mlx5e_handle_action_trap(stru
+@@ -237,11 +279,13 @@ static int mlx5e_handle_action_trap(struct mlx5e_priv *priv, int trap_id)
  		if (err)
  			goto err_out;
  		break;
@@ -118,7 +119,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	default:
  		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
  		err = -EINVAL;
-@@ -261,9 +306,11 @@ static int mlx5e_handle_action_drop(stru
+@@ -261,9 +305,11 @@ static int mlx5e_handle_action_drop(struct mlx5e_priv *priv, int trap_id)
  	case DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER:
  		mlx5e_remove_vlan_trap(priv->fs);
  		break;
@@ -130,7 +131,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	default:
  		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
  		return -EINVAL;
-@@ -286,7 +333,10 @@ int mlx5e_handle_trap_event(struct mlx5e
+@@ -286,7 +332,10 @@ int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))
  		return 0;
  
@@ -141,7 +142,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	switch (trap_ctx->action) {
  	case DEVLINK_TRAP_ACTION_TRAP:
  		err = mlx5e_handle_action_trap(priv, trap_ctx->id);
-@@ -299,7 +349,10 @@ int mlx5e_handle_trap_event(struct mlx5e
+@@ -299,7 +348,10 @@ int mlx5e_handle_trap_event(struct mlx5e_priv *priv, struct mlx5_trap_ctx *trap_
  			    trap_ctx->action);
  		err = -EINVAL;
  	}
@@ -152,7 +153,7 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  	return err;
  }
  
-@@ -319,7 +372,9 @@ static int mlx5e_apply_trap(struct mlx5e
+@@ -319,7 +371,9 @@ static int mlx5e_apply_trap(struct mlx5e_priv *priv, int trap_id, bool enable)
  
  static const int mlx5e_traps_arr[] = {
  	DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
@@ -162,9 +163,8 @@ Change-Id: I83f18354c7714eb35bb80739373cc03a1ebb7f75
  };
  
  int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
-@@ -334,3 +389,5 @@ int mlx5e_apply_traps(struct mlx5e_priv
+@@ -334,3 +388,4 @@ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
  	}
  	return 0;
  }
 +
-+#endif /* HAVE_DEVLINK_TRAP_SUPPORT */

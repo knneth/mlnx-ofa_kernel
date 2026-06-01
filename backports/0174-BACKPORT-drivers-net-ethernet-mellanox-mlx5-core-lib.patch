@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
  drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c | 1 +
  1 file changed, 1 insertion(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/gid.c
-@@ -45,6 +45,7 @@ void mlx5_init_reserved_gids(struct mlx5
+@@ -45,6 +45,7 @@ void mlx5_init_reserved_gids(struct mlx5_core_dev *dev)
  	dev->roce.reserved_gids.count = 0;
  }
  

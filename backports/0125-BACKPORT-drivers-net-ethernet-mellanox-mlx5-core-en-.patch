@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  .../ethernet/mellanox/mlx5/core/en/xsk/rx.c   | 381 +++++++++++++++++-
  1 file changed, 370 insertions(+), 11 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 @@ -1,13 +1,26 @@
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  static struct mlx5e_xdp_buff *xsk_buff_to_mxbuf(struct xdp_buff *xdp)
  {
  	/* mlx5e_xdp_buff shares its layout with xdp_buff_xsk
-@@ -15,27 +28,125 @@ static struct mlx5e_xdp_buff *xsk_buff_t
+@@ -15,27 +28,125 @@ static struct mlx5e_xdp_buff *xsk_buff_to_mxbuf(struct xdp_buff *xdp)
  	 */
  	return (struct mlx5e_xdp_buff *)xdp;
  }
@@ -161,7 +163,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  			goto err_reuse_batch;
  	}
  
-@@ -45,31 +156,68 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -45,31 +156,68 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  
  	if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_ALIGNED)) {
  		for (i = 0; i < batch; i++) {
@@ -233,7 +235,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  
  			umr_wqe->inline_ksms[i << 2] = (struct mlx5_ksm) {
  				.key = rq->mkey_be,
-@@ -87,7 +235,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -87,7 +235,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  				.key = rq->mkey_be,
  				.va = cpu_to_be64(rq->wqe_overflow.addr),
  			};
@@ -243,7 +245,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  		}
  	} else {
  		__be32 pad_size = cpu_to_be32((1 << rq->mpwqe.page_shift) -
-@@ -95,8 +245,19 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -95,8 +245,19 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  		__be32 frame_size = cpu_to_be32(rq->xsk_pool->chunk_size);
  
  		for (i = 0; i < batch; i++) {
@@ -264,7 +266,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  
  			umr_wqe->inline_klms[i << 1] = (struct mlx5_klm) {
  				.key = rq->mkey_be,
-@@ -108,7 +269,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -108,7 +269,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  				.va = cpu_to_be64(rq->wqe_overflow.addr),
  				.bcount = pad_size,
  			};
@@ -274,7 +276,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  		}
  	}
  
-@@ -142,12 +305,18 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -142,12 +305,18 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  
  err_reuse_batch:
  	while (--batch >= 0)
@@ -294,7 +296,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  
  int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
-@@ -164,13 +333,43 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e
+@@ -164,13 +333,43 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  		/* Assumes log_num_frags == 0. */
  		frag = &rq->wqe.frags[j];
  
@@ -308,6 +310,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 +#endif
  		if (unlikely(!*frag->xskp))
  			return i;
+-
+-		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
 +#else /* HAVE_PAGE_POOL_DEFRAG_PAGE */
 +#ifdef HAVE_XSK_BUFF_ALLOC
 +		frag->au->xsk =
@@ -320,8 +324,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 +			return i;
 +#endif
 +#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
- 
--		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
++
 +		addr =
 +#if defined(HAVE_PAGE_POOL_GET_DMA_ADDR) && defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
 +				xsk_buff_xdp_get_frame_dma(
@@ -340,7 +343,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  	}
  
  	return wqe_bulk;
-@@ -198,6 +397,25 @@ static struct sk_buff *mlx5e_xsk_constru
+@@ -198,6 +397,25 @@ static struct sk_buff *mlx5e_xsk_construct_skb(struct mlx5e_rq *rq, struct xdp_b
  	return skb;
  }
  
@@ -366,7 +369,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  						    struct mlx5e_mpw_info *wi,
  						    struct mlx5_cqe64 *cqe,
-@@ -205,7 +423,26 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+@@ -205,7 +423,26 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  						    u32 head_offset,
  						    u32 page_idx)
  {
@@ -393,7 +396,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  	struct bpf_prog *prog;
  
  	/* Check packet size. Note LRO doesn't use linear SKB */
-@@ -221,11 +458,48 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+@@ -221,11 +458,48 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  	 */
  	WARN_ON_ONCE(head_offset);
  
@@ -442,7 +445,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  
  	/* Possible flows:
  	 * - XDP_REDIRECT to XSKMAP:
-@@ -243,7 +517,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+@@ -243,7 +517,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  	 */
  
  	prog = rcu_dereference(rq->xdp_prog);
@@ -460,7 +463,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  		if (likely(__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)))
  			__set_bit(page_idx, wi->skip_release_bitmap); /* non-atomic */
  		return NULL; /* page/packet was consumed by XDP */
-@@ -252,7 +536,12 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+@@ -252,7 +536,12 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  	/* XDP_PASS: copy the data from the UMEM to a new SKB and reuse the
  	 * frame. On SKB allocation failure, NULL is returned.
  	 */
@@ -474,7 +477,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  }
  
  struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
-@@ -260,7 +549,23 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -260,7 +549,23 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  					      struct mlx5_cqe64 *cqe,
  					      u32 cqe_bcnt)
  {
@@ -498,7 +501,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  	struct bpf_prog *prog;
  
  	/* wi->offset is not used in this function, because xdp->data and the
-@@ -270,10 +575,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -270,10 +575,17 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  	 */
  	WARN_ON_ONCE(wi->offset);
  
@@ -516,7 +519,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
  	net_prefetch(mxbuf->xdp.data);
  
  	prog = rcu_dereference(rq->xdp_prog);
-@@ -282,10 +594,57 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -282,10 +594,57 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  			wi->flags |= BIT(MLX5E_WQE_FRAG_SKIP_RELEASE);
  		return NULL; /* page/packet was consumed by XDP */
  	}

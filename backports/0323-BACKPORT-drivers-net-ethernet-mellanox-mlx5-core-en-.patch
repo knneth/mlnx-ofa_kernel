@@ -6,9 +6,11 @@ Change-Id: I65a6b107228d92939964abef438e2040a38c16d3
  drivers/net/ethernet/mellanox/mlx5/core/en/rss.h | 12 +++++++++---
  1 file changed, 9 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.h b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rss.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rss.h
-@@ -59,10 +59,16 @@ void mlx5e_rss_disable(struct mlx5e_rss
+@@ -59,10 +59,16 @@ void mlx5e_rss_disable(struct mlx5e_rss *rss);
  
  int mlx5e_rss_packet_merge_set_param(struct mlx5e_rss *rss,
  				     struct mlx5e_packet_merge_param *pkt_merge_param);

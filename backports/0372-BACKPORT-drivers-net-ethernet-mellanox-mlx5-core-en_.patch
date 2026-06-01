@@ -7,6 +7,8 @@ Change-Id: I9db4f1655a8c66cf1d73e95d03579477f7d467c9
  .../net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.h   | 8 +++++---
  1 file changed, 5 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp_rxtx.h
 @@ -6,7 +6,9 @@
@@ -28,7 +30,7 @@ Change-Id: I9db4f1655a8c66cf1d73e95d03579477f7d467c9
  static inline bool mlx5e_psp_is_offload_state(struct mlx5e_accel_tx_psp_state *psp_state)
  {
  	return (psp_state->tailen != 0);
-@@ -88,7 +90,7 @@ static inline bool mlx5e_psp_is_rx_flow(
+@@ -88,7 +90,7 @@ static inline bool mlx5e_psp_is_rx_flow(struct mlx5_cqe64 *cqe)
  
  bool mlx5e_psp_offload_handle_rx_skb(struct net_device *netdev, struct sk_buff *skb,
  				     struct mlx5_cqe64 *cqe);
@@ -37,7 +39,7 @@ Change-Id: I9db4f1655a8c66cf1d73e95d03579477f7d467c9
  static inline bool mlx5e_psp_is_offload_state(struct mlx5e_accel_tx_psp_state *psp_state)
  {
  	return false;
-@@ -117,5 +119,5 @@ static inline bool mlx5e_psp_offload_han
+@@ -117,5 +119,5 @@ static inline bool mlx5e_psp_offload_handle_rx_skb(struct net_device *netdev,
  {
  	return false;
  }

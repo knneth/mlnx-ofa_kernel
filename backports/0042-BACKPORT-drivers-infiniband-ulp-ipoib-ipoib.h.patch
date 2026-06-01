@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib.h
  drivers/infiniband/ulp/ipoib/ipoib.h | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib.h b/drivers/infiniband/ulp/ipoib/ipoib.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib.h
 +++ b/drivers/infiniband/ulp/ipoib/ipoib.h
 @@ -42,6 +42,9 @@

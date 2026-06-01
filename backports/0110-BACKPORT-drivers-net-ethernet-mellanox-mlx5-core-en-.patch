@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 25 ++++++++++++++++++-
  1 file changed, 24 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
  
  	ct_state |= MLX5_CT_STATE_TRK_BIT;
  	ct_state |= ctinfo == IP_CT_NEW ? MLX5_CT_STATE_NEW_BIT : MLX5_CT_STATE_ESTABLISHED_BIT;
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
  					     ct_state,
  					     meta->ct_metadata.mark,
-@@ -1396,8 +1398,12 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+@@ -1396,8 +1398,12 @@ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
  	spin_unlock_bh(&ct_priv->ht_lock);
  
  	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  
  	mlx5_tc_ct_entry_put(entry);
  	return 0;
-@@ -1650,7 +1656,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_c
+@@ -1650,7 +1656,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_ct_priv *priv,
  	attr->ct_attr.zone = act->ct.zone;
  	if (!(act->ct.action & TCA_CT_ACT_CLEAR))
  		attr->ct_attr.nf_ft = act->ct.flow_table;
@@ -40,7 +42,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  
  	return 0;
  }
-@@ -2041,8 +2049,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+@@ -2041,8 +2049,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *ct_priv,
  	}
  	attr->ct_attr.ft = ft;
  
@@ -53,7 +55,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  	if (err) {
  		ct_dbg("Failed to get register mapping for act miss");
  		goto err_get_act_miss;
-@@ -2078,7 +2090,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+@@ -2078,7 +2090,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *ct_priv,
  	return 0;
  
  err_mapping:
@@ -77,7 +79,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  	mlx5_tc_ct_del_ft_cb(ct_priv, attr->ct_attr.ft);
  }
  
-@@ -2541,7 +2561,6 @@ static bool mlx5e_tc_ct_valid_used_disse
+@@ -2541,7 +2561,6 @@ static bool mlx5e_tc_ct_valid_used_dissector_keys(const u64 used_keys)
  	return (used_keys == ipv4_tcp || used_keys == ipv4_udp || used_keys == ipv6_tcp ||
  		used_keys == ipv6_udp || used_keys == ipv4_gre || used_keys == ipv6_gre);
  }
@@ -85,7 +87,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
  bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_rule *flow_rule)
  {
  	struct flow_match_ipv4_addrs ipv4_addrs;
-@@ -2552,7 +2571,11 @@ bool mlx5e_tc_ct_is_valid_flow_rule(cons
+@@ -2552,7 +2571,11 @@ bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_ru
  	struct flow_match_tcp tcp;
  
  	if (!mlx5e_tc_ct_valid_used_dissector_keys(flow_rule->match.dissector->used_keys)) {

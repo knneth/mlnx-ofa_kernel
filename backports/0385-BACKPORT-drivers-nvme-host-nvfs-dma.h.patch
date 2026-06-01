@@ -7,6 +7,8 @@ Signed-off-by: Israel Rukshin <israelr@nvidia.com>
  drivers/nvme/host/nvfs-dma.h | 184 +++++++++++++++++++++++++++++++++++
  1 file changed, 184 insertions(+)
 
+diff --git a/drivers/nvme/host/nvfs-dma.h b/drivers/nvme/host/nvfs-dma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/nvfs-dma.h
 +++ b/drivers/nvme/host/nvfs-dma.h
 @@ -15,6 +15,11 @@
@@ -21,7 +23,7 @@ Signed-off-by: Israel Rukshin <israelr@nvidia.com>
  /* Forward declarations for functions from pci.c that we need */
  static blk_status_t nvme_pci_setup_data_prp(struct request *req,
  		struct blk_dma_iter *iter);
-@@ -177,4 +182,183 @@ static inline blk_status_t nvme_nvfs_map
+@@ -177,4 +182,183 @@ static inline blk_status_t nvme_nvfs_map_data(struct request *req,
  	return ret;
  }
  
@@ -52,7 +54,7 @@ Signed-off-by: Israel Rukshin <israelr@nvidia.com>
 +	if (iod->sg && !is_pci_p2pdma_page(sg_page(iod->sg)) &&
 +#endif
 +		!blk_integrity_rq(req) &&
-+#if defined(HAVE_BLKDEV_DMA_MAP_BVEC) && defined(HAVE_BLKDEV_REQ_BVEC)
++#ifdef HAVE_BLKDEV_REQ_BVEC
 +		!iod->dma_len &&
 +#endif
 +		nvfs_ops != NULL) {
@@ -87,7 +89,7 @@ Signed-off-by: Israel Rukshin <israelr@nvidia.com>
 +	*is_nvfs_io = false;
 +
 +	if (!blk_integrity_rq(req) && nvfs_get_ops()) {
-+#if defined(HAVE_BLKDEV_DMA_MAP_BVEC) && defined(HAVE_BLKDEV_REQ_BVEC)
++#ifdef HAVE_BLKDEV_REQ_BVEC
 +		iod->dma_len = 0;
 +#endif
 +#ifdef HAVE_DMA_PCI_P2PDMA_SUPPORTED

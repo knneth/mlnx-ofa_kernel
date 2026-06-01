@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: fs/fuse/file.c
 
 ---
- fs/fuse/file.c | 175 +++++++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 171 insertions(+), 4 deletions(-)
+ fs/fuse/file.c | 200 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 196 insertions(+), 4 deletions(-)
 
+diff --git a/fs/fuse/file.c b/fs/fuse/file.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/file.c
 +++ b/fs/fuse/file.c
 @@ -21,6 +21,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  static int fuse_send_open(struct fuse_mount *fm, u64 nodeid,
  			  unsigned int open_flags, int opcode,
-@@ -485,7 +488,11 @@ static inline bool fuse_folio_is_writeba
+@@ -485,7 +488,11 @@ static inline bool fuse_folio_is_writeback(struct inode *inode,
  					   struct folio *folio)
  {
  	pgoff_t last = folio_next_index(folio) - 1;
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  }
  
  static void fuse_wait_on_folio_writeback(struct inode *inode,
-@@ -658,14 +665,38 @@ void fuse_read_args_fill(struct fuse_io_
+@@ -658,14 +665,38 @@ void fuse_read_args_fill(struct fuse_io_args *ia, struct file *file, loff_t pos,
  	args->out_args[0].size = count;
  }
  
@@ -69,7 +71,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  		if (ap->args.is_pinned)
  			unpin_folio(ap->folios[i]);
  	}
-@@ -890,7 +921,6 @@ static int fuse_do_readfolio(struct file
+@@ -890,7 +921,6 @@ static int fuse_do_readfolio(struct file *file, struct folio *folio)
  	 * make sure we read a properly synced folio.
  	 */
  	fuse_wait_on_folio_writeback(inode, folio);
@@ -77,7 +79,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	attr_ver = fuse_get_attr_version(fm->fc);
  
  	/* Don't overflow end offset */
-@@ -954,7 +984,13 @@ static void fuse_readpages_end(struct fu
+@@ -954,7 +984,13 @@ static void fuse_readpages_end(struct fuse_mount *fm, struct fuse_args *args,
  	}
  
  	for (i = 0; i < ap->num_folios; i++) {
@@ -91,7 +93,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  		folio_put(ap->folios[i]);
  	}
  	if (ia->ff)
-@@ -1511,7 +1547,9 @@ static int fuse_get_user_pages(struct fu
+@@ -1511,7 +1547,9 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
  			       bool use_pages_for_kvec_io,
  			       bool use_p2p_dma)
  {
@@ -101,7 +103,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	bool flush_or_invalidate = false;
  	unsigned int nr_pages = 0;
  	size_t nbytes = 0;  /* # bytes already packed in req */
-@@ -1563,7 +1601,11 @@ static int fuse_get_user_pages(struct fu
+@@ -1563,7 +1601,11 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
  		ret = iov_iter_extract_pages(ii, &pages,
  					     *nbytesp - nbytes,
  					     max_pages - nr_pages,
@@ -113,7 +115,39 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  					     &start);
  		if (ret < 0)
  			break;
-@@ -2436,6 +2478,7 @@ out_unlock:
+@@ -2119,6 +2161,31 @@ static void fuse_writepage_add_to_bucket(struct fuse_conn *fc,
+ 	rcu_read_unlock();
+ }
+ 
++#ifndef HAVE_FOLIO_COPY_EXPORTED
++/**
++ * folio_copy - Copy the contents of one folio to another.
++ * @dst: Folio to copy to.
++ * @src: Folio to copy from.
++ *
++ * The bytes in the folio represented by @src are copied to @dst.
++ * Assumes the caller has validated that @dst is at least as large as @src.
++ * Can be called in atomic context for order-0 folios, but if the folio is
++ * larger, it may sleep.
++ */
++void folio_copy(struct folio *dst, struct folio *src)
++{
++       long i = 0;
++       long nr = folio_nr_pages(src);
++
++       for (;;) {
++               copy_highpage(folio_page(dst, i), folio_page(src, i));
++               if (++i == nr)
++                       break;
++               cond_resched();
++       }
++}
++#endif
++
+ static void fuse_writepage_args_page_fill(struct fuse_writepage_args *wpa, struct folio *folio,
+ 					  struct folio *tmp_folio, uint32_t folio_index)
+ {
+@@ -2436,6 +2503,7 @@ out_unlock:
   */
  typedef int (*writepage_t)(struct folio *folio, struct writeback_control *wbc,
                                 void *data);
@@ -121,7 +155,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  static int write_cache_pages(struct address_space *mapping,
  			     struct writeback_control *wbc, writepage_t writepage,
  			     void *data)
-@@ -2453,6 +2496,7 @@ static int write_cache_pages(struct addr
+@@ -2453,6 +2521,7 @@ static int write_cache_pages(struct address_space *mapping,
  
         return error;
  }
@@ -129,7 +163,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  static int fuse_writepages(struct address_space *mapping,
  			   struct writeback_control *wbc)
-@@ -2498,19 +2542,37 @@ out:
+@@ -2498,19 +2567,37 @@ out:
   * It's worthy to make sure that space is reserved on disk for the write,
   * but how to implement it without killing performance need more thinking.
   */
@@ -168,7 +202,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	folio = __filemap_get_folio(mapping, index, FGP_WRITEBEGIN,
  			mapping_gfp_mask(mapping));
  	if (IS_ERR(folio))
-@@ -2541,38 +2603,108 @@ success:
+@@ -2541,38 +2628,108 @@ success:
  cleanup:
  	folio_unlock(folio);
  	folio_put(folio);
@@ -278,7 +312,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  	return copied;
  }
-@@ -2584,10 +2716,19 @@ static int fuse_launder_folio(struct fol
+@@ -2584,10 +2741,19 @@ static int fuse_launder_folio(struct folio *folio)
  		struct inode *inode = folio->mapping->host;
  
  		/* Serialize with pending writeback for the same page */
@@ -298,7 +332,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	}
  	return err;
  }
-@@ -2724,14 +2865,22 @@ static int convert_fuse_file_lock(struct
+@@ -2724,14 +2890,22 @@ static int convert_fuse_file_lock(struct fuse_conn *fc,
  		 * translate it into the caller's pid namespace.
  		 */
  		rcu_read_lock();
@@ -321,7 +355,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	return 0;
  }
  
-@@ -2745,10 +2894,18 @@ static void fuse_lk_fill(struct fuse_arg
+@@ -2745,10 +2919,18 @@ static void fuse_lk_fill(struct fuse_args *args, struct file *file,
  
  	memset(inarg, 0, sizeof(*inarg));
  	inarg->fh = ff->fh;
@@ -340,7 +374,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	inarg->lk.pid = pid;
  	if (flock)
  		inarg->lk_flags |= FUSE_LK_FLOCK;
-@@ -2785,8 +2942,13 @@ static int fuse_setlk(struct file *file,
+@@ -2785,8 +2967,13 @@ static int fuse_setlk(struct file *file, struct file_lock *fl, int flock)
  	struct fuse_mount *fm = get_fuse_mount(inode);
  	FUSE_ARGS(args);
  	struct fuse_lk_in inarg;
@@ -354,7 +388,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	pid_t pid_nr = pid_nr_ns(pid, fm->fc->pid_ns);
  	int err;
  
-@@ -3406,8 +3568,13 @@ static ssize_t fuse_copy_file_range(stru
+@@ -3406,8 +3593,13 @@ static ssize_t fuse_copy_file_range(struct file *src_file, loff_t src_off,
  				     len, flags);
  
  	if (ret == -EOPNOTSUPP || ret == -EXDEV)

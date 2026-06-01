@@ -2,12 +2,14 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/alloc.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/alloc.c | 17 +++++++++++++++--
- 1 file changed, 15 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/alloc.c   | 61 ++++++++++++++++---
+ 1 file changed, 51 insertions(+), 10 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
-@@ -61,11 +61,20 @@ static void *mlx5_dma_zalloc_coherent_no
+@@ -87,11 +87,20 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
  	int original_node;
  	void *cpu_handle;
  
@@ -30,7 +32,112 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/alloc.c
  	set_dev_node(device, original_node);
  	mutex_unlock(&priv->alloc_mutex);
  	return cpu_handle;
-@@ -140,7 +149,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_
+@@ -103,7 +112,12 @@ mlx5_dma_pool_page_alloc(struct mlx5_dma_pool *pool)
+ 	int blocks_per_page = BIT(PAGE_SHIFT - pool->block_shift);
+ 	struct mlx5_dma_pool_page *page;
+ 
+-	page = kzalloc_obj(*page);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	page = kzalloc_obj(*page, GFP_KERNEL);
++#else
++	page = kzalloc(sizeof(*page), GFP_KERNEL);
++#endif
+ 	if (!page)
+ 		goto err_out;
+ 
+@@ -164,7 +178,12 @@ static struct mlx5_dma_pool *mlx5_dma_pool_create(struct mlx5_core_dev *dev,
+ 		      block_shift, PAGE_SHIFT))
+ 		return NULL;
+ 
+-	pool = kzalloc_obj(*pool);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	pool = kzalloc_obj(*pool, GFP_KERNEL);
++#else
++	pool = kzalloc(sizeof(*pool), GFP_KERNEL);
++#endif
+ 	if (!pool)
+ 		return NULL;
+ 
+@@ -256,7 +275,9 @@ unlock:
+ static void
+ mlx5_frag_buf_node_pools_destroy(struct mlx5_frag_buf_node_pools *node_pools)
+ {
+-	for (int i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++)
++	int i;
++
++	for (i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++)
+ 		if (node_pools->pools[i])
+ 			mlx5_dma_pool_destroy(node_pools->pools[i]);
+ 	kfree(node_pools);
+@@ -266,12 +287,18 @@ static struct mlx5_frag_buf_node_pools *
+ mlx5_frag_buf_node_pools_create(struct mlx5_core_dev *dev, int node)
+ {
+ 	struct mlx5_frag_buf_node_pools *node_pools;
++	int i;
+ 
+-	node_pools = kzalloc_obj(*node_pools);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	node_pools = kzalloc_obj(*node_pools, GFP_KERNEL);
++#else
++	node_pools = kzalloc(sizeof(*node_pools), GFP_KERNEL);
++#endif
+ 	if (!node_pools)
+ 		return NULL;
+ 
+-	for (int i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++) {
++	for (i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++) {
+ 		u8 block_shift = MLX5_FRAG_BUF_POOL_MIN_BLOCK_SHIFT + i;
+ 
+ 		node_pools->pools[i] = mlx5_dma_pool_create(dev, node,
+@@ -308,8 +335,15 @@ int mlx5_frag_buf_pools_init(struct mlx5_core_dev *dev)
+ 	struct mlx5_priv *priv = &dev->priv;
+ 	int node;
+ 
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
+ 	priv->frag_buf_node_pools = kzalloc_objs(*priv->frag_buf_node_pools,
+-						 nr_node_ids);
++						 nr_node_ids, GFP_KERNEL);
++#else
++	priv->frag_buf_node_pools = kcalloc(nr_node_ids,
++					    sizeof(*priv->frag_buf_node_pools),
++					    GFP_KERNEL);
++#endif
+ 	if (!priv->frag_buf_node_pools)
+ 		return -ENOMEM;
+ 
+@@ -332,6 +366,7 @@ int mlx5_frag_buf_alloc_node(struct mlx5_core_dev *dev, int size,
+ {
+ 	struct mlx5_dma_pool *pool;
+ 	int pool_idx;
++	int i;
+ 
+ 	if (WARN_ONCE(size <= 0, "mlx5_frag_buf non-positive size: %d\n", size))
+ 		return -EINVAL;
+@@ -354,7 +389,7 @@ int mlx5_frag_buf_alloc_node(struct mlx5_core_dev *dev, int size,
+ 
+ 	pool_idx = buf->page_shift - MLX5_FRAG_BUF_POOL_MIN_BLOCK_SHIFT;
+ 	pool = dev->priv.frag_buf_node_pools[node]->pools[pool_idx];
+-	for (int i = 0; i < buf->npages; i++) {
++	for (i = 0; i < buf->npages; i++) {
+ 		struct mlx5_buf_list *frag = &buf->frags[i];
+ 		struct mlx5_dma_pool_page *page;
+ 		unsigned long idx;
+@@ -375,7 +410,9 @@ EXPORT_SYMBOL_GPL(mlx5_frag_buf_alloc_node);
+ 
+ void mlx5_frag_buf_free(struct mlx5_core_dev *dev, struct mlx5_frag_buf *buf)
+ {
+-	for (int i = 0; i < buf->npages; i++) {
++	int i;
++
++	for (i = 0; i < buf->npages; i++) {
+ 		struct mlx5_buf_list *frag = &buf->frags[i];
+ 		struct mlx5_dma_pool_page *page;
+ 		struct mlx5_dma_pool *pool;
+@@ -403,7 +440,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
  	if (!pgdir)
  		return NULL;
  

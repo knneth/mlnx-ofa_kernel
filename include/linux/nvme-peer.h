@@ -16,7 +16,7 @@
  */
 
 #ifndef _LINUX_NVME_PEER_H
-#define _LINUX_NVME_PERR_H
+#define _LINUX_NVME_PEER_H
 
 #include <linux/pci.h>
 

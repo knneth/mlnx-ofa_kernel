@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../net/ethernet/mellanox/mlx5/core/steering/hws/debug.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/debug.c
 @@ -7,6 +7,15 @@

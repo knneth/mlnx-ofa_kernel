@@ -3,23 +3,45 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
- 1 file changed, 6 insertions(+)
+ .../mellanox/mlx5/core/en/rep/neigh.c         | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
-@@ -10,6 +10,10 @@
+@@ -10,6 +10,14 @@
  #include <linux/notifier.h>
  #include <net/netevent.h>
  #include <net/arp.h>
 +#ifdef HAVE_BASECODE_EXTRAS
 +#include <net/addrconf.h>
++#ifndef HAVE_NET_IPV6_STUBS_H
++#include <net/ndisc.h>
++#else
 +#include <net/ipv6_stubs.h>
++#endif
 +#endif
  #include "neigh.h"
  #include "tc.h"
  #include "en_rep.h"
-@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
+@@ -18,8 +26,15 @@
+ 
+ static unsigned long mlx5e_rep_ipv6_interval(void)
+ {
++#ifndef HAVE_NET_IPV6_STUBS_H
++/* Newer kernels (7.1+): ipv6_stub removed, direct nd_tbl access */
++	if (IS_ENABLED(CONFIG_IPV6) && ipv6_mod_enabled())
++		return NEIGH_VAR(&nd_tbl.parms, DELAY_PROBE_TIME);
++#else
++/* Older kernels: use ipv6_stub indirection */
+ 	if (IS_ENABLED(CONFIG_IPV6) && ipv6_stub->nd_tbl)
+ 		return NEIGH_VAR(&ipv6_stub->nd_tbl->parms, DELAY_PROBE_TIME);
++#endif
+ 
+ 	return ~0UL;
+ }
+@@ -150,7 +165,9 @@ static void mlx5e_rep_neigh_update(struct work_struct *work)
  
  	neigh_connected = (nud_state & NUD_VALID) && !dead;
  
@@ -29,3 +51,29 @@ Subject: [PATCH] BACKPORT:
  
  	if (!same_dev)
  		goto out;
+@@ -217,7 +234,12 @@ static int mlx5e_rep_netevent_event(struct notifier_block *nb,
+ 	case NETEVENT_NEIGH_UPDATE:
+ 		n = ptr;
+ #if IS_ENABLED(CONFIG_IPV6)
++#ifndef HAVE_NET_IPV6_STUBS_H
++/* Newer kernels (7.1+): direct nd_tbl access */
++		if (n->tbl != &nd_tbl && n->tbl != &arp_tbl)
++#else
+ 		if (n->tbl != ipv6_stub->nd_tbl && n->tbl != &arp_tbl)
++#endif
+ #else
+ 		if (n->tbl != &arp_tbl)
+ #endif
+@@ -238,7 +260,12 @@ static int mlx5e_rep_netevent_event(struct notifier_block *nb,
+ 		 * done per device delay prob time parameter.
+ 		 */
+ #if IS_ENABLED(CONFIG_IPV6)
++#ifndef HAVE_NET_IPV6_STUBS_H
++/* Newer kernels (7.1+): direct nd_tbl access */
++		if (!p->dev || (p->tbl != &nd_tbl && p->tbl != &arp_tbl))
++#else
+ 		if (!p->dev || (p->tbl != ipv6_stub->nd_tbl && p->tbl != &arp_tbl))
++#endif
+ #else
+ 		if (!p->dev || p->tbl != &arp_tbl)
+ #endif

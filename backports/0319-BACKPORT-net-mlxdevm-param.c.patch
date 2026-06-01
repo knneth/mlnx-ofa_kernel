@@ -6,9 +6,11 @@ Change-Id: Iad6cb819359045ffc7a8ef92b4303f6cace4ab71
  net/mlxdevm/param.c | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/net/mlxdevm/param.c b/net/mlxdevm/param.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/param.c
 +++ b/net/mlxdevm/param.c
-@@ -343,8 +343,10 @@ static void mlxdevm_param_notify(struct
+@@ -343,8 +343,10 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  				 struct mlxdevm_param_item *param_item,
  				 enum mlxdevm_command cmd)
  {
@@ -19,7 +21,7 @@ Change-Id: Iad6cb819359045ffc7a8ef92b4303f6cace4ab71
  
  	WARN_ON(cmd != MLXDEVM_CMD_PARAM_NEW && cmd != MLXDEVM_CMD_PARAM_DEL &&
  		cmd != MLXDEVM_CMD_PORT_PARAM_NEW &&
-@@ -357,6 +359,7 @@ static void mlxdevm_param_notify(struct
+@@ -357,6 +359,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  	if (!devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
  		return;
  
@@ -27,7 +29,7 @@ Change-Id: Iad6cb819359045ffc7a8ef92b4303f6cace4ab71
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -368,6 +371,7 @@ static void mlxdevm_param_notify(struct
+@@ -368,6 +371,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  	}
  
  	mlxdevm_nl_notify_send(mlxdevm, msg);
@@ -47,7 +49,7 @@ Change-Id: Iad6cb819359045ffc7a8ef92b4303f6cace4ab71
  		return -EINVAL;
  
  	*param_type = nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE]);
-@@ -500,7 +508,11 @@ mlxdevm_param_get_from_info(struct xarra
+@@ -500,7 +508,11 @@ mlxdevm_param_get_from_info(struct xarray *params, struct genl_info *info)
  {
  	char *param_name;
  
@@ -59,7 +61,7 @@ Change-Id: Iad6cb819359045ffc7a8ef92b4303f6cace4ab71
  		return NULL;
  
  	param_name = nla_data(info->attrs[MLXDEVM_ATTR_PARAM_NAME]);
-@@ -566,7 +578,11 @@ static int __mlxdevm_nl_cmd_param_set_do
+@@ -566,7 +578,11 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
  			return err;
  	}
  

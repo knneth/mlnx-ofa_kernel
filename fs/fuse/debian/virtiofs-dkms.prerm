@@ -4,7 +4,7 @@ set -e
 # Get the package version
 package=virtiofs
 version=`dpkg-query -W -f='${Version}' "$package-dkms" \
-    | sed -e 's/[+-].*//'`
+    | sed -e 's/^[0-9]*://'`
 
 dkms remove -m "$package" -v "$version" --all || true
 

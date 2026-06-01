@@ -11,11 +11,6 @@
 #define skb_vlan_tag_get_id vlan_tx_tag_get_id
 #endif
 
-#ifndef ETH_P_8021AD
-#define ETH_P_8021AD    0x88A8          /* 802.1ad Service VLAN         */
-#endif
-
-#ifndef HAVE_VLAN_GET_ENCAP_LEVEL
 static inline int vlan_get_encap_level(struct net_device *dev)
 {
 #if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
@@ -32,6 +27,5 @@ static inline int vlan_get_encap_level(struct net_device *dev)
 	return 0;
 #endif
 }
-#endif
 
 #endif /* _COMPAT_LINUX_IF_VLAN_H */

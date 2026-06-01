@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
  drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 18 +++++++++++++++++-
  1 file changed, 17 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
 @@ -97,13 +97,23 @@ out_err:
@@ -32,7 +34,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
  	struct net_device *pdev;
  	struct ipoib_dev_priv *ppriv;
  	u16 child_pkey;
-@@ -112,7 +122,11 @@ static int ipoib_new_child_link(struct n
+@@ -112,7 +122,11 @@ static int ipoib_new_child_link(struct net_device *dev,
  	if (!tb[IFLA_LINK])
  		return -EINVAL;
  
@@ -44,7 +46,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_netlink.c
  	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
  		return -ENODEV;
  
-@@ -170,7 +184,9 @@ static size_t ipoib_get_size(const struc
+@@ -170,7 +184,9 @@ static size_t ipoib_get_size(const struct net_device *dev)
  
  static struct rtnl_link_ops ipoib_link_ops __read_mostly = {
  	.kind		= "ipoib",

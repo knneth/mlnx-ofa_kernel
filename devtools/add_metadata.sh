@@ -36,45 +36,6 @@ WDIR=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd | sed --expression 's/devtools//'
 readonly NA_TRACKING_ISSUE_ID="4468530"
 readonly IGNORE_TRACKING_ISSUE_ID="4468524"
 
-# Branch filtering: only process commits from maintained branches
-# Maintained branches: mlnx_ofed_5_8 and newer (5.8, 23.xx, 24.xx, 25.xx, etc.)
-is_commit_on_maintained_branch() {
-	local commit_id=$1
-
-	# Get all branches containing this commit
-	local branches=$(git branch -r --contains "$commit_id" 2>/dev/null)
-
-	if [ -z "$branches" ]; then
-		return 1  # Commit not found in any remote branch
-	fi
-
-	# Check if any branch matches maintained patterns
-	echo "$branches" | grep -qE "mlnx_ofed_(5_[89]|[2-9][0-9]_[0-9][0-9])($|[[:space:]])" && return 0
-
-	return 1  # Not found on any maintained branch
-}
-
-# Check if author has commits only on old deprecated branches
-should_skip_author_for_old_branches() {
-	local author=$1
-
-	# Get all commits by this author across all branches
-	local author_commits=$(git log --all --format="%h" --author="$author" 2>/dev/null)
-
-	if [ -z "$author_commits" ]; then
-		return 1  # No commits found, don't skip
-	fi
-
-	# Check if ANY of the author's commits are on maintained branches
-	for commit in $author_commits; do
-		if is_commit_on_maintained_branch "$commit"; then
-			return 1  # Author has commits on maintained branches, don't skip
-		fi
-	done
-
-	return 0  # All author's commits are only on old branches, skip this author
-}
-
 base=
 num=
 dry_run=0
@@ -673,12 +634,6 @@ do
 		continue
 	fi
 	author=$(git log --format="%aN" $cid| head -1 | sed -e 's/ /_/g')
-
-	# Skip authors who only have commits on old deprecated branches
-	if should_skip_author_for_old_branches "$author"; then
-		echo "-I- Skipping author '$author' (only has commits on deprecated branches older than mlnx_ofed_5_8)"
-		continue
-	fi
 
 	changeID=
 	subject=
