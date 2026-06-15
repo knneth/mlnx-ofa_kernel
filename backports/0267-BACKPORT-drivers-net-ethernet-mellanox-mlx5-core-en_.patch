@@ -4,9 +4,11 @@ Subject: [PATCH] BACKPORT:
 
 Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
 ---
- .../mellanox/mlx5/core/en_accel/ktls_rx.c     | 58 ++++++++++++++++++-
- 1 file changed, 57 insertions(+), 1 deletion(-)
+ .../mellanox/mlx5/core/en_accel/ktls_rx.c     | 123 +++++++++++++++++-
+ 1 file changed, 122 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
 @@ -1,6 +1,7 @@
@@ -39,7 +41,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	u32 rxq;
  	DECLARE_BITMAP(flags, MLX5E_NUM_PRIV_RX_FLAGS);
  
-@@ -148,7 +155,11 @@ post_static_params(struct mlx5e_icosq *s
+@@ -148,7 +155,11 @@ post_static_params(struct mlx5e_icosq *sq,
  	wqe = MLX5E_TLS_FETCH_SET_STATIC_PARAMS_WQE(sq, pi);
  	mlx5e_ktls_build_static_params(wqe, sq->pc, sq->sqn, &priv_rx->crypto_info,
  				       mlx5e_tir_get_tirn(&priv_rx->tir),
@@ -51,7 +53,44 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  				       priv_rx->resync.seq, false,
  				       TLS_OFFLOAD_CTX_DIR_RX);
  	wi = (struct mlx5e_icosq_wqe_info) {
-@@ -382,6 +393,7 @@ static void resync_handle_seq_match(stru
+@@ -320,7 +331,9 @@ err_dma_unmap:
+ err_free:
+ 	kfree(buf);
+ err_out:
++#ifndef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
+ 	priv_rx->rq_stats->tls_resync_req_skip++;
++#endif
+ 	return err;
+ }
+ 
+@@ -339,14 +352,26 @@ static void resync_handle_work(struct work_struct *work)
+ 
+ 	if (unlikely(test_bit(MLX5E_PRIV_RX_FLAG_DELETING, priv_rx->flags))) {
+ 		mlx5e_ktls_priv_rx_put(priv_rx);
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++		priv_rx->rq_stats->tls_resync_req_skip++;
++		tls_offload_rx_resync_async_request_cancel(&resync->core);
++#endif
+ 		return;
+ 	}
+ 
+ 	c = resync->priv->channels.c[priv_rx->rxq];
+ 	sq = &c->async_icosq;
+ 
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	if (resync_post_get_progress_params(sq, priv_rx)) {
++		priv_rx->rq_stats->tls_resync_req_skip++;
++		tls_offload_rx_resync_async_request_cancel(&resync->core);
++		mlx5e_ktls_priv_rx_put(priv_rx);
++	}
++#else
+ 	if (resync_post_get_progress_params(sq, priv_rx))
+ 		mlx5e_ktls_priv_rx_put(priv_rx);
++#endif
+ }
+ 
+ static void resync_init(struct mlx5e_ktls_rx_resync_ctx *resync,
+@@ -382,6 +407,7 @@ static void resync_handle_seq_match(struct mlx5e_ktls_offload_context_rx *priv_r
  		       sizeof(info->rec_seq));
  		break;
  	}
@@ -59,7 +98,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	case TLS_CIPHER_AES_GCM_256: {
  		struct tls12_crypto_info_aes_gcm_256 *info =
  			&priv_rx->crypto_info.crypto_info_256;
-@@ -390,6 +402,7 @@ static void resync_handle_seq_match(stru
+@@ -390,6 +416,7 @@ static void resync_handle_seq_match(struct mlx5e_ktls_offload_context_rx *priv_r
  		       sizeof(info->rec_seq));
  		break;
  	}
@@ -67,8 +106,14 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  priv_rx->crypto_info.crypto_info.cipher_type);
-@@ -427,7 +440,9 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -425,14 +452,30 @@ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
+ {
+ 	struct mlx5e_ktls_rx_resync_buf *buf = wi->tls_get_params.buf;
  	struct mlx5e_ktls_offload_context_rx *priv_rx;
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	struct tls_offload_resync_async *async_resync;
++	struct tls_offload_context_rx *rx_ctx;
++#endif
  	u8 tracker_state, auth_state, *ctx;
  	struct device *dev;
 +#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
@@ -77,13 +122,39 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  
  	priv_rx = buf->priv_rx;
  	dev = mlx5_core_dma_dev(sq->channel->mdev);
-@@ -446,9 +461,14 @@ void mlx5e_ktls_handle_get_psv_completio
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	rx_ctx = tls_offload_ctx_rx(tls_get_ctx(priv_rx->sk));
++	async_resync = rx_ctx->resync_async;
++	if (unlikely(test_bit(MLX5E_PRIV_RX_FLAG_DELETING, priv_rx->flags))) {
++		priv_rx->rq_stats->tls_resync_req_skip++;
++		tls_offload_rx_resync_async_request_cancel(async_resync);
++		goto out;
++	}
++#else
+ 	if (unlikely(test_bit(MLX5E_PRIV_RX_FLAG_DELETING, priv_rx->flags)))
+ 		goto out;
++#endif
+ 
+ 	dma_sync_single_for_cpu(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE,
+ 				DMA_FROM_DEVICE);
+@@ -443,12 +486,25 @@ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
+ 	if (tracker_state != MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_TRACKING ||
+ 	    auth_state != MLX5E_TLS_PROGRESS_PARAMS_AUTH_STATE_NO_OFFLOAD) {
+ 		priv_rx->rq_stats->tls_resync_req_skip++;
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++		tls_offload_rx_resync_async_request_cancel(async_resync);
++#endif
  		goto out;
  	}
  
 +#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
  	hw_seq = MLX5_GET(tls_progress_params, ctx, hw_resync_tcp_sn);
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	tls_offload_rx_resync_async_request_end(async_resync,
++						cpu_to_be32(hw_seq));
++#else
  	tls_offload_rx_resync_async_request_end(priv_rx->sk, cpu_to_be32(hw_seq));
++#endif
  	priv_rx->rq_stats->tls_resync_req_end++;
 +#else
 +	tls_offload_rx_force_resync_request(priv_rx->sk);
@@ -92,7 +163,29 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  out:
  	mlx5e_ktls_priv_rx_put(priv_rx);
  	dma_unmap_single(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE, DMA_FROM_DEVICE);
-@@ -485,10 +505,12 @@ static void resync_update_sn(struct mlx5
+@@ -472,8 +528,15 @@ static bool resync_queue_get_psv(struct sock *sk)
+ 
+ 	resync = &priv_rx->resync;
+ 	mlx5e_ktls_priv_rx_get(priv_rx);
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	if (unlikely(!queue_work(resync->priv->tls->rx_wq, &resync->work))) {
++		mlx5e_ktls_priv_rx_put(priv_rx);
++		return false;
++	}
++#else
+ 	if (unlikely(!queue_work(resync->priv->tls->rx_wq, &resync->work)))
+ 		mlx5e_ktls_priv_rx_put(priv_rx);
++#endif
+ 
+ 	return true;
+ }
+@@ -482,13 +545,18 @@ static bool resync_queue_get_psv(struct sock *sk)
+ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
+ {
+ 	struct ethhdr *eth = (struct ethhdr *)(skb->data);
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	struct tls_offload_resync_async *resync_async;
++#endif
  	struct net_device *netdev = rq->netdev;
  	struct net *net = dev_net(netdev);
  	struct sock *sk = NULL;
@@ -106,7 +199,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	int depth = 0;
  
  	__vlan_get_protocol(skb, eth->h_proto, &depth);
-@@ -498,7 +520,11 @@ static void resync_update_sn(struct mlx5
+@@ -498,7 +566,11 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  		depth += sizeof(struct iphdr);
  		th = (void *)iph + sizeof(struct iphdr);
  
@@ -118,7 +211,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  					     iph->saddr, th->source, iph->daddr,
  					     th->dest, netdev->ifindex);
  #if IS_ENABLED(CONFIG_IPV6)
-@@ -508,7 +534,11 @@ static void resync_update_sn(struct mlx5
+@@ -508,7 +580,11 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  		depth += sizeof(struct ipv6hdr);
  		th = (void *)ipv6h + sizeof(struct ipv6hdr);
  
@@ -130,14 +223,19 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  						&ipv6h->saddr, th->source,
  						&ipv6h->daddr, ntohs(th->dest),
  						netdev->ifindex, 0);
-@@ -526,10 +556,14 @@ static void resync_update_sn(struct mlx5
+@@ -526,10 +602,19 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  	if (unlikely(!resync_queue_get_psv(sk)))
  		goto unref;
  
 +#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
  	seq = th->seq;
  	datalen = skb->len - depth;
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++	resync_async = tls_offload_ctx_rx(tls_get_ctx(sk))->resync_async;
++	tls_offload_rx_resync_async_request_start(resync_async, seq, datalen);
++#else
  	tls_offload_rx_resync_async_request_start(sk, seq, datalen);
++#endif
  	rq->stats->tls_resync_req_start++;
 +#else
 +	tls_offload_rx_force_resync_request(sk);
@@ -145,7 +243,28 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  
  unref:
  	sock_gen_put(sk);
-@@ -609,7 +643,9 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -557,6 +642,20 @@ void mlx5e_ktls_rx_resync(struct net_device *netdev, struct sock *sk,
+ 	resync_handle_seq_match(priv_rx, c);
+ }
+ 
++#ifdef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC /* 6.18 forwardport 426e9da3b284 c15d5c62ab31 */
++void
++mlx5e_ktls_rx_resync_async_request_cancel(struct mlx5e_icosq_wqe_info *wi)
++{
++	struct mlx5e_ktls_offload_context_rx *priv_rx;
++	struct mlx5e_ktls_rx_resync_buf *buf;
++
++	buf = wi->tls_get_params.buf;
++	priv_rx = buf->priv_rx;
++	priv_rx->rq_stats->tls_resync_req_skip++;
++	tls_offload_rx_resync_async_request_cancel(&priv_rx->resync.core);
++}
++#endif
++
+ /* End of resync section */
+ 
+ void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
+@@ -609,7 +708,9 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  	struct mlx5e_ktls_offload_context_rx *priv_rx;
  	struct mlx5e_ktls_rx_resync_ctx *resync;
  	struct tls_context *tls_ctx;
@@ -155,7 +274,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	struct mlx5e_priv *priv;
  	int rxq, err;
  
-@@ -624,10 +660,12 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -624,10 +725,12 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  		priv_rx->crypto_info.crypto_info_128 =
  			*(struct tls12_crypto_info_aes_gcm_128 *)crypto_info;
  		break;
@@ -168,7 +287,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  crypto_info->cipher_type);
-@@ -635,12 +673,19 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -635,12 +738,19 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  		goto err_cipher_type;
  	}
  
@@ -188,7 +307,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  
  	INIT_LIST_HEAD(&priv_rx->list);
  	spin_lock_init(&priv_rx->lock);
-@@ -662,8 +707,10 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -662,8 +772,10 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  	accel_rule_init(&priv_rx->rule, priv);
  	resync = &priv_rx->resync;
  	resync_init(resync, priv);
@@ -199,7 +318,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  
  	err = post_rx_param_wqes(priv->channels.c[rxq], priv_rx, start_offload_tcp_sn);
  	if (err)
-@@ -676,7 +723,11 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -676,7 +788,11 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  err_post_wqes:
  	mlx5e_tir_destroy(&priv_rx->tir);
  err_create_tir:
@@ -211,7 +330,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  err_cipher_type:
  	kfree(priv_rx);
  	return err;
-@@ -708,7 +759,11 @@ void mlx5e_ktls_del_rx(struct net_device
+@@ -708,7 +824,11 @@ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx)
  		mlx5e_accel_fs_del_sk(priv_rx->rule.rule);
  
  	mlx5e_tir_destroy(&priv_rx->tir);
@@ -223,7 +342,7 @@ Change-Id: I5676967da9458a79860e19a40570ce4a9f346c40
  	/* priv_rx should normally be freed here, but if there is an outstanding
  	 * GET_PSV, deallocation will be delayed until the CQE for GET_PSV is
  	 * processed.
-@@ -781,3 +836,4 @@ bool mlx5e_ktls_rx_handle_resync_list(st
+@@ -781,3 +901,4 @@ bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget)
  
  	return i == budget;
  }

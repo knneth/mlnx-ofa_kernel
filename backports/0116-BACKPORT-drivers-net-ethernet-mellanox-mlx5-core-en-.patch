@@ -6,6 +6,8 @@ Change-Id: Ia12960d1f63c76b354efd6c7467ceaaccdc503ab
  drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 @@ -15,6 +15,9 @@ struct mlx5e_tc_mod_hdr_acts;
@@ -18,7 +20,7 @@ Change-Id: Ia12960d1f63c76b354efd6c7467ceaaccdc503ab
  
  struct mlx5_fs_chains;
  struct mlx5_tc_ct_priv;
-@@ -140,6 +143,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx
+@@ -140,6 +143,8 @@ mlx5_tc_ct_lables_mapping_set(struct mlx5_core_dev *dev, bool enable);
  
  #else /* CONFIG_MLX5_TC_CT */
  

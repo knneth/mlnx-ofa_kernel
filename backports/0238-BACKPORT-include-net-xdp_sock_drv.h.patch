@@ -6,6 +6,8 @@ Change-Id: Ibfccbe9050086e424d2fa6290e6f3ef6c9c9c53d
  include/net/xdp_sock_drv.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/include/net/xdp_sock_drv.h b/include/net/xdp_sock_drv.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/net/xdp_sock_drv.h
 +++ b/include/net/xdp_sock_drv.h
 @@ -11,4 +11,12 @@

@@ -7,6 +7,8 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  .../mellanox/mlx5/core/en_accel/ktls.c        | 65 ++++++++++++++++++-
  1 file changed, 62 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.c
 @@ -1,6 +1,7 @@
@@ -31,7 +33,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  {
  	const void *key;
  	u32 sz_bytes;
-@@ -24,6 +30,7 @@ struct mlx5_crypto_dek *mlx5_ktls_create
+@@ -24,6 +30,7 @@ struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_po
  		sz_bytes = sizeof(info->key);
  		break;
  	}
@@ -39,7 +41,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  	case TLS_CIPHER_AES_GCM_256: {
  		struct tls12_crypto_info_aes_gcm_256 *info =
  			(struct tls12_crypto_info_aes_gcm_256 *)crypto_info;
-@@ -32,17 +39,33 @@ struct mlx5_crypto_dek *mlx5_ktls_create
+@@ -32,17 +39,33 @@ struct mlx5_crypto_dek *mlx5_ktls_create_key(struct mlx5_crypto_dek_pool *dek_po
  		sz_bytes = sizeof(info->key);
  		break;
  	}
@@ -76,7 +78,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  }
  
  static int mlx5e_ktls_add(struct net_device *netdev, struct sock *sk,
-@@ -60,7 +83,11 @@ static int mlx5e_ktls_add(struct net_dev
+@@ -60,7 +83,11 @@ static int mlx5e_ktls_add(struct net_device *netdev, struct sock *sk,
  	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
  		err = mlx5e_ktls_add_tx(netdev, sk, crypto_info, start_offload_tcp_sn);
  	else
@@ -88,7 +90,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  
  	return err;
  }
-@@ -71,10 +98,13 @@ static void mlx5e_ktls_del(struct net_de
+@@ -71,10 +98,13 @@ static void mlx5e_ktls_del(struct net_device *netdev,
  {
  	if (direction == TLS_OFFLOAD_CTX_DIR_TX)
  		mlx5e_ktls_del_tx(netdev, tls_ctx);
@@ -102,7 +104,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  static int mlx5e_ktls_resync(struct net_device *netdev,
  			     struct sock *sk, u32 seq, u8 *rcd_sn,
  			     enum tls_offload_ctx_dir direction)
-@@ -82,14 +112,21 @@ static int mlx5e_ktls_resync(struct net_
+@@ -82,14 +112,21 @@ static int mlx5e_ktls_resync(struct net_device *netdev,
  	if (unlikely(direction != TLS_OFFLOAD_CTX_DIR_RX))
  		return -EOPNOTSUPP;
  
@@ -124,7 +126,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  };
  
  bool mlx5e_is_ktls_rx(struct mlx5_core_dev *mdev)
-@@ -123,12 +160,15 @@ void mlx5e_ktls_build_netdev(struct mlx5
+@@ -123,12 +160,15 @@ void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
  		netdev->features    |= NETIF_F_HW_TLS_TX;
  	}
  
@@ -140,7 +142,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable)
  {
  	struct mlx5e_priv *priv = netdev_priv(netdev);
-@@ -176,6 +216,24 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
+@@ -176,6 +216,24 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv)
  
  	destroy_workqueue(priv->tls->rx_wq);
  }
@@ -165,7 +167,7 @@ Change-Id: I943f72937b7da86797c11efde5561e70e17d2ac0
  
  static void mlx5e_tls_debugfs_init(struct mlx5e_tls *tls,
  				   struct dentry *dfs_root)
-@@ -218,3 +276,4 @@ void mlx5e_ktls_cleanup(struct mlx5e_pri
+@@ -218,3 +276,4 @@ void mlx5e_ktls_cleanup(struct mlx5e_priv *priv)
  	kfree(priv->tls);
  	priv->tls = NULL;
  }

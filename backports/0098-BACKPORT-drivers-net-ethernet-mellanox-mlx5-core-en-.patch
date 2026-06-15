@@ -6,6 +6,8 @@ Change-Id: I7ef730d8dcb06bef97ab548e0f794bb2e6207fc1
  drivers/net/ethernet/mellanox/mlx5/core/en/selq.h | 11 +++++++++++
  1 file changed, 11 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 @@ -5,6 +5,7 @@
@@ -16,7 +18,7 @@ Change-Id: I7ef730d8dcb06bef97ab548e0f794bb2e6207fc1
  
  struct mlx5e_selq_params;
  
-@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb(u16 txq, u16 num_channels)
  	return txq;
  }
  

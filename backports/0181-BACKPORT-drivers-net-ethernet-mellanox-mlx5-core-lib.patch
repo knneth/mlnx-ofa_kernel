@@ -7,9 +7,11 @@ Change-Id: Ifa3db2b3b6917b1b3dacf8578790f979fa69a626
  drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h b/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/geneve.h
-@@ -18,7 +18,7 @@ int mlx5_geneve_tlv_option_add(struct ml
+@@ -18,7 +18,7 @@ int mlx5_geneve_tlv_option_add(struct mlx5_geneve *geneve, struct geneve_opt *op
  void mlx5_geneve_tlv_option_del(struct mlx5_geneve *geneve);
  
  #else /* CONFIG_MLX5_ESWITCH */

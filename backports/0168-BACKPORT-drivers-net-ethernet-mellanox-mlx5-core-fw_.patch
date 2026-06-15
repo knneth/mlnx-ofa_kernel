@@ -6,9 +6,11 @@ Change-Id: Id8059e12c99685b2785658eda548129b014f7e78
  drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.h
-@@ -11,7 +11,9 @@ int mlx5_fw_reset_set_reset_sync(struct
+@@ -11,7 +11,9 @@ int mlx5_fw_reset_set_reset_sync(struct mlx5_core_dev *dev, u8 reset_type_sel,
  				 struct netlink_ext_ack *extack);
  int mlx5_fw_reset_set_live_patch(struct mlx5_core_dev *dev);
  
@@ -18,7 +20,7 @@ Change-Id: Id8059e12c99685b2785658eda548129b014f7e78
  int mlx5_fw_reset_verify_fw_complete(struct mlx5_core_dev *dev,
  				     struct netlink_ext_ack *extack);
  void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev);
-@@ -19,5 +21,9 @@ void mlx5_fw_reset_events_stop(struct ml
+@@ -19,5 +21,9 @@ void mlx5_fw_reset_events_stop(struct mlx5_core_dev *dev);
  void mlx5_drain_fw_reset(struct mlx5_core_dev *dev);
  int mlx5_fw_reset_init(struct mlx5_core_dev *dev);
  void mlx5_fw_reset_cleanup(struct mlx5_core_dev *dev);

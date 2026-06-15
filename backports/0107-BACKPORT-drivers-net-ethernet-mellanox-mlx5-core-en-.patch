@@ -7,6 +7,8 @@ Change-Id: Id069c1d917473ab4b80420b6218c65ba64933593
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.h
 @@ -24,4 +24,8 @@ int

@@ -6,9 +6,11 @@ Change-Id: Ic7bd17e733b668e88296391f6ab4ceaa1c0b5fd5
  drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/mpfs.c
-@@ -136,6 +136,7 @@ int mlx5_mpfs_add_mac(struct mlx5_core_d
+@@ -136,6 +136,7 @@ int mlx5_mpfs_add_mac(struct mlx5_core_dev *dev, u8 *mac)
  	struct l2table_node *l2addr;
  	int err = 0;
  	u32 index;
@@ -16,7 +18,7 @@ Change-Id: Ic7bd17e733b668e88296391f6ab4ceaa1c0b5fd5
  
  	if (!mpfs)
  		return 0;
-@@ -184,6 +185,7 @@ int mlx5_mpfs_del_mac(struct mlx5_core_d
+@@ -184,6 +185,7 @@ int mlx5_mpfs_del_mac(struct mlx5_core_dev *dev, u8 *mac)
  	struct l2table_node *l2addr;
  	int err = 0;
  	u32 index;

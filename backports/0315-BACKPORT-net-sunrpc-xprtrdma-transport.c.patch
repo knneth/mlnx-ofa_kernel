@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/transport.c | 129 +++++++++++++++++++++++++++++++-
  1 file changed, 126 insertions(+), 3 deletions(-)
 
+diff --git a/net/sunrpc/xprtrdma/transport.c b/net/sunrpc/xprtrdma/transport.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/transport.c
 +++ b/net/sunrpc/xprtrdma/transport.c
 @@ -58,8 +58,15 @@
@@ -25,7 +27,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /*
   * tunables
   */
-@@ -69,7 +76,9 @@ unsigned int xprt_rdma_max_inline_read =
+@@ -69,7 +76,9 @@ unsigned int xprt_rdma_max_inline_read = RPCRDMA_DEF_INLINE;
  unsigned int xprt_rdma_max_inline_write = RPCRDMA_DEF_INLINE;
  unsigned int xprt_rdma_memreg_strategy		= RPCRDMA_FRWR;
  int xprt_rdma_pad_optimize;
@@ -35,7 +37,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
  
-@@ -81,6 +90,9 @@ static unsigned int max_padding = PAGE_S
+@@ -81,6 +90,9 @@ static unsigned int max_padding = PAGE_SIZE;
  static unsigned int min_memreg = RPCRDMA_BOUNCEBUFFERS;
  static unsigned int max_memreg = RPCRDMA_LAST - 1;
  static unsigned int dummy;
@@ -45,7 +47,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  static struct ctl_table_header *sunrpc_table_header;
  
-@@ -118,7 +130,11 @@ static struct ctl_table xr_tunables_tabl
+@@ -118,7 +130,11 @@ static struct ctl_table xr_tunables_table[] = {
  		.maxlen		= sizeof(unsigned int),
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec_minmax,
@@ -57,7 +59,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		.extra2		= &max_padding,
  	},
  	{
-@@ -140,6 +156,17 @@ static struct ctl_table xr_tunables_tabl
+@@ -140,6 +156,17 @@ static struct ctl_table xr_tunables_table[] = {
  	{ },
  };
  
@@ -75,7 +77,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  #endif
  
  static const struct rpc_xprt_ops xprt_rdma_procs;
-@@ -226,11 +253,13 @@ xprt_rdma_connect_worker(struct work_str
+@@ -226,11 +253,13 @@ xprt_rdma_connect_worker(struct work_struct *work)
  	struct rpcrdma_xprt *r_xprt = container_of(work, struct rpcrdma_xprt,
  						   rx_connect_worker.work);
  	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
@@ -90,7 +92,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	rc = rpcrdma_xprt_connect(r_xprt);
  	xprt_clear_connecting(xprt);
  	if (!rc) {
-@@ -240,11 +269,22 @@ xprt_rdma_connect_worker(struct work_str
+@@ -240,11 +269,22 @@ xprt_rdma_connect_worker(struct work_struct *work)
  					   xprt->stat.connect_start;
  		xprt_set_connected(xprt);
  		rc = -EAGAIN;
@@ -113,7 +115,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -261,7 +301,9 @@ xprt_rdma_inject_disconnect(struct rpc_x
+@@ -261,7 +301,9 @@ xprt_rdma_inject_disconnect(struct rpc_xprt *xprt)
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -123,7 +125,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	rdma_disconnect(r_xprt->rx_ep->re_id);
  }
  
-@@ -321,8 +363,10 @@ xprt_setup_rdma(struct xprt_create *args
+@@ -321,8 +363,10 @@ xprt_setup_rdma(struct xprt_create *args)
  	}
  
  	xprt->timeout = &xprt_rdma_default_timeout;
@@ -134,7 +136,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	xprt->bind_timeout = RPCRDMA_BIND_TO;
  	xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
  	xprt->idle_timeout = RPCRDMA_IDLE_DISC_TO;
-@@ -338,7 +382,9 @@ xprt_setup_rdma(struct xprt_create *args
+@@ -338,7 +382,9 @@ xprt_setup_rdma(struct xprt_create *args)
  	/* Ensure xprt->addr holds valid server TCP (not RDMA)
  	 * address, for any side protocols which peek at it */
  	xprt->prot = IPPROTO_TCP;
@@ -144,7 +146,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	xprt->addrlen = args->addrlen;
  	memcpy(&xprt->addr, sap, xprt->addrlen);
  
-@@ -426,6 +472,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, s
+@@ -426,6 +472,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, struct rpc_task *task)
  	xprt_force_disconnect(xprt);
  }
  
@@ -152,7 +154,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /**
   * xprt_rdma_set_connect_timeout - set timeouts for establishing a connection
   * @xprt: controlling transport instance
-@@ -439,7 +486,9 @@ static void xprt_rdma_set_connect_timeou
+@@ -439,7 +486,9 @@ static void xprt_rdma_set_connect_timeout(struct rpc_xprt *xprt,
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -162,7 +164,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	spin_lock(&xprt->transport_lock);
  
-@@ -463,6 +512,7 @@ static void xprt_rdma_set_connect_timeou
+@@ -463,6 +512,7 @@ static void xprt_rdma_set_connect_timeout(struct rpc_xprt *xprt,
  
  	spin_unlock(&xprt->transport_lock);
  }
@@ -170,7 +172,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * xprt_rdma_connect - schedule an attempt to reconnect
-@@ -475,17 +525,39 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
+@@ -475,17 +525,39 @@ xprt_rdma_connect(struct rpc_xprt *xprt, struct rpc_task *task)
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  	struct rpcrdma_ep *ep = r_xprt->rx_ep;
@@ -211,7 +213,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -512,7 +584,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xp
+@@ -512,7 +584,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xprt, struct rpc_task *task)
  
  out_sleep:
  	task->tk_status = -ENOMEM;
@@ -224,7 +226,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -527,11 +604,18 @@ xprt_rdma_free_slot(struct rpc_xprt *xpr
+@@ -527,11 +604,18 @@ xprt_rdma_free_slot(struct rpc_xprt *xprt, struct rpc_rqst *rqst)
  	struct rpcrdma_xprt *r_xprt =
  		container_of(xprt, struct rpcrdma_xprt, rx_xprt);
  
@@ -243,7 +245,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  static bool rpcrdma_check_regbuf(struct rpcrdma_xprt *r_xprt,
-@@ -561,7 +645,19 @@ xprt_rdma_allocate(struct rpc_task *task
+@@ -561,7 +645,19 @@ xprt_rdma_allocate(struct rpc_task *task)
  	struct rpc_rqst *rqst = task->tk_rqstp;
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(rqst->rq_xprt);
  	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
@@ -288,7 +290,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	struct rpc_xprt *xprt = rqst->rq_xprt;
  	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
-@@ -634,8 +738,10 @@ xprt_rdma_send_request(struct rpc_rqst *
+@@ -634,8 +738,10 @@ xprt_rdma_send_request(struct rpc_rqst *rqst)
  	if (!xprt_connected(xprt))
  		return -ENOTCONN;
  
@@ -299,7 +301,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	rc = rpcrdma_marshal_req(r_xprt, rqst);
  	if (rc < 0)
-@@ -721,14 +827,18 @@ xprt_rdma_disable_swap(struct rpc_xprt *
+@@ -721,14 +827,18 @@ xprt_rdma_disable_swap(struct rpc_xprt *xprt)
  /*
   * Plumbing for rpc transport switch and kernel module
   */
@@ -319,7 +321,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	.timer			= xprt_rdma_timer,
  	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */
  	.set_port		= xprt_rdma_set_port,
-@@ -738,15 +848,22 @@ static const struct rpc_xprt_ops xprt_rd
+@@ -738,15 +848,22 @@ static const struct rpc_xprt_ops xprt_rdma_procs = {
  	.send_request		= xprt_rdma_send_request,
  	.close			= xprt_rdma_close,
  	.destroy		= xprt_rdma_destroy,
@@ -360,7 +362,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
 +		sunrpc_table_header = register_sysctl_table(sunrpc_table);
 +#else
  		sunrpc_table_header = register_sysctl("sunrpc", xr_tunables_table);
- #endif
 +#endif
+ #endif
  	return 0;
  }

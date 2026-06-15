@@ -6,6 +6,8 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  .../net/ethernet/mellanox/mlx5/core/en/trap.c | 23 +++++++++++++++++++
  1 file changed, 23 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/trap.c
 @@ -1,6 +1,15 @@
@@ -24,7 +26,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  #include "en/txrx.h"
  #include "en/params.h"
  #include "en/trap.h"
-@@ -52,7 +61,9 @@ static void mlx5e_init_trap_rq(struct ml
+@@ -52,7 +61,9 @@ static void mlx5e_init_trap_rq(struct mlx5e_trap *t, struct mlx5e_params *params
  	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
  	rq->stats        = &priv->trap_stats.rq;
  	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
@@ -34,7 +36,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  	mlx5e_rq_set_trap_handlers(rq, params);
  }
  
-@@ -135,7 +146,11 @@ static struct mlx5e_trap *mlx5e_open_tra
+@@ -135,7 +146,11 @@ static struct mlx5e_trap *mlx5e_open_trap(struct mlx5e_priv *priv)
  	t->mkey_be  = cpu_to_be32(priv->mdev->mlx5e_res.hw_objs.mkey);
  	t->stats    = &priv->trap_stats.ch;
  
@@ -46,7 +48,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  
  	err = mlx5e_open_trap_rq(priv, t);
  	if (unlikely(err))
-@@ -222,11 +237,13 @@ static int mlx5e_handle_action_trap(stru
+@@ -222,11 +237,13 @@ static int mlx5e_handle_action_trap(struct mlx5e_priv *priv, int trap_id)
  		if (err)
  			goto err_out;
  		break;
@@ -60,7 +62,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  	default:
  		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
  		err = -EINVAL;
-@@ -246,9 +263,11 @@ static int mlx5e_handle_action_drop(stru
+@@ -246,9 +263,11 @@ static int mlx5e_handle_action_drop(struct mlx5e_priv *priv, int trap_id)
  	case DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER:
  		mlx5e_remove_vlan_trap(priv->fs);
  		break;
@@ -72,7 +74,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  	default:
  		netdev_warn(priv->netdev, "%s: Unknown trap id %d\n", __func__, trap_id);
  		return -EINVAL;
-@@ -302,7 +321,9 @@ static int mlx5e_apply_trap(struct mlx5e
+@@ -302,7 +321,9 @@ static int mlx5e_apply_trap(struct mlx5e_priv *priv, int trap_id, bool enable)
  
  static const int mlx5e_traps_arr[] = {
  	DEVLINK_TRAP_GENERIC_ID_INGRESS_VLAN_FILTER,
@@ -82,7 +84,7 @@ Change-Id: I1bf70ff04cfedc1903ffd268a43d33367458a85f
  };
  
  int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
-@@ -317,3 +338,5 @@ int mlx5e_apply_traps(struct mlx5e_priv
+@@ -317,3 +338,5 @@ int mlx5e_apply_traps(struct mlx5e_priv *priv, bool enable)
  	}
  	return 0;
  }

@@ -6,6 +6,8 @@ Change-Id: I3a3e9247bc4983bd9fa02473adda720e93e42116
  drivers/net/ethernet/mellanox/mlx5/core/cq.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/cq.c b/drivers/net/ethernet/mellanox/mlx5/core/cq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cq.c
 @@ -41,11 +41,19 @@

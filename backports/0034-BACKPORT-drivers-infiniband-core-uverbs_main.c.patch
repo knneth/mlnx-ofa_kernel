@@ -6,6 +6,8 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  drivers/infiniband/core/uverbs_main.c | 65 ++++++++++++++++++++++++---
  1 file changed, 60 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/infiniband/core/uverbs_main.c b/drivers/infiniband/core/uverbs_main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_main.c
 +++ b/drivers/infiniband/core/uverbs_main.c
 @@ -29,6 +29,7 @@
@@ -54,7 +56,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  	.name = "infiniband_verbs",
  	.devnode = uverbs_devnode,
  };
-@@ -101,7 +113,6 @@ struct ib_ucontext *ib_uverbs_get_uconte
+@@ -101,7 +113,6 @@ struct ib_ucontext *ib_uverbs_get_ucontext_file(struct ib_uverbs_file *ufile)
  	 * get_context, we get NULL or valid ucontext.
  	 */
  	struct ib_ucontext *ucontext = smp_load_acquire(&ufile->ucontext);
@@ -62,7 +64,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  	if (!srcu_dereference(ufile->device->ib_dev,
  			      &ufile->device->disassociate_srcu))
  		return ERR_PTR(-EIO);
-@@ -353,7 +364,9 @@ const struct file_operations uverbs_even
+@@ -353,7 +364,9 @@ const struct file_operations uverbs_event_fops = {
  	.poll    = ib_uverbs_comp_event_poll,
  	.release = uverbs_uobject_fd_release,
  	.fasync  = ib_uverbs_comp_event_fasync,
@@ -72,7 +74,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  };
  
  const struct file_operations uverbs_async_event_fops = {
-@@ -362,7 +375,9 @@ const struct file_operations uverbs_asyn
+@@ -362,7 +375,9 @@ const struct file_operations uverbs_async_event_fops = {
  	.poll    = ib_uverbs_async_event_poll,
  	.release = uverbs_async_event_release,
  	.fasync  = ib_uverbs_async_event_fasync,
@@ -82,7 +84,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  };
  
  void ib_uverbs_comp_handler(struct ib_cq *cq, void *cq_context)
-@@ -531,8 +546,14 @@ static ssize_t verify_hdr(struct ib_uver
+@@ -531,8 +546,14 @@ static ssize_t verify_hdr(struct ib_uverbs_cmd_hdr *hdr,
  			if (hdr->out_words * 8 < method_elm->resp_size)
  				return -ENOSPC;
  
@@ -97,7 +99,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  				return -EFAULT;
  		} else {
  			if (hdr->out_words || ex_hdr->provider_out_words)
-@@ -810,7 +831,6 @@ static vm_fault_t rdma_umap_fault(struct
+@@ -810,7 +831,6 @@ static vm_fault_t rdma_umap_fault(struct vm_fault *vmf)
  
  	return ret;
  }
@@ -105,7 +107,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  static const struct vm_operations_struct rdma_umap_ops = {
  	.open = rdma_umap_open,
  	.close = rdma_umap_close,
-@@ -856,7 +876,11 @@ void uverbs_user_mmap_disassociate(struc
+@@ -856,7 +876,11 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
  		 * at a time to get the lock ordering right. Typically there
  		 * will only be one mm, so no big deal.
  		 */
@@ -117,7 +119,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  		mutex_lock(&ufile->umap_lock);
  		list_for_each_entry_safe (priv, next_priv, &ufile->umaps,
  					  list) {
-@@ -875,7 +899,11 @@ void uverbs_user_mmap_disassociate(struc
+@@ -875,7 +899,11 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
  			}
  		}
  		mutex_unlock(&ufile->umap_lock);
@@ -130,7 +132,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  		mmput(mm);
  	}
  }
-@@ -956,7 +984,11 @@ static int ib_uverbs_open(struct inode *
+@@ -956,7 +984,11 @@ static int ib_uverbs_open(struct inode *inode, struct file *filp)
  
  	setup_ufile_idr_uobject(file);
  
@@ -142,7 +144,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  
  err_module:
  	module_put(ib_dev->ops.owner);
-@@ -991,7 +1023,9 @@ static const struct file_operations uver
+@@ -991,7 +1023,9 @@ static const struct file_operations uverbs_fops = {
  	.write	 = ib_uverbs_write,
  	.open	 = ib_uverbs_open,
  	.release = ib_uverbs_close,
@@ -152,7 +154,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  	.unlocked_ioctl = ib_uverbs_ioctl,
  	.compat_ioctl = compat_ptr_ioctl,
  };
-@@ -1002,7 +1036,9 @@ static const struct file_operations uver
+@@ -1002,7 +1036,9 @@ static const struct file_operations uverbs_mmap_fops = {
  	.mmap    = ib_uverbs_mmap,
  	.open	 = ib_uverbs_open,
  	.release = ib_uverbs_close,
@@ -162,7 +164,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  	.unlocked_ioctl = ib_uverbs_ioctl,
  	.compat_ioctl = compat_ptr_ioctl,
  };
-@@ -1143,13 +1179,21 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -1143,13 +1179,21 @@ static int ib_uverbs_add_one(struct ib_device *device)
  	rcu_assign_pointer(uverbs_dev->ib_dev, device);
  	uverbs_dev->num_comp_vectors = device->num_comp_vectors;
  
@@ -184,7 +186,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  	if (devnum >= IB_UVERBS_NUM_FIXED_MINOR)
  		base = dynamic_uverbs_dev + devnum - IB_UVERBS_NUM_FIXED_MINOR;
  	else
-@@ -1174,7 +1218,11 @@ static int ib_uverbs_add_one(struct ib_d
+@@ -1174,7 +1218,11 @@ static int ib_uverbs_add_one(struct ib_device *device)
  	return 0;
  
  err_uapi:
@@ -196,7 +198,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  err:
  	if (refcount_dec_and_test(&uverbs_dev->refcount))
  		ib_uverbs_comp_dev(uverbs_dev);
-@@ -1207,7 +1255,6 @@ static void ib_uverbs_free_hw_resources(
+@@ -1207,7 +1255,6 @@ static void ib_uverbs_free_hw_resources(struct ib_uverbs_device *uverbs_dev,
  
  		uverbs_destroy_ufile_hw(file, RDMA_REMOVE_DRIVER_REMOVE);
  		kref_put(&file->ref, ib_uverbs_release_file);
@@ -204,7 +206,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  		mutex_lock(&uverbs_dev->lists_mutex);
  	}
  	mutex_unlock(&uverbs_dev->lists_mutex);
-@@ -1221,7 +1268,11 @@ static void ib_uverbs_remove_one(struct
+@@ -1221,7 +1268,11 @@ static void ib_uverbs_remove_one(struct ib_device *device, void *client_data)
  	int wait_clients = 1;
  
  	cdev_device_del(&uverbs_dev->cdev, &uverbs_dev->dev);
@@ -216,7 +218,7 @@ Change-Id: I9f0164f6254ec35299c869597c5e253fe37490dc
  
  	if (device->ops.disassociate_ucontext) {
  		/* We disassociate HW resources and immediately return.
-@@ -1310,7 +1361,11 @@ static void __exit ib_uverbs_cleanup(voi
+@@ -1310,7 +1361,11 @@ static void __exit ib_uverbs_cleanup(void)
  				 IB_UVERBS_NUM_FIXED_MINOR);
  	unregister_chrdev_region(dynamic_uverbs_dev,
  				 IB_UVERBS_NUM_DYNAMIC_MINOR);

@@ -6,6 +6,8 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  drivers/infiniband/hw/mlx5/mr.c | 77 ++++++++++++++++++++++++++++-----
  1 file changed, 66 insertions(+), 11 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/mr.c b/drivers/infiniband/hw/mlx5/mr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/mr.c
 +++ b/drivers/infiniband/hw/mlx5/mr.c
 @@ -40,7 +40,9 @@
@@ -18,7 +20,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  #include <rdma/ib_umem_odp.h>
  #include "dm.h"
  #include "mlx5_ib.h"
-@@ -621,10 +623,17 @@ static struct attribute *order_default_a
+@@ -621,10 +623,17 @@ static struct attribute *order_default_attrs[] = {
  	NULL
  };
  
@@ -39,7 +41,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  };
  
  static bool someone_releasing(struct mlx5_mkey_cache *cache)
-@@ -928,8 +937,7 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(s
+@@ -928,8 +937,7 @@ struct mlx5_ib_mr *mlx5_mr_cache_alloc(struct mlx5_ib_dev *dev,
  
  static void delay_time_func(struct timer_list *t)
  {
@@ -49,7 +51,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  	WRITE_ONCE(dev->fill_delay, 0);
  }
  
-@@ -1565,6 +1573,7 @@ static struct ib_mr *create_real_mr(stru
+@@ -1565,6 +1573,7 @@ static struct ib_mr *create_real_mr(struct ib_pd *pd, struct ib_umem *umem,
  	return &mr->ibmr;
  }
  
@@ -57,7 +59,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  					u64 iova, int access_flags,
  					struct ib_udata *udata)
-@@ -1586,7 +1595,7 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1586,7 +1595,7 @@ static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  		if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
  			return ERR_PTR(-EINVAL);
  
@@ -66,7 +68,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  		if (IS_ERR(mr))
  			return ERR_CAST(mr);
  		return &mr->ibmr;
-@@ -1596,8 +1605,12 @@ static struct ib_mr *create_user_odp_mr(
+@@ -1596,8 +1605,12 @@ static struct ib_mr *create_user_odp_mr(struct ib_pd *pd, u64 start, u64 length,
  	if (!mlx5r_umr_can_load_pas(dev, length))
  		return ERR_PTR(-EINVAL);
  
@@ -87,7 +89,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  
  struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  				  u64 iova, int access_flags,
-@@ -1642,16 +1656,24 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct
+@@ -1642,16 +1656,24 @@ struct ib_mr *mlx5_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
  	if (err)
  		return ERR_PTR(err);
  
@@ -112,7 +114,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  {
  	struct ib_umem_dmabuf *umem_dmabuf = attach->importer_priv;
-@@ -1667,7 +1689,9 @@ static void mlx5_ib_dmabuf_invalidate_cb
+@@ -1667,7 +1689,9 @@ static void mlx5_ib_dmabuf_invalidate_cb(struct dma_buf_attachment *attach)
  }
  
  static struct dma_buf_attach_ops mlx5_ib_dmabuf_attach_ops = {
@@ -130,7 +132,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  
  static struct ib_mr *
  reg_user_mr_dmabuf_by_data_direct(struct ib_pd *pd, u64 offset,
-@@ -1758,9 +1783,14 @@ reg_user_mr_dmabuf_by_data_direct(struct
+@@ -1758,9 +1783,14 @@ reg_user_mr_dmabuf_by_data_direct(struct ib_pd *pd, u64 offset,
  	 * Since RO is not a must, mask it out accordingly.
  	 */
  	access_flags &= ~IB_ACCESS_RELAXED_ORDERING;
@@ -145,7 +147,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  	if (IS_ERR(crossed_mr)) {
  		ret = PTR_ERR(crossed_mr);
  		goto end;
-@@ -1816,10 +1846,13 @@ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf
+@@ -1816,10 +1846,13 @@ struct ib_mr *mlx5_ib_reg_user_mr_dmabuf(struct ib_pd *pd, u64 offset,
  	if (mlx5_access_flags & MLX5_IB_UAPI_REG_DMABUF_ACCESS_DATA_DIRECT)
  		return reg_user_mr_dmabuf_by_data_direct(pd, offset, length, virt_addr,
  							 fd, access_flags);
@@ -160,7 +162,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  }
  
  /*
-@@ -1985,8 +2018,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(stru
+@@ -1985,8 +2018,11 @@ struct ib_mr *mlx5_ib_rereg_user_mr(struct ib_mr *ib_mr, int flags, u64 start,
  	    can_use_umr_rereg_access(dev, mr->access_flags, new_access_flags)) {
  		struct ib_umem *new_umem;
  		unsigned long page_size;
@@ -173,7 +175,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  					    new_access_flags,
  					    IB_PEER_MEM_INVAL_SUPP);
  		if (IS_ERR(new_umem))
-@@ -2140,17 +2176,21 @@ void mlx5_ib_revoke_data_direct_mrs(stru
+@@ -2140,17 +2176,21 @@ void mlx5_ib_revoke_data_direct_mrs(struct mlx5_ib_dev *dev)
  
  static int mlx5_umr_revoke_mr_with_lock(struct mlx5_ib_mr *mr)
  {
@@ -195,7 +197,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  
  	ret = mlx5r_umr_revoke_mr(mr);
  
-@@ -2160,20 +2200,24 @@ static int mlx5_umr_revoke_mr_with_lock(
+@@ -2160,20 +2200,24 @@ static int mlx5_umr_revoke_mr_with_lock(struct mlx5_ib_mr *mr)
  		mutex_unlock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  	}
  
@@ -220,7 +222,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  	struct mlx5_ib_dev *dev = to_mdev(mr->ibmr.device);
  	struct mlx5_cache_ent *ent = mr->mmkey.cache_ent;
  	bool is_odp = is_odp_mr(mr);
-@@ -2201,10 +2245,12 @@ static int mlx5r_handle_mkey_cleanup(str
+@@ -2201,10 +2245,12 @@ static int mlx5r_handle_mkey_cleanup(struct mlx5_ib_mr *mr)
  		if (is_odp)
  			mutex_lock(&to_ib_umem_odp(mr->umem)->umem_mutex);
  
@@ -248,7 +250,7 @@ Change-Id: I0f3c1f3246c4113398ca4e550aad74521a637b18
  	}
  
  	return ret;
-@@ -3190,10 +3238,17 @@ static struct attribute *cache_default_a
+@@ -3190,10 +3238,17 @@ static struct attribute *cache_default_attrs[] = {
  	NULL
  };
  

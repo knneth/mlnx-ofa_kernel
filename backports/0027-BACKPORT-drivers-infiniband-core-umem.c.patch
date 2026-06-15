@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
 ---
- drivers/infiniband/core/umem.c | 436 ++++++++++++++++++++++++++++++++-
- 1 file changed, 432 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/umem.c | 434 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 431 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/umem.c
 +++ b/drivers/infiniband/core/umem.c
 @@ -39,9 +39,17 @@
@@ -26,7 +28,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  
  #include "uverbs.h"
  
-@@ -49,19 +57,58 @@
+@@ -51,23 +59,62 @@
  
  static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
  {
@@ -43,21 +45,25 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	if (dirty)
  		ib_dma_unmap_sgtable_attrs(dev, &umem->sgt_append.sgt,
  					   DMA_BIDIRECTIONAL, 0);
+-
 +#else
 +	if (umem->nmap > 0)
 +		ib_dma_unmap_sg(dev, umem->sg_head.sgl, umem->sg_nents,
 +				DMA_BIDIRECTIONAL);
 +#endif
- 
++
 +#ifdef HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED
 +#ifdef HAVE_SG_APPEND_TABLE
- 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i)
+ 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
 +#else
-+	for_each_sg(umem->sg_head.sgl, sg, umem->sg_nents, i)
-+#endif
++	for_each_sg(umem->sg_head.sgl, sg, umem->sg_nents, i) {
++#endif	/* HAVE_SG_APPEND_TABLE */
  		unpin_user_page_range_dirty_lock(sg_page(sg),
--			DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
-+				DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
+ 			DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
+ 
+ 		if (i && !(i % RESCHED_LOOP_CNT_THRESHOLD))
+ 			cond_resched();
+ 	}
 +#else
 +	for_each_sg_page(umem->sg_head.sgl, &sg_iter, umem->sg_nents, 0) {
 +		page = sg_page_iter_page(&sg_iter);
@@ -74,19 +80,19 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
 +		if (!PageDirty(page) && umem->writable && dirty)
 +			set_page_dirty_lock(page);
 +		put_page(page);
-+#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
++#endif /* HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED */
 +	}
-+#endif /*HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED*/
++#endif	/* HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED */
  
 +#ifdef HAVE_SG_APPEND_TABLE
  	sg_free_append_table(&umem->sgt_append);
 +#else
 +	sg_free_table(&umem->sg_head);
-+#endif /*HAVE_SG_APPEND_TABLE*/
++#endif
  }
  
  /**
-@@ -89,6 +136,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -95,6 +142,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  
  	umem->iova = va = virt;
  
@@ -94,7 +100,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	if (umem->is_odp) {
  		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
  
-@@ -97,6 +145,7 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -103,6 +151,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  			return 0;
  		return page_size;
  	}
@@ -102,7 +108,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  
  	/* The best result is the smallest page size that results in the minimum
  	 * number of required pages. Compute the largest page size that could
-@@ -108,7 +157,12 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -114,7 +163,12 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  	/* offset into first SGL */
  	pgoff = umem->address & ~PAGE_MASK;
  
@@ -115,7 +121,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  		/* Walk SGL and reduce max page size if VA/PA bits differ
  		 * for any address.
  		 */
-@@ -118,7 +172,11 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -124,7 +178,11 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  		 * the maximum possible page size as the low bits of the iova
  		 * must be zero when starting the next chunk.
  		 */
@@ -127,7 +133,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  			mask |= va;
  		pgoff = 0;
  	}
-@@ -133,6 +191,64 @@ unsigned long ib_umem_find_best_pgsz(str
+@@ -139,6 +197,64 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  }
  EXPORT_SYMBOL(ib_umem_find_best_pgsz);
  
@@ -192,7 +198,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  /**
   * __ib_umem_get - Pin and DMA map userspace memory.
   *
-@@ -142,20 +258,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -148,20 +264,64 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -257,7 +263,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -178,7 +338,15 @@ static struct ib_umem *__ib_umem_get(str
+@@ -184,7 +344,15 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -273,7 +279,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	umem->length     = size;
  	umem->address    = addr;
  	/*
-@@ -190,12 +358,24 @@ static struct ib_umem *__ib_umem_get(str
+@@ -196,12 +364,24 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	umem->owning_mm = mm = current->mm;
  	mmgrab(mm);
  
@@ -299,7 +305,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -204,31 +384,80 @@ static struct ib_umem *__ib_umem_get(str
+@@ -210,31 +390,80 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  
  	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
  
@@ -346,6 +352,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
 +#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
  	if (umem->writable)
  		gup_flags |= FOLL_WRITE;
+-
 +#else
 +	if (!umem->writable)
 +		gup_flags |= FOLL_FORCE;
@@ -354,7 +361,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
 +#if !defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
 +	sg = umem->sg_head.sgl;
 +#endif
- 
++
 +#ifdef HAVE_SG_APPEND_TABLE
  	while (npages) {
  		cond_resched();
@@ -380,7 +387,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  			goto umem_release;
  		}
  
-@@ -256,8 +485,154 @@ static struct ib_umem *__ib_umem_get(str
+@@ -262,8 +491,154 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	}
  	goto out;
  
@@ -535,7 +542,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -278,8 +653,22 @@ umem_release:
+@@ -284,8 +659,22 @@ umem_release:
  		goto out;
  	}
  vma:
@@ -558,7 +565,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	free_page((unsigned long) page_list);
  umem_kfree:
  	if (ret) {
-@@ -289,19 +678,36 @@ umem_kfree:
+@@ -295,19 +684,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -595,7 +602,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -313,16 +719,34 @@ void ib_umem_release(struct ib_umem *ume
+@@ -319,16 +725,34 @@ void ib_umem_release(struct ib_umem *umem)
  {
  	if (!umem)
  		return;
@@ -630,7 +637,7 @@ Change-Id: I24f42ceba4d1e6233fb101471ba88212b708b335
  	mmdrop(umem->owning_mm);
  	kfree(umem);
  }
-@@ -350,8 +774,12 @@ int ib_umem_copy_from(void *dst, struct
+@@ -356,8 +780,12 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
  		return -EINVAL;
  	}
  

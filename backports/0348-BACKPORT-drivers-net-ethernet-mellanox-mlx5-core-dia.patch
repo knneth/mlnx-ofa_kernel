@@ -7,6 +7,8 @@ Change-Id: Ia12c6f439d51240eece630394580aa6972025197
  .../mellanox/mlx5/core/diag/fw_tracer_tracepoint.h        | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
 @@ -55,12 +55,20 @@ TRACE_EVENT(mlx5_fw,

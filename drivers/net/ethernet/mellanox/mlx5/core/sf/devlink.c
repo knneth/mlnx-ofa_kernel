@@ -162,14 +162,23 @@ int mlx5_devlink_sf_port_fn_state_get(struct devlink_port *dl_port,
 static int mlx5_sf_activate(struct mlx5_core_dev *dev, struct mlx5_sf *sf,
 			    struct netlink_ext_ack *extack)
 {
+	u32 out[MLX5_ST_SZ_DW(query_vhca_state_out)] = {};
 	struct mlx5_vport *vport;
+	u8 new_vhca_state;
 	int err;
 
 	if (mlx5_sf_is_active(sf))
 		return 0;
 	if (sf->hw_state != MLX5_VHCA_STATE_ALLOCATED) {
-		NL_SET_ERR_MSG_MOD(extack, "SF is inactivated but it is still attached");
-		return -EBUSY;
+		err = mlx5_cmd_query_vhca_state(dev, sf->hw_fn_id, out, sizeof(out));
+		if (err)
+			return err;
+		new_vhca_state = MLX5_GET(query_vhca_state_out, out,
+					  vhca_state_context.vhca_state);
+		if (new_vhca_state != MLX5_VHCA_STATE_ALLOCATED) {
+			NL_SET_ERR_MSG_MOD(extack, "SF is inactivated but it is still attached");
+			return -EBUSY;
+		}
 	}
 
 	vport = mlx5_devlink_port_vport_get(&sf->dl_port.dl_port);

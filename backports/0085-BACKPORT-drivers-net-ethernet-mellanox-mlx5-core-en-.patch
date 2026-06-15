@@ -6,9 +6,11 @@ Change-Id: I76ef6cbe8a83b5f147d54f3371b871978a30b0d2
  drivers/net/ethernet/mellanox/mlx5/core/en/params.h | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.h
-@@ -84,8 +84,10 @@ void mlx5e_set_rx_cq_mode_params(struct
+@@ -84,8 +84,10 @@ void mlx5e_set_rx_cq_mode_params(struct mlx5e_params *params, u8 cq_period_mode)
  
  bool slow_pci_heuristic(struct mlx5_core_dev *mdev);
  int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params *params);

@@ -7,6 +7,8 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  .../ethernet/mellanox/mlx5/core/sf/devlink.c  | 71 +++++++++++++++++--
  1 file changed, 66 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/devlink.c
 @@ -34,9 +34,26 @@ struct mlx5_sf_table {
@@ -36,7 +38,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  static struct mlx5_sf *
  mlx5_sf_lookup_by_function_id(struct mlx5_sf_table *table, unsigned int fn_id)
  {
-@@ -142,8 +159,12 @@ static bool mlx5_sf_is_active(const stru
+@@ -142,8 +159,12 @@ static bool mlx5_sf_is_active(const struct mlx5_sf *sf)
  {
  	return sf->hw_state == MLX5_VHCA_STATE_ACTIVE || sf->hw_state == MLX5_VHCA_STATE_IN_USE;
  }
@@ -51,7 +53,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  				      enum devlink_port_fn_state *state,
  				      enum devlink_port_fn_opstate *opstate,
  				      struct netlink_ext_ack *extack)
-@@ -152,6 +173,9 @@ int mlx5_devlink_sf_port_fn_state_get(st
+@@ -152,6 +173,9 @@ int mlx5_devlink_sf_port_fn_state_get(struct devlink_port *dl_port,
  	struct mlx5_sf_table *table = dev->priv.sf_table;
  	struct mlx5_sf *sf = mlx5_sf_by_dl_port(dl_port);
  
@@ -61,7 +63,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  	mutex_lock(&table->sf_state_lock);
  	*state = mlx5_sf_to_devlink_state(sf->hw_state);
  	*opstate = mlx5_sf_to_devlink_opstate(sf->hw_state);
-@@ -225,7 +249,12 @@ out:
+@@ -217,7 +241,12 @@ out:
  	return err;
  }
  
@@ -75,7 +77,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  				      enum devlink_port_fn_state state,
  				      struct netlink_ext_ack *extack)
  {
-@@ -239,7 +268,11 @@ int mlx5_devlink_sf_port_fn_state_set(st
+@@ -231,7 +260,11 @@ int mlx5_devlink_sf_port_fn_state_set(struct devlink_port *dl_port,
  static int mlx5_sf_add(struct mlx5_core_dev *dev, struct mlx5_sf_table *table,
  		       const struct devlink_port_new_attrs *new_attr,
  		       struct netlink_ext_ack *extack,
@@ -87,7 +89,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  {
  	struct mlx5_eswitch *esw = dev->priv.eswitch;
  	struct mlx5_sf *sf;
-@@ -253,7 +286,11 @@ static int mlx5_sf_add(struct mlx5_core_
+@@ -245,7 +278,11 @@ static int mlx5_sf_add(struct mlx5_core_dev *dev, struct mlx5_sf_table *table,
  					 &sf->dl_port, new_attr->controller, new_attr->sfnum);
  	if (err)
  		goto esw_err;
@@ -99,7 +101,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  	trace_mlx5_sf_add(dev, sf->port_index, sf->controller, sf->hw_fn_id, new_attr->sfnum);
  	return 0;
  
-@@ -302,7 +339,11 @@ static bool mlx5_sf_table_supported(cons
+@@ -293,7 +330,11 @@ static bool mlx5_sf_table_supported(const struct mlx5_core_dev *dev)
  int mlx5_devlink_sf_port_new(struct devlink *devlink,
  			     const struct devlink_port_new_attrs *new_attr,
  			     struct netlink_ext_ack *extack,
@@ -111,7 +113,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  {
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_sf_table *table = dev->priv.sf_table;
-@@ -323,7 +364,11 @@ int mlx5_devlink_sf_port_new(struct devl
+@@ -314,7 +355,11 @@ int mlx5_devlink_sf_port_new(struct devlink *devlink,
  		return -EOPNOTSUPP;
  	}
  
@@ -123,7 +125,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  }
  
  static void mlx5_sf_dealloc(struct mlx5_sf_table *table, struct mlx5_sf *sf)
-@@ -363,13 +408,24 @@ static void mlx5_sf_del(struct mlx5_sf_t
+@@ -350,13 +395,24 @@ static void mlx5_sf_del(struct mlx5_sf_table *table, struct mlx5_sf *sf)
  	mlx5_sf_dealloc(table, sf);
  }
  
@@ -149,7 +151,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  
  	mlx5_sf_del(table, sf);
  	return 0;
-@@ -449,6 +505,7 @@ static int mlx5_sf_esw_event(struct noti
+@@ -436,6 +492,7 @@ static int mlx5_sf_esw_event(struct notifier_block *nb, unsigned long event, voi
  	return 0;
  }
  
@@ -157,7 +159,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  static int mlx5_sf_mdev_event(struct notifier_block *nb, unsigned long event, void *data)
  {
  	struct mlx5_sf_table *table = container_of(nb, struct mlx5_sf_table, mdev_nb);
-@@ -473,6 +530,7 @@ out:
+@@ -460,6 +517,7 @@ out:
  	mutex_unlock(&table->sf_state_lock);
  	return ret;
  }
@@ -165,7 +167,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  
  int mlx5_sf_table_init(struct mlx5_core_dev *dev)
  {
-@@ -500,9 +558,10 @@ int mlx5_sf_table_init(struct mlx5_core_
+@@ -487,9 +545,10 @@ int mlx5_sf_table_init(struct mlx5_core_dev *dev)
  	if (err)
  		goto vhca_err;
  
@@ -177,7 +179,7 @@ Change-Id: If7deb93c015f9c4b4a7979681f6d389b89a1b877
  	return 0;
  
  vhca_err:
-@@ -521,7 +580,9 @@ void mlx5_sf_table_cleanup(struct mlx5_c
+@@ -508,7 +567,9 @@ void mlx5_sf_table_cleanup(struct mlx5_core_dev *dev)
  	if (!table)
  		return;
  

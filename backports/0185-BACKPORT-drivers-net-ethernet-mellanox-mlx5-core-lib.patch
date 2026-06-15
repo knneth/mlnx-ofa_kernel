@@ -6,9 +6,11 @@ Change-Id: I9d74f55d8c78ea51bcbdf281fd6f3859a34f617f
  .../net/ethernet/mellanox/mlx5/core/lib/tout.c   | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/tout.c
-@@ -52,6 +52,22 @@ void mlx5_tout_cleanup(struct mlx5_core_
+@@ -52,6 +52,22 @@ void mlx5_tout_cleanup(struct mlx5_core_dev *dev)
  	kfree(dev->timeouts);
  }
  

@@ -7,6 +7,8 @@ Change-Id: Idaae35b0bac12acb475dba4188f1e8ecc0fc71f6
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/sample.h
 @@ -4,7 +4,7 @@

@@ -7,9 +7,11 @@ Change-Id: I4e0085808d7cc56c05b28c9cc9950e27d5493079
  .../ethernet/mellanox/mlx5/core/en/tc_tun_gre.c    | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_gre.c
-@@ -31,12 +31,22 @@ static int mlx5e_gen_ip_tunnel_header_gr
+@@ -31,12 +31,22 @@ static int mlx5e_gen_ip_tunnel_header_gretap(char buf[],
  	const struct ip_tunnel_key *tun_key  = &e->tun_info->key;
  	struct gre_base_hdr *greh = (struct gre_base_hdr *)(buf);
  	__be32 tun_id = tunnel_id_to_key32(tun_key->tun_id);
@@ -32,7 +34,7 @@ Change-Id: I4e0085808d7cc56c05b28c9cc9950e27d5493079
  		return -EOPNOTSUPP;
  
  	greh->protocol = htons(ETH_P_TEB);
-@@ -44,7 +54,11 @@ static int mlx5e_gen_ip_tunnel_header_gr
+@@ -44,7 +54,11 @@ static int mlx5e_gen_ip_tunnel_header_gretap(char buf[],
  	/* GRE key */
  	hdr_len	= mlx5e_tc_tun_calc_hlen_gretap(e);
  	greh->flags = gre_tnl_flags_to_gre_flags(tun_key->tun_flags);

@@ -7,9 +7,11 @@ Change-Id: If8c0dd6babd68e1b5bd3cc4ce1dcece9d3e48cdf
  drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
-@@ -83,7 +83,9 @@ static void mlx5_sf_dev_remove_aux(struc
+@@ -83,7 +83,9 @@ static void mlx5_sf_dev_remove_aux(struct mlx5_core_dev *dev,
  	trace_mlx5_sf_dev_del(dev, sf_dev, id);
  
  	auxiliary_device_delete(&sf_dev->adev);
@@ -19,7 +21,7 @@ Change-Id: If8c0dd6babd68e1b5bd3cc4ce1dcece9d3e48cdf
  	auxiliary_device_uninit(&sf_dev->adev);
  }
  
-@@ -128,10 +130,14 @@ static void mlx5_sf_dev_add(struct mlx5_
+@@ -128,10 +130,14 @@ static void mlx5_sf_dev_add(struct mlx5_core_dev *dev, u16 sf_index, u16 fn_id,
  		goto add_err;
  	}
  

@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/rpc_rdma.c | 103 ++++++++++++++++++++++++++++++++-
  1 file changed, 102 insertions(+), 1 deletion(-)
 
+diff --git a/net/sunrpc/xprtrdma/rpc_rdma.c b/net/sunrpc/xprtrdma/rpc_rdma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/rpc_rdma.c
 +++ b/net/sunrpc/xprtrdma/rpc_rdma.c
 @@ -52,8 +52,15 @@
@@ -25,7 +27,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /* Returns size of largest RPC-over-RDMA header in a Call message
   *
   * The largest Call header contains a full-size Read list and a
-@@ -310,8 +317,12 @@ static struct rpcrdma_mr_seg *rpcrdma_mr
+@@ -310,8 +317,12 @@ static struct rpcrdma_mr_seg *rpcrdma_mr_prepare(struct rpcrdma_xprt *r_xprt,
  	return frwr_map(r_xprt, seg, nsegs, writing, req->rl_slot.rq_xid, *mr);
  
  out_getmr_err:
@@ -38,7 +40,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	rpcrdma_mrs_refresh(r_xprt);
  	return ERR_PTR(-EAGAIN);
  }
-@@ -361,7 +372,9 @@ static int rpcrdma_encode_read_list(stru
+@@ -361,7 +372,9 @@ static int rpcrdma_encode_read_list(struct rpcrdma_xprt *r_xprt,
  		if (encode_read_segment(xdr, mr, pos) < 0)
  			return -EMSGSIZE;
  
@@ -48,7 +50,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.read_chunk_count++;
  		nsegs -= mr->mr_nents;
  	} while (nsegs);
-@@ -425,7 +438,9 @@ static int rpcrdma_encode_write_list(str
+@@ -425,7 +438,9 @@ static int rpcrdma_encode_write_list(struct rpcrdma_xprt *r_xprt,
  		if (encode_rdma_segment(xdr, mr) < 0)
  			return -EMSGSIZE;
  
@@ -58,7 +60,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.write_chunk_count++;
  		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
  		nchunks++;
-@@ -436,8 +451,10 @@ static int rpcrdma_encode_write_list(str
+@@ -436,8 +451,10 @@ static int rpcrdma_encode_write_list(struct rpcrdma_xprt *r_xprt,
  		if (encode_rdma_segment(xdr, ep->re_write_pad_mr) < 0)
  			return -EMSGSIZE;
  
@@ -69,7 +71,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.write_chunk_count++;
  		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
  		nchunks++;
-@@ -503,7 +520,9 @@ static int rpcrdma_encode_reply_chunk(st
+@@ -503,7 +520,9 @@ static int rpcrdma_encode_reply_chunk(struct rpcrdma_xprt *r_xprt,
  		if (encode_rdma_segment(xdr, mr) < 0)
  			return -EMSGSIZE;
  
@@ -79,7 +81,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.reply_chunk_count++;
  		r_xprt->rx_stats.total_rdma_request += mr->mr_length;
  		nchunks++;
-@@ -625,7 +644,9 @@ static bool rpcrdma_prepare_pagelist(str
+@@ -625,7 +644,9 @@ static bool rpcrdma_prepare_pagelist(struct rpcrdma_req *req,
  	return true;
  
  out_mapping_err:
@@ -89,7 +91,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return false;
  }
  
-@@ -653,7 +674,9 @@ static bool rpcrdma_prepare_tail_iov(str
+@@ -653,7 +674,9 @@ static bool rpcrdma_prepare_tail_iov(struct rpcrdma_req *req,
  	return true;
  
  out_mapping_err:
@@ -99,7 +101,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return false;
  }
  
-@@ -833,7 +856,9 @@ inline int rpcrdma_prepare_send_sges(str
+@@ -833,7 +856,9 @@ inline int rpcrdma_prepare_send_sges(struct rpcrdma_xprt *r_xprt,
  out_unmap:
  	rpcrdma_sendctx_unmap(req->rl_sendctx);
  out_nosc:
@@ -109,7 +111,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return ret;
  }
  
-@@ -867,15 +892,23 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -867,15 +892,23 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
  	__be32 *p;
  	int ret;
  
@@ -133,7 +135,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	/* Fixed header fields */
  	ret = -EMSGSIZE;
-@@ -891,7 +924,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -891,7 +924,7 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
  	 * is not allowed.
  	 */
  	ddp_allowed = !test_bit(RPCAUTH_AUTH_DATATOUCH,
@@ -142,7 +144,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	/*
  	 * Chunks needed for results?
-@@ -974,11 +1007,20 @@ rpcrdma_marshal_req(struct rpcrdma_xprt
+@@ -974,11 +1007,20 @@ rpcrdma_marshal_req(struct rpcrdma_xprt *r_xprt, struct rpc_rqst *rqst)
  	if (ret)
  		goto out_err;
  
@@ -163,7 +165,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	r_xprt->rx_stats.failed_marshal_count++;
  	frwr_reset(req);
  	return ret;
-@@ -1013,7 +1055,9 @@ void rpcrdma_reset_cwnd(struct rpcrdma_x
+@@ -1013,7 +1055,9 @@ void rpcrdma_reset_cwnd(struct rpcrdma_xprt *r_xprt)
  	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
  
  	spin_lock(&xprt->transport_lock);
@@ -173,7 +175,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	__rpcrdma_update_cwnd_locked(xprt, &r_xprt->rx_buf, 1);
  	spin_unlock(&xprt->transport_lock);
  }
-@@ -1107,8 +1151,10 @@ rpcrdma_inline_fixup(struct rpc_rqst *rq
+@@ -1107,8 +1151,10 @@ rpcrdma_inline_fixup(struct rpc_rqst *rqst, char *srcp, int copy_len, int pad)
  		rqst->rq_private_buf.tail[0].iov_base = srcp;
  	}
  
@@ -184,7 +186,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return fixup_copy_count;
  }
  
-@@ -1176,7 +1222,9 @@ static int decode_rdma_segment(struct xd
+@@ -1176,7 +1222,9 @@ static int decode_rdma_segment(struct xdr_stream *xdr, u32 *length)
  		return -EIO;
  
  	xdr_decode_rdma_segment(p, &handle, length, &offset);
@@ -194,7 +196,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return 0;
  }
  
-@@ -1329,13 +1377,19 @@ rpcrdma_decode_error(struct rpcrdma_xprt
+@@ -1329,13 +1377,19 @@ rpcrdma_decode_error(struct rpcrdma_xprt *r_xprt, struct rpcrdma_rep *rep,
  		p = xdr_inline_decode(xdr, 2 * sizeof(*p));
  		if (!p)
  			break;
@@ -214,7 +216,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	}
  
  	return -EIO;
-@@ -1358,9 +1412,17 @@ void rpcrdma_unpin_rqst(struct rpcrdma_r
+@@ -1358,9 +1412,17 @@ void rpcrdma_unpin_rqst(struct rpcrdma_rep *rep)
  	req->rl_reply = NULL;
  	rep->rr_rqst = NULL;
  
@@ -232,7 +234,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -1395,14 +1457,27 @@ void rpcrdma_complete_rqst(struct rpcrdm
+@@ -1395,14 +1457,27 @@ void rpcrdma_complete_rqst(struct rpcrdma_rep *rep)
  		goto out_badheader;
  
  out:
@@ -260,7 +262,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	r_xprt->rx_stats.bad_reply_count++;
  	rqst->rq_task->tk_status = status;
  	status = 0;
-@@ -1441,8 +1516,13 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1441,8 +1516,13 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
  		xprt->reestablish_timeout = 0;
  
  	/* Fixed transport header fields */
@@ -274,7 +276,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	p = xdr_inline_decode(&rep->rr_stream, 4 * sizeof(*p));
  	if (unlikely(!p))
  		goto out_shortreply;
-@@ -1460,12 +1540,21 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1460,12 +1540,21 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
  	/* Match incoming rpcrdma_rep to an rpcrdma_req to
  	 * get context for handling any incoming chunks.
  	 */
@@ -296,7 +298,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	if (credits == 0)
  		credits = 1;	/* don't deadlock */
-@@ -1482,7 +1571,9 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1482,7 +1571,9 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
  	req->rl_reply = rep;
  	rep->rr_rqst = rqst;
  
@@ -306,7 +308,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	if (rep->rr_wc_flags & IB_WC_WITH_INVALIDATE)
  		frwr_reminv(rep, &req->rl_registered);
-@@ -1494,16 +1585,26 @@ void rpcrdma_reply_handler(struct rpcrdm
+@@ -1494,16 +1585,26 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *rep)
  	return;
  
  out_badversion:

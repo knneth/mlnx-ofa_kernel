@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  include/linux/sunrpc/svc_rdma.h | 65 +++++++++++++++++++++++++++++++--
  1 file changed, 62 insertions(+), 3 deletions(-)
 
+diff --git a/include/linux/sunrpc/svc_rdma.h b/include/linux/sunrpc/svc_rdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/sunrpc/svc_rdma.h
 +++ b/include/linux/sunrpc/svc_rdma.h
 @@ -42,12 +42,17 @@
@@ -124,7 +126,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  extern void svc_rdma_write_chunk_release(struct svcxprt_rdma *rdma,
  					 struct svc_rdma_send_ctxt *ctxt);
  extern void svc_rdma_reply_chunk_release(struct svcxprt_rdma *rdma,
-@@ -290,6 +322,18 @@ extern int svc_rdma_prepare_reply_chunk(
+@@ -290,6 +322,18 @@ extern int svc_rdma_prepare_reply_chunk(struct svcxprt_rdma *rdma,
  extern int svc_rdma_process_read_list(struct svcxprt_rdma *rdma,
  				      struct svc_rqst *rqstp,
  				      struct svc_rdma_recv_ctxt *head);
@@ -151,7 +153,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  extern int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  			      struct svc_rdma_send_ctxt *ctxt);
  extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
-@@ -304,14 +349,28 @@ extern int svc_rdma_map_reply_msg(struct
+@@ -304,14 +349,28 @@ extern int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
  				  const struct svc_rdma_pcl *write_pcl,
  				  const struct svc_rdma_pcl *reply_pcl,
  				  const struct xdr_buf *xdr);

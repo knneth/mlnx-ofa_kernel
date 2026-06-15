@@ -7,6 +7,8 @@ Change-Id: I13bf105e0d223180012ed8b3aec6baddcb1aecb9
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/neigh.c
 @@ -10,6 +10,10 @@
@@ -20,7 +22,7 @@ Change-Id: I13bf105e0d223180012ed8b3aec6baddcb1aecb9
  #include "neigh.h"
  #include "tc.h"
  #include "en_rep.h"
-@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struc
+@@ -150,7 +154,9 @@ static void mlx5e_rep_neigh_update(struct work_struct *work)
  
  	neigh_connected = (nud_state & NUD_VALID) && !dead;
  

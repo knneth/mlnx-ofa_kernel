@@ -6,9 +6,11 @@ Change-Id: I2f8b48afd05192e82a824cc45018b7dedde10750
  drivers/net/ethernet/mellanox/mlx5/core/Makefile | 10 ++++++++--
  1 file changed, 8 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/Makefile b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/Makefile
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/Makefile
-@@ -25,6 +25,8 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw
+@@ -21,6 +21,8 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
  		sriov_sysfs.o crdump.o diag/diag_cnt.o fw_exp.o \
  		eswitch_devlink_compat.o ecpf.o wc.o auxiliary_sysfs_compat.o
  
@@ -17,7 +19,7 @@ Change-Id: I2f8b48afd05192e82a824cc45018b7dedde10750
  #
  # Netdev basic
  #
-@@ -88,8 +90,12 @@ mlx5_core-$(CONFIG_MLX5_BRIDGE)    += es
+@@ -84,8 +86,12 @@ mlx5_core-$(CONFIG_MLX5_BRIDGE)    += esw/bridge.o esw/bridge_mcast.o esw/bridge
  
  mlx5_core-$(CONFIG_HWMON)          += hwmon.o
  mlx5_core-$(CONFIG_MLX5_MPFS)      += lib/mpfs.o

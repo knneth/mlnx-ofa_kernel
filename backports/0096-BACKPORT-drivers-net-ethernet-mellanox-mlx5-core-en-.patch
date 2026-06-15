@@ -6,9 +6,11 @@ Change-Id: Ib11f1d728cf626f0471fc6a978f8f8d12d19d487
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/tc.h
-@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct
+@@ -33,12 +33,21 @@ int mlx5e_rep_encap_entry_attach(struct mlx5e_priv *priv,
  void mlx5e_rep_encap_entry_detach(struct mlx5e_priv *priv,
  				  struct mlx5e_encap_entry *e);
  

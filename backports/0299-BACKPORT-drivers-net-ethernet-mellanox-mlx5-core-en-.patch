@@ -6,6 +6,8 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  .../ethernet/mellanox/mlx5/core/en/health.c   | 274 +++++++++++++++++-
  1 file changed, 262 insertions(+), 12 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/health.c b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/health.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/health.c
 @@ -5,52 +5,172 @@
@@ -186,7 +188,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "EQ");
  	devlink_fmsg_u8_pair_put(fmsg, "eqn", eq->core.eqn);
  	devlink_fmsg_u32_pair_put(fmsg, "irqn", eq->core.irqn);
-@@ -58,8 +178,37 @@ void mlx5e_health_eq_diag_fmsg(struct ml
+@@ -58,8 +178,37 @@ void mlx5e_health_eq_diag_fmsg(struct mlx5_eq_comp *eq, struct devlink_fmsg *fms
  	devlink_fmsg_u32_pair_put(fmsg, "ci", eq->core.cons_index);
  	devlink_fmsg_u32_pair_put(fmsg, "size", eq_get_size(&eq->core));
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -225,7 +227,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  void mlx5e_health_create_reporters(struct mlx5e_priv *priv)
  {
  	mlx5e_reporter_tx_create(priv);
-@@ -74,12 +223,14 @@ void mlx5e_health_destroy_reporters(stru
+@@ -74,12 +223,14 @@ void mlx5e_health_destroy_reporters(struct mlx5e_priv *priv)
  
  void mlx5e_health_channels_update(struct mlx5e_priv *priv)
  {
@@ -240,7 +242,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  }
  
  int mlx5e_health_sq_to_ready(struct mlx5_core_dev *mdev, struct net_device *dev, u32 sqn)
-@@ -156,23 +307,55 @@ int mlx5e_health_report(struct mlx5e_pri
+@@ -156,23 +307,55 @@ int mlx5e_health_report(struct mlx5e_priv *priv,
  	if (!reporter)
  		return err_ctx->recover(err_ctx->ctx);
  
@@ -299,7 +301,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  }
  
  int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key,
-@@ -180,8 +363,13 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
+@@ -180,8 +363,13 @@ int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key
  {
  	struct mlx5_core_dev *mdev = priv->mdev;
  	struct mlx5_rsc_dump_cmd *cmd;
@@ -314,7 +316,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  	int size;
  
  	if (IS_ERR_OR_NULL(mdev->rsc_dump))
-@@ -191,7 +379,17 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
+@@ -191,7 +379,17 @@ int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key
  	if (!page)
  		return -ENOMEM;
  
@@ -332,7 +334,7 @@ Change-Id: I763a7b991342926c6965f388db2a5585607d5546
  
  	cmd = mlx5_rsc_dump_cmd_create(mdev, key);
  	if (IS_ERR(cmd)) {
-@@ -206,31 +404,83 @@ int mlx5e_health_rsc_fmsg_dump(struct ml
+@@ -206,31 +404,83 @@ int mlx5e_health_rsc_fmsg_dump(struct mlx5e_priv *priv, struct mlx5_rsc_key *key
  			goto destroy_cmd;
  		}
  

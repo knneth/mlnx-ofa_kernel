@@ -6,6 +6,8 @@ Change-Id: I16f56794318f1f06e61e109cce17871cfe67c488
  drivers/net/ethernet/mellanox/mlx5/core/hwmon.c | 9 +++++++--
  1 file changed, 7 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c b/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/hwmon.c
 @@ -1,6 +1,8 @@
@@ -17,7 +19,7 @@ Change-Id: I16f56794318f1f06e61e109cce17871cfe67c488
  #include <linux/hwmon.h>
  #include <linux/bitmap.h>
  #include <linux/mlx5/device.h>
-@@ -142,14 +144,17 @@ static umode_t mlx5_hwmon_is_visible(con
+@@ -142,14 +144,17 @@ static umode_t mlx5_hwmon_is_visible(const void *data, enum hwmon_sensor_types t
  }
  
  static int mlx5_hwmon_read_string(struct device *dev, enum hwmon_sensor_types type, u32 attr,

@@ -6,6 +6,8 @@ Change-Id: I155eb501b880f6e60684b33f17b3e357bba7e091
  drivers/nvme/host/trace.h | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
+diff --git a/drivers/nvme/host/trace.h b/drivers/nvme/host/trace.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/trace.h
 +++ b/drivers/nvme/host/trace.h
 @@ -68,9 +68,15 @@ TRACE_EVENT(nvme_setup_cmd,

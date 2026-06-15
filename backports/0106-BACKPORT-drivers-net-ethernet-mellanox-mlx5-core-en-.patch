@@ -7,6 +7,8 @@ Change-Id: Ib0a1d15d227fe2bf958615a20710de75e41b53b2
  .../mellanox/mlx5/core/en/tc/act_stats.c      | 43 ++++++++++++++++++-
  1 file changed, 42 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act_stats.c
 @@ -3,6 +3,7 @@
@@ -17,7 +19,7 @@ Change-Id: Ib0a1d15d227fe2bf958615a20710de75e41b53b2
  #include "en/tc_priv.h"
  #include "act_stats.h"
  #include "en/fs.h"
-@@ -169,11 +170,18 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+@@ -169,11 +170,18 @@ mlx5e_tc_act_stats_fill_stats(struct mlx5e_tc_act_stats_handle *handle,
  {
  	struct rhashtable *ht = &handle->ht;
  	struct mlx5e_tc_act_stats *item;
@@ -37,7 +39,7 @@ Change-Id: Ib0a1d15d227fe2bf958615a20710de75e41b53b2
  	if (!item) {
  		rcu_read_unlock();
  		err = -ENOENT;
-@@ -183,10 +191,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+@@ -183,10 +191,30 @@ mlx5e_tc_act_stats_fill_stats(struct mlx5e_tc_act_stats_handle *handle,
  	mlx5_fc_query_cached_raw(item->counter,
  				 &bytes, &pkts, &lastused);
  
@@ -68,7 +70,7 @@ Change-Id: Ib0a1d15d227fe2bf958615a20710de75e41b53b2
  
  	item->lastpackets = pkts;
  	item->lastbytes = bytes;
-@@ -197,3 +225,16 @@ mlx5e_tc_act_stats_fill_stats(struct mlx
+@@ -197,3 +225,16 @@ mlx5e_tc_act_stats_fill_stats(struct mlx5e_tc_act_stats_handle *handle,
  err_out:
  	return err;
  }

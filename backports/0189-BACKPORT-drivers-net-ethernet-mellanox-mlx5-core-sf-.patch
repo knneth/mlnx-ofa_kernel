@@ -7,6 +7,8 @@ Change-Id: Ib1737d92554580dbd7fb61a10ff2446d56d11c17
  .../ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h   | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/diag/vhca_tracepoint.h
 @@ -11,6 +11,7 @@

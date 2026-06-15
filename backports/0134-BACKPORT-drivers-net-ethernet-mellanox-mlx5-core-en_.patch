@@ -7,9 +7,11 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  .../mellanox/mlx5/core/en_accel/ipsec_rxtx.c  | 114 +++++++++++++++++-
  1 file changed, 110 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.c
-@@ -74,6 +74,9 @@ static int mlx5e_ipsec_remove_trailer(st
+@@ -74,6 +74,9 @@ static int mlx5e_ipsec_remove_trailer(struct sk_buff *skb, struct xfrm_state *x)
  
  static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  				struct mlx5_wqe_eth_seg *eseg, u8 mode,
@@ -19,7 +21,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  				struct xfrm_offload *xo)
  {
  	/* Tunnel Mode:
-@@ -88,7 +91,11 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -88,7 +91,11 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  	 * SWP:      OutL3                   InL3  InL4
  	 * Pkt: MAC  IP     ESP  UDP  VXLAN  IP    L4
  	 */
@@ -32,7 +34,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  	/* Shared settings */
  	eseg->swp_outer_l3_offset = skb_network_offset(skb) / 2;
  	if (skb->protocol == htons(ETH_P_IPV6))
-@@ -96,11 +103,36 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -96,11 +103,36 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  
  	/* Tunnel mode */
  	if (mode == XFRM_MODE_TUNNEL) {
@@ -70,7 +72,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  			fallthrough;
-@@ -118,7 +150,32 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -118,7 +150,32 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  	if (mode != XFRM_MODE_TRANSPORT)
  		return;
  
@@ -104,7 +106,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  		switch (xo->proto) {
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_OUTER_L4_UDP;
-@@ -132,7 +189,7 @@ static void mlx5e_ipsec_set_swp(struct s
+@@ -132,7 +189,7 @@ static void mlx5e_ipsec_set_swp(struct sk_buff *skb,
  		}
  	} else {
  		/* Tunnel(VXLAN TCP/UDP) over Transport Mode */
@@ -113,7 +115,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  		case IPPROTO_UDP:
  			eseg->swp_flags |= MLX5_ETH_WQE_SWP_INNER_L4_UDP;
  			fallthrough;
-@@ -184,6 +241,26 @@ void mlx5e_ipsec_set_iv(struct sk_buff *
+@@ -184,6 +241,26 @@ void mlx5e_ipsec_set_iv(struct sk_buff *skb, struct xfrm_state *x,
  	skb_store_bits(skb, iv_offset, &seqno, 8);
  }
  
@@ -140,7 +142,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  void mlx5e_ipsec_handle_tx_wqe(struct mlx5e_tx_wqe *wqe,
  			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
  			       struct mlx5_wqe_inline_seg *inlseg)
-@@ -217,17 +294,24 @@ static int mlx5e_ipsec_set_state(struct
+@@ -217,17 +294,24 @@ static int mlx5e_ipsec_set_state(struct mlx5e_priv *priv,
  }
  
  void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
@@ -165,7 +167,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  
  	x = xfrm_input_state(skb);
  	if (unlikely(!x))
-@@ -238,7 +322,11 @@ void mlx5e_ipsec_tx_build_eseg(struct ml
+@@ -238,7 +322,11 @@ void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
  		      skb->protocol != htons(ETH_P_IPV6))))
  		return;
  
@@ -177,7 +179,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  
  	l3_proto = (x->props.family == AF_INET) ?
  		   ((struct iphdr *)skb_network_header(skb))->protocol :
-@@ -266,10 +354,16 @@ bool mlx5e_ipsec_handle_tx_skb(struct ne
+@@ -266,10 +354,16 @@ bool mlx5e_ipsec_handle_tx_skb(struct net_device *netdev,
  	struct xfrm_offload *xo = xfrm_offload(skb);
  	struct mlx5e_ipsec_sa_entry *sa_entry;
  	struct xfrm_state *x;
@@ -194,7 +196,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  		atomic64_inc(&priv->ipsec->sw_stats.ipsec_tx_drop_bundle);
  		goto drop;
  	}
-@@ -312,15 +406,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -312,15 +406,22 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
  	struct mlx5e_ipsec *ipsec = priv->ipsec;
  	struct mlx5e_ipsec_sa_entry *sa_entry;
  	struct xfrm_offload *xo;
@@ -217,7 +219,7 @@ Change-Id: Id6bf326e3e4156181a86d2ac69c8cb2c937cde5c
  		atomic64_inc(&ipsec->sw_stats.ipsec_rx_drop_sp_alloc);
  		return;
  	}
-@@ -335,8 +436,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(s
+@@ -335,8 +436,13 @@ void mlx5e_ipsec_offload_handle_rx_skb(struct net_device *netdev,
  	xfrm_state_hold(sa_entry->x);
  	rcu_read_unlock();
  

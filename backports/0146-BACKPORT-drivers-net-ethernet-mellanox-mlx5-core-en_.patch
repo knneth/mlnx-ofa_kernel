@@ -7,9 +7,11 @@ Change-Id: I0b6d4c8ec85198c7e48d31f9b11d02883fffc124
  .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
  1 file changed, 20 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
-@@ -95,14 +95,26 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -95,14 +95,26 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
  	skb_reserve(skb, NET_IP_ALIGN);
  
  	/*  Reserve for ethernet and IP header  */
@@ -39,7 +41,7 @@ Change-Id: I0b6d4c8ec85198c7e48d31f9b11d02883fffc124
  
  	/* Fill ETH header */
  	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
-@@ -131,7 +143,11 @@ static struct sk_buff *mlx5e_test_get_ud
+@@ -131,7 +143,11 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
  	ip_send_check(iph);
  
  	/* Fill test header and data */

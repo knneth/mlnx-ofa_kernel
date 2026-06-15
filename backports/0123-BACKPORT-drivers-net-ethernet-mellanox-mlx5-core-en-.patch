@@ -7,9 +7,11 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  .../mellanox/mlx5/core/en/tc_tun_vxlan.c      | 88 +++++++++++++++++--
  1 file changed, 83 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_vxlan.c
-@@ -18,9 +18,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(
+@@ -18,9 +18,12 @@ static int mlx5e_tc_tun_calc_hlen_vxlan(struct mlx5e_encap_entry *e)
  
  static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
  					      struct flow_cls_offload *f)
@@ -23,7 +25,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  	struct flow_match_ports enc_ports;
  
  	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_ENC_PORTS))
-@@ -32,8 +35,10 @@ static int mlx5e_tc_tun_check_udp_dport_
+@@ -32,8 +35,10 @@ static int mlx5e_tc_tun_check_udp_dport_vxlan(struct mlx5e_priv *priv,
  
  	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan,
  				    be16_to_cpu(enc_ports.key->dst))) {
@@ -34,7 +36,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  		netdev_warn(priv->netdev,
  			    "UDP port %d is not registered as a VXLAN port\n",
  			    be16_to_cpu(enc_ports.key->dst));
-@@ -68,8 +73,10 @@ static int mlx5e_tc_tun_init_encap_attr_
+@@ -68,8 +73,10 @@ static int mlx5e_tc_tun_init_encap_attr_vxlan(struct net_device *tunnel_dev,
  	e->tunnel = &vxlan_tunnel;
  
  	if (!mlx5_vxlan_lookup_port(priv->mdev->vxlan, dst_port)) {
@@ -45,7 +47,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  		netdev_warn(priv->netdev,
  			    "%d isn't an offloaded vxlan udp dport\n",
  			    dst_port);
-@@ -80,6 +87,31 @@ static int mlx5e_tc_tun_init_encap_attr_
+@@ -80,6 +87,31 @@ static int mlx5e_tc_tun_init_encap_attr_vxlan(struct net_device *tunnel_dev,
  	return 0;
  }
  
@@ -77,7 +79,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  					    __u8 *ip_proto,
  					    struct mlx5e_encap_entry *e)
-@@ -90,7 +122,11 @@ static int mlx5e_gen_ip_tunnel_header_vx
+@@ -90,7 +122,11 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  	const struct vxlan_metadata *md;
  	struct vxlanhdr *vxh;
  
@@ -89,7 +91,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  	    e->tun_info->options_len != sizeof(*md))
  		return -EOPNOTSUPP;
  	vxh = (struct vxlanhdr *)((char *)udp + sizeof(struct udphdr));
-@@ -99,9 +135,13 @@ static int mlx5e_gen_ip_tunnel_header_vx
+@@ -99,9 +135,13 @@ static int mlx5e_gen_ip_tunnel_header_vxlan(char buf[],
  	udp->dest = tun_key->tp_dst;
  	vxh->vx_flags = VXLAN_HF_VNI;
  	vxh->vx_vni = vxlan_vni_field(tun_id);
@@ -105,7 +107,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  	}
  
  	return 0;
-@@ -112,7 +152,9 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+@@ -112,7 +152,9 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
  					       struct flow_cls_offload *f)
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -115,7 +117,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  	struct flow_match_enc_opts enc_opts;
  	void *misc5_c, *misc5_v;
  	u32 *gbp, *gbp_mask;
-@@ -120,19 +162,29 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+@@ -120,19 +162,29 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
  	flow_rule_match_enc_opts(rule, &enc_opts);
  
  	if (memchr_inv(&enc_opts.mask->data, 0, sizeof(enc_opts.mask->data)) &&
@@ -147,7 +149,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  		return -EINVAL;
  	}
  
-@@ -140,7 +192,13 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_
+@@ -140,7 +192,13 @@ static int mlx5e_tc_tun_parse_vxlan_gbp_option(struct mlx5e_priv *priv,
  	gbp_mask = (u32 *)&enc_opts.mask->data[0];
  
  	if (*gbp_mask & ~VXLAN_GBP_MASK) {
@@ -161,7 +163,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  		return -EINVAL;
  	}
  
-@@ -161,7 +219,9 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -161,7 +219,9 @@ static int mlx5e_tc_tun_parse_vxlan(struct mlx5e_priv *priv,
  				    void *headers_v)
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
@@ -171,7 +173,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  	struct flow_match_enc_keyid enc_keyid;
  	void *misc_c, *misc_v;
  
-@@ -188,8 +248,10 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -188,8 +248,10 @@ static int mlx5e_tc_tun_parse_vxlan(struct mlx5e_priv *priv,
  
  	if (!MLX5_CAP_ESW_FLOWTABLE_FDB(priv->mdev,
  					ft_field_support.outer_vxlan_vni)) {
@@ -182,7 +184,7 @@ Change-Id: I0dcbcb5f01e44769110675bf0e156beea0a55759
  		netdev_warn(priv->netdev,
  			    "Matching on VXLAN VNI is not supported\n");
  		return -EOPNOTSUPP;
-@@ -208,13 +270,29 @@ static int mlx5e_tc_tun_parse_vxlan(stru
+@@ -208,13 +270,29 @@ static int mlx5e_tc_tun_parse_vxlan(struct mlx5e_priv *priv,
  static bool mlx5e_tc_tun_encap_info_equal_vxlan(struct mlx5e_encap_key *a,
  						struct mlx5e_encap_key *b)
  {

@@ -6,9 +6,11 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  drivers/net/ethernet/mellanox/mlx5/core/cmd.c | 24 +++++++++++++++++--
  1 file changed, 22 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/cmd.c
-@@ -1416,6 +1416,9 @@ static struct mlx5_cmd_mailbox *alloc_cm
+@@ -1410,6 +1410,9 @@ static struct mlx5_cmd_mailbox *alloc_cmd_box(struct mlx5_core_dev *dev,
  		kfree(mailbox);
  		return ERR_PTR(-ENOMEM);
  	}
@@ -18,7 +20,7 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  	mailbox->next = NULL;
  
  	return mailbox;
-@@ -1752,7 +1755,6 @@ static void mlx5_cmd_comp_handler(struct
+@@ -1746,7 +1749,6 @@ static void mlx5_cmd_comp_handler(struct mlx5_core_dev *dev, u64 vec, enum mlx5_
  				set_bit(MLX5_CMD_ENT_STATE_RREF_CLEARED, &ent->state);
  				cmd_ent_put(ent);
  			}
@@ -26,7 +28,7 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  			ent->ts2 = ktime_get_ns();
  			memcpy(ent->out->first.data, ent->lay->out, sizeof(ent->lay->out));
  			dump_command(dev, ent, 0);
-@@ -2324,7 +2326,11 @@ static void create_msg_cache(struct mlx5
+@@ -2314,7 +2316,11 @@ static void create_msg_cache(struct mlx5_core_dev *dev)
  
  static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
  {
@@ -39,7 +41,7 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
  		return -ENOMEM;
-@@ -2339,7 +2345,11 @@ static int alloc_cmd_page(struct mlx5_co
+@@ -2329,7 +2335,11 @@ static int alloc_cmd_page(struct mlx5_core_dev *dev, struct mlx5_cmd *cmd)
  
  	dma_free_coherent(mlx5_core_dma_dev(dev), MLX5_ADAPTER_PAGE_SIZE, cmd->cmd_alloc_buf,
  			  cmd->alloc_dma);
@@ -51,7 +53,7 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  						2 * MLX5_ADAPTER_PAGE_SIZE - 1,
  						&cmd->alloc_dma, GFP_KERNEL);
  	if (!cmd->cmd_alloc_buf)
-@@ -2691,7 +2701,11 @@ static ssize_t real_miss_store(struct de
+@@ -2681,7 +2691,11 @@ static ssize_t real_miss_store(struct device *dev, struct device_attribute *attr
  	return count;
  }
  
@@ -63,7 +65,7 @@ Change-Id: I90f8029fc97c787f55a7c283348cc6d9b606b079
  	.show = cmd_cache_attr_show,
  	.store = cmd_cache_attr_store,
  };
-@@ -2720,11 +2734,17 @@ static struct attribute *cmd_cache_defau
+@@ -2710,11 +2724,17 @@ static struct attribute *cmd_cache_default_attrs[] = {
  	NULL
  };
  

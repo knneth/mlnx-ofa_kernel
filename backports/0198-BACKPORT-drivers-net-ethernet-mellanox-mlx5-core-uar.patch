@@ -6,9 +6,11 @@ Change-Id: I969fc207849845f639801182bf9f031b76d4d255
  drivers/net/ethernet/mellanox/mlx5/core/uar.c | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/uar.c b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/uar.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/uar.c
-@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars
+@@ -98,21 +98,35 @@ static struct mlx5_uars_page *alloc_uars_page(struct mlx5_core_dev *mdev,
  	int err = -ENOMEM;
  	phys_addr_t pfn;
  	int bfregs;
@@ -44,7 +46,7 @@ Change-Id: I969fc207849845f639801182bf9f031b76d4d255
  	if (!up->fp_bitmap)
  		goto error1;
  
-@@ -358,9 +372,13 @@ static int mlx5_get_pcie_dev_link_caps(s
+@@ -358,9 +372,13 @@ static int mlx5_get_pcie_dev_link_caps(struct pci_dev *pdev,
  		*width = (lnkcap1 & PCI_EXP_LNKCAP_MLW) >>
  			PCI_EXP_LNKCAP_MLW_SHIFT;
  		if (*speed == PCI_SPEED_UNKNOWN) { /* pre-r3.0 */

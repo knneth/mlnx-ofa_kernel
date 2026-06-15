@@ -6,9 +6,11 @@ Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
  .../ethernet/mellanox/mlx5/core/mlx5_devm.c   | 46 ++++++++++++++++---
  1 file changed, 40 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_devm.c
-@@ -142,21 +142,30 @@ static int mlx5_devm_sf_port_new(struct
+@@ -142,21 +142,30 @@ static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
  {
  	struct devlink_port_new_attrs devl_attrs;
  	struct mlx5_devm_device *mdevm_dev;
@@ -39,7 +41,7 @@ Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
          mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
          return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
                           xa_mk_value(attrs->sfnum), GFP_KERNEL);
-@@ -183,9 +192,13 @@ static int mlx5_devm_sf_port_del(struct
+@@ -183,9 +192,13 @@ static int mlx5_devm_sf_port_del(struct mlxdevm *devm_dev,
  	if (port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF)
  		return -EOPNOTSUPP;
  
@@ -53,7 +55,7 @@ Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
  	return ret;
  }
  
-@@ -196,16 +209,15 @@ static int mlx5_devm_sf_port_fn_state_ge
+@@ -196,16 +209,15 @@ static int mlx5_devm_sf_port_fn_state_get(struct mlxdevm_port *port,
  {
  	enum devlink_port_fn_opstate dl_opstate;
  	enum devlink_port_fn_state dl_state;
@@ -75,7 +77,7 @@ Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
  	if (!ret) {
  		*state = devlink_to_mlxdevm_state(dl_state);
  		*opstate = devlink_to_mlxdevm_opstate(dl_opstate);
-@@ -217,18 +229,33 @@ static int mlx5_devm_sf_port_fn_state_se
+@@ -217,18 +229,33 @@ static int mlx5_devm_sf_port_fn_state_set(struct mlxdevm_port *port,
  				   enum mlxdevm_port_fn_state state,
  				   struct netlink_ext_ack *extack)
  {
@@ -109,7 +111,7 @@ Change-Id: I198fcadf392930b564bc28cadd4b1b40849c3db7
  }
  
  static int mlx5_devm_sf_port_function_trust_get(struct mlxdevm_port *port,
-@@ -249,8 +276,15 @@ static int mlx5_devm_sf_port_fn_hw_addr_
+@@ -249,8 +276,15 @@ static int mlx5_devm_sf_port_fn_hw_addr_set(struct mlxdevm_port *port,
  				     const u8 *hw_addr, int hw_addr_len,
  				     struct netlink_ext_ack *extack)
  {

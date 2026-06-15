@@ -6,9 +6,11 @@ Change-Id: I9e9d0542fffe80a357dc580ca86947f379cf79c7
  drivers/infiniband/ulp/ipoib/ipoib_netlink.c | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_netlink.c
-@@ -108,8 +108,8 @@ static int ipoib_new_child_link(struct n
+@@ -108,8 +108,8 @@ static int ipoib_new_child_link(struct net *src_net, struct net_device *dev,
  
  	if (!tb[IFLA_LINK])
  		return -EINVAL;
@@ -18,7 +20,7 @@ Change-Id: I9e9d0542fffe80a357dc580ca86947f379cf79c7
  	if (!pdev || pdev->type != ARPHRD_INFINIBAND)
  		return -ENODEV;
  
-@@ -167,7 +167,9 @@ static size_t ipoib_get_size(const struc
+@@ -167,7 +167,9 @@ static size_t ipoib_get_size(const struct net_device *dev)
  
  static struct rtnl_link_ops ipoib_link_ops __read_mostly = {
  	.kind		= "ipoib",

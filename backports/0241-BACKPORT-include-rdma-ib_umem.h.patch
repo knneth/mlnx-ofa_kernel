@@ -6,6 +6,8 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  include/rdma/ib_umem.h | 54 +++++++++++++++++++++++++++++++++++++++---
  1 file changed, 51 insertions(+), 3 deletions(-)
 
+diff --git a/include/rdma/ib_umem.h b/include/rdma/ib_umem.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/ib_umem.h
 +++ b/include/rdma/ib_umem.h
 @@ -7,6 +7,8 @@
@@ -48,7 +50,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  };
  
  struct ib_umem_dmabuf {
-@@ -63,8 +78,13 @@ static inline int ib_umem_offset(struct
+@@ -63,8 +78,13 @@ static inline int ib_umem_offset(struct ib_umem *umem)
  static inline unsigned long ib_umem_dma_offset(struct ib_umem *umem,
  					       unsigned long pgsz)
  {
@@ -62,7 +64,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  }
  
  static inline size_t ib_umem_num_dma_blocks(struct ib_umem *umem,
-@@ -84,8 +104,12 @@ static inline void __rdma_umem_block_ite
+@@ -84,8 +104,12 @@ static inline void __rdma_umem_block_iter_start(struct ib_block_iter *biter,
  						struct ib_umem *umem,
  						unsigned long pgsz)
  {
@@ -75,7 +77,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  	biter->__sg_advance = ib_umem_offset(umem) & ~(pgsz - 1);
  	biter->__sg_numblocks = ib_umem_num_dma_blocks(umem, pgsz);
  }
-@@ -112,7 +136,11 @@ static inline bool __rdma_umem_block_ite
+@@ -112,7 +136,11 @@ static inline bool __rdma_umem_block_iter_next(struct ib_block_iter *biter)
  
  #ifdef CONFIG_INFINIBAND_USER_MEM
  
@@ -87,7 +89,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  			    size_t size, int access);
  void ib_umem_release(struct ib_umem *umem);
  int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
-@@ -143,7 +171,11 @@ static inline unsigned long ib_umem_find
+@@ -143,7 +171,11 @@ static inline unsigned long ib_umem_find_best_pgoff(struct ib_umem *umem,
  						    unsigned long pgsz_bitmap,
  						    u64 pgoff_bitmask)
  {
@@ -99,7 +101,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  	dma_addr_t dma_addr;
  
  	dma_addr = sg_dma_address(sg) + (umem->address & ~PAGE_MASK);
-@@ -167,8 +199,16 @@ ib_umem_dmabuf_get_pinned_with_dma_devic
+@@ -167,8 +199,16 @@ ib_umem_dmabuf_get_pinned_with_dma_device(struct ib_device *device,
  int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf);
  void ib_umem_dmabuf_unmap_pages(struct ib_umem_dmabuf *umem_dmabuf);
  void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf);
@@ -116,7 +118,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  				 size_t size, int access,
  				 unsigned long peer_mem_flags);
  void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
-@@ -180,7 +220,11 @@ void ib_umem_stop_invalidation_notifier(
+@@ -180,7 +220,11 @@ void ib_umem_stop_invalidation_notifier(struct ib_umem *umem);
  
  #include <linux/err.h>
  
@@ -128,7 +130,7 @@ Change-Id: I2869c485b24e936b339b4ff9af64f5802f5a022c
  					  unsigned long addr, size_t size,
  					  int access)
  {
-@@ -235,10 +279,14 @@ static inline int ib_umem_dmabuf_map_pag
+@@ -235,10 +279,14 @@ static inline int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
  static inline void ib_umem_dmabuf_unmap_pages(struct ib_umem_dmabuf *umem_dmabuf) { }
  static inline void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf) { }
  static inline void ib_umem_dmabuf_revoke(struct ib_umem_dmabuf *umem_dmabuf) {}

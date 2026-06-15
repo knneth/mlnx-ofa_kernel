@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
  drivers/nvme/host/zns.c | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/drivers/nvme/host/zns.c b/drivers/nvme/host/zns.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/zns.c
 +++ b/drivers/nvme/host/zns.c
 @@ -3,6 +3,8 @@
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
  	lim->zoned = 1;
  	lim->max_open_zones = zi->max_open_zones;
  	lim->max_active_zones = zi->max_active_zones;
-@@ -115,6 +119,17 @@ void nvme_update_zone_info(struct nvme_n
+@@ -115,6 +119,17 @@ void nvme_update_zone_info(struct nvme_ns *ns, struct queue_limits *lim,
  	lim->chunk_sectors = ns->head->zsze =
  		nvme_lba_to_sect(ns->head, zi->zone_size);
  	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
  }
  
  static void *nvme_zns_alloc_report_buffer(struct nvme_ns *ns,
-@@ -249,3 +264,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+@@ -249,3 +264,4 @@ blk_status_t nvme_setup_zone_mgmt_send(struct nvme_ns *ns, struct request *req,
  
  	return BLK_STS_OK;
  }

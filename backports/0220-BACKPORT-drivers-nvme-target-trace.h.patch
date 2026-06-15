@@ -6,9 +6,11 @@ Change-Id: Ib5619fe639d5435211e9610d5a4b4f54b73e650e
  drivers/nvme/target/trace.h | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/nvme/target/trace.h b/drivers/nvme/target/trace.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/trace.h
 +++ b/drivers/nvme/target/trace.h
-@@ -59,7 +59,11 @@ static inline void __assign_req_name(cha
+@@ -59,7 +59,11 @@ static inline void __assign_req_name(char *name, struct nvmet_req *req)
  		return;
  	}
  

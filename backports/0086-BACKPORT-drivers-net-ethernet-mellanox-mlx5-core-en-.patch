@@ -7,6 +7,8 @@ Change-Id: I9da2c5c9e53d8b75ec497ce7cc3c17296447f42c
  drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.c
 @@ -31,6 +31,7 @@
@@ -17,7 +19,7 @@ Change-Id: I9da2c5c9e53d8b75ec497ce7cc3c17296447f42c
  int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
  			    struct mlx5e_port_buffer *port_buffer)
  {
-@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(stru
+@@ -588,3 +589,4 @@ int mlx5e_port_manual_buffer_config(struct mlx5e_priv *priv,
  
  	return err;
  }

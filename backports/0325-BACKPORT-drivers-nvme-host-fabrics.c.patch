@@ -6,6 +6,8 @@ Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
  drivers/nvme/host/fabrics.c | 47 ++++++++++++++++++++++++++++++++++---
  1 file changed, 44 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/nvme/host/fabrics.c b/drivers/nvme/host/fabrics.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fabrics.c
 +++ b/drivers/nvme/host/fabrics.c
 @@ -15,7 +15,9 @@
@@ -18,7 +20,7 @@ Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
  
  static LIST_HEAD(nvmf_transports);
  static DECLARE_RWSEM(nvmf_transports_rwsem);
-@@ -28,6 +30,7 @@ static struct nvmf_host *nvmf_default_ho
+@@ -28,6 +30,7 @@ static struct nvmf_host *nvmf_default_host;
  static struct nvmf_host *nvmf_host_alloc(const char *hostnqn, uuid_t *id)
  {
  	struct nvmf_host *host;
@@ -26,7 +28,7 @@ Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
  
  	host = kmalloc(sizeof(*host), GFP_KERNEL);
  	if (!host)
-@@ -35,8 +38,7 @@ static struct nvmf_host *nvmf_host_alloc
+@@ -35,8 +38,7 @@ static struct nvmf_host *nvmf_host_alloc(const char *hostnqn, uuid_t *id)
  
  	kref_init(&host->ref);
  	uuid_copy(&host->id, id);
@@ -44,7 +46,7 @@ Change-Id: I85cd420de992fcc092d624952dd3d4f4182cae0e
  void nvmf_set_io_queues(struct nvmf_ctrl_options *opts, u32 nr_io_queues,
  			u32 io_queues[HCTX_MAX_TYPES])
  {
-@@ -1142,6 +1145,7 @@ void nvmf_map_queues(struct blk_mq_tag_s
+@@ -1142,6 +1145,7 @@ void nvmf_map_queues(struct blk_mq_tag_set *set, struct nvme_ctrl *ctrl,
  		io_queues[HCTX_TYPE_POLL]);
  }
  EXPORT_SYMBOL_GPL(nvmf_map_queues);

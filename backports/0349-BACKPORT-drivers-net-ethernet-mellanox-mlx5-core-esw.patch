@@ -7,6 +7,8 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
  .../mellanox/mlx5/core/esw/diag/qos_tracepoint.h | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
 @@ -18,7 +18,11 @@ TRACE_EVENT(mlx5_esw_vport_qos_destroy,
@@ -21,7 +23,7 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
  		    __entry->vport_id = vport->vport;
  		    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
  	    ),
-@@ -38,7 +42,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_t
+@@ -38,7 +42,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_template,
  				     __field(unsigned int, max_rate)
  				     __field(void *, parent)
  				     ),
@@ -33,7 +35,7 @@ Change-Id: I09e2d806c8a47d787813086ef8dde4eb192c46b1
  			    __entry->vport_id = vport->vport;
  			    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
  			    __entry->bw_share = bw_share;
-@@ -72,7 +80,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_node_qos_te
+@@ -72,7 +80,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_node_qos_template,
  				     __field(const void *, node)
  				     __field(unsigned int, tsar_ix)
  				     ),

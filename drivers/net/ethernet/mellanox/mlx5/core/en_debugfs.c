@@ -194,10 +194,19 @@ void mlx5e_create_debugfs(struct mlx5e_priv *priv)
 		mlx5e_create_channel_debugfs(priv, i);
 }
 
+static void mlx5e_debugfs_lookup_and_free(const char *name, struct dentry *parent)
+{
+	struct dentry *dent;
+
+	dent = debugfs_lookup(name, parent);
+	if (dent && dent->d_inode)
+		kvfree(dent->d_inode->i_private);
+	dput(dent);
+}
+
 static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 {
 	char name[MLX5_MAX_DEBUGFS_NAME_LEN] = {};
-	struct dentry *dent;
 	u8 num_tc;
 	int i;
 
@@ -207,10 +216,7 @@ static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 
 		for (tc = 0; tc < num_tc; tc++) {
 			snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "tisn-%d_%d", i, tc);
-
-			dent = debugfs_lookup(name, priv->netdev_dfs_root);
-			if (dent && dent->d_inode && dent->d_inode->i_private)
-				kvfree(dent->d_inode->i_private);
+			mlx5e_debugfs_lookup_and_free(name, priv->netdev_dfs_root);
 		}
 	}
 
@@ -219,18 +225,12 @@ static void mlx5e_debugs_free_recursive_private_data(struct mlx5e_priv *priv)
 
 	for (i = 0; i < MLX5E_NUM_INDIR_TIRS; i++) {
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "indir-tirn-%d", i);
-
-		dent = debugfs_lookup(name, priv->netdev_dfs_root);
-		if (dent && dent->d_inode && dent->d_inode->i_private)
-			kvfree(dent->d_inode->i_private);
+		mlx5e_debugfs_lookup_and_free(name, priv->netdev_dfs_root);
 	}
 
 	for (i = 0; i < priv->max_nch; i++) {
 		snprintf(name, MLX5_MAX_DEBUGFS_NAME_LEN, "dir-tirn-%d", i);
-
-		dent = debugfs_lookup(name, priv->netdev_dfs_root);
-		if (dent && dent->d_inode && dent->d_inode->i_private)
-			kvfree(dent->d_inode->i_private);
+		mlx5e_debugfs_lookup_and_free(name, priv->netdev_dfs_root);
 	}
 }
 

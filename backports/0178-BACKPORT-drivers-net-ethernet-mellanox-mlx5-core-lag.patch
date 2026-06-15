@@ -7,9 +7,11 @@ Change-Id: I8c57801f2fc034b44daa9bf502d5ab5ba0d38ddc
  drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.c
-@@ -272,12 +272,14 @@ static int mlx5_lag_set_definer(u32 *mat
+@@ -268,12 +268,14 @@ static int mlx5_lag_set_definer(u32 *match_definer_mask,
  		MLX5_SET_TO_ONES(match_definer_format_0, match_definer_mask,
  				 outer_smac_15_0);
  

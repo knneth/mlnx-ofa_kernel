@@ -6,6 +6,8 @@ Change-Id: Id0a5793aa9592d7432b4aef5b251f07dd56b569f
  include/rdma/rdma_counter.h | 7 ++++---
  1 file changed, 4 insertions(+), 3 deletions(-)
 
+diff --git a/include/rdma/rdma_counter.h b/include/rdma/rdma_counter.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/rdma_counter.h
 +++ b/include/rdma/rdma_counter.h
 @@ -6,9 +6,10 @@

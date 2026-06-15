@@ -7,9 +7,11 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
  .../ethernet/mellanox/mlx5/core/en/devlink.c  | 138 +++++++++++++++++-
  1 file changed, 135 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
-@@ -12,20 +12,36 @@ struct mlx5e_dev *mlx5e_create_devlink(s
+@@ -12,20 +12,36 @@ struct mlx5e_dev *mlx5e_create_devlink(struct device *dev,
  {
  	struct mlx5e_dev *mlx5e_dev;
  	struct devlink *devlink;
@@ -47,7 +49,7 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
  	return devlink_priv(devlink);
  }
  
-@@ -37,7 +53,7 @@ void mlx5e_destroy_devlink(struct mlx5e_
+@@ -37,7 +53,7 @@ void mlx5e_destroy_devlink(struct mlx5e_dev *mlx5e_dev)
  	devlink_free(devlink);
  }
  
@@ -56,7 +58,7 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
  mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_item_id *ppid)
  {
  	u64 parent_id;
-@@ -47,14 +63,33 @@ mlx5e_devlink_get_port_parent_id(struct
+@@ -47,14 +63,33 @@ mlx5e_devlink_get_port_parent_id(struct mlx5_core_dev *dev, struct netdev_phys_i
  	memcpy(ppid->id, &parent_id, sizeof(parent_id));
  }
  
@@ -91,7 +93,7 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
  	if (mlx5_core_is_pf(mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
  		attrs.phys.port_number = mlx5_get_dev_index(mdev);
-@@ -70,13 +105,110 @@ int mlx5e_devlink_port_register(struct m
+@@ -70,13 +105,110 @@ int mlx5e_devlink_port_register(struct mlx5e_dev *mlx5e_dev,
  		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
  	}
  
@@ -108,7 +110,7 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
 +	if (mlx5_core_is_pf(priv->mdev)) {
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
 +		struct netdev_phys_item_id ppid = {};
-+
+ 
 +		if (MLX5_ESWITCH_MANAGER(priv->mdev))
 +			mlx5e_devlink_get_port_parent_id(priv->mdev, &ppid);
 +#endif
@@ -133,7 +135,7 @@ Change-Id: I99d24ee7db0a5915efef44e2ac59105e7465c8a8
 +		);
 +	}
 +#endif /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS */ 
- 
++
 +#ifdef HAVE_DEVLINK_PER_AUXDEV
  	return devlink_port_register(devlink, &mlx5e_dev->dl_port,
  				     dl_port_index);

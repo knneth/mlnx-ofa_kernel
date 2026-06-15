@@ -6,9 +6,11 @@ Change-Id: Id3cb26764bb5948e1b4726498f73b0740f06be57
  drivers/infiniband/hw/mlx5/main_ext.c | 20 +++++++++++++++++++-
  1 file changed, 19 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/main_ext.c b/drivers/infiniband/hw/mlx5/main_ext.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/main_ext.c
 +++ b/drivers/infiniband/hw/mlx5/main_ext.c
-@@ -97,11 +97,17 @@ static const struct sysfs_ops ttl_sysfs_
+@@ -97,11 +97,17 @@ static const struct sysfs_ops ttl_sysfs_ops = {
  	.store = ttl_attr_store
  };
  
@@ -26,7 +28,7 @@ Change-Id: Id3cb26764bb5948e1b4726498f73b0740f06be57
  };
  
  int init_ttl_sysfs(struct mlx5_ib_dev *dev)
-@@ -699,11 +705,17 @@ static const struct sysfs_ops tc_sysfs_o
+@@ -699,11 +705,17 @@ static const struct sysfs_ops tc_sysfs_ops = {
  	.store = tc_attr_store
  };
  
@@ -45,7 +47,7 @@ Change-Id: Id3cb26764bb5948e1b4726498f73b0740f06be57
  };
  
  int init_tc_sysfs(struct mlx5_ib_dev *dev)
-@@ -1401,11 +1413,17 @@ static const struct sysfs_ops dc_sysfs_o
+@@ -1401,11 +1413,17 @@ static const struct sysfs_ops dc_sysfs_ops = {
  	.store = dc_attr_store
  };
  

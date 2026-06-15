@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/svc_rdma_sendto.c | 616 +++++++++++++++++++++++++-
  1 file changed, 615 insertions(+), 1 deletion(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_sendto.c b/net/sunrpc/xprtrdma/svc_rdma_sendto.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_sendto.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_sendto.c
 @@ -109,7 +109,9 @@
@@ -19,7 +21,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  static void svc_rdma_wc_send(struct ib_cq *cq, struct ib_wc *wc);
  
-@@ -142,7 +144,9 @@ svc_rdma_send_ctxt_alloc(struct svcxprt_
+@@ -142,7 +144,9 @@ svc_rdma_send_ctxt_alloc(struct svcxprt_rdma *rdma)
  	ctxt->sc_send_wr.sg_list = ctxt->sc_sges;
  	ctxt->sc_send_wr.send_flags = IB_SEND_SIGNALED;
  	ctxt->sc_cqe.done = svc_rdma_wc_send;
@@ -29,7 +31,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	ctxt->sc_xprt_buf = buffer;
  	xdr_buf_init(&ctxt->sc_hdrbuf, ctxt->sc_xprt_buf,
  		     rdma->sc_max_req_size);
-@@ -203,14 +207,21 @@ struct svc_rdma_send_ctxt *svc_rdma_send
+@@ -203,14 +207,21 @@ struct svc_rdma_send_ctxt *svc_rdma_send_ctxt_get(struct svcxprt_rdma *rdma)
  
  out:
  	rpcrdma_set_xdrlen(&ctxt->sc_hdrbuf, 0);
@@ -60,7 +62,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static void svc_rdma_send_ctxt_release(struct svcxprt_rdma *rdma,
  				       struct svc_rdma_send_ctxt *ctxt)
  {
-@@ -231,16 +243,23 @@ static void svc_rdma_send_ctxt_release(s
+@@ -231,16 +243,23 @@ static void svc_rdma_send_ctxt_release(struct svcxprt_rdma *rdma,
  	svc_rdma_write_chunk_release(rdma, ctxt);
  	svc_rdma_reply_chunk_release(rdma, ctxt);
  
@@ -84,7 +86,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		ib_dma_unmap_page(device,
  				  ctxt->sc_sges[i].addr,
  				  ctxt->sc_sges[i].length,
-@@ -271,6 +290,39 @@ void svc_rdma_send_ctxt_put(struct svcxp
+@@ -271,6 +290,39 @@ void svc_rdma_send_ctxt_put(struct svcxprt_rdma *rdma,
  	INIT_WORK(&ctxt->sc_work, svc_rdma_send_ctxt_put_async);
  	queue_work(svcrdma_wq, &ctxt->sc_work);
  }
@@ -124,7 +126,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * svc_rdma_wake_send_waiters - manage Send Queue accounting
-@@ -306,19 +358,29 @@ static void svc_rdma_wc_send(struct ib_c
+@@ -306,19 +358,29 @@ static void svc_rdma_wc_send(struct ib_cq *cq, struct ib_wc *wc)
  	if (unlikely(wc->status != IB_WC_SUCCESS))
  		goto flushed;
  
@@ -154,7 +156,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /**
   * svc_rdma_post_send - Post a WR chain to the Send Queue
   * @rdma: transport context
-@@ -343,7 +405,9 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -343,7 +405,9 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  	struct ib_send_wr *first_wr = ctxt->sc_wr_chain;
  	struct ib_send_wr *send_wr = &ctxt->sc_send_wr;
  	const struct ib_send_wr *bad_wr = first_wr;
@@ -164,7 +166,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	int ret, sqecount = ctxt->sc_sqecount;
  
  	might_sleep();
-@@ -366,17 +430,26 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -366,17 +430,26 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  			 * exit.
  			 */
  			percpu_counter_inc(&svcrdma_stat_sq_starve);
@@ -191,7 +193,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  			svc_xprt_deferred_close(&rdma->sc_xprt);
  
  			/* If even one WR was posted, there will be a
-@@ -386,11 +459,75 @@ int svc_rdma_post_send(struct svcxprt_rd
+@@ -386,11 +459,75 @@ int svc_rdma_post_send(struct svcxprt_rdma *rdma,
  				svc_rdma_wake_send_waiters(rdma, sqecount);
  				break;
  			}
@@ -267,7 +269,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * svc_rdma_encode_read_list - Encode RPC Reply's Read chunk list
-@@ -407,6 +544,7 @@ static ssize_t svc_rdma_encode_read_list
+@@ -407,6 +544,7 @@ static ssize_t svc_rdma_encode_read_list(struct svc_rdma_send_ctxt *sctxt)
  	return xdr_stream_encode_item_absent(&sctxt->sc_stream);
  }
  
@@ -275,7 +277,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /**
   * svc_rdma_encode_write_segment - Encode one Write segment
   * @sctxt: Send context for the RPC Reply
-@@ -436,11 +574,43 @@ static ssize_t svc_rdma_encode_write_seg
+@@ -436,11 +574,43 @@ static ssize_t svc_rdma_encode_write_segment(struct svc_rdma_send_ctxt *sctxt,
  	*remaining -= length;
  	xdr_encode_rdma_segment(p, segment->rs_handle, length,
  				segment->rs_offset);
@@ -283,8 +285,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	trace_svcrdma_encode_wseg(sctxt, segno, segment->rs_handle, length,
  				  segment->rs_offset);
 +#endif
- 	return len;
- }
++	return len;
++}
 +#else
 +static ssize_t svc_rdma_encode_write_segment(__be32 *src,
 +					     struct svc_rdma_send_ctxt *sctxt,
@@ -294,7 +296,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
 +	const size_t len = rpcrdma_segment_maxsz * sizeof(*p);
 +	u32 handle, length;
 +	u64 offset;
- 
++
 +	p = xdr_reserve_space(&sctxt->sc_stream, len);
 +	if (!p)
 +		return -EMSGSIZE;
@@ -311,15 +313,15 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
 +	}
 +	xdr_encode_rdma_segment(p, handle, length, offset);
 +
-+	return len;
-+}
+ 	return len;
+ }
 +#endif
-+
+ 
 +#ifdef HAVE_SVC_RDMA_PCL
  /**
   * svc_rdma_encode_write_chunk - Encode one Write chunk
   * @sctxt: Send context for the RPC Reply
-@@ -482,7 +652,41 @@ static ssize_t svc_rdma_encode_write_chu
+@@ -482,7 +652,41 @@ static ssize_t svc_rdma_encode_write_chunk(struct svc_rdma_send_ctxt *sctxt,
  
  	return len;
  }
@@ -330,7 +332,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
 +{
 +	unsigned int i, nsegs;
 +	ssize_t len, ret;
- 
++
 +	len = 0;
 +
 +	src++;
@@ -356,12 +358,12 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
 +	return len;
 +}
 +#endif
-+
+ 
 +#ifdef HAVE_SVC_RDMA_PCL
  /**
   * svc_rdma_encode_write_list - Encode RPC Reply's Write chunk list
   * @rctxt: Reply context with information about the RPC Call
-@@ -514,6 +718,27 @@ static ssize_t svc_rdma_encode_write_lis
+@@ -514,6 +718,27 @@ static ssize_t svc_rdma_encode_write_list(struct svc_rdma_recv_ctxt *rctxt,
  
  	return len + ret;
  }
@@ -389,7 +391,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * svc_rdma_encode_reply_chunk - Encode RPC Reply's Reply chunk
-@@ -527,6 +752,7 @@ static ssize_t svc_rdma_encode_write_lis
+@@ -527,6 +752,7 @@ static ssize_t svc_rdma_encode_write_list(struct svc_rdma_recv_ctxt *rctxt,
   *   %-EMSGSIZE on XDR buffer overflow
   *   %-E2BIG if the RPC message is larger than the Reply chunk
   */
@@ -397,7 +399,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static ssize_t
  svc_rdma_encode_reply_chunk(struct svc_rdma_recv_ctxt *rctxt,
  			    struct svc_rdma_send_ctxt *sctxt,
-@@ -544,7 +770,18 @@ svc_rdma_encode_reply_chunk(struct svc_r
+@@ -544,7 +770,18 @@ svc_rdma_encode_reply_chunk(struct svc_rdma_recv_ctxt *rctxt,
  	chunk->ch_payload_length = length;
  	return svc_rdma_encode_write_chunk(sctxt, chunk);
  }
@@ -416,7 +418,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  struct svc_rdma_map_data {
  	struct svcxprt_rdma		*md_rdma;
  	struct svc_rdma_send_ctxt	*md_ctxt;
-@@ -576,17 +813,45 @@ static int svc_rdma_page_dma_map(void *d
+@@ -576,17 +813,45 @@ static int svc_rdma_page_dma_map(void *data, struct page *page,
  	if (ib_dma_mapping_error(dev, dma_addr))
  		goto out_maperr;
  
@@ -462,7 +464,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /**
   * svc_rdma_iov_dma_map - DMA map an iovec
   * @data: pointer to arguments
-@@ -651,7 +916,21 @@ static int svc_rdma_xb_dma_map(const str
+@@ -651,7 +916,21 @@ static int svc_rdma_xb_dma_map(const struct xdr_buf *xdr, void *data)
  
  	return xdr->len;
  }
@@ -484,7 +486,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  struct svc_rdma_pullup_data {
  	u8		*pd_dest;
  	unsigned int	pd_length;
-@@ -799,10 +1078,130 @@ static int svc_rdma_pull_up_reply_msg(co
+@@ -799,10 +1078,130 @@ static int svc_rdma_pull_up_reply_msg(const struct svcxprt_rdma *rdma,
  		return ret;
  
  	sctxt->sc_sges[0].length = sctxt->sc_hdrbuf.len + args.pd_length;
@@ -615,7 +617,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  /* svc_rdma_map_reply_msg - DMA map the buffer holding RPC message
   * @rdma: controlling transport
   * @sctxt: send_ctxt for the Send WR
-@@ -847,6 +1246,89 @@ int svc_rdma_map_reply_msg(struct svcxpr
+@@ -847,6 +1246,89 @@ int svc_rdma_map_reply_msg(struct svcxprt_rdma *rdma,
  	return pcl_process_nonpayloads(write_pcl, xdr,
  				       svc_rdma_xb_dma_map, &args);
  }
@@ -705,7 +707,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /* The svc_rqst and all resources it owns are released as soon as
   * svc_rdma_sendto returns. Transfer pages under I/O to the ctxt
-@@ -887,8 +1369,12 @@ static int svc_rdma_send_reply_msg(struc
+@@ -887,8 +1369,12 @@ static int svc_rdma_send_reply_msg(struct svcxprt_rdma *rdma,
  	struct ib_send_wr *send_wr = &sctxt->sc_send_wr;
  	int ret;
  
@@ -718,7 +720,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	if (ret < 0)
  		return ret;
  
-@@ -904,7 +1390,11 @@ static int svc_rdma_send_reply_msg(struc
+@@ -904,7 +1390,11 @@ static int svc_rdma_send_reply_msg(struct svcxprt_rdma *rdma,
  		send_wr->opcode = IB_WR_SEND;
  	}
  
@@ -730,7 +732,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -931,8 +1421,13 @@ void svc_rdma_send_error_msg(struct svcx
+@@ -931,8 +1421,13 @@ void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
  	__be32 *p;
  
  	rpcrdma_set_xdrlen(&sctxt->sc_hdrbuf, 0);
@@ -744,7 +746,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	p = xdr_reserve_space(&sctxt->sc_stream,
  			      rpcrdma_fixed_maxsz * sizeof(*p));
-@@ -953,7 +1448,9 @@ void svc_rdma_send_error_msg(struct svcx
+@@ -953,7 +1448,9 @@ void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
  		*p++ = err_vers;
  		*p++ = rpcrdma_version;
  		*p = rpcrdma_version;
@@ -754,7 +756,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		break;
  	default:
  		p = xdr_reserve_space(&sctxt->sc_stream, sizeof(*p));
-@@ -961,14 +1458,20 @@ void svc_rdma_send_error_msg(struct svcx
+@@ -961,14 +1458,20 @@ void svc_rdma_send_error_msg(struct svcxprt_rdma *rdma,
  			goto put_ctxt;
  
  		*p = err_chunk;
@@ -775,7 +777,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto put_ctxt;
  	return;
  
-@@ -996,13 +1499,21 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -996,13 +1499,21 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  	struct svc_rdma_recv_ctxt *rctxt = rqstp->rq_xprt_ctxt;
  	__be32 *rdma_argp = rctxt->rc_recv_buf;
  	struct svc_rdma_send_ctxt *sctxt;
@@ -797,7 +799,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	ret = -ENOMEM;
  	sctxt = svc_rdma_send_ctxt_get(rdma);
-@@ -1015,6 +1526,7 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -1015,6 +1526,7 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  	if (!p)
  		goto put_ctxt;
  
@@ -805,7 +807,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	ret = svc_rdma_prepare_write_list(rdma, &rctxt->rc_write_pcl, sctxt,
  					  &rqstp->rq_res);
  	if (ret < 0)
-@@ -1029,26 +1541,76 @@ int svc_rdma_sendto(struct svc_rqst *rqs
+@@ -1029,26 +1541,76 @@ int svc_rdma_sendto(struct svc_rqst *rqstp)
  			goto reply_chunk;
  		rc_size = ret;
  	}
@@ -940,7 +942,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
  			    unsigned int length)
  {
-@@ -1101,3 +1698,20 @@ int svc_rdma_result_payload(struct svc_r
+@@ -1101,3 +1698,20 @@ int svc_rdma_result_payload(struct svc_rqst *rqstp, unsigned int offset,
  	chunk->ch_payload_length = length;
  	return 0;
  }

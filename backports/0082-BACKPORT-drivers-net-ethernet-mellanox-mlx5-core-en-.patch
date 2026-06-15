@@ -6,9 +6,11 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  .../net/ethernet/mellanox/mlx5/core/en/htb.c  | 28 +++++++++++++++++++
  1 file changed, 28 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/htb.c
-@@ -89,6 +89,7 @@ mlx5e_htb_node_create_leaf(struct mlx5e_
+@@ -89,6 +89,7 @@ mlx5e_htb_node_create_leaf(struct mlx5e_htb *htb, u16 classid, u16 qid,
  	return node;
  }
  
@@ -16,7 +18,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  static struct mlx5e_qos_node *mlx5e_htb_node_create_root(struct mlx5e_htb *htb)
  {
  	struct mlx5e_qos_node *node;
-@@ -103,6 +104,7 @@ static struct mlx5e_qos_node *mlx5e_htb_
+@@ -103,6 +104,7 @@ static struct mlx5e_qos_node *mlx5e_htb_node_create_root(struct mlx5e_htb *htb)
  
  	return node;
  }
@@ -40,7 +42,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  
  static int mlx5e_htb_root_del(struct mlx5e_htb *htb)
  {
-@@ -440,8 +444,13 @@ static struct mlx5e_qos_node *mlx5e_htb_
+@@ -440,8 +444,13 @@ static struct mlx5e_qos_node *mlx5e_htb_node_find_by_qid(struct mlx5e_htb *htb,
  	return node;
  }
  
@@ -54,7 +56,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  {
  	struct mlx5e_priv *priv = htb->priv;
  	struct mlx5e_qos_node *node;
-@@ -450,9 +459,17 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+@@ -450,9 +459,17 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
  	bool opened;
  	int err;
  
@@ -72,7 +74,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  	if (!node)
  		return -ENOENT;
  
-@@ -470,7 +487,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+@@ -470,7 +487,11 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
  	err = mlx5_qos_destroy_node(htb->mdev, node->hw_id);
  	if (err) /* Not fatal. */
  		qos_warn(htb->mdev, "Failed to destroy leaf node %u (class %04x), err = %d\n",
@@ -84,7 +86,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  
  	mlx5e_htb_node_delete(htb, node);
  
-@@ -532,7 +553,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb
+@@ -532,7 +553,12 @@ int mlx5e_htb_leaf_del(struct mlx5e_htb *htb, u16 *classid,
  	if (opened)
  		mlx5e_reactivate_qos_sq(priv, moved_qid, txq);
  
@@ -97,7 +99,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  	return 0;
  }
  
-@@ -702,6 +728,7 @@ void mlx5e_htb_free(struct mlx5e_htb *ht
+@@ -702,6 +728,7 @@ void mlx5e_htb_free(struct mlx5e_htb *htb)
  	kvfree(htb);
  }
  
@@ -105,7 +107,7 @@ Change-Id: Ife9fe82d745acae3a42154783322cfad366e0fcd
  int mlx5e_htb_init(struct mlx5e_htb *htb, struct tc_htb_qopt_offload *htb_qopt,
  		   struct net_device *netdev, struct mlx5_core_dev *mdev,
  		   struct mlx5e_selq *selq, struct mlx5e_priv *priv)
-@@ -714,6 +741,7 @@ int mlx5e_htb_init(struct mlx5e_htb *htb
+@@ -714,6 +741,7 @@ int mlx5e_htb_init(struct mlx5e_htb *htb, struct tc_htb_qopt_offload *htb_qopt,
  	return mlx5e_htb_root_add(htb, htb_qopt->parent_classid, htb_qopt->classid,
  				  htb_qopt->extack);
  }

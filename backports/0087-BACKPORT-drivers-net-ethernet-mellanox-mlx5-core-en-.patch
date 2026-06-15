@@ -7,6 +7,8 @@ Change-Id: Ie4cbdc05596423909344258721909f7b84c1b51b
  drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/port_buffer.h
 @@ -32,6 +32,9 @@

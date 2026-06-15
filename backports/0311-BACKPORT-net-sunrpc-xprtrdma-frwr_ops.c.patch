@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/frwr_ops.c | 46 ++++++++++++++++++++++++++++++++++
  1 file changed, 46 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/frwr_ops.c b/net/sunrpc/xprtrdma/frwr_ops.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/frwr_ops.c
 +++ b/net/sunrpc/xprtrdma/frwr_ops.c
 @@ -43,7 +43,9 @@
@@ -32,7 +34,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static void frwr_cid_init(struct rpcrdma_ep *ep,
  			  struct rpcrdma_mr *mr)
  {
-@@ -63,7 +71,9 @@ static void frwr_cid_init(struct rpcrdma
+@@ -63,7 +71,9 @@ static void frwr_cid_init(struct rpcrdma_ep *ep,
  static void frwr_mr_unmap(struct rpcrdma_xprt *r_xprt, struct rpcrdma_mr *mr)
  {
  	if (mr->mr_device) {
@@ -42,7 +44,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  #ifdef CONFIG_NVFS
  		if (rpcrdma_nvfs_unmap_data(mr->mr_device->dma_device,
  					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
-@@ -90,8 +100,10 @@ void frwr_mr_release(struct rpcrdma_mr *
+@@ -90,8 +100,10 @@ void frwr_mr_release(struct rpcrdma_mr *mr)
  	frwr_mr_unmap(mr->mr_xprt, mr);
  
  	rc = ib_dereg_mr(mr->mr_ibmr);
@@ -53,7 +55,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	kfree(mr->mr_sg);
  	kfree(mr);
  }
-@@ -161,7 +173,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_
+@@ -161,7 +173,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_xprt, struct rpcrdma_mr *mr)
  
  out_mr_err:
  	kfree(sg);
@@ -63,7 +65,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return PTR_ERR(frmr);
  }
  
-@@ -364,16 +378,22 @@ struct rpcrdma_mr_seg *frwr_map(struct r
+@@ -364,16 +378,22 @@ struct rpcrdma_mr_seg *frwr_map(struct rpcrdma_xprt *r_xprt,
  	mr->mr_handle = ibmr->rkey;
  	mr->mr_length = ibmr->length;
  	mr->mr_offset = ibmr->iova;
@@ -100,7 +102,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	rpcrdma_flush_disconnect(cq->cq_context, wc);
  }
-@@ -420,7 +442,9 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
+@@ -420,7 +442,9 @@ int frwr_send(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  	num_wrs = 1;
  	post_wr = send_wr;
  	list_for_each_entry(mr, &req->rl_registered, mr_list) {
@@ -110,7 +112,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  		mr->mr_cqe.done = frwr_wc_fastreg;
  		mr->mr_regwr.wr.next = post_wr;
-@@ -441,10 +465,14 @@ int frwr_send(struct rpcrdma_xprt *r_xpr
+@@ -441,10 +465,14 @@ int frwr_send(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  		ep->re_send_count -= num_wrs;
  	}
  
@@ -125,7 +127,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return ret;
  }
  
-@@ -461,7 +489,9 @@ void frwr_reminv(struct rpcrdma_rep *rep
+@@ -461,7 +489,9 @@ void frwr_reminv(struct rpcrdma_rep *rep, struct list_head *mrs)
  	list_for_each_entry(mr, mrs, mr_list)
  		if (mr->mr_handle == rep->rr_inv_rkey) {
  			list_del_init(&mr->mr_list);
@@ -135,7 +137,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  			frwr_mr_put(mr);
  			break;	/* only one invalidated MR per RPC */
  		}
-@@ -485,7 +515,9 @@ static void frwr_wc_localinv(struct ib_c
+@@ -485,7 +515,9 @@ static void frwr_wc_localinv(struct ib_cq *cq, struct ib_wc *wc)
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -145,7 +147,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	frwr_mr_done(wc, mr);
  
  	rpcrdma_flush_disconnect(cq->cq_context, wc);
-@@ -504,7 +536,9 @@ static void frwr_wc_localinv_wake(struct
+@@ -504,7 +536,9 @@ static void frwr_wc_localinv_wake(struct ib_cq *cq, struct ib_wc *wc)
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -155,7 +157,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	frwr_mr_done(wc, mr);
  	complete(&mr->mr_linv_done);
  
-@@ -538,7 +572,9 @@ void frwr_unmap_sync(struct rpcrdma_xprt
+@@ -538,7 +572,9 @@ void frwr_unmap_sync(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  	prev = &first;
  	mr = rpcrdma_mr_pop(&req->rl_registered);
  	do {
@@ -165,7 +167,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.local_inv_needed++;
  
  		last = &mr->mr_invwr;
-@@ -581,8 +617,10 @@ void frwr_unmap_sync(struct rpcrdma_xprt
+@@ -581,8 +617,10 @@ void frwr_unmap_sync(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  	if (!rc)
  		return;
  
@@ -176,7 +178,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	/* Force a connection loss to ensure complete recovery.
  	 */
-@@ -601,8 +639,10 @@ static void frwr_wc_localinv_done(struct
+@@ -601,8 +639,10 @@ static void frwr_wc_localinv_done(struct ib_cq *cq, struct ib_wc *wc)
  	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
  	struct rpcrdma_rep *rep;
  
@@ -187,7 +189,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	/* Ensure that @rep is generated before the MR is released */
  	rep = mr->mr_req->rl_reply;
-@@ -641,7 +681,9 @@ void frwr_unmap_async(struct rpcrdma_xpr
+@@ -641,7 +681,9 @@ void frwr_unmap_async(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  	prev = &first;
  	mr = rpcrdma_mr_pop(&req->rl_registered);
  	do {
@@ -197,7 +199,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		r_xprt->rx_stats.local_inv_needed++;
  
  		last = &mr->mr_invwr;
-@@ -674,8 +716,10 @@ void frwr_unmap_async(struct rpcrdma_xpr
+@@ -674,8 +716,10 @@ void frwr_unmap_async(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
  	if (!rc)
  		return;
  
@@ -208,7 +210,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	/* The final LOCAL_INV WR in the chain is supposed to
  	 * do the wake. If it was never posted, the wake does
-@@ -712,7 +756,9 @@ int frwr_wp_create(struct rpcrdma_xprt *
+@@ -712,7 +756,9 @@ int frwr_wp_create(struct rpcrdma_xprt *r_xprt)
  	seg.mr_offset = offset_in_page(ep->re_write_pad);
  	if (IS_ERR(frwr_map(r_xprt, &seg, 1, true, xdr_zero, mr)))
  		return -EIO;

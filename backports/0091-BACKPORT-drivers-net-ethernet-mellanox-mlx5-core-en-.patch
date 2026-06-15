@@ -7,6 +7,8 @@ Change-Id: Ia046503d46ac9224512dc3b9227136a91588e3f8
  drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rep/bond.c
 @@ -3,8 +3,12 @@
@@ -23,7 +25,7 @@ Change-Id: Ia046503d46ac9224512dc3b9227136a91588e3f8
  #include "mlx5_core.h"
  #include "eswitch.h"
  #include "esw/acl/ofld.h"
-@@ -212,8 +216,10 @@ static void mlx5e_rep_changelowerstate_e
+@@ -212,8 +216,10 @@ static void mlx5e_rep_changelowerstate_event(struct net_device *netdev, void *pt
  	if (!lag_dev)
  		return;
  

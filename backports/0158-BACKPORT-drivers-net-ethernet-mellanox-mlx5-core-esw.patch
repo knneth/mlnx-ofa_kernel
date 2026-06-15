@@ -6,6 +6,8 @@ Change-Id: I5e5b75c2f0755b037a2574e267525ce0fe76c060
  drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 @@ -8,6 +8,9 @@
@@ -18,7 +20,7 @@ Change-Id: I5e5b75c2f0755b037a2574e267525ce0fe76c060
  
  /* Minimum supported BW share value by the HW is 1 Mbit/sec */
  #define MLX5_MIN_BW_SHARE 1
-@@ -1539,6 +1542,7 @@ int mlx5_esw_qos_modify_vport_rate(struc
+@@ -2258,6 +2261,7 @@ int mlx5_esw_qos_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num, u32
  
  #define MLX5_LINKSPEED_UNIT 125000 /* 1Mbps in Bps */
  
@@ -26,7 +28,7 @@ Change-Id: I5e5b75c2f0755b037a2574e267525ce0fe76c060
  /* Converts bytes per second value passed in a pointer into megabits per
   * second, rewriting last. If converted rate exceed link speed or is not a
   * fraction of Mbps - returns error.
-@@ -1569,6 +1573,7 @@ static int esw_qos_devlink_rate_to_mbps(
+@@ -2288,6 +2292,7 @@ static int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *
  	*rate = value;
  	return 0;
  }

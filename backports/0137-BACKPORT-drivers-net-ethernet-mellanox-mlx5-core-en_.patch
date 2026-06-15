@@ -7,6 +7,8 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  .../mellanox/mlx5/core/en_accel/ktls_tx.c     | 78 ++++++++++++++++++-
  1 file changed, 77 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_tx.c
 @@ -6,6 +6,7 @@
@@ -67,7 +69,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	if (priv_tx->create_err) {
  		kfree(priv_tx);
  		return;
-@@ -457,7 +479,9 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -457,7 +479,9 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	struct mlx5e_ktls_offload_context_tx *priv_tx;
  	struct mlx5e_tls_tx_pool *pool;
  	struct tls_context *tls_ctx;
@@ -77,7 +79,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	struct mlx5e_priv *priv;
  	int err;
  
-@@ -469,15 +493,24 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -469,15 +493,24 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	if (IS_ERR(priv_tx))
  		return PTR_ERR(priv_tx);
  
@@ -102,7 +104,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  crypto_info->cipher_type);
-@@ -485,6 +518,7 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -485,6 +518,7 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  		goto err_pool_push;
  	}
  
@@ -110,7 +112,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	dek = mlx5_ktls_create_key(priv->tls->dek_pool, crypto_info);
  	if (IS_ERR(dek)) {
  		err = PTR_ERR(dek);
-@@ -492,12 +526,24 @@ int mlx5e_ktls_add_tx(struct net_device
+@@ -492,12 +526,24 @@ int mlx5e_ktls_add_tx(struct net_device *netdev, struct sock *sk,
  	}
  
  	priv_tx->dek = dek;
@@ -135,7 +137,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	atomic64_inc(&priv_tx->sw_stats->tx_tls_ctx);
  
  	return 0;
-@@ -518,7 +564,9 @@ void mlx5e_ktls_del_tx(struct net_device
+@@ -518,7 +564,9 @@ void mlx5e_ktls_del_tx(struct net_device *netdev, struct tls_context *tls_ctx)
  	pool = priv->tls->tx_pool;
  
  	atomic64_inc(&priv_tx->sw_stats->tx_tls_del);
@@ -145,7 +147,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	pool_push(pool, priv_tx);
  }
  
-@@ -535,6 +583,7 @@ static void tx_fill_wi(struct mlx5e_txqs
+@@ -535,6 +583,7 @@ static void tx_fill_wi(struct mlx5e_txqsq *sq,
  	};
  }
  
@@ -153,7 +155,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  static bool
  mlx5e_ktls_tx_offload_test_and_clear_pending(struct mlx5e_ktls_offload_context_tx *priv_tx)
  {
-@@ -544,7 +593,7 @@ mlx5e_ktls_tx_offload_test_and_clear_pen
+@@ -544,7 +593,7 @@ mlx5e_ktls_tx_offload_test_and_clear_pending(struct mlx5e_ktls_offload_context_t
  
  	return ret;
  }
@@ -162,7 +164,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  static void
  post_static_params(struct mlx5e_txqsq *sq,
  		   struct mlx5e_ktls_offload_context_tx *priv_tx,
-@@ -558,7 +607,11 @@ post_static_params(struct mlx5e_txqsq *s
+@@ -558,7 +607,11 @@ post_static_params(struct mlx5e_txqsq *sq,
  	wqe = MLX5E_TLS_FETCH_SET_STATIC_PARAMS_WQE(sq, pi);
  	mlx5e_ktls_build_static_params(wqe, sq->pc, sq->sqn, &priv_tx->crypto_info,
  				       priv_tx->tisn,
@@ -174,7 +176,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  				       0, fence, TLS_OFFLOAD_CTX_DIR_TX);
  	tx_fill_wi(sq, pi, num_wqebbs, 0, NULL);
  	sq->pc += num_wqebbs;
-@@ -691,6 +744,7 @@ tx_post_resync_params(struct mlx5e_txqsq
+@@ -691,6 +744,7 @@ tx_post_resync_params(struct mlx5e_txqsq *sq,
  		rec_seq_sz = sizeof(info->rec_seq);
  		break;
  	}
@@ -182,7 +184,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	case TLS_CIPHER_AES_GCM_256: {
  		struct tls12_crypto_info_aes_gcm_256 *info = &priv_tx->crypto_info.crypto_info_256;
  
-@@ -698,6 +752,7 @@ tx_post_resync_params(struct mlx5e_txqsq
+@@ -698,6 +752,7 @@ tx_post_resync_params(struct mlx5e_txqsq *sq,
  		rec_seq_sz = sizeof(info->rec_seq);
  		break;
  	}
@@ -190,7 +192,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  priv_tx->crypto_info.crypto_info.cipher_type);
-@@ -837,7 +892,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -837,7 +892,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
  	int datalen;
  	u32 seq;
  
@@ -202,7 +204,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	if (!datalen)
  		return true;
  
-@@ -854,7 +913,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net
+@@ -854,7 +913,11 @@ bool mlx5e_ktls_handle_tx_skb(struct net_device *netdev, struct mlx5e_txqsq *sq,
  
  	priv_tx = mlx5e_get_ktls_tx_priv_ctx(tls_ctx);
  
@@ -214,7 +216,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  		mlx5e_ktls_tx_post_param_wqes(sq, priv_tx, false, false);
  
  	seq = ntohl(tcp_hdr(skb)->seq);
-@@ -908,13 +971,16 @@ static void mlx5e_tls_tx_debugfs_init(st
+@@ -908,13 +971,16 @@ static void mlx5e_tls_tx_debugfs_init(struct mlx5e_tls *tls,
  
  int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  {
@@ -231,7 +233,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  	/* DEK pool could be used by either or both of TX and RX. But we have to
  	 * put the creation here to avoid syndrome when doing devlink reload.
  	 */
-@@ -922,6 +988,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -922,6 +988,7 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  	if (IS_ERR(dek_pool))
  		return PTR_ERR(dek_pool);
  	tls->dek_pool = dek_pool;
@@ -239,7 +241,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  
  	if (!mlx5e_is_ktls_tx(priv->mdev))
  		return 0;
-@@ -937,14 +1004,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv
+@@ -937,14 +1004,20 @@ int mlx5e_ktls_init_tx(struct mlx5e_priv *priv)
  	return 0;
  
  err_tx_pool_init:
@@ -260,7 +262,7 @@ Change-Id: I624dbec7a7ed00743b4d17af521447d7c1fccdf7
  
  	debugfs_remove_recursive(priv->tls->debugfs.dfs_tx);
  	priv->tls->debugfs.dfs_tx = NULL;
-@@ -952,7 +1025,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_
+@@ -952,7 +1025,10 @@ void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv)
  	mlx5e_tls_tx_pool_cleanup(priv->tls->tx_pool);
  	priv->tls->tx_pool = NULL;
  

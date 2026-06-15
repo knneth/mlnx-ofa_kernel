@@ -6,6 +6,8 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  drivers/infiniband/ulp/srp/ib_srp.c | 292 +++++++++++++++++++++++++++-
  1 file changed, 291 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/ulp/srp/ib_srp.c b/drivers/infiniband/ulp/srp/ib_srp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/srp/ib_srp.c
 +++ b/drivers/infiniband/ulp/srp/ib_srp.c
 @@ -64,6 +64,31 @@
@@ -40,7 +42,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  
  static unsigned int srp_sg_tablesize;
  static unsigned int cmd_sg_entries;
-@@ -960,6 +985,7 @@ static void srp_disconnect_target(struct
+@@ -960,6 +985,7 @@ static void srp_disconnect_target(struct srp_target_port *target)
  	}
  }
  
@@ -48,7 +50,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  static int srp_exit_cmd_priv(struct Scsi_Host *shost, struct scsi_cmnd *cmd)
  {
  	struct srp_target_port *target = host_to_target(shost);
-@@ -1011,6 +1037,74 @@ static int srp_init_cmd_priv(struct Scsi
+@@ -1011,6 +1037,74 @@ static int srp_init_cmd_priv(struct Scsi_Host *shost, struct scsi_cmnd *cmd)
  out:
  	return ret;
  }
@@ -131,7 +133,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	const struct attribute_group **g;
  	struct attribute **attr;
  
-@@ -1032,6 +1127,12 @@ static void srp_del_scsi_host_attr(struc
+@@ -1032,6 +1127,12 @@ static void srp_del_scsi_host_attr(struct Scsi_Host *shost)
  			device_remove_file(&shost->shost_dev, dev_attr);
  		}
  	}
@@ -144,7 +146,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  }
  
  static void srp_remove_target(struct srp_target_port *target)
-@@ -1054,6 +1155,12 @@ static void srp_remove_target(struct srp
+@@ -1054,6 +1155,12 @@ static void srp_remove_target(struct srp_target_port *target)
  	}
  	cancel_work_sync(&target->tl_err_work);
  	srp_rport_put(target->rport);
@@ -157,7 +159,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	kfree(target->ch);
  	target->ch = NULL;
  
-@@ -1268,20 +1375,34 @@ static void srp_finish_req(struct srp_rd
+@@ -1268,20 +1375,34 @@ static void srp_finish_req(struct srp_rdma_ch *ch, struct srp_request *req,
  	if (scmnd) {
  		srp_free_req(ch, req, scmnd, 0);
  		scmnd->result = result;
@@ -192,7 +194,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	struct srp_rdma_ch *ch = &target->ch[blk_mq_unique_tag_to_hwq(tag)];
  	struct srp_request *req = scsi_cmd_priv(scmnd);
  
-@@ -1298,6 +1419,25 @@ static void srp_terminate_io(struct srp_
+@@ -1298,6 +1419,25 @@ static void srp_terminate_io(struct srp_rport *rport)
  
  	scsi_host_busy_iter(target->scsi_host, srp_terminate_cmd, &context);
  }
@@ -218,7 +220,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  
  /* Calculate maximum initiator to target information unit length. */
  static uint32_t srp_max_it_iu_len(int cmd_sg_cnt, bool use_imm_data,
-@@ -1352,6 +1492,7 @@ static int srp_rport_reconnect(struct sr
+@@ -1352,6 +1492,7 @@ static int srp_rport_reconnect(struct srp_rport *rport)
  		ch = &target->ch[i];
  		ret += srp_new_cm_id(ch);
  	}
@@ -226,7 +228,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	{
  		struct srp_terminate_context context = {
  			.srp_target = target, .scsi_result = DID_RESET << 16};
-@@ -1359,6 +1500,16 @@ static int srp_rport_reconnect(struct sr
+@@ -1359,6 +1500,16 @@ static int srp_rport_reconnect(struct srp_rport *rport)
  		scsi_host_busy_iter(target->scsi_host, srp_terminate_cmd,
  				    &context);
  	}
@@ -243,7 +245,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	for (i = 0; i < target->ch_count; i++) {
  		ch = &target->ch[i];
  		/*
-@@ -1953,10 +2104,19 @@ static void srp_process_rsp(struct srp_r
+@@ -1953,10 +2104,19 @@ static void srp_process_rsp(struct srp_rdma_ch *ch, struct srp_rsp *rsp)
  		spin_unlock_irqrestore(&ch->lock, flags);
  	} else {
  		scmnd = scsi_host_find_tag(target->scsi_host, rsp->tag);
@@ -263,7 +265,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  		if (!scmnd) {
  			shost_printk(KERN_ERR, target->scsi_host,
  				     "Null scmnd for RSP w/tag %#016llx received on ch %td / QP %#x\n",
-@@ -1985,7 +2145,14 @@ static void srp_process_rsp(struct srp_r
+@@ -1985,7 +2145,14 @@ static void srp_process_rsp(struct srp_rdma_ch *ch, struct srp_rsp *rsp)
  		srp_free_req(ch, req, scmnd,
  			     be32_to_cpu(rsp->req_lim_delta));
  
@@ -278,7 +280,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	}
  }
  
-@@ -2150,15 +2317,26 @@ static void srp_handle_qp_err(struct ib_
+@@ -2150,15 +2317,26 @@ static void srp_handle_qp_err(struct ib_cq *cq, struct ib_wc *wc,
  
  static int srp_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
  {
@@ -305,7 +307,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	int len, ret;
  
  	scmnd->result = srp_chkready(target->rport);
-@@ -2168,6 +2346,12 @@ static int srp_queuecommand(struct Scsi_
+@@ -2168,6 +2346,12 @@ static int srp_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
  	WARN_ON_ONCE(rq->tag < 0);
  	tag = blk_mq_unique_tag(rq);
  	ch = &target->ch[blk_mq_unique_tag_to_hwq(tag)];
@@ -318,7 +320,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  
  	spin_lock_irqsave(&ch->lock, flags);
  	iu = __srp_get_tx_iu(ch, SRP_IU_CMD);
-@@ -2176,10 +2360,16 @@ static int srp_queuecommand(struct Scsi_
+@@ -2176,10 +2360,16 @@ static int srp_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
  	if (!iu)
  		goto err;
  
@@ -335,7 +337,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	cmd = iu->buf;
  	memset(cmd, 0, sizeof *cmd);
  
-@@ -2208,7 +2398,11 @@ static int srp_queuecommand(struct Scsi_
+@@ -2208,7 +2398,11 @@ static int srp_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *scmnd)
  		 * to reduce queue depth temporarily.
  		 */
  		scmnd->result = len == -ENOMEM ?
@@ -359,7 +361,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  		ret = 0;
  	} else {
  		ret = SCSI_MLQUEUE_HOST_BUSY;
-@@ -2780,14 +2978,26 @@ static int srp_send_tsk_mgmt(struct srp_
+@@ -2780,14 +2978,26 @@ static int srp_send_tsk_mgmt(struct srp_rdma_ch *ch, u64 req_tag, u64 lun,
  static int srp_abort(struct scsi_cmnd *scmnd)
  {
  	struct srp_target_port *target = host_to_target(scmnd->device->host);
@@ -386,7 +388,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	ch_idx = blk_mq_unique_tag_to_hwq(tag);
  	if (WARN_ON_ONCE(ch_idx >= target->ch_count))
  		return SUCCESS;
-@@ -2844,7 +3054,26 @@ static int srp_target_alloc(struct scsi_
+@@ -2844,7 +3054,26 @@ static int srp_target_alloc(struct scsi_target *starget)
  	return 0;
  }
  
@@ -413,7 +415,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  {
  	struct Scsi_Host *shost = sdev->host;
  	struct srp_target_port *target = host_to_target(shost);
-@@ -3040,6 +3269,7 @@ static ssize_t allow_ext_sg_show(struct
+@@ -3040,6 +3269,7 @@ static ssize_t allow_ext_sg_show(struct device *dev,
  
  static DEVICE_ATTR_RO(allow_ext_sg);
  
@@ -421,7 +423,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  static struct attribute *srp_host_attrs[] = {
  	&dev_attr_id_ext.attr,
  	&dev_attr_ioc_guid.attr,
-@@ -3061,16 +3291,50 @@ static struct attribute *srp_host_attrs[
+@@ -3061,16 +3291,50 @@ static struct attribute *srp_host_attrs[] = {
  };
  
  ATTRIBUTE_GROUPS(srp_host);
@@ -472,7 +474,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	.queuecommand			= srp_queuecommand,
  	.change_queue_depth             = srp_change_queue_depth,
  	.eh_timed_out			= srp_timed_out,
-@@ -3082,9 +3346,18 @@ static const struct scsi_host_template s
+@@ -3082,9 +3346,18 @@ static const struct scsi_host_template srp_template = {
  	.can_queue			= SRP_DEFAULT_CMD_SQ_SIZE,
  	.this_id			= -1,
  	.cmd_per_lun			= SRP_DEFAULT_CMD_SQ_SIZE,
@@ -491,7 +493,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  };
  
  static int srp_sdev_count(struct Scsi_Host *host)
-@@ -3704,9 +3977,12 @@ static ssize_t add_target_store(struct d
+@@ -3704,9 +3977,12 @@ static ssize_t add_target_store(struct device *dev,
  	target_host->max_id      = 1;
  	target_host->max_lun     = -1LL;
  	target_host->max_cmd_len = sizeof ((struct srp_cmd *) (void *) 0L)->cdb;
@@ -505,7 +507,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  
  	target = host_to_target(target_host);
  
-@@ -3736,6 +4012,9 @@ static ssize_t add_target_store(struct d
+@@ -3736,6 +4012,9 @@ static ssize_t add_target_store(struct device *dev,
  	if (ret)
  		goto out;
  
@@ -515,7 +517,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  	if (!srp_conn_unique(target->srp_host, target)) {
  		if (target->using_rdma_cm) {
  			shost_printk(KERN_INFO, target->scsi_host,
-@@ -3830,6 +4109,11 @@ static ssize_t add_target_store(struct d
+@@ -3830,6 +4109,11 @@ static ssize_t add_target_store(struct device *dev,
  		if (ret)
  			goto err_disconnect;
  
@@ -527,7 +529,7 @@ Change-Id: If1f3a134adce2cfb5fead910f85810587508c660
  		ret = srp_connect_ch(ch, max_iu_len, multich);
  		if (ret) {
  			char dst[64];
-@@ -3848,6 +4132,9 @@ static ssize_t add_target_store(struct d
+@@ -3848,6 +4132,9 @@ static ssize_t add_target_store(struct device *dev,
  				goto free_ch;
  			} else {
  				srp_free_ch_ib(target, ch);

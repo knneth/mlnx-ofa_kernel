@@ -6,9 +6,11 @@ Change-Id: Ie35b6e7e1f952d00c955717e4b1d5f609f1e3f7d
  drivers/infiniband/core/sa_query.c | 25 ++++++++++++++++++++++---
  1 file changed, 22 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/sa_query.c b/drivers/infiniband/core/sa_query.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/sa_query.c
 +++ b/drivers/infiniband/core/sa_query.c
-@@ -709,10 +709,20 @@ static void ib_nl_set_path_rec_attrs(str
+@@ -709,10 +709,20 @@ static void ib_nl_set_path_rec_attrs(struct sk_buff *skb,
  	query->mad_buf->context[1] = NULL;
  
  	/* Construct the family header first */
@@ -30,7 +32,7 @@ Change-Id: Ie35b6e7e1f952d00c955717e4b1d5f609f1e3f7d
  	header->port_num = query->port->port_num;
  
  	if ((comp_mask & IB_SA_PATH_REC_REVERSIBLE) &&
-@@ -998,11 +1008,15 @@ int ib_nl_handle_set_timeout(struct sk_b
+@@ -998,11 +1008,15 @@ int ib_nl_handle_set_timeout(struct sk_buff *skb,
  	int ret;
  
  	if (!(nlh->nlmsg_flags & NLM_F_REQUEST) ||
@@ -48,7 +50,7 @@ Change-Id: Ie35b6e7e1f952d00c955717e4b1d5f609f1e3f7d
  	attr = (const struct nlattr *)tb[LS_NLA_TYPE_TIMEOUT];
  	if (ret || !attr)
  		goto settimeout_out;
-@@ -1053,8 +1067,13 @@ static inline int ib_nl_is_good_resolve_
+@@ -1053,8 +1067,13 @@ static inline int ib_nl_is_good_resolve_resp(const struct nlmsghdr *nlh)
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return 0;
  

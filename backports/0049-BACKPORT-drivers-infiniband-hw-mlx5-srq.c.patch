@@ -6,9 +6,11 @@ Change-Id: I08e3b78c887ddf04683dab9e2e26e0c6b86a48b7
  drivers/infiniband/hw/mlx5/srq.c | 10 +++++++++-
  1 file changed, 9 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/srq.c b/drivers/infiniband/hw/mlx5/srq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/srq.c
 +++ b/drivers/infiniband/hw/mlx5/srq.c
-@@ -75,7 +75,11 @@ static int create_srq_user(struct ib_pd
+@@ -75,7 +75,11 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
  
  	srq->wq_sig = !!(ucmd.flags & MLX5_SRQ_FLAG_SIGNATURE);
  
@@ -20,7 +22,7 @@ Change-Id: I08e3b78c887ddf04683dab9e2e26e0c6b86a48b7
  	if (IS_ERR(srq->umem)) {
  		mlx5_ib_dbg(dev, "failed umem get, size %d\n", buf_size);
  		err = PTR_ERR(srq->umem);
-@@ -83,7 +87,11 @@ static int create_srq_user(struct ib_pd
+@@ -83,7 +87,11 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
  	}
  	in->umem = srq->umem;
  

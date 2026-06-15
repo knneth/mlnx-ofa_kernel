@@ -7,6 +7,8 @@ Change-Id: I35ad314b24ade2b77e154a705a693adda1f0cbb2
  .../net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/cmd_tracepoint.h
 @@ -22,10 +22,18 @@ TRACE_EVENT(mlx5_cmd,

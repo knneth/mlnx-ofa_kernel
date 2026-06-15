@@ -6,9 +6,11 @@ Change-Id: I852753a437e6423aa20da54d77215aa8c704aa98
  .../net/ethernet/mellanox/mlx5/core/en/qos.c   | 18 +++++++++++++++---
  1 file changed, 15 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/qos.c
-@@ -375,6 +375,7 @@ void mlx5e_reset_qdisc(struct net_device
+@@ -375,6 +375,7 @@ void mlx5e_reset_qdisc(struct net_device *dev, u16 qid)
  	spin_unlock_bh(qdisc_lock(qdisc));
  }
  
@@ -16,7 +18,7 @@ Change-Id: I852753a437e6423aa20da54d77215aa8c704aa98
  int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_qopt)
  {
  	struct mlx5e_htb *htb = priv->htb;
-@@ -382,12 +383,17 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+@@ -382,12 +383,17 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_
  
  	if (!htb && htb_qopt->command != TC_HTB_CREATE)
  		return -EINVAL;
@@ -37,7 +39,7 @@ Change-Id: I852753a437e6423aa20da54d77215aa8c704aa98
  
  	switch (htb_qopt->command) {
  	case TC_HTB_CREATE:
-@@ -422,7 +428,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+@@ -422,7 +428,12 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_
  		return mlx5e_htb_leaf_to_inner(htb, htb_qopt->parent_classid, htb_qopt->classid,
  					       htb_qopt->rate, htb_qopt->ceil, htb_qopt->extack);
  	case TC_HTB_LEAF_DEL:
@@ -50,7 +52,7 @@ Change-Id: I852753a437e6423aa20da54d77215aa8c704aa98
  	case TC_HTB_LEAF_DEL_LAST:
  	case TC_HTB_LEAF_DEL_LAST_FORCE:
  		return mlx5e_htb_leaf_del_last(htb, htb_qopt->classid,
-@@ -441,6 +452,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv
+@@ -441,6 +452,7 @@ int mlx5e_htb_setup_tc(struct mlx5e_priv *priv, struct tc_htb_qopt_offload *htb_
  		return -EOPNOTSUPP;
  	}
  }

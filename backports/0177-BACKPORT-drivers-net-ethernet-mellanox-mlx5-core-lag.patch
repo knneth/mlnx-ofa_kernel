@@ -6,6 +6,8 @@ Change-Id: Idd46c6de54234fcf4f0c757c1f0dd612907a699d
  drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
 @@ -2,7 +2,9 @@

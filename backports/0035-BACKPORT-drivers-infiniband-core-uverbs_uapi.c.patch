@@ -6,6 +6,8 @@ Change-Id: I62400185a4151f248ad79f8070ef3c810d2d0811
  drivers/infiniband/core/uverbs_uapi.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/uverbs_uapi.c b/drivers/infiniband/core/uverbs_uapi.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_uapi.c
 +++ b/drivers/infiniband/core/uverbs_uapi.c
 @@ -567,7 +567,7 @@ again:

@@ -6,6 +6,8 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  .../net/ethernet/mellanox/mlx5/core/pci_irq.c | 38 +++++++++++++++++++
  1 file changed, 38 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/pci_irq.c
 @@ -27,6 +27,13 @@
@@ -22,7 +24,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  struct mlx5_irq {
  	struct atomic_notifier_head nh;
  	cpumask_var_t mask;
-@@ -162,7 +169,11 @@ static void mlx5_system_free_irq(struct
+@@ -162,7 +169,11 @@ static void mlx5_system_free_irq(struct mlx5_irq *irq)
  	 * calling it. To satisfy this requirement, we call
  	 * irq_cpu_rmap_remove() to remove the notifier
  	 */
@@ -34,7 +36,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  #ifdef CONFIG_RFS_ACCEL
  	rmap = mlx5_eq_table_get_rmap(pool->dev);
  	if (rmap)
-@@ -170,8 +181,10 @@ static void mlx5_system_free_irq(struct
+@@ -170,8 +181,10 @@ static void mlx5_system_free_irq(struct mlx5_irq *irq)
  #endif
  
  	free_irq(irq->map.virq, &irq->nh);
@@ -45,7 +47,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  }
  
  static void irq_release(struct mlx5_irq *irq)
-@@ -267,6 +280,7 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -267,6 +280,7 @@ struct mlx5_irq *mlx5_irq_alloc(struct mlx5_irq_pool *pool, int i,
  		return ERR_PTR(-ENOMEM);
  	}
  
@@ -53,7 +55,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  	if (!i || !pci_msix_can_alloc_dyn(dev->pdev)) {
  		/* The vector at index 0 is always statically allocated. If
  		 * dynamic irq is not supported all vectors are statically
-@@ -282,6 +296,10 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -282,6 +296,10 @@ struct mlx5_irq *mlx5_irq_alloc(struct mlx5_irq_pool *pool, int i,
  			goto err_alloc_irq;
  		}
  	}
@@ -64,7 +66,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  
  	if (i && rmap && *rmap) {
  #ifdef CONFIG_RFS_ACCEL
-@@ -306,7 +324,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -306,7 +324,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct mlx5_irq_pool *pool, int i,
  
  	if (af_desc) {
  		cpumask_copy(irq->mask, &af_desc->mask);
@@ -76,7 +78,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  	}
  	irq->pool = pool;
  	irq->refcount = 1;
-@@ -320,7 +342,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct m
+@@ -320,7 +342,11 @@ struct mlx5_irq *mlx5_irq_alloc(struct mlx5_irq_pool *pool, int i,
  	return irq;
  err_xa:
  	if (af_desc)
@@ -100,7 +102,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  	free_cpumask_var(irq->mask);
  	kfree(irq);
  	return ERR_PTR(err);
-@@ -514,6 +542,7 @@ struct mlx5_irq *mlx5_irq_request(struct
+@@ -514,6 +542,7 @@ struct mlx5_irq *mlx5_irq_request(struct mlx5_core_dev *dev, u16 vecidx,
  	return irq;
  }
  
@@ -108,7 +110,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  /**
   * mlx5_msix_alloc - allocate msix interrupt
   * @dev: mlx5 device from which to request
-@@ -565,6 +594,7 @@ void mlx5_msix_free(struct mlx5_core_dev
+@@ -565,6 +594,7 @@ void mlx5_msix_free(struct mlx5_core_dev *dev, struct msi_map map)
  	pci_msix_free_irq(dev->pdev, map);
  }
  EXPORT_SYMBOL(mlx5_msix_free);
@@ -116,7 +118,7 @@ Change-Id: Ieb2f43c2be0b09791f480e1e7556aae381642945
  
  /**
   * mlx5_irq_release_vector - release one IRQ back to the system.
-@@ -814,13 +844,21 @@ int mlx5_irq_table_create(struct mlx5_co
+@@ -818,13 +848,21 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
  		total_vec += MLX5_MAX_MSIX_PER_SF * mlx5_sf_max_functions(dev);
  	total_vec = min_t(int, total_vec, pci_msix_vec_count(dev->pdev));
  

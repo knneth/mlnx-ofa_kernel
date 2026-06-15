@@ -6,9 +6,11 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  drivers/infiniband/hw/mlx5/cq.c | 30 ++++++++++++++++++++++++++++--
  1 file changed, 28 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/cq.c b/drivers/infiniband/hw/mlx5/cq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/cq.c
 +++ b/drivers/infiniband/hw/mlx5/cq.c
-@@ -754,9 +754,16 @@ static int create_cq_user(struct mlx5_ib
+@@ -750,9 +750,16 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
  
  	*cqe_size = ucmd.cqe_size;
  
@@ -26,7 +28,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	if (IS_ERR(cq->buf.umem)) {
  		err = PTR_ERR(cq->buf.umem);
  		return err;
-@@ -770,7 +777,11 @@ static int create_cq_user(struct mlx5_ib
+@@ -766,7 +773,11 @@ static int create_cq_user(struct mlx5_ib_dev *dev, struct ib_udata *udata,
  		goto err_umem;
  	}
  
@@ -39,7 +41,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	if (err)
  		goto err_umem;
  
-@@ -964,8 +975,13 @@ int mlx5_ib_create_cq(struct ib_cq *ibcq
+@@ -955,8 +966,13 @@ int mlx5_ib_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
  	struct mlx5_ib_dev *dev = to_mdev(ibdev);
  	struct mlx5_ib_cq *cq = to_mcq(ibcq);
  	u32 out[MLX5_ST_SZ_DW(create_cq_out)];
@@ -53,7 +55,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	u32 *cqb = NULL;
  	void *cqc;
  	int cqe_size;
-@@ -1197,9 +1213,15 @@ static int resize_user(struct mlx5_ib_de
+@@ -1173,9 +1189,15 @@ static int resize_user(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
  	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
  		return -EINVAL;
  
@@ -69,7 +71,7 @@ Change-Id: I37f843fb70bd10df0e9b00c31637d8da5427e99e
  	if (IS_ERR(umem)) {
  		err = PTR_ERR(umem);
  		return err;
-@@ -1300,7 +1322,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq
+@@ -1276,7 +1298,11 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq, int entries, struct ib_udata *udata)
  	unsigned int page_offset_quantized = 0;
  	unsigned int page_shift;
  	int inlen;

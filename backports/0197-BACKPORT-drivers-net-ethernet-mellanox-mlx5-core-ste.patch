@@ -7,9 +7,11 @@ Change-Id: I962fb2ff180762003df97598ccc8ad2f9746712d
  drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_send.c
-@@ -360,7 +360,11 @@ static void dr_destroy_qp(struct mlx5_co
+@@ -360,7 +360,11 @@ static void dr_destroy_qp(struct mlx5_core_dev *mdev,
  
  static void dr_cmd_notify_hw(struct mlx5dr_qp *dr_qp, void *ctrl)
  {

@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/verbs.c | 56 +++++++++++++++++++++++++++++++++++++
  1 file changed, 56 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/verbs.c b/net/sunrpc/xprtrdma/verbs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/verbs.c
 +++ b/net/sunrpc/xprtrdma/verbs.c
 @@ -55,14 +55,27 @@
@@ -37,7 +39,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static int rpcrdma_sendctxs_create(struct rpcrdma_xprt *r_xprt);
  static void rpcrdma_sendctxs_destroy(struct rpcrdma_xprt *r_xprt);
  static void rpcrdma_sendctx_put_locked(struct rpcrdma_xprt *r_xprt,
-@@ -145,7 +158,9 @@ static void rpcrdma_wc_send(struct ib_cq
+@@ -145,7 +158,9 @@ static void rpcrdma_wc_send(struct ib_cq *cq, struct ib_wc *wc)
  	struct rpcrdma_xprt *r_xprt = cq->cq_context;
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -47,7 +49,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	rpcrdma_sendctx_put_locked(r_xprt, sc);
  	rpcrdma_flush_disconnect(r_xprt, wc);
  }
-@@ -164,7 +179,9 @@ static void rpcrdma_wc_receive(struct ib
+@@ -164,7 +179,9 @@ static void rpcrdma_wc_receive(struct ib_cq *cq, struct ib_wc *wc)
  	struct rpcrdma_xprt *r_xprt = cq->cq_context;
  
  	/* WARNING: Only wr_cqe and status are reliable at this point */
@@ -57,7 +59,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	--r_xprt->rx_ep->re_receive_count;
  	if (wc->status != IB_WC_SUCCESS)
  		goto out_flushed;
-@@ -256,7 +273,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_
+@@ -252,7 +269,9 @@ rpcrdma_cm_event_handler(struct rdma_cm_id *id, struct rdma_cm_event *event)
  		rpcrdma_ep_get(ep);
  		ep->re_connect_status = 1;
  		rpcrdma_update_cm_private(ep, &event->param.conn);
@@ -67,7 +69,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		wake_up_all(&ep->re_connect_wait);
  		break;
  	case RDMA_CM_EVENT_CONNECT_ERROR:
-@@ -535,7 +554,9 @@ int rpcrdma_xprt_connect(struct rpcrdma_
+@@ -531,7 +550,9 @@ int rpcrdma_xprt_connect(struct rpcrdma_xprt *r_xprt)
  	frwr_wp_create(r_xprt);
  
  out:
@@ -77,7 +79,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return rc;
  }
  
-@@ -560,7 +581,9 @@ void rpcrdma_xprt_disconnect(struct rpcr
+@@ -556,7 +577,9 @@ void rpcrdma_xprt_disconnect(struct rpcrdma_xprt *r_xprt)
  
  	id = ep->re_id;
  	rc = rdma_disconnect(id);
@@ -87,7 +89,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	rpcrdma_xprt_drain(r_xprt);
  	rpcrdma_reps_unmap(r_xprt);
-@@ -645,6 +668,9 @@ static int rpcrdma_sendctxs_create(struc
+@@ -641,6 +664,9 @@ static int rpcrdma_sendctxs_create(struct rpcrdma_xprt *r_xprt)
  		buf->rb_sc_ctxs[i] = sc;
  	}
  
@@ -97,7 +99,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	buf->rb_sc_head = 0;
  	buf->rb_sc_tail = 0;
  	return 0;
-@@ -699,7 +725,11 @@ out_emptyq:
+@@ -695,7 +721,11 @@ out_emptyq:
  	 * completions recently. This is a sign the Send Queue is
  	 * backing up. Cause the caller to pause and try again.
  	 */
@@ -109,7 +111,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	r_xprt->rx_stats.empty_sendctx_q++;
  	return NULL;
  }
-@@ -735,7 +765,14 @@ static void rpcrdma_sendctx_put_locked(s
+@@ -731,7 +761,14 @@ static void rpcrdma_sendctx_put_locked(struct rpcrdma_xprt *r_xprt,
  	/* Paired with READ_ONCE */
  	smp_store_release(&buf->rb_sc_tail, next_tail);
  
@@ -124,7 +126,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  static void
-@@ -769,7 +806,12 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *
+@@ -765,7 +802,12 @@ rpcrdma_mrs_create(struct rpcrdma_xprt *r_xprt)
  	}
  
  	r_xprt->rx_stats.mrs_allocated += count;
@@ -137,7 +139,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  static void
-@@ -781,7 +823,9 @@ rpcrdma_mr_refresh_worker(struct work_st
+@@ -777,7 +819,9 @@ rpcrdma_mr_refresh_worker(struct work_struct *work)
  						   rx_buf);
  
  	rpcrdma_mrs_create(r_xprt);
@@ -147,7 +149,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -799,7 +843,11 @@ void rpcrdma_mrs_refresh(struct rpcrdma_
+@@ -795,7 +839,11 @@ void rpcrdma_mrs_refresh(struct rpcrdma_xprt *r_xprt)
  	 */
  	if (ep->re_connect_status != 1)
  		return;
@@ -159,7 +161,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /**
-@@ -1293,7 +1341,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpc
+@@ -1289,7 +1337,9 @@ bool __rpcrdma_regbuf_dma_map(struct rpcrdma_xprt *r_xprt,
  	rb->rg_iov.addr = ib_dma_map_single(device, rdmab_data(rb),
  					    rdmab_length(rb), rb->rg_direction);
  	if (ib_dma_mapping_error(device, rdmab_addr(rb))) {
@@ -169,7 +171,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		return false;
  	}
  
-@@ -1368,7 +1418,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+@@ -1364,7 +1414,9 @@ void rpcrdma_post_recvs(struct rpcrdma_xprt *r_xprt, int needed, bool temp)
  		}
  
  		rep->rr_cid.ci_queue_id = ep->re_attr.recv_cq->res.id;
@@ -179,7 +181,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		rep->rr_recv_wr.next = wr;
  		wr = &rep->rr_recv_wr;
  		--needed;
-@@ -1380,7 +1432,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+@@ -1376,7 +1428,9 @@ void rpcrdma_post_recvs(struct rpcrdma_xprt *r_xprt, int needed, bool temp)
  	rc = ib_post_recv(ep->re_id->qp, wr,
  			  (const struct ib_recv_wr **)&bad_wr);
  	if (rc) {
@@ -189,7 +191,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		for (wr = bad_wr; wr;) {
  			struct rpcrdma_rep *rep;
  
-@@ -1394,7 +1448,9 @@ void rpcrdma_post_recvs(struct rpcrdma_x
+@@ -1390,7 +1444,9 @@ void rpcrdma_post_recvs(struct rpcrdma_xprt *r_xprt, int needed, bool temp)
  		complete(&ep->re_done);
  
  out:

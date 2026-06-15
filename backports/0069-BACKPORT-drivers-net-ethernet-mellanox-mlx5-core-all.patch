@@ -6,9 +6,11 @@ Change-Id: Ifc6ef36db45171103562cc604f12ebffbdda1224
  drivers/net/ethernet/mellanox/mlx5/core/alloc.c | 17 +++++++++++++++--
  1 file changed, 15 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
-@@ -61,11 +61,20 @@ static void *mlx5_dma_zalloc_coherent_no
+@@ -61,11 +61,20 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
  	int original_node;
  	void *cpu_handle;
  
@@ -31,7 +33,7 @@ Change-Id: Ifc6ef36db45171103562cc604f12ebffbdda1224
  	set_dev_node(device, original_node);
  	mutex_unlock(&priv->alloc_mutex);
  	return cpu_handle;
-@@ -140,7 +149,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_
+@@ -140,7 +149,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
  	if (!pgdir)
  		return NULL;
  

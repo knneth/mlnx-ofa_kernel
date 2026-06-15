@@ -6,9 +6,11 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  .../net/ethernet/mellanox/mlxfw/mlxfw_fsm.c   | 96 +++++++++++++++----
  1 file changed, 76 insertions(+), 20 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
 +++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_fsm.c
-@@ -50,31 +50,41 @@ static int mlxfw_fsm_state_err(struct ml
+@@ -50,31 +50,41 @@ static int mlxfw_fsm_state_err(struct mlxfw_dev *mlxfw_dev,
  	case MLXFW_FSM_STATE_ERR_ERROR:
  		MLXFW_ERR_MSG(mlxfw_dev, extack, "general error", err);
  		break;
@@ -50,7 +52,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	case MLXFW_FSM_STATE_ERR_MAX:
  		MLXFW_ERR_MSG(mlxfw_dev, extack, "unknown error", err);
  		break;
-@@ -84,8 +94,9 @@ static int mlxfw_fsm_state_err(struct ml
+@@ -84,8 +94,9 @@ static int mlxfw_fsm_state_err(struct mlxfw_dev *mlxfw_dev,
  };
  
  static int mlxfw_fsm_state_wait(struct mlxfw_dev *mlxfw_dev, u32 fwhandle,
@@ -83,7 +85,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  {
  	enum mlxfw_fsm_reactivate_status status;
  
-@@ -133,31 +147,41 @@ mlxfw_fsm_reactivate_err(struct mlxfw_de
+@@ -133,31 +147,41 @@ mlxfw_fsm_reactivate_err(struct mlxfw_dev *mlxfw_dev,
  	case MLXFW_FSM_REACTIVATE_STATUS_BUSY:
  		MLXFW_REACT_ERR("busy", err);
  		break;
@@ -125,7 +127,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	case MLXFW_FSM_REACTIVATE_STATUS_MAX:
  		MLXFW_REACT_ERR("unexpected error", err);
  		break;
-@@ -191,15 +215,24 @@ static int mlxfw_fsm_reactivate(struct m
+@@ -191,15 +215,24 @@ static int mlxfw_fsm_reactivate(struct mlxfw_dev *mlxfw_dev,
  	    status == MLXFW_FSM_REACTIVATE_STATUS_FW_ALREADY_ACTIVATED)
  		return 0;
  
@@ -151,7 +153,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  }
  
  #define MLXFW_ALIGN_DOWN(x, align_bits) ((x) & ~((1 << (align_bits)) - 1))
-@@ -209,8 +242,9 @@ static void mlxfw_status_notify(struct m
+@@ -209,8 +242,9 @@ static void mlxfw_status_notify(struct mlxfw_dev *mlxfw_dev,
  static int mlxfw_flash_component(struct mlxfw_dev *mlxfw_dev,
  				 u32 fwhandle,
  				 struct mlxfw_mfa2_component *comp,
@@ -163,7 +165,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  {
  	u16 comp_max_write_size;
  	u8 comp_align_bits;
-@@ -239,7 +273,6 @@ static int mlxfw_flash_component(struct
+@@ -239,7 +273,6 @@ static int mlxfw_flash_component(struct mlxfw_dev *mlxfw_dev,
  
  	comp_max_write_size = MLXFW_ALIGN_DOWN(comp_max_write_size,
  					       comp_align_bits);
@@ -171,7 +173,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	mlxfw_dbg(mlxfw_dev, "Component update\n");
  	mlxfw_status_notify(mlxfw_dev, "Updating component", comp_name, 0, 0);
  	err = mlxfw_dev->ops->fsm_component_update(mlxfw_dev, fwhandle,
-@@ -257,10 +290,11 @@ static int mlxfw_flash_component(struct
+@@ -257,10 +290,11 @@ static int mlxfw_flash_component(struct mlxfw_dev *mlxfw_dev,
  	}
  
  	err = mlxfw_fsm_state_wait(mlxfw_dev, fwhandle,
@@ -185,7 +187,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	mlxfw_dbg(mlxfw_dev, "Component download\n");
  	mlxfw_status_notify(mlxfw_dev, "Downloading component",
  			    comp_name, 0, comp->data_size);
-@@ -294,7 +328,9 @@ static int mlxfw_flash_component(struct
+@@ -294,7 +328,9 @@ static int mlxfw_flash_component(struct mlxfw_dev *mlxfw_dev,
  	}
  
  	err = mlxfw_fsm_state_wait(mlxfw_dev, fwhandle,
@@ -208,7 +210,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  {
  	u32 component_count;
  	int err;
-@@ -336,6 +373,7 @@ static int mlxfw_flash_components(struct
+@@ -336,6 +373,7 @@ static int mlxfw_flash_components(struct mlxfw_dev *mlxfw_dev, u32 fwhandle,
  
  		mlxfw_info(mlxfw_dev, "Flashing component type %d\n",
  			   comp->index);
@@ -216,7 +218,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  		err = mlxfw_flash_component(mlxfw_dev, fwhandle, comp,
  					    reactivate_supp, extack);
  		mlxfw_mfa2_file_component_put(comp);
-@@ -346,8 +384,9 @@ static int mlxfw_flash_components(struct
+@@ -346,8 +384,9 @@ static int mlxfw_flash_components(struct mlxfw_dev *mlxfw_dev, u32 fwhandle,
  }
  
  int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
@@ -228,7 +230,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  {
  	struct mlxfw_mfa2_file *mfa2_file;
  	bool reactivate_supp = true;
-@@ -379,21 +418,29 @@ int mlxfw_firmware_flash(struct mlxfw_de
+@@ -379,21 +418,29 @@ int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
  	}
  
  	err = mlxfw_fsm_state_wait(mlxfw_dev, fwhandle,
@@ -262,7 +264,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	if (err)
  		goto err_flash_components;
  
-@@ -407,7 +454,9 @@ int mlxfw_firmware_flash(struct mlxfw_de
+@@ -407,7 +454,9 @@ int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
  	}
  
  	err = mlxfw_fsm_state_wait(mlxfw_dev, fwhandle,
@@ -273,7 +275,7 @@ Change-Id: Ic61f5544ac79f28bc3fbc2be494765eca8f0470c
  	if (err)
  		goto err_state_wait_activate_to_locked;
  
-@@ -417,6 +466,10 @@ int mlxfw_firmware_flash(struct mlxfw_de
+@@ -417,6 +466,10 @@ int mlxfw_firmware_flash(struct mlxfw_dev *mlxfw_dev,
  	mlxfw_info(mlxfw_dev, "Firmware flash done\n");
  	mlxfw_status_notify(mlxfw_dev, "Firmware flash done", NULL, 0, 0);
  	mlxfw_mfa2_file_fini(mfa2_file);

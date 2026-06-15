@@ -886,6 +886,11 @@ static ssize_t group_store(struct mlx5_sriov_vf *g,
 	u32 group_id;
 	int err;
 
+	if (is_mdev_legacy_mode(dev)) {
+		pr_err("QoS is supported only in switchdev mode\n");
+		return -EOPNOTSUPP;
+	}
+
 	opts_p = get_long_group_id(&opts, &group_id, buf);
 	if (IS_ERR(opts_p))
 		return PTR_ERR(opts_p);

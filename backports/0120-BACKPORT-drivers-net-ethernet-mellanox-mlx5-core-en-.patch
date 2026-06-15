@@ -7,6 +7,8 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  .../mellanox/mlx5/core/en/tc_tun_encap.c      | 37 ++++++++++++++++++-
  1 file changed, 35 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_encap.c
 @@ -1,8 +1,14 @@
@@ -24,19 +26,18 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  #include <net/ip_tunnels.h>
  #include "tc_tun_encap.h"
  #include "en_tc.h"
-@@ -393,9 +399,11 @@ void mlx5e_tc_update_neigh_used_value(st
+@@ -393,8 +399,10 @@ void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe)
  	if (m_neigh->family == AF_INET)
  		tbl = &arp_tbl;
  #if IS_ENABLED(CONFIG_IPV6)
 +#if defined(HAVE_IPV6_STUBS_H)
  	else if (m_neigh->family == AF_INET6)
  		tbl = ipv6_stub->nd_tbl;
- #endif
 +#endif
+ #endif
  	else
  		return;
- 
-@@ -436,7 +444,9 @@ void mlx5e_tc_update_neigh_used_value(st
+@@ -436,7 +444,9 @@ void mlx5e_tc_update_neigh_used_value(struct mlx5e_neigh_hash_entry *nhe)
  		}
  	}
  
@@ -46,7 +47,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  
  	if (neigh_used) {
  		nhe->reported_lastuse = jiffies;
-@@ -587,7 +597,11 @@ bool mlx5e_tc_tun_encap_info_equal_gener
+@@ -587,7 +597,11 @@ bool mlx5e_tc_tun_encap_info_equal_generic(struct mlx5e_encap_key *a,
  
  bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
  					   struct mlx5e_encap_key *b,
@@ -58,7 +59,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  {
  	struct ip_tunnel_info *a_info;
  	struct ip_tunnel_info *b_info;
-@@ -595,10 +609,13 @@ bool mlx5e_tc_tun_encap_info_equal_optio
+@@ -595,10 +609,13 @@ bool mlx5e_tc_tun_encap_info_equal_options(struct mlx5e_encap_key *a,
  
  	if (!mlx5e_tc_tun_encap_info_equal_generic(a, b))
  		return false;
@@ -74,7 +75,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  	/* keys are equal when both don't have any options attached */
  	if (!a_has_opts && !b_has_opts)
  		return true;
-@@ -1734,15 +1751,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_pr
+@@ -1734,15 +1751,19 @@ mlx5e_init_fib_work_ipv4(struct mlx5e_priv *priv,
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
@@ -94,7 +95,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1779,13 +1800,17 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_pr
+@@ -1779,13 +1800,17 @@ mlx5e_init_fib_work_ipv6(struct mlx5e_priv *priv,
  	struct mlx5e_tc_fib_event_data *fib_work;
  	struct mlx5e_route_entry *r;
  	struct mlx5e_route_key key;
@@ -112,7 +113,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  
  	fib_work = mlx5e_tc_init_fib_work(event, ul_dev, GFP_ATOMIC);
  	if (!fib_work)
-@@ -1864,8 +1889,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_
+@@ -1864,8 +1889,12 @@ struct mlx5e_tc_tun_encap *mlx5e_tc_tun_init(struct mlx5e_priv *priv)
  	encap->fib_nb.notifier_call = mlx5e_tc_tun_fib_event;
  	spin_lock_init(&encap->route_lock);
  	hash_init(encap->route_tbl);
@@ -125,7 +126,7 @@ Change-Id: If7c0f19cd7ca06101173843dc80724a273a77676
  	if (err) {
  		kvfree(encap);
  		return ERR_PTR(err);
-@@ -1879,7 +1908,11 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_t
+@@ -1879,7 +1908,11 @@ void mlx5e_tc_tun_cleanup(struct mlx5e_tc_tun_encap *encap)
  	if (!encap)
  		return;
  

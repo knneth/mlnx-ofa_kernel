@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/xprt_rdma.h | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/xprt_rdma.h b/net/sunrpc/xprtrdma/xprt_rdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/xprt_rdma.h
 +++ b/net/sunrpc/xprtrdma/xprt_rdma.h
 @@ -366,6 +366,9 @@ struct rpcrdma_buffer {

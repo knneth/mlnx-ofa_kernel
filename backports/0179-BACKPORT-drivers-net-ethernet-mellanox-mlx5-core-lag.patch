@@ -7,6 +7,8 @@ Change-Id: I5aeb743604ddd60113cd1d2ddd08b08724ec45f6
  drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/port_sel.h
 @@ -28,8 +28,7 @@ struct mlx5_lag_port_sel {

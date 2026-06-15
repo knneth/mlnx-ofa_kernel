@@ -7,6 +7,8 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
  .../mellanox/mlx5/core/diag/reporter_vnic.c   | 124 +++++++++++++++++-
  1 file changed, 120 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/reporter_vnic.c
 @@ -1,6 +1,7 @@
@@ -101,7 +103,7 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
  	if (MLX5_CAP_GEN(dev, vnic_env_cq_overrun))
  		devlink_fmsg_u32_pair_put(fmsg, "cq_overrun",
  					  VNIC_ENV_GET(&vnic, cq_overrun));
-@@ -59,19 +108,81 @@ void mlx5_reporter_vnic_diagnose_counter
+@@ -59,19 +108,81 @@ void mlx5_reporter_vnic_diagnose_counters(struct mlx5_core_dev *dev,
  		devlink_fmsg_u64_pair_put(fmsg, "handled_pkt_steering_fail",
  					  VNIC_ENV_GET64(&vnic, handled_pkt_steering_fail));
  	}
@@ -126,7 +128,7 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
 +		if (err)
 +			return err;
 +	}
-+
+ 
 +	if (MLX5_CAP_GEN(dev, nic_receive_steering_discard)) {
 +		err = devlink_fmsg_u64_pair_put(fmsg, "nic_receive_steering_discard",
 +						VNIC_ENV_GET64(&vnic,
@@ -148,7 +150,7 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
 +			return err;
 +	}
 +#endif
- 
++
 +#ifndef HAVE_INT_DEVLINK_FMSG_U8_PAIR
  	devlink_fmsg_obj_nest_end(fmsg);
  	devlink_fmsg_pair_nest_end(fmsg);
@@ -185,7 +187,7 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
  }
  
  static const struct devlink_health_reporter_ops mlx5_reporter_vnic_ops = {
-@@ -87,7 +198,11 @@ void mlx5_reporter_vnic_create(struct ml
+@@ -87,7 +198,11 @@ void mlx5_reporter_vnic_create(struct mlx5_core_dev *dev)
  	health->vnic_reporter =
  		devlink_health_reporter_create(devlink,
  					       &mlx5_reporter_vnic_ops,
@@ -198,7 +200,7 @@ Change-Id: I9247f07fca1ba722203a41734bb83a48f954d3a9
  	if (IS_ERR(health->vnic_reporter))
  		mlx5_core_warn(dev,
  			       "Failed to create vnic reporter, err = %ld\n",
-@@ -101,3 +216,4 @@ void mlx5_reporter_vnic_destroy(struct m
+@@ -101,3 +216,4 @@ void mlx5_reporter_vnic_destroy(struct mlx5_core_dev *dev)
  	if (!IS_ERR_OR_NULL(health->vnic_reporter))
  		devlink_health_reporter_destroy(health->vnic_reporter);
  }

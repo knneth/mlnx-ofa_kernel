@@ -6,9 +6,11 @@ Change-Id: Ia1d4be911216054d1f3890b6c5ea93415efca5ca
  drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 50 +++++++++++++++++++-
  1 file changed, 48 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
-@@ -65,16 +65,20 @@ static void ipoib_get_drvinfo(struct net
+@@ -65,16 +65,20 @@ static void ipoib_get_drvinfo(struct net_device *netdev,
  
  	ib_get_device_fw_str(priv->ca, drvinfo->fw_version);
  
@@ -31,7 +33,7 @@ Change-Id: Ia1d4be911216054d1f3890b6c5ea93415efca5ca
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  
-@@ -85,9 +89,13 @@ static int ipoib_get_coalesce(struct net
+@@ -85,9 +89,13 @@ static int ipoib_get_coalesce(struct net_device *dev,
  }
  
  static int ipoib_set_coalesce(struct net_device *dev,
@@ -45,7 +47,7 @@ Change-Id: Ia1d4be911216054d1f3890b6c5ea93415efca5ca
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	int ret;
-@@ -113,6 +121,39 @@ static int ipoib_set_coalesce(struct net
+@@ -113,6 +121,39 @@ static int ipoib_set_coalesce(struct net_device *dev,
  
  	return 0;
  }
@@ -85,7 +87,7 @@ Change-Id: Ia1d4be911216054d1f3890b6c5ea93415efca5ca
  static void ipoib_get_ethtool_stats(struct net_device *dev,
  				    struct ethtool_stats __always_unused *stats,
  				    u64 *data)
-@@ -220,12 +261,17 @@ static int ipoib_get_link_ksettings(stru
+@@ -220,12 +261,17 @@ static int ipoib_get_link_ksettings(struct net_device *netdev,
  }
  
  static const struct ethtool_ops ipoib_ethtool_ops = {

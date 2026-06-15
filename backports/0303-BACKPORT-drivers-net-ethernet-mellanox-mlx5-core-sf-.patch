@@ -7,6 +7,8 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  .../mellanox/mlx5/core/sf/dev/driver.c        | 28 +++++++++++++++++++
  1 file changed, 28 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/driver.c
 @@ -10,6 +10,7 @@
@@ -17,7 +19,7 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink *devlink)
  {
  	struct mlx5_sf_peer_devlink_event_ctx event_ctx = {
-@@ -23,11 +24,14 @@ static int mlx5_core_peer_devlink_set(st
+@@ -23,11 +24,14 @@ static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink
  						&event_ctx);
  	return ret == NOTIFY_OK ? event_ctx.err : 0;
  }
@@ -32,7 +34,7 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  
  static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxiliary_device_id *id)
  {
-@@ -36,7 +40,9 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -36,7 +40,9 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  	struct devlink *devlink;
  	int err;
  
@@ -42,7 +44,7 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  	devlink = mlx5_devlink_alloc(&adev->dev);
  	if (!devlink)
  		return -ENOMEM;
-@@ -51,10 +57,12 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -51,10 +57,12 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  	mdev->priv.adev_idx = adev->id;
  	sf_dev->mdev = mdev;
  
@@ -55,7 +57,7 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  
  	err = mlx5_mdev_init(mdev, MLX5_SF_PROF);
  	if (err) {
-@@ -77,26 +85,38 @@ static int mlx5_sf_dev_probe(struct auxi
+@@ -77,26 +85,38 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
  		goto remap_err;
  	}
  
@@ -94,7 +96,7 @@ Change-Id: I8143b29dd1280890280f20a07b59206a5701f14c
  	iounmap(mdev->iseg);
  remap_err:
  	mlx5_mdev_uninit(mdev);
-@@ -115,9 +135,17 @@ static void mlx5_sf_dev_remove(struct au
+@@ -115,9 +135,17 @@ static void mlx5_sf_dev_remove(struct auxiliary_device *adev)
  	set_bit(MLX5_BREAK_FW_WAIT, &mdev->intf_state);
  	mlx5_drain_health_wq(mdev);
  	set_bit(MLX5_BREAK_FW_WAIT, &sf_dev->mdev->intf_state);

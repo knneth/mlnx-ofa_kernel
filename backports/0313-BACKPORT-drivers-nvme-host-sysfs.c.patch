@@ -6,6 +6,8 @@ Change-Id: I4141890d86f299123dc8f01056adb3917db6f661
  drivers/nvme/host/sysfs.c | 12 +++++++++---
  1 file changed, 9 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/nvme/host/sysfs.c b/drivers/nvme/host/sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/sysfs.c
 +++ b/drivers/nvme/host/sysfs.c
 @@ -5,7 +5,9 @@
@@ -18,7 +20,7 @@ Change-Id: I4141890d86f299123dc8f01056adb3917db6f661
  
  #include "nvme.h"
  #include "fabrics.h"
-@@ -233,13 +235,12 @@ static ssize_t nuse_show(struct device *
+@@ -233,13 +235,12 @@ static ssize_t nuse_show(struct device *dev, struct device_attribute *attr,
  {
  	struct nvme_ns_head *head = dev_to_ns_head(dev);
  	struct gendisk *disk = dev_to_disk(dev);
@@ -34,7 +36,7 @@ Change-Id: I4141890d86f299123dc8f01056adb3917db6f661
  	if (ret)
  		return ret;
  
-@@ -295,7 +296,11 @@ static umode_t nvme_ns_attrs_are_visible
+@@ -295,7 +296,11 @@ static umode_t nvme_ns_attrs_are_visible(struct kobject *kobj,
  	return a->mode;
  }
  
@@ -46,7 +48,7 @@ Change-Id: I4141890d86f299123dc8f01056adb3917db6f661
  	.attrs		= nvme_ns_attrs,
  	.is_visible	= nvme_ns_attrs_are_visible,
  };
-@@ -347,6 +352,7 @@ static ssize_t nvme_sysfs_delete(struct
+@@ -347,6 +352,7 @@ static ssize_t nvme_sysfs_delete(struct device *dev,
  		nvme_delete_ctrl_sync(ctrl);
  	return count;
  }

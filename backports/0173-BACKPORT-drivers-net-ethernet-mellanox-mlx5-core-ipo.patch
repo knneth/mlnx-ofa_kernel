@@ -7,9 +7,11 @@ Change-Id: I987e37d8fc775ac1623797dcf542ac4fae7759d5
  .../mellanox/mlx5/core/ipoib/ipoib_vlan.c       | 17 ++++++++++++++++-
  1 file changed, 16 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib_vlan.c
-@@ -73,8 +73,9 @@ static struct qpn_to_netdev *mlx5i_find_
+@@ -73,8 +73,9 @@ static struct qpn_to_netdev *mlx5i_find_qpn_to_netdev_node(struct hlist_head *bu
  {
  	struct hlist_head *h = &buckets[hash_32(qpn, MLX5I_MAX_LOG_PKEY_SUP)];
  	struct qpn_to_netdev *node;
@@ -20,7 +22,7 @@ Change-Id: I987e37d8fc775ac1623797dcf542ac4fae7759d5
  		if (node->underlay_qpn == qpn)
  			return node;
  	}
-@@ -149,7 +150,14 @@ static const struct net_device_ops mlx5i
+@@ -149,7 +150,14 @@ static const struct net_device_ops mlx5i_pkey_netdev_ops = {
  	.ndo_get_stats64         = mlx5i_get_stats,
  	.ndo_uninit              = mlx5i_pkey_dev_cleanup,
  	.ndo_change_mtu          = mlx5i_pkey_change_mtu,
@@ -35,7 +37,7 @@ Change-Id: I987e37d8fc775ac1623797dcf542ac4fae7759d5
  };
  
  /* Child NDOs */
-@@ -298,6 +306,13 @@ static int mlx5i_pkey_init(struct mlx5_c
+@@ -298,6 +306,13 @@ static int mlx5i_pkey_init(struct mlx5_core_dev *mdev,
  	if (err)
  		return err;
  

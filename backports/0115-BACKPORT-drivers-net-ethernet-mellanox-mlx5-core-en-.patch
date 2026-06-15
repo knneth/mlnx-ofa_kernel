@@ -6,9 +6,11 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  .../ethernet/mellanox/mlx5/core/en/tc_ct.c    | 33 ++++++++++++++++---
  1 file changed, 28 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.c
-@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct m
+@@ -791,7 +791,9 @@ mlx5_tc_ct_entry_create_mod_hdr(struct mlx5_tc_ct_priv *ct_priv,
  
  	ct_state |= MLX5_CT_STATE_TRK_BIT;
  	ct_state |= ctinfo == IP_CT_NEW ? MLX5_CT_STATE_NEW_BIT : MLX5_CT_STATE_ESTABLISHED_BIT;
@@ -18,7 +20,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  	err = mlx5_tc_ct_entry_set_registers(ct_priv, &mod_acts,
  					     ct_state,
  					     meta->ct_metadata.mark,
-@@ -1242,9 +1244,9 @@ mlx5_tc_ct_block_flow_offload_replace(st
+@@ -1241,9 +1243,9 @@ mlx5_tc_ct_block_flow_offload_replace(struct mlx5_ct_ft *ft, struct flow_rule *f
  
  static int
  mlx5_tc_ct_block_flow_offload_add(struct mlx5_ct_ft *ft,
@@ -30,7 +32,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	struct flow_action_entry *meta_action;
  	unsigned long cookie = flow->cookie;
-@@ -1353,7 +1355,7 @@ err_set:
+@@ -1352,7 +1354,7 @@ err_set:
  
  static int
  mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
@@ -39,7 +41,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = flow->cookie;
-@@ -1381,7 +1383,7 @@ mlx5_tc_ct_block_flow_offload_del(struct
+@@ -1380,7 +1382,7 @@ mlx5_tc_ct_block_flow_offload_del(struct mlx5_ct_ft *ft,
  
  static int
  mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
@@ -48,7 +50,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  {
  	struct mlx5_tc_ct_priv *ct_priv = ft->ct_priv;
  	unsigned long cookie = f->cookie;
-@@ -1403,8 +1405,15 @@ mlx5_tc_ct_block_flow_offload_stats(stru
+@@ -1402,8 +1404,15 @@ mlx5_tc_ct_block_flow_offload_stats(struct mlx5_ct_ft *ft,
  	spin_unlock_bh(&ct_priv->ht_lock);
  
  	mlx5_fc_query_cached(entry->counter->counter, &bytes, &packets, &lastuse);
@@ -64,7 +66,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  
  	mlx5_tc_ct_entry_put(entry);
  	return 0;
-@@ -1439,7 +1448,7 @@ static int
+@@ -1438,7 +1447,7 @@ static int
  mlx5_tc_ct_block_flow_offload(enum tc_setup_type type, void *type_data,
  			      void *cb_priv)
  {
@@ -73,7 +75,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  	struct mlx5_ct_ft *ft = cb_priv;
  
  	if (type != TC_SETUP_CLSFLOWER)
-@@ -1656,7 +1665,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_c
+@@ -1655,7 +1664,9 @@ mlx5_tc_ct_parse_action(struct mlx5_tc_ct_priv *priv,
  	attr->ct_attr.zone = act->ct.zone;
  	if (!(act->ct.action & TCA_CT_ACT_CLEAR))
  		attr->ct_attr.nf_ft = act->ct.flow_table;
@@ -83,7 +85,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  
  	return 0;
  }
-@@ -2047,8 +2058,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+@@ -2046,8 +2057,12 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *ct_priv,
  	}
  	attr->ct_attr.ft = ft;
  
@@ -96,7 +98,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  	if (err) {
  		ct_dbg("Failed to get register mapping for act miss");
  		goto err_get_act_miss;
-@@ -2084,7 +2099,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc
+@@ -2083,7 +2098,11 @@ __mlx5_tc_ct_flow_offload(struct mlx5_tc_ct_priv *ct_priv,
  	return 0;
  
  err_mapping:
@@ -108,7 +110,7 @@ Change-Id: Ie77a963b13cd52c5d9c5cf8f4a6c7b4c4e7de7b9
  err_get_act_miss:
  	mlx5_tc_ct_del_ft_cb(ct_priv, ft);
  err_ft:
-@@ -2130,7 +2149,11 @@ static void
+@@ -2129,7 +2148,11 @@ static void
  __mlx5_tc_ct_delete_flow(struct mlx5_tc_ct_priv *ct_priv,
  			 struct mlx5_flow_attr *attr)
  {

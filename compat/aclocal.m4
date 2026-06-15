@@ -2111,6 +2111,21 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if dpll_device_put has tracker argument])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+	#include <linux/dpll.h>
+	],[
+		dpll_device_put(NULL, NULL);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_DPLL_DEVICE_PUT_TRACKER, 1,
+			[dpll_device_put has tracker argument])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
 	AC_MSG_CHECKING([if struct dpll_pin_ops has ffo_get])
 	MLNX_BG_LB_LINUX_TRY_COMPILE([
 	#include <linux/dpll.h>
@@ -5907,6 +5922,41 @@ AC_DEFUN([LINUX_CONFIG_COMPAT],
 		AC_MSG_RESULT(yes)
 		MLNX_AC_DEFINE(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START, 1,
 			  [net/tls.h has tls_offload_rx_resync_async_request_start])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tls_offload_rx_resync_async_request_start takes struct tls_offload_resync_async *])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/tls.h>
+	],[
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_start(&async, 0, 0);
+
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC, 1,
+			  [tls_offload_rx_resync_async_request_start takes struct tls_offload_resync_async *])
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([if tls_offload_rx_resync_async_request_end takes struct tls_offload_resync_async *])
+	MLNX_BG_LB_LINUX_TRY_COMPILE([
+		#include <net/tls.h>
+	],[
+		struct tls_offload_resync_async async = {};
+
+		tls_offload_rx_resync_async_request_end(&async, 0);
+
+		return 0;
+	],[
+		AC_MSG_RESULT(yes)
+		MLNX_AC_DEFINE(HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC, 1,
+			  [tls_offload_rx_resync_async_request_end takes struct tls_offload_resync_async *])
 	],[
 		AC_MSG_RESULT(no)
 	])

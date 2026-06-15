@@ -6,6 +6,8 @@ Change-Id: Id941a185c88fe64081d2874aac2cddb34e3c7e3a
  drivers/net/ethernet/mellanox/mlxfw/mlxfw.h | 21 ++++++++++++++++-----
  1 file changed, 16 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h b/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
 +++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw.h
 @@ -19,7 +19,11 @@ struct mlxfw_dev {

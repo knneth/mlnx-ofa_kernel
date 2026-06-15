@@ -6,6 +6,8 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  drivers/infiniband/core/ucma.c | 38 +++++++++++++++++++++++++++++++---
  1 file changed, 35 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/ucma.c b/drivers/infiniband/core/ucma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
 @@ -43,9 +43,10 @@
@@ -35,7 +37,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  static struct ctl_table_header *ucma_ctl_table_hdr;
  static struct ctl_table ucma_ctl_table[] = {
  	{
-@@ -71,7 +76,11 @@ static struct ctl_table ucma_ctl_table[]
+@@ -71,7 +76,11 @@ static struct ctl_table ucma_ctl_table[] = {
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec,
  	},
@@ -47,7 +49,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  
  struct ucma_file {
  	struct mutex		mut;
-@@ -1624,13 +1633,25 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1624,13 +1633,25 @@ static ssize_t ucma_migrate_id(struct ucma_file *new_file,
  
  	/* Get current fd to protect against it being closed */
  	f = fdget(cmd.fd);
@@ -73,7 +75,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  
  	/* Validate current fd and prevent destruction of id. */
  	ctx = ucma_get_ctx(cur_file, cmd.id);
-@@ -1733,7 +1754,6 @@ static ssize_t ucma_write(struct file *f
+@@ -1733,7 +1754,6 @@ static ssize_t ucma_write(struct file *filp, const char __user *buf,
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
  	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucma_cmd_table));
@@ -81,7 +83,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1784,7 +1804,11 @@ static int ucma_open(struct inode *inode
+@@ -1784,7 +1804,11 @@ static int ucma_open(struct inode *inode, struct file *filp)
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -93,7 +95,7 @@ Change-Id: If8d258c0a0d18190c8eca954baf1d8d620391877
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1817,7 +1841,9 @@ static const struct file_operations ucma
+@@ -1817,7 +1841,9 @@ static const struct file_operations ucma_fops = {
  	.release = ucma_close,
  	.write	 = ucma_write,
  	.poll    = ucma_poll,

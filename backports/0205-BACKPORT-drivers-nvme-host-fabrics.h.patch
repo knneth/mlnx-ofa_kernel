@@ -6,9 +6,11 @@ Change-Id: I1cd8d376b53e638f60a04bf23b872677971b7745
  drivers/nvme/host/fabrics.h | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/nvme/host/fabrics.h b/drivers/nvme/host/fabrics.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fabrics.h
 +++ b/drivers/nvme/host/fabrics.h
-@@ -226,9 +226,11 @@ int nvmf_get_address(struct nvme_ctrl *c
+@@ -226,9 +226,11 @@ int nvmf_get_address(struct nvme_ctrl *ctrl, char *buf, int size);
  bool nvmf_should_reconnect(struct nvme_ctrl *ctrl);
  bool nvmf_ip_options_match(struct nvme_ctrl *ctrl,
  		struct nvmf_ctrl_options *opts);

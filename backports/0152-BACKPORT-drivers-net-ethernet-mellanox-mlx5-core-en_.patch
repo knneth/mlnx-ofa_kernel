@@ -6,6 +6,8 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 69 +++++++++++++++++--
  1 file changed, 65 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 @@ -31,11 +31,19 @@
@@ -28,7 +30,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  #include "en/xsk/tx.h"
  #include "en_accel/ktls_txrx.h"
  
-@@ -90,9 +98,16 @@ void mlx5e_trigger_irq(struct mlx5e_icos
+@@ -90,9 +98,16 @@ void mlx5e_trigger_irq(struct mlx5e_icosq *sq)
  	mlx5e_notify_hw(wq, sq->pc, sq->uar_map, &nopwqe->ctrl);
  }
  
@@ -45,7 +47,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  	bool busy_xsk = false, xsk_rx_alloc_err;
  
  	/* If SQ is empty, there are no TX completions to trigger NAPI, so set
-@@ -100,17 +115,29 @@ static bool mlx5e_napi_xsk_post(struct m
+@@ -100,17 +115,29 @@ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskr
  	 * condition with userspace.
  	 */
  	if (need_wakeup && xsksq->pc == xsksq->cc)
@@ -75,7 +77,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  	xsk_rx_alloc_err = INDIRECT_CALL_2(xskrq->post_wqes,
  					   mlx5e_post_rx_mpwqes,
  					   mlx5e_post_rx_wqes,
-@@ -119,35 +146,58 @@ static bool mlx5e_napi_xsk_post(struct m
+@@ -119,35 +146,58 @@ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskr
  	if (!need_wakeup)
  		busy_xsk |= xsk_rx_alloc_err;
  	else if (xsk_rx_alloc_err)
@@ -137,7 +139,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  
  	ch_stats->poll++;
  
-@@ -170,13 +220,17 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -170,13 +220,17 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  	if (unlikely(!budget))
  		goto out;
  
@@ -155,7 +157,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  
  	if (likely(budget - work_done))
  		work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
-@@ -198,12 +252,14 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -198,12 +252,14 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  				mlx5e_post_rx_mpwqes,
  				mlx5e_post_rx_wqes,
  				rq);
@@ -170,7 +172,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  
  	if (busy) {
  		if (likely(mlx5e_channel_no_affinity_change(c))) {
-@@ -211,14 +267,15 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -211,14 +267,15 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  			goto out;
  		}
  		ch_stats->aff_change++;
@@ -187,7 +189,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  	ch_stats->arm++;
  
  	for (i = 0; i < c->num_tc; i++) {
-@@ -239,8 +296,11 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -239,8 +296,11 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  	mlx5e_rx_dim_cq_rearm(c->priv, rq);
  	mlx5e_cq_arm(&c->icosq.cq);
  	mlx5e_cq_arm(&c->async_icosq.cq);
@@ -199,7 +201,7 @@ Change-Id: Ia3c13ee1b52ea3d6607a515cae3002061c9379fb
  	if (xsk_open) {
  		mlx5e_rx_dim_cq_rearm(c->priv, xskrq);
  		mlx5e_cq_arm(&xsksq->cq);
-@@ -250,6 +310,7 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -250,6 +310,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  		mlx5e_trigger_irq(&c->icosq);
  		ch_stats->force_irq++;
  	}

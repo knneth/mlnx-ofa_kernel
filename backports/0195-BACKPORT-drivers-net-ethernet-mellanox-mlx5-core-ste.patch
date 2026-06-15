@@ -7,6 +7,8 @@ Change-Id: Ia242d352ca8b8473cd608ea2864c04cf62f52e3d
  .../net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c  | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_dbg.c
 @@ -7,6 +7,16 @@

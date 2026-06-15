@@ -7,6 +7,8 @@ Change-Id: Ia309fed866569f891bc509212ea9312618aec5ec
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec.h
 @@ -123,6 +123,7 @@ enum mlx5_ipsec_cap {

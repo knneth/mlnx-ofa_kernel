@@ -6,6 +6,8 @@ Change-Id: I467fd03696857f13be2ffee1562674c8d6c964ed
  drivers/infiniband/ulp/ipoib/ipoib.h | 22 ++++++++++++++++++++++
  1 file changed, 22 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib.h b/drivers/infiniband/ulp/ipoib/ipoib.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib.h
 +++ b/drivers/infiniband/ulp/ipoib/ipoib.h
 @@ -42,6 +42,9 @@

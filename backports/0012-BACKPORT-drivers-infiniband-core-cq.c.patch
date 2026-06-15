@@ -6,6 +6,8 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  drivers/infiniband/core/cq.c | 41 +++++++++++++++++++++++++++++++++---
  1 file changed, 38 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/cq.c b/drivers/infiniband/core/cq.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cq.c
 +++ b/drivers/infiniband/core/cq.c
 @@ -8,7 +8,12 @@
@@ -21,7 +23,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  /* Max size for shared CQ, may require tuning */
  #define IB_MAX_SHARED_CQ_SZ		4096U
  
-@@ -46,7 +51,9 @@ static void ib_cq_rdma_dim_work(struct w
+@@ -46,7 +51,9 @@ static void ib_cq_rdma_dim_work(struct work_struct *w)
  
  	dim->state = DIM_START_MEASURE;
  
@@ -31,7 +33,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  	cq->device->ops.modify_cq(cq, comps, usec);
  }
  
-@@ -80,6 +87,7 @@ static void rdma_dim_destroy(struct ib_c
+@@ -80,6 +87,7 @@ static void rdma_dim_destroy(struct ib_cq *cq)
  	kfree(cq->dim);
  }
  
@@ -39,7 +41,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  static int __poll_cq(struct ib_cq *cq, int num_entries, struct ib_wc *wc)
  {
  	int rc;
-@@ -88,21 +96,26 @@ static int __poll_cq(struct ib_cq *cq, i
+@@ -88,21 +96,26 @@ static int __poll_cq(struct ib_cq *cq, int num_entries, struct ib_wc *wc)
  	trace_cq_poll(cq, num_entries, rc);
  	return rc;
  }
@@ -68,7 +70,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  		for (i = 0; i < n; i++) {
  			struct ib_wc *wc = &wcs[i];
  
-@@ -148,6 +161,7 @@ static void ib_cq_completion_direct(stru
+@@ -148,6 +161,7 @@ static void ib_cq_completion_direct(struct ib_cq *cq, void *private)
  	WARN_ONCE(1, "got unsolicited completion for CQ 0x%p\n", cq);
  }
  
@@ -76,7 +78,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  static int ib_poll_handler(struct irq_poll *iop, int budget)
  {
  	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
-@@ -158,7 +172,9 @@ static int ib_poll_handler(struct irq_po
+@@ -158,7 +172,9 @@ static int ib_poll_handler(struct irq_poll *iop, int budget)
  	if (completed < budget) {
  		irq_poll_complete(&cq->iop);
  		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0) {
@@ -86,7 +88,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  			irq_poll_sched(&cq->iop);
  		}
  	}
-@@ -171,9 +187,12 @@ static int ib_poll_handler(struct irq_po
+@@ -171,9 +187,12 @@ static int ib_poll_handler(struct irq_poll *iop, int budget)
  
  static void ib_cq_completion_softirq(struct ib_cq *cq, void *private)
  {
@@ -99,7 +101,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  
  static void ib_cq_poll_work(struct work_struct *work)
  {
-@@ -191,7 +210,9 @@ static void ib_cq_poll_work(struct work_
+@@ -191,7 +210,9 @@ static void ib_cq_poll_work(struct work_struct *work)
  
  static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
  {
@@ -109,7 +111,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  	queue_work(cq->comp_wq, &cq->work);
  }
  
-@@ -247,12 +268,16 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
+@@ -247,12 +268,16 @@ struct ib_cq *__ib_alloc_cq(struct ib_device *dev, void *private, int nr_cqe,
  	case IB_POLL_DIRECT:
  		cq->comp_handler = ib_cq_completion_direct;
  		break;
@@ -126,7 +128,7 @@ Change-Id: I8971d59a4f2b152d2592bae795eca94c5e9d3ad7
  	case IB_POLL_WORKQUEUE:
  	case IB_POLL_UNBOUND_WORKQUEUE:
  		cq->comp_handler = ib_cq_completion_workqueue;
-@@ -267,7 +292,9 @@ struct ib_cq *__ib_alloc_cq(struct ib_de
+@@ -267,7 +292,9 @@ struct ib_cq *__ib_alloc_cq(struct ib_device *dev, void *private, int nr_cqe,
  	}
  
  	rdma_restrack_add(&cq->res);

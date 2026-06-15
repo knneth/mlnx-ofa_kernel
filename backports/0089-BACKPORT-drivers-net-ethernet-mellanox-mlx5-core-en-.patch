@@ -6,6 +6,8 @@ Change-Id: I11623dc953aff3accd3bbaa8ce45f2b6f2fd147f
  drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.h
 @@ -71,12 +71,12 @@ struct mlx5e_ptp {

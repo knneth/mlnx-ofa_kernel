@@ -7,9 +7,11 @@ Change-Id: I671196eff76fe96e1fb6a9ee6ef237551df8de81
  .../ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h  | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/diag/dev_tracepoint.h
-@@ -22,7 +22,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_dev_template
+@@ -22,7 +22,11 @@ DECLARE_EVENT_CLASS(mlx5_sf_dev_template,
  				     __field(u16, hw_fn_id)
  				     __field(u32, sfnum)
  		    ),

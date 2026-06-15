@@ -6,9 +6,11 @@ Change-Id: If593c90a0760a2dc1aae3feafcfa5f7502b098a5
  drivers/nvme/host/nvfs-rdma.h | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/nvme/host/nvfs-rdma.h b/drivers/nvme/host/nvfs-rdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/nvfs-rdma.h
 +++ b/drivers/nvme/host/nvfs-rdma.h
-@@ -19,7 +19,12 @@ static bool nvme_rdma_nvfs_unmap_data(st
+@@ -19,7 +19,12 @@ static bool nvme_rdma_nvfs_unmap_data(struct ib_device *ibdev,
  				dma_dir);
  		if (count) {
  			nvfs_put_ops();

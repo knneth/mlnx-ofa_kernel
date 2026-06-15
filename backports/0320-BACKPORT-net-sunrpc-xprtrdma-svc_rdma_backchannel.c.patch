@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/svc_rdma_backchannel.c | 55 +++++++++++++++++++++-
  1 file changed, 54 insertions(+), 1 deletion(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_backchannel.c b/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_backchannel.c
 @@ -8,7 +8,9 @@
@@ -19,7 +21,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * svc_rdma_handle_bc_reply - Process incoming backchannel Reply
-@@ -28,7 +30,13 @@ void svc_rdma_handle_bc_reply(struct svc
+@@ -28,7 +30,13 @@ void svc_rdma_handle_bc_reply(struct svc_rqst *rqstp,
  	struct rpc_rqst *req;
  	u32 credits;
  
@@ -33,7 +35,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	req = xprt_lookup_rqst(xprt, *rdma_resp);
  	if (!req)
  		goto out_unlock;
-@@ -38,25 +46,46 @@ void svc_rdma_handle_bc_reply(struct svc
+@@ -38,25 +46,46 @@ void svc_rdma_handle_bc_reply(struct svc_rqst *rqstp,
  	if (dst->iov_len < src->iov_len)
  		goto out_unlock;
  	memcpy(dst->iov_base, src->iov_base, src->iov_len);
@@ -80,7 +82,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  }
  
  /* Send a reverse-direction RPC Call.
-@@ -76,12 +105,17 @@ static int svc_rdma_bc_sendto(struct svc
+@@ -76,12 +105,17 @@ static int svc_rdma_bc_sendto(struct svcxprt_rdma *rdma,
  			      struct rpc_rqst *rqst,
  			      struct svc_rdma_send_ctxt *sctxt)
  {
@@ -99,7 +101,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	if (ret < 0)
  		return -EIO;
  
-@@ -90,7 +124,11 @@ static int svc_rdma_bc_sendto(struct svc
+@@ -90,7 +124,11 @@ static int svc_rdma_bc_sendto(struct svcxprt_rdma *rdma,
  	 */
  	get_page(virt_to_page(rqst->rq_buffer));
  	sctxt->sc_send_wr.opcode = IB_WR_SEND;
@@ -126,7 +128,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	struct svc_xprt *sxprt = rqst->rq_xprt->bc_xprt;
  	struct svcxprt_rdma *rdma =
  		container_of(sxprt, struct svcxprt_rdma, sc_xprt);
-@@ -189,7 +233,11 @@ static int xprt_rdma_bc_send_request(str
+@@ -189,7 +233,11 @@ static int xprt_rdma_bc_send_request(struct rpc_rqst *rqst)
  
  	ret = rpcrdma_bc_send_request(rdma, rqst);
  	if (ret == -ENOTCONN)
@@ -138,7 +140,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	return ret;
  }
  
-@@ -216,7 +264,12 @@ static const struct rpc_xprt_ops xprt_rd
+@@ -216,7 +264,12 @@ static const struct rpc_xprt_ops xprt_rdma_bc_procs = {
  	.buf_alloc		= xprt_rdma_bc_allocate,
  	.buf_free		= xprt_rdma_bc_free,
  	.send_request		= xprt_rdma_bc_send_request,

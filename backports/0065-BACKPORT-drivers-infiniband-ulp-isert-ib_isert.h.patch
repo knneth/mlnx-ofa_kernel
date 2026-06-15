@@ -6,6 +6,8 @@ Change-Id: If74fbac6089cc6f0eb1a9682949dadf9f24a35c2
  drivers/infiniband/ulp/isert/ib_isert.h | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/isert/ib_isert.h b/drivers/infiniband/ulp/isert/ib_isert.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/isert/ib_isert.h
 +++ b/drivers/infiniband/ulp/isert/ib_isert.h
 @@ -11,6 +11,23 @@

@@ -6,9 +6,11 @@ Change-Id: Iaba250f579861d2f50bf8be5cbeec1ba6b61783f
  drivers/infiniband/core/rdma_core.c | 9 +++++++--
  1 file changed, 7 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/core/rdma_core.c b/drivers/infiniband/core/rdma_core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/rdma_core.c
 +++ b/drivers/infiniband/core/rdma_core.c
-@@ -74,7 +74,13 @@ static int uverbs_try_lock_object(struct
+@@ -74,7 +74,13 @@ static int uverbs_try_lock_object(struct ib_uobject *uobj,
  	 */
  	switch (mode) {
  	case UVERBS_LOOKUP_READ:
@@ -22,7 +24,7 @@ Change-Id: Iaba250f579861d2f50bf8be5cbeec1ba6b61783f
  			-EBUSY : 0;
  	case UVERBS_LOOKUP_WRITE:
  		/* lock is exclusive */
-@@ -524,7 +530,6 @@ static void alloc_abort_idr_uobject(stru
+@@ -524,7 +530,6 @@ static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
  {
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);
@@ -30,7 +32,7 @@ Change-Id: Iaba250f579861d2f50bf8be5cbeec1ba6b61783f
  	xa_erase(&uobj->ufile->idr, uobj->id);
  }
  
-@@ -545,13 +550,13 @@ static int __must_check destroy_hw_idr_u
+@@ -545,13 +550,13 @@ static int __must_check destroy_hw_idr_uobject(struct ib_uobject *uobj,
  
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);

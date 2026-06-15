@@ -6,6 +6,8 @@ Change-Id: I66773c9be02bf93a4f21a6b2ca1140a8af07567d
  drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 14 +++++---------
  1 file changed, 5 insertions(+), 9 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 @@ -6,6 +6,9 @@
@@ -18,7 +20,7 @@ Change-Id: I66773c9be02bf93a4f21a6b2ca1140a8af07567d
  
  struct mlx5_prio_hp {
  	u32 rate;
-@@ -191,15 +194,6 @@ int mlx5e_arfs_enable(struct mlx5e_flow_
+@@ -186,15 +189,6 @@ int mlx5e_arfs_enable(struct mlx5e_flow_steering *fs);
  int mlx5e_arfs_disable(struct mlx5e_flow_steering *fs);
  int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
  			u16 rxq_index, u32 flow_id);
@@ -34,7 +36,7 @@ Change-Id: I66773c9be02bf93a4f21a6b2ca1140a8af07567d
  #endif
  
  #ifdef CONFIG_MLX5_EN_TLS
-@@ -264,10 +258,12 @@ void mlx5e_fs_set_state_destroy(struct m
+@@ -259,10 +253,12 @@ void mlx5e_fs_set_state_destroy(struct mlx5e_flow_steering *fs, bool state_destr
  void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
  
  struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);

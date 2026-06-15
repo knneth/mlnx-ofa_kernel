@@ -6,9 +6,11 @@ Change-Id: I2d6ce635c3dff190ca35d71deac16e98638df054
  drivers/net/ethernet/mellanox/mlx5/core/fw.c | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fw.c b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
-@@ -709,8 +709,8 @@ static const struct mlxfw_dev_ops mlx5_m
+@@ -705,8 +705,8 @@ static const struct mlxfw_dev_ops mlx5_mlxfw_dev_ops = {
  };
  
  int mlx5_firmware_flash(struct mlx5_core_dev *dev,
@@ -19,7 +21,7 @@ Change-Id: I2d6ce635c3dff190ca35d71deac16e98638df054
  {
  	struct mlx5_mlxfw_dev mlx5_mlxfw_dev = {
  		.mlxfw_dev = {
-@@ -731,7 +731,7 @@ int mlx5_firmware_flash(struct mlx5_core
+@@ -727,7 +727,7 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
  	}
  
  	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev,

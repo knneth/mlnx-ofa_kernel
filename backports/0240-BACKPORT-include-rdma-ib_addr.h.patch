@@ -6,6 +6,8 @@ Change-Id: I3ec064e9c704cccfba7209a63069f3f463ea2204
  include/rdma/ib_addr.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/include/rdma/ib_addr.h b/include/rdma/ib_addr.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/ib_addr.h
 +++ b/include/rdma/ib_addr.h
 @@ -7,6 +7,8 @@

@@ -6,6 +6,8 @@ Change-Id: I2207cf8f2664b048376c788d55fd8c43c9a48625
  drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
 +++ b/drivers/net/ethernet/mellanox/mlxfw/mlxfw_mfa2.c
 @@ -7,6 +7,9 @@

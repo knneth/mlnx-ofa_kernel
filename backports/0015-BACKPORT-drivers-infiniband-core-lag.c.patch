@@ -6,9 +6,11 @@ Change-Id: I4d66061847d47ff08ed741201d00c83be9f5732b
  drivers/infiniband/core/lag.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/lag.c b/drivers/infiniband/core/lag.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/lag.c
 +++ b/drivers/infiniband/core/lag.c
-@@ -90,9 +90,13 @@ static struct net_device *rdma_get_xmit_
+@@ -90,9 +90,13 @@ static struct net_device *rdma_get_xmit_slave_udp(struct ib_device *device,
  		return ERR_PTR(-ENOMEM);
  
  	rcu_read_lock();
@@ -22,7 +24,7 @@ Change-Id: I4d66061847d47ff08ed741201d00c83be9f5732b
  	if (slave)
  		dev_hold(slave);
  	rcu_read_unlock();
-@@ -128,7 +132,6 @@ struct net_device *rdma_lag_get_ah_roce_
+@@ -128,7 +132,6 @@ struct net_device *rdma_lag_get_ah_roce_slave(struct ib_device *device,
  
  	if (!netif_is_bond_master(master))
  		goto put;

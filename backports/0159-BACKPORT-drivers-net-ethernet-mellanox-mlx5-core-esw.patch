@@ -6,9 +6,11 @@ Change-Id: I1c481de5e7447aab94370a877bbe0ee87d0d6a34
  drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
-@@ -165,6 +165,6 @@ int mlx5_esw_devlink_rate_parent_set(str
+@@ -84,6 +84,6 @@ int mlx5_esw_devlink_rate_parent_set(struct devlink_rate *devlink_rate,
  
  #endif /* HAVE_DEVLINK_HAS_RATE_FUNCTIONS */
  

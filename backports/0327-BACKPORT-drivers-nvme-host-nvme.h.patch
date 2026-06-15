@@ -6,6 +6,8 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  drivers/nvme/host/nvme.h | 123 ++++++++++++++++++++++++++++++++++++++-
  1 file changed, 120 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/nvme/host/nvme.h b/drivers/nvme/host/nvme.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/nvme.h
 +++ b/drivers/nvme/host/nvme.h
 @@ -6,19 +6,37 @@
@@ -66,7 +68,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  
  /*
   * Default to a 4K page size, with the intention to update this
-@@ -206,8 +229,11 @@ static inline u16 nvme_req_qid(struct re
+@@ -206,8 +229,11 @@ static inline u16 nvme_req_qid(struct request *req)
  {
  	if (!req->q->queuedata)
  		return 0;
@@ -156,7 +158,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  };
  
  /*
-@@ -727,9 +777,16 @@ static inline bool nvme_try_complete_req
+@@ -727,9 +777,16 @@ static inline bool nvme_try_complete_req(struct request *req, __le16 status,
  	rq->result = result;
  	/* inject error when permitted by fault injection framework */
  	nvme_should_fail(req);
@@ -181,7 +183,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  static __always_inline void nvme_complete_batch(struct io_comp_batch *iob,
  						void (*fn)(struct request *rq))
  {
-@@ -784,9 +842,16 @@ static __always_inline void nvme_complet
+@@ -784,9 +842,16 @@ static __always_inline void nvme_complete_batch(struct io_comp_batch *iob,
  	}
  	blk_mq_end_request_batch(iob);
  }
@@ -198,7 +200,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  void nvme_cancel_tagset(struct nvme_ctrl *ctrl);
  void nvme_cancel_admin_tagset(struct nvme_ctrl *ctrl);
  bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
-@@ -824,12 +889,17 @@ void nvme_wait_freeze(struct nvme_ctrl *
+@@ -824,12 +889,17 @@ void nvme_wait_freeze(struct nvme_ctrl *ctrl);
  int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl, long timeout);
  void nvme_start_freeze(struct nvme_ctrl *ctrl);
  
@@ -216,7 +218,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  void nvme_init_request(struct request *req, struct nvme_command *cmd);
  void nvme_cleanup_cmd(struct request *req);
  blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req);
-@@ -890,27 +960,45 @@ void nvme_put_ns_head(struct nvme_ns_hea
+@@ -890,27 +960,45 @@ void nvme_put_ns_head(struct nvme_ns_head *head);
  int nvme_cdev_add(struct cdev *cdev, struct device *cdev_device,
  		const struct file_operations *fops, struct module *owner);
  void nvme_cdev_del(struct cdev *cdev, struct device *cdev_device);
@@ -262,7 +264,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  extern const struct pr_ops nvme_pr_ops;
  extern const struct block_device_operations nvme_ns_head_ops;
  extern const struct attribute_group nvme_dev_attrs_group;
-@@ -944,15 +1032,27 @@ bool nvme_mpath_clear_current_path(struc
+@@ -944,15 +1032,27 @@ bool nvme_mpath_clear_current_path(struct nvme_ns *ns);
  void nvme_mpath_revalidate_paths(struct nvme_ns *ns);
  void nvme_mpath_clear_ctrl_paths(struct nvme_ctrl *ctrl);
  void nvme_mpath_shutdown_disk(struct nvme_ns_head *head);
@@ -290,7 +292,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  }
  
  extern bool multipath;
-@@ -1000,7 +1100,12 @@ static inline void nvme_mpath_clear_ctrl
+@@ -1000,7 +1100,12 @@ static inline void nvme_mpath_clear_ctrl_paths(struct nvme_ctrl *ctrl)
  static inline void nvme_mpath_shutdown_disk(struct nvme_ns_head *head)
  {
  }
@@ -303,7 +305,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  {
  }
  static inline void nvme_mpath_init_ctrl(struct nvme_ctrl *ctrl)
-@@ -1011,7 +1116,7 @@ static inline int nvme_mpath_init_identi
+@@ -1011,7 +1116,7 @@ static inline int nvme_mpath_init_identify(struct nvme_ctrl *ctrl,
  {
  	if (ctrl->subsys->cmic & NVME_CTRL_CMIC_ANA)
  		dev_warn(ctrl->device,
@@ -323,7 +325,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  int nvme_query_zone_info(struct nvme_ns *ns, unsigned lbaf,
  		struct nvme_zone_info *zi);
  void nvme_update_zone_info(struct nvme_ns *ns, struct queue_limits *lim,
-@@ -1096,8 +1203,10 @@ static inline void nvme_hwmon_exit(struc
+@@ -1096,8 +1203,10 @@ static inline void nvme_hwmon_exit(struct nvme_ctrl *ctrl)
  
  static inline void nvme_start_request(struct request *rq)
  {
@@ -334,7 +336,7 @@ Change-Id: Ie722763117427860f278a60ce8ad93a4ab9ec015
  	blk_mq_start_request(rq);
  }
  
-@@ -1142,7 +1251,15 @@ struct nvme_ns *disk_to_nvme_ns(struct g
+@@ -1142,7 +1251,15 @@ struct nvme_ns *disk_to_nvme_ns(struct gendisk *disk);
  u32 nvme_command_effects(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  			 u8 opcode);
  u32 nvme_passthru_start(struct nvme_ctrl *ctrl, struct nvme_ns *ns, u8 opcode);

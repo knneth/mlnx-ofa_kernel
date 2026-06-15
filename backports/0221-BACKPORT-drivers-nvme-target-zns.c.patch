@@ -6,6 +6,8 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  drivers/nvme/target/zns.c | 119 +++++++++++++++++++++++++++++++++++++-
  1 file changed, 118 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/target/zns.c b/drivers/nvme/target/zns.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/zns.c
 +++ b/drivers/nvme/target/zns.c
 @@ -3,11 +3,15 @@
@@ -24,7 +26,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  /*
   * We set the Memory Page Size Minimum (MPSMIN) for target controller to 0
   * which gets added by 12 in the nvme_enable_ctrl() which results in 2^12 = 4k
-@@ -34,7 +38,12 @@ static int validate_conv_zones_cb(struct
+@@ -34,7 +38,12 @@ static int validate_conv_zones_cb(struct blk_zone *z,
  
  bool nvmet_bdev_zns_enable(struct nvmet_ns *ns)
  {
@@ -37,7 +39,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	struct gendisk *bd_disk = ns->bdev->bd_disk;
  	int ret;
  
-@@ -57,11 +66,20 @@ bool nvmet_bdev_zns_enable(struct nvmet_
+@@ -57,11 +66,20 @@ bool nvmet_bdev_zns_enable(struct nvmet_ns *ns)
  	 * zones, reject the device. Otherwise, use report zones to detect if
  	 * the device has conventional zones.
  	 */
@@ -58,7 +60,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	if (ret < 0)
  		return false;
  
-@@ -256,7 +274,16 @@ static unsigned long nvmet_req_nr_zones_
+@@ -256,7 +274,16 @@ static unsigned long nvmet_req_nr_zones_from_slba(struct nvmet_req *req)
  {
  	unsigned int sect = nvmet_lba_to_sect(req->ns, req->cmd->zmr.slba);
  
@@ -76,7 +78,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  }
  
  static unsigned long get_nr_zones_from_buf(struct nvmet_req *req, u32 bufsize)
-@@ -322,7 +349,11 @@ void nvmet_bdev_execute_zone_mgmt_recv(s
+@@ -322,7 +349,11 @@ void nvmet_bdev_execute_zone_mgmt_recv(struct nvmet_req *req)
  	queue_work(zbd_wq, &req->z.zmgmt_work);
  }
  
@@ -88,7 +90,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  {
  	switch (zsa) {
  	case NVME_ZONE_OPEN:
-@@ -397,10 +428,34 @@ static int zmgmt_send_scan_cb(struct blk
+@@ -397,10 +428,34 @@ static int zmgmt_send_scan_cb(struct blk_zone *z, unsigned i, void *d)
  	return 0;
  }
  
@@ -123,7 +125,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	struct bio *bio = NULL;
  	sector_t sector = 0;
  	int ret;
-@@ -426,16 +481,35 @@ static u16 nvmet_bdev_zone_mgmt_emulate_
+@@ -426,16 +481,35 @@ static u16 nvmet_bdev_zone_mgmt_emulate_all(struct nvmet_req *req)
  		ret = 0;
  	}
  
@@ -159,7 +161,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	}
  
  	if (bio) {
-@@ -455,8 +529,13 @@ static u16 nvmet_bdev_execute_zmgmt_send
+@@ -455,8 +529,13 @@ static u16 nvmet_bdev_execute_zmgmt_send_all(struct nvmet_req *req)
  
  	switch (zsa_req_op(req->cmd->zms.zsa)) {
  	case REQ_OP_ZONE_RESET:
@@ -173,7 +175,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  		if (ret < 0)
  			return blkdev_zone_mgmt_errno_to_nvme_status(ret);
  		break;
-@@ -477,7 +556,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+@@ -477,7 +556,11 @@ static void nvmet_bdev_zmgmt_send_work(struct work_struct *w)
  {
  	struct nvmet_req *req = container_of(w, struct nvmet_req, z.zmgmt_work);
  	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->zms.slba);
@@ -185,7 +187,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	struct block_device *bdev = req->ns->bdev;
  	sector_t zone_sectors = bdev_zone_sectors(bdev);
  	u16 status = NVME_SC_SUCCESS;
-@@ -507,7 +590,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+@@ -507,7 +590,11 @@ static void nvmet_bdev_zmgmt_send_work(struct work_struct *w)
  		goto out;
  	}
  
@@ -197,7 +199,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	if (ret < 0)
  		status = blkdev_zone_mgmt_errno_to_nvme_status(ret);
  
-@@ -537,7 +624,13 @@ static void nvmet_bdev_zone_append_bio_d
+@@ -537,7 +624,13 @@ static void nvmet_bdev_zone_append_bio_done(struct bio *bio)
  void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
  {
  	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->rw.slba);
@@ -211,7 +213,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	u16 status = NVME_SC_SUCCESS;
  	unsigned int total_len = 0;
  	struct scatterlist *sg;
-@@ -567,13 +660,36 @@ void nvmet_bdev_execute_zone_append(stru
+@@ -567,13 +660,36 @@ void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
  
  	if (nvmet_use_inline_bvec(req)) {
  		bio = &req->z.inline_bio;
@@ -248,7 +250,7 @@ Change-Id: Iefd632870049964a2e460fa0fd382260ebea789e
  	bio->bi_iter.bi_sector = sect;
  	bio->bi_private = req;
  	if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
-@@ -625,3 +741,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct n
+@@ -625,3 +741,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct nvmet_req *req)
  		return nvmet_bdev_parse_io_cmd(req);
  	}
  }

@@ -6,6 +6,8 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  .../net/ethernet/mellanox/mlx5/core/en_rx.c   | 1627 ++++++++++++++++-
  1 file changed, 1556 insertions(+), 71 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
 @@ -36,9 +36,17 @@
@@ -26,7 +28,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  #include <net/udp.h>
  #include <net/tcp.h>
  #include <net/xdp_sock_drv.h>
-@@ -271,6 +279,171 @@ static inline u32 mlx5e_decompress_cqes_
+@@ -271,6 +279,171 @@ static inline u32 mlx5e_decompress_cqes_start(struct mlx5e_rq *rq,
  	return mlx5e_decompress_cqes_cont(rq, wq, 1, budget_rem);
  }
  
@@ -198,7 +200,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  #define MLX5E_PAGECNT_BIAS_MAX (PAGE_SIZE / 64)
  
  static int mlx5e_page_alloc_fragmented(struct mlx5e_rq *rq,
-@@ -298,9 +471,219 @@ static void mlx5e_page_release_fragmente
+@@ -298,26 +471,246 @@ static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
  	u16 drain_count = MLX5E_PAGECNT_BIAS_MAX - frag_page->frags;
  	struct page *page = frag_page->page;
  
@@ -248,8 +250,8 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	cache->reduce.successive = 0;
 +
 +	return false;
-+}
-+
+ }
+ 
 +static inline int mlx5e_page_alloc_pool(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au)
 +{
 +	dma_addr_t addr;
@@ -413,12 +415,12 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +#endif
 +	mlx5e_put_page(au->page);
 +#endif
- }
++}
 +#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
- 
++
  static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
  				    struct mlx5e_wqe_frag_info *frag)
-@@ -308,16 +691,26 @@ static inline int mlx5e_get_rx_frag(stru
+ {
  	int err = 0;
  
  	if (!frag->offset)
@@ -445,7 +447,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static bool mlx5e_frag_can_release(struct mlx5e_wqe_frag_info *frag)
  {
  #define CAN_RELEASE_MASK \
-@@ -327,12 +720,23 @@ static bool mlx5e_frag_can_release(struc
+@@ -327,12 +720,23 @@ static bool mlx5e_frag_can_release(struct mlx5e_wqe_frag_info *frag)
  
  	return (frag->flags & CAN_RELEASE_MASK) == CAN_RELEASE_VALUE;
  }
@@ -469,7 +471,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  }
  
  static inline struct mlx5e_wqe_frag_info *get_frag(struct mlx5e_rq *rq, u16 ix)
-@@ -354,11 +758,30 @@ static int mlx5e_alloc_rx_wqe(struct mlx
+@@ -354,11 +758,30 @@ static int mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq, struct mlx5e_rx_wqe_cyc *wqe,
  		err = mlx5e_get_rx_frag(rq, frag);
  		if (unlikely(err))
  			goto free_frags;
@@ -501,7 +503,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		wqe->data[i].addr = cpu_to_be64(addr + frag->offset + headroom);
  	}
  
-@@ -366,44 +789,81 @@ static int mlx5e_alloc_rx_wqe(struct mlx
+@@ -366,44 +789,81 @@ static int mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq, struct mlx5e_rx_wqe_cyc *wqe,
  
  free_frags:
  	while (--i >= 0)
@@ -585,7 +587,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static void mlx5e_xsk_free_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-@@ -421,6 +881,7 @@ static void mlx5e_xsk_free_rx_wqes(struc
+@@ -421,6 +881,7 @@ static void mlx5e_xsk_free_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  		mlx5e_xsk_free_rx_wqe(wi);
  	}
  }
@@ -593,7 +595,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static void mlx5e_free_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
-@@ -435,6 +896,14 @@ static void mlx5e_free_rx_wqes(struct ml
+@@ -435,6 +896,14 @@ static void mlx5e_free_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  		mlx5e_free_rx_wqe(rq, wi);
  	}
  }
@@ -608,7 +610,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static int mlx5e_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
-@@ -454,12 +923,16 @@ static int mlx5e_alloc_rx_wqes(struct ml
+@@ -454,12 +923,16 @@ static int mlx5e_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  	return i;
  }
  
@@ -625,7 +627,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	/* The WQE bulk is split into smaller bulks that are sized
  	 * according to the page pool cache refill size to avoid overflowing
-@@ -482,12 +955,12 @@ static int mlx5e_refill_rx_wqes(struct m
+@@ -482,12 +955,12 @@ static int mlx5e_refill_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  err_free:
  	mlx5e_free_rx_wqes(rq, ix, total_alloc + refill_alloc);
  
@@ -692,7 +694,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static inline void
  mlx5e_add_skb_frag(struct mlx5e_rq *rq, struct sk_buff *skb,
  		   struct page *page, u32 frag_offset, u32 len,
-@@ -533,6 +1026,29 @@ mlx5e_add_skb_frag(struct mlx5e_rq *rq,
+@@ -533,6 +1026,29 @@ mlx5e_add_skb_frag(struct mlx5e_rq *rq, struct sk_buff *skb,
  	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags,
  			page, frag_offset, len, truesize);
  }
@@ -722,7 +724,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static inline void
  mlx5e_copy_skb_header(struct mlx5e_rq *rq, struct sk_buff *skb,
-@@ -548,11 +1064,13 @@ mlx5e_copy_skb_header(struct mlx5e_rq *r
+@@ -548,11 +1064,13 @@ mlx5e_copy_skb_header(struct mlx5e_rq *rq, struct sk_buff *skb,
  	skb_copy_to_linear_data(skb, from, len);
  }
  
@@ -737,7 +739,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	/* A common case for AF_XDP. */
  	if (bitmap_full(wi->skip_release_bitmap, rq->mpwqe.pages_per_wqe))
-@@ -580,7 +1098,63 @@ mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq,
+@@ -580,7 +1098,63 @@ mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi)
  			}
  		}
  	}
@@ -753,7 +755,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +			mlx5e_page_release_fragmented(rq, frag_page);
 +	}
 +#endif
- }
++}
 +#else /* HAVE_PAGE_POOL_DEFRAG_PAGE */
 +static void
 +mlx5e_free_rx_mpwqe(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi, bool recycle)
@@ -796,12 +798,12 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +	for (i = 0; i < rq->mpwqe.pages_per_wqe; i++, alloc_units++)
 +		mlx5e_page_release_dynamic(rq, alloc_units, recycle);
 +#endif
-+}
+ }
 +#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
  
  static void mlx5e_post_rx_mpwqe(struct mlx5e_rq *rq, u8 n)
  {
-@@ -596,6 +1170,10 @@ static void mlx5e_post_rx_mpwqe(struct m
+@@ -596,6 +1170,10 @@ static void mlx5e_post_rx_mpwqe(struct mlx5e_rq *rq, u8 n)
  	dma_wmb();
  
  	mlx5_wq_ll_update_db_record(wq);
@@ -812,7 +814,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  }
  
  /* This function returns the size of the continuous free space inside a bitmap
-@@ -635,6 +1213,7 @@ static void build_klm_umr(struct mlx5e_i
+@@ -635,6 +1213,7 @@ static void build_klm_umr(struct mlx5e_icosq *sq, struct mlx5e_umr_wqe *umr_wqe,
  	umr_wqe->uctrl.mkey_mask     = cpu_to_be64(MLX5_MKEY_MASK_FREE);
  }
  
@@ -820,11 +822,23 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static int mlx5e_build_shampo_hd_umr(struct mlx5e_rq *rq,
  				     struct mlx5e_icosq *sq,
  				     u16 klm_entries, u16 index)
-@@ -710,12 +1289,98 @@ err_unmap:
- 		dma_info = &shampo->info[--index];
- 		if (!(i & (MLX5E_SHAMPO_WQ_HEADER_PER_PAGE - 1))) {
- 			dma_info->addr = ALIGN_DOWN(dma_info->addr, PAGE_SIZE);
--			mlx5e_page_release_fragmented(rq, dma_info->frag_page);
+@@ -698,7 +1277,88 @@ update_klm:
+ 	};
+ 
+ 	shampo->pi = (shampo->pi + new_entries) & (shampo->hd_per_wq - 1);
+-	shampo->curr_page_index = page_index;
++	shampo->curr_page_index = page_index;
++	shampo->last_addr = addr;
++	sq->pc += wqe_bbs;
++	sq->doorbell_cseg = &umr_wqe->ctrl;
++
++	return 0;
++
++err_unmap:
++	while (--i >= 0) {
++		dma_info = &shampo->info[--index];
++		if (!(i & (MLX5E_SHAMPO_WQ_HEADER_PER_PAGE - 1))) {
++			dma_info->addr = ALIGN_DOWN(dma_info->addr, PAGE_SIZE);
 +			mlx5e_page_release_fragmented(rq, dma_info->frag_page);
 +		}
 +	}
@@ -895,21 +909,19 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
 +
 +	shampo->pi = (shampo->pi + new_entries) & (shampo->hd_per_wq - 1);
 +	shampo->last_page = page;
-+	shampo->last_addr = addr;
-+	sq->pc += wqe_bbs;
-+	sq->doorbell_cseg = &umr_wqe->ctrl;
-+
-+	return 0;
-+
-+err_unmap:
-+	while (--i >= 0) {
-+		dma_info = &shampo->info[--index];
-+		if (!(i & (MLX5E_SHAMPO_WQ_HEADER_PER_PAGE - 1))) {
+ 	shampo->last_addr = addr;
+ 	sq->pc += wqe_bbs;
+ 	sq->doorbell_cseg = &umr_wqe->ctrl;
+@@ -709,13 +1369,18 @@ err_unmap:
+ 	while (--i >= 0) {
+ 		dma_info = &shampo->info[--index];
+ 		if (!(i & (MLX5E_SHAMPO_WQ_HEADER_PER_PAGE - 1))) {
 +			struct mlx5e_alloc_unit au = {
 +				.page = dma_info->page,
 +			};
 +
-+			dma_info->addr = ALIGN_DOWN(dma_info->addr, PAGE_SIZE);
+ 			dma_info->addr = ALIGN_DOWN(dma_info->addr, PAGE_SIZE);
+-			mlx5e_page_release_fragmented(rq, dma_info->frag_page);
 +			mlx5e_page_release_dynamic(rq, &au, true);
  		}
  	}
@@ -920,7 +932,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static int mlx5e_alloc_rx_hd_mpwqe(struct mlx5e_rq *rq)
  {
-@@ -756,6 +1421,7 @@ static int mlx5e_alloc_rx_hd_mpwqe(struc
+@@ -756,6 +1421,7 @@ static int mlx5e_alloc_rx_hd_mpwqe(struct mlx5e_rq *rq)
  	return 0;
  }
  
@@ -1105,7 +1117,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	int hd_per_wq = shampo->hd_per_wq;
  	struct mlx5e_dma_info *hd_info;
  	int i, index = start;
-@@ -862,12 +1690,23 @@ void mlx5e_shampo_dealloc_hd(struct mlx5
+@@ -862,12 +1690,23 @@ void mlx5e_shampo_dealloc_hd(struct mlx5e_rq *rq, u16 len, u16 start, bool close
  
  		hd_info = &shampo->info[index];
  		hd_info->addr = ALIGN_DOWN(hd_info->addr, PAGE_SIZE);
@@ -1129,7 +1141,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  
  	if (start + len > hd_per_wq) {
-@@ -882,13 +1721,18 @@ void mlx5e_shampo_dealloc_hd(struct mlx5
+@@ -882,13 +1721,18 @@ void mlx5e_shampo_dealloc_hd(struct mlx5e_rq *rq, u16 len, u16 start, bool close
  static void mlx5e_dealloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  {
  	struct mlx5e_mpw_info *wi = mlx5e_get_mpw_info(rq, ix);
@@ -1148,7 +1160,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  }
  
  INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
-@@ -904,8 +1748,10 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -904,8 +1748,10 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
  	if (mlx5_wq_cyc_missing(wq) < rq->wqe.info.wqe_bulk)
  		return false;
  
@@ -1159,7 +1171,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	wqe_bulk = mlx5_wq_cyc_missing(wq);
  	head = mlx5_wq_cyc_get_head(wq);
-@@ -914,10 +1760,15 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -914,10 +1760,15 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
  	 * WQEs that aren't completed yet. Stop earlier.
  	 */
  	wqe_bulk -= (head + wqe_bulk) & rq->wqe.info.wqe_index_mask;
@@ -1176,7 +1188,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		mlx5e_xsk_free_rx_wqes(rq, head, wqe_bulk);
  		count = mlx5e_xsk_alloc_rx_wqes_batched(rq, head, wqe_bulk);
  	} else {
-@@ -929,6 +1780,23 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -929,6 +1780,23 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
  		 */
  		count = mlx5e_xsk_alloc_rx_wqes(rq, head, wqe_bulk);
  	}
@@ -1200,7 +1212,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	mlx5_wq_cyc_push_n(wq, count);
  	if (unlikely(count != wqe_bulk)) {
-@@ -940,7 +1808,9 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -940,7 +1808,9 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
  	dma_wmb();
  
  	mlx5_wq_cyc_update_db_record(wq);
@@ -1211,7 +1223,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	return busy;
  }
  
-@@ -967,7 +1837,7 @@ void mlx5e_free_icosq_descs(struct mlx5e
+@@ -967,7 +1837,7 @@ void mlx5e_free_icosq_descs(struct mlx5e_icosq *sq)
  		ci = mlx5_wq_cyc_ctr2ix(&sq->wq, sqcc);
  		wi = &sq->db.wqe_info[ci];
  		sqcc += wi->num_wqebbs;
@@ -1220,7 +1232,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		switch (wi->wqe_type) {
  		case MLX5E_ICOSQ_WQE_SET_PSV_TLS:
  			mlx5e_ktls_handle_ctx_completion(wi);
-@@ -1062,7 +1932,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *c
+@@ -1062,7 +1932,7 @@ int mlx5e_poll_ico_cq(struct mlx5e_cq *cq)
  			case MLX5E_ICOSQ_WQE_SHAMPO_HD_UMR:
  				mlx5e_handle_shampo_hd_umr(wi->shampo, sq);
  				break;
@@ -1229,7 +1241,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  			case MLX5E_ICOSQ_WQE_UMR_TLS:
  				break;
  			case MLX5E_ICOSQ_WQE_SET_PSV_TLS:
-@@ -1113,19 +1983,35 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -1113,19 +1983,35 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq)
  	if (likely(missing < rq->mpwqe.min_wqe_bulk))
  		return false;
  
@@ -1267,7 +1279,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  		if (unlikely(alloc_err))
  			break;
-@@ -1147,8 +2033,14 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_
+@@ -1147,8 +2033,14 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_mpwqes(struct mlx5e_rq *rq)
  	 * the driver when it refills the Fill Ring.
  	 * 2. Otherwise, busy poll by rescheduling the NAPI poll.
  	 */
@@ -1282,7 +1294,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	return false;
  }
-@@ -1228,7 +2120,11 @@ static void *mlx5e_shampo_get_packet_hd(
+@@ -1228,7 +2120,11 @@ static void *mlx5e_shampo_get_packet_hd(struct mlx5e_rq *rq, u16 header_index)
  	struct mlx5e_dma_info *last_head = &rq->mpwqe.shampo->info[header_index];
  	u16 head_offset = (last_head->addr & (PAGE_SIZE - 1)) + rq->buff.headroom;
  
@@ -1294,7 +1306,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  }
  
  static void mlx5e_shampo_update_ipv4_udp_hdr(struct mlx5e_rq *rq, struct iphdr *ipv4)
-@@ -1651,118 +2547,316 @@ static inline void mlx5e_complete_rx_cqe
+@@ -1651,118 +2547,316 @@ static inline void mlx5e_complete_rx_cqe(struct mlx5e_rq *rq,
  		rq->dim_obj.sample.pkt_ctr  = rq->stats->packets;
  		rq->dim_obj.sample.byte_ctr = rq->stats->bytes;
  	}
@@ -1643,7 +1655,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	truesize = 0;
  
  	cqe_bcnt -= frag_consumed_bytes;
-@@ -1770,12 +2864,59 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
+@@ -1770,12 +2864,59 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
  	wi++;
  
  	while (cqe_bcnt) {
@@ -1706,7 +1718,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		truesize += frag_info->frag_stride;
  
  		cqe_bcnt -= frag_consumed_bytes;
-@@ -1783,39 +2924,55 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5
+@@ -1783,39 +2924,55 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
  		wi++;
  	}
  
@@ -1775,7 +1787,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static void trigger_report(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
-@@ -1837,6 +2994,9 @@ static void mlx5e_handle_rx_err_cqe(stru
+@@ -1837,6 +2994,9 @@ static void mlx5e_handle_rx_err_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  
  static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
@@ -1785,7 +1797,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct sk_buff *skb;
-@@ -1849,19 +3009,41 @@ static void mlx5e_handle_rx_cqe(struct m
+@@ -1849,19 +3009,41 @@ static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  
  	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
  		mlx5e_handle_rx_err_cqe(rq, cqe);
@@ -1827,7 +1839,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  
  	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
-@@ -1869,11 +3051,24 @@ static void mlx5e_handle_rx_cqe(struct m
+@@ -1869,11 +3051,24 @@ static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  	if (mlx5e_cqe_regb_chain(cqe))
  		if (!mlx5e_tc_update_skb_nic(cqe, skb)) {
  			dev_kfree_skb_any(skb);
@@ -1852,7 +1864,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  wq_cyc_pop:
  	mlx5_wq_cyc_pop(wq);
  }
-@@ -1956,7 +3151,11 @@ static void mlx5e_handle_rx_cqe_rep(stru
+@@ -1956,7 +3151,11 @@ static void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  
  	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
  		mlx5e_handle_rx_err_cqe(rq, cqe);
@@ -1864,7 +1876,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  
  	skb = INDIRECT_CALL_2(rq->wqe.skb_from_cqe,
-@@ -1964,10 +3163,21 @@ static void mlx5e_handle_rx_cqe_rep(stru
+@@ -1964,10 +3163,21 @@ static void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  			      mlx5e_skb_from_cqe_nonlinear,
  			      rq, wi, cqe, cqe_bcnt);
  	if (!skb) {
@@ -1886,7 +1898,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  
  	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
-@@ -1980,6 +3190,10 @@ static void mlx5e_handle_rx_cqe_rep(stru
+@@ -1980,6 +3190,10 @@ static void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  
  	mlx5e_rep_tc_receive(cqe, rq, skb);
  
@@ -1907,7 +1919,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	mlx5_wq_ll_pop(wq, cqe->wqe_id, &wqe->next.next_wqe_index);
  }
  
-@@ -2046,8 +3263,12 @@ const struct mlx5e_rx_handlers mlx5e_rx_
+@@ -2046,8 +3263,12 @@ const struct mlx5e_rx_handlers mlx5e_rx_handlers_rep = {
  
  static void
  mlx5e_fill_skb_data(struct sk_buff *skb, struct mlx5e_rq *rq,
@@ -1920,7 +1932,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  {
  	net_prefetchw(skb->data);
  
-@@ -2061,16 +3282,26 @@ mlx5e_fill_skb_data(struct sk_buff *skb,
+@@ -2061,16 +3282,26 @@ mlx5e_fill_skb_data(struct sk_buff *skb, struct mlx5e_rq *rq,
  		else
  			truesize = ALIGN(pg_consumed_bytes, BIT(rq->mpwqe.log_stride_sz));
  
@@ -1947,7 +1959,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static struct sk_buff *
  mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  				   struct mlx5_cqe64 *cqe, u16 cqe_bcnt, u32 head_offset,
-@@ -2084,13 +3315,19 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+@@ -2084,13 +3315,19 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
  	struct skb_shared_info *sinfo;
  	struct mlx5e_xdp_buff mxbuf;
  	unsigned int truesize = 0;
@@ -1967,7 +1979,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	prog = rcu_dereference(rq->xdp_prog);
  
  	if (prog) {
-@@ -2105,7 +3342,9 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+@@ -2105,7 +3342,9 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
  		linear_hr = XDP_PACKET_HEADROOM;
  		linear_data_len = 0;
  		linear_frame_sz = MLX5_SKB_FRAG_SZ(linear_hr + MLX5E_RX_MAX_HEAD);
@@ -1978,7 +1990,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		skb = napi_alloc_skb(rq->cq.napi,
  				     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
  		if (unlikely(!skb)) {
-@@ -2142,12 +3381,17 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+@@ -2142,12 +3381,17 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
  			truesize += ALIGN(pg_consumed_bytes, BIT(rq->mpwqe.log_stride_sz));
  
  		mlx5e_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, frag_page, frag_offset,
@@ -1996,7 +2008,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	if (prog) {
  		if (mlx5e_xdp_handle(rq, prog, &mxbuf)) {
  			if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)) {
-@@ -2189,10 +3433,16 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struc
+@@ -2189,10 +3433,16 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
  			while (++pagep < frag_page);
  		}
  		__pskb_pull_tail(skb, headlen);
@@ -2014,7 +2026,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  			struct mlx5e_frag_page *pagep;
  
  			xdp_update_skb_shared_info(skb, sinfo->nr_frags,
-@@ -2223,7 +3473,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -2223,7 +3473,9 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  {
  	struct mlx5e_frag_page *frag_page = &wi->alloc_units.frag_pages[page_idx];
  	u16 rx_headroom = rq->buff.headroom;
@@ -2024,7 +2036,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	struct sk_buff *skb;
  	u32 metasize = 0;
  	void *va, *data;
-@@ -2245,6 +3497,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -2245,6 +3497,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  				      frag_size, rq->buff.map_dir);
  	net_prefetch(data);
  
@@ -2032,7 +2044,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	prog = rcu_dereference(rq->xdp_prog);
  	if (prog) {
  		struct mlx5e_xdp_buff mxbuf;
-@@ -2262,6 +3515,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -2262,6 +3515,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  		metasize = mxbuf.xdp.data - mxbuf.xdp.data_meta;
  		cqe_bcnt = mxbuf.xdp.data_end - mxbuf.xdp.data;
  	}
@@ -2040,7 +2052,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt);
  	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt, metasize);
  	if (unlikely(!skb))
-@@ -2274,6 +3528,123 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct m
+@@ -2274,6 +3528,123 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  	return skb;
  }
  
@@ -2164,7 +2176,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static struct sk_buff *
  mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  			  struct mlx5_cqe64 *cqe, u16 header_index)
-@@ -2286,7 +3657,11 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_r
+@@ -2286,7 +3657,11 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  	void *hdr, *data;
  	u32 frag_size;
  
@@ -2176,7 +2188,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	data		= hdr + rx_headroom;
  	frag_size	= MLX5_SKB_FRAG_SZ(rx_headroom + head_size);
  
-@@ -2300,7 +3675,12 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_r
+@@ -2300,7 +3675,12 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  		if (unlikely(!skb))
  			return NULL;
  
@@ -2189,7 +2201,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	} else {
  		/* allocate SKB and copy header for large header */
  		rq->stats->gro_large_hds++;
-@@ -2312,7 +3692,12 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_r
+@@ -2312,7 +3692,12 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  		}
  
  		prefetchw(skb->data);
@@ -2202,7 +2214,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  				      head_offset + rx_headroom,
  				      rx_headroom, head_size);
  		/* skb linear part was allocated with headlen and aligned to long */
-@@ -2320,8 +3705,10 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_r
+@@ -2320,8 +3705,10 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
  		skb->len  += head_size;
  	}
  
@@ -2213,7 +2225,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	return skb;
  }
-@@ -2357,7 +3744,14 @@ mlx5e_hw_gro_skb_has_enough_space(struct
+@@ -2357,7 +3744,14 @@ mlx5e_hw_gro_skb_has_enough_space(struct sk_buff *skb, u16 data_bcnt)
  {
  	int nr_frags = skb_shinfo(skb)->nr_frags;
  
@@ -2229,7 +2241,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  }
  
  static void
-@@ -2367,10 +3761,19 @@ mlx5e_free_rx_shampo_hd_entry(struct mlx
+@@ -2367,10 +3761,19 @@ mlx5e_free_rx_shampo_hd_entry(struct mlx5e_rq *rq, u16 header_index)
  	u64 addr = shampo->info[header_index].addr;
  
  	if (((header_index + 1) & (MLX5E_SHAMPO_WQ_HEADER_PER_PAGE - 1)) == 0) {
@@ -2249,7 +2261,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  	bitmap_clear(shampo->bitmap, header_index, 1);
  }
-@@ -2391,6 +3794,9 @@ static void mlx5e_handle_rx_cqe_mpwrq_sh
+@@ -2391,6 +3794,9 @@ static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cq
  	bool match		= cqe->shampo.match;
  	struct mlx5e_rq_stats *stats = rq->stats;
  	struct mlx5e_rx_wqe_ll *wqe;
@@ -2259,7 +2271,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	struct mlx5e_mpw_info *wi;
  	struct mlx5_wq_ll *wq;
  
-@@ -2440,10 +3846,15 @@ static void mlx5e_handle_rx_cqe_mpwrq_sh
+@@ -2440,10 +3846,15 @@ static void mlx5e_handle_rx_cqe_mpwrq_shampo(struct mlx5e_rq *rq, struct mlx5_cq
  	}
  
  	if (likely(head_size)) {
@@ -2288,7 +2300,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
-@@ -2491,12 +3906,20 @@ static void mlx5e_handle_rx_cqe_mpwrq(st
+@@ -2491,12 +3906,20 @@ static void mlx5e_handle_rx_cqe_mpwrq(struct mlx5e_rq *rq, struct mlx5_cqe64 *cq
  
  	cqe_bcnt = mpwrq_get_cqe_byte_cnt(cqe);
  
@@ -2324,7 +2336,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	mlx5_wq_ll_pop(wq, cqe->wqe_id, &wqe->next.next_wqe_index);
  }
  
-@@ -2618,8 +4044,10 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq
+@@ -2618,8 +4044,10 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
  	if (test_bit(MLX5E_RQ_STATE_SHAMPO, &rq->state) && rq->hw_gro_data->skb)
  		mlx5e_shampo_flush_skb(rq, NULL, false);
  
@@ -2335,7 +2347,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  
  	mlx5_cqwq_update_db_record(cqwq);
  
-@@ -2729,6 +4157,9 @@ static inline void mlx5i_complete_rx_cqe
+@@ -2729,6 +4157,9 @@ static inline void mlx5i_complete_rx_cqe(struct mlx5e_rq *rq,
  
  static void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
@@ -2345,7 +2357,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
  	struct mlx5e_wqe_frag_info *wi;
  	struct sk_buff *skb;
-@@ -2741,7 +4172,11 @@ static void mlx5i_handle_rx_cqe(struct m
+@@ -2741,7 +4172,11 @@ static void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  
  	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
  		rq->stats->wqe_err++;
@@ -2357,7 +2369,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	}
  
  	skb = INDIRECT_CALL_2(rq->wqe.skb_from_cqe,
-@@ -2749,16 +4184,34 @@ static void mlx5i_handle_rx_cqe(struct m
+@@ -2749,16 +4184,34 @@ static void mlx5i_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  			      mlx5e_skb_from_cqe_nonlinear,
  			      rq, wi, cqe, cqe_bcnt);
  	if (!skb)
@@ -2392,7 +2404,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	mlx5_wq_cyc_pop(wq);
  }
  
-@@ -2782,11 +4235,18 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
+@@ -2782,11 +4235,18 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
  
  	switch (rq->wq_type) {
  	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
@@ -2411,7 +2423,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		rq->post_wqes = mlx5e_post_rx_mpwqes;
  		rq->dealloc_wqe = mlx5e_dealloc_rx_mpwqe;
  
-@@ -2806,11 +4266,17 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
+@@ -2806,11 +4266,17 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
  
  		break;
  	default: /* MLX5_WQ_TYPE_CYCLIC */
@@ -2429,7 +2441,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  		rq->post_wqes = mlx5e_post_rx_wqes;
  		rq->dealloc_wqe = mlx5e_dealloc_rx_wqe;
  		rq->handle_rx_cqe = priv->profile->rx_handlers->handle_rx_cqe;
-@@ -2823,6 +4289,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_r
+@@ -2823,6 +4289,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
  	return 0;
  }
  
@@ -2437,7 +2449,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
  {
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-@@ -2839,21 +4306,38 @@ static void mlx5e_trap_handle_rx_cqe(str
+@@ -2839,21 +4306,38 @@ static void mlx5e_trap_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe
  
  	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
  		rq->stats->wqe_err++;
@@ -2476,7 +2488,7 @@ Change-Id: Iac1f1b54f8b0e6d35caa85c42cd420c02dfffb21
  	mlx5_wq_cyc_pop(wq);
  }
  
-@@ -2866,3 +4350,4 @@ void mlx5e_rq_set_trap_handlers(struct m
+@@ -2866,3 +4350,4 @@ void mlx5e_rq_set_trap_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params
  	rq->dealloc_wqe = mlx5e_dealloc_rx_wqe;
  	rq->handle_rx_cqe = mlx5e_trap_handle_rx_cqe;
  }

@@ -7,9 +7,11 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  .../net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c   | 11 ++++++-----
  1 file changed, 6 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c b/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs_ethtool.c
-@@ -446,7 +446,8 @@ static int flow_get_tirn(struct mlx5e_pr
+@@ -446,7 +446,8 @@ static int flow_get_tirn(struct mlx5e_priv *priv,
  			return err;
  		eth_rule->rss = rss;
  		mlx5e_rss_refcnt_inc(eth_rule->rss);
@@ -19,7 +21,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  		*tirn = mlx5e_rx_res_get_tirn_direct(priv->rx_res, fs->ring_cookie);
  	}
  
-@@ -461,7 +462,7 @@ add_ethtool_flow_rule(struct mlx5e_priv
+@@ -461,7 +462,7 @@ add_ethtool_flow_rule(struct mlx5e_priv *priv,
  {
  	struct mlx5_flow_act flow_act = { .flags = FLOW_ACT_NO_APPEND };
  	struct mlx5_flow_destination *dst = NULL;
@@ -28,7 +30,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  	struct mlx5_flow_spec *spec;
  	int err = 0;
  
-@@ -646,7 +647,6 @@ static int validate_tcpudp6(struct ethto
+@@ -646,7 +647,6 @@ static int validate_tcpudp6(struct ethtool_rx_flow_spec *fs)
  	/* Flow is TCP/UDP */
  	return ++ntuples;
  }
@@ -36,7 +38,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  static int validate_vlan(struct ethtool_rx_flow_spec *fs)
  {
  	if (fs->m_ext.vlan_etype ||
-@@ -659,7 +659,6 @@ static int validate_vlan(struct ethtool_
+@@ -659,7 +659,6 @@ static int validate_vlan(struct ethtool_rx_flow_spec *fs)
  
  	return 1;
  }
@@ -44,7 +46,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  static int validate_flow(struct mlx5e_priv *priv,
  			 struct ethtool_rx_flow_spec *fs)
  {
-@@ -973,6 +972,7 @@ static int mlx5e_get_rss_hash_opt(struct
+@@ -973,6 +972,7 @@ static int mlx5e_get_rss_hash_opt(struct mlx5e_priv *priv,
  	return 0;
  }
  
@@ -52,7 +54,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd)
  {
  	int err = 0;
-@@ -980,6 +980,7 @@ int mlx5e_ethtool_set_rxnfc(struct mlx5e
+@@ -980,6 +980,7 @@ int mlx5e_ethtool_set_rxnfc(struct mlx5e_priv *priv, struct ethtool_rxnfc *cmd)
  	switch (cmd->cmd) {
  	case ETHTOOL_SRXCLSRLINS:
  		err = mlx5e_ethtool_flow_replace(priv, &cmd->fs, cmd->rss_context);
@@ -60,7 +62,7 @@ Change-Id: I12cd069580f6de31bcdee258482b1b87ea3b7c14
  		break;
  	case ETHTOOL_SRXCLSRLDEL:
  		err = mlx5e_ethtool_flow_remove(priv, cmd->fs.location);
-@@ -1021,4 +1022,4 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e
+@@ -1021,4 +1022,4 @@ int mlx5e_ethtool_get_rxnfc(struct mlx5e_priv *priv,
  
  	return err;
  }

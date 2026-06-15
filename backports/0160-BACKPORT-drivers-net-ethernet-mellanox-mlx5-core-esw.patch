@@ -7,9 +7,11 @@ Change-Id: Ic30c75d0f0c96867c80960f7d91bd5fe9698b57e
  .../net/ethernet/mellanox/mlx5/core/esw/vf_meter.c | 14 +++++++++++++-
  1 file changed, 13 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
-@@ -54,10 +54,12 @@ esw_acl_destrory_meter(struct mlx5_vport
+@@ -54,10 +54,12 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
  		meter->meter_grp = NULL;
  	}
  
@@ -33,7 +35,7 @@ Change-Id: Ic30c75d0f0c96867c80960f7d91bd5fe9698b57e
  	struct mlx5e_flow_meter_params params;
  	int ns, prio;
  	int err;
-@@ -239,19 +243,25 @@ esw_vf_meter_set_rate_limit(struct mlx5_
+@@ -239,19 +243,25 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
  		goto update;
  	}
  

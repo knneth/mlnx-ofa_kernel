@@ -6,6 +6,8 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  drivers/nvme/host/ioctl.c | 269 +++++++++++++++++++++++++++++++++++++-
  1 file changed, 265 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/nvme/host/ioctl.c b/drivers/nvme/host/ioctl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/ioctl.c
 +++ b/drivers/nvme/host/ioctl.c
 @@ -3,9 +3,17 @@
@@ -130,7 +132,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  {
  	struct request *req;
  
-@@ -113,14 +191,31 @@ static struct request *nvme_alloc_user_r
+@@ -113,14 +191,31 @@ static struct request *nvme_alloc_user_request(struct request_queue *q,
  
  static int nvme_map_user_request(struct request *req, u64 ubuffer,
  		unsigned bufflen, void __user *meta_buffer, unsigned meta_len,
@@ -163,7 +165,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  	if (ioucmd && (ioucmd->flags & IORING_URING_CMD_FIXED)) {
  		struct iov_iter iter;
  
-@@ -128,7 +223,11 @@ static int nvme_map_user_request(struct
+@@ -128,7 +223,11 @@ static int nvme_map_user_request(struct request *req, u64 ubuffer,
  		if (WARN_ON_ONCE(flags & NVME_IOCTL_VEC))
  			return -EINVAL;
  		ret = io_uring_cmd_import_fixed(ubuffer, bufflen,
@@ -175,7 +177,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  		if (ret < 0)
  			goto out;
  		ret = blk_rq_map_user_iov(q, req, NULL, &iter, GFP_KERNEL);
-@@ -137,21 +236,88 @@ static int nvme_map_user_request(struct
+@@ -137,21 +236,88 @@ static int nvme_map_user_request(struct request *req, u64 ubuffer,
  				bufflen, GFP_KERNEL, flags & NVME_IOCTL_VEC, 0,
  				0, rq_data_dir(req));
  	}
@@ -264,7 +266,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  
  	return ret;
  
-@@ -168,11 +334,18 @@ static int nvme_submit_user_cmd(struct r
+@@ -168,11 +334,18 @@ static int nvme_submit_user_cmd(struct request_queue *q,
  		void __user *meta_buffer, unsigned meta_len, u32 meta_seed,
  		u64 *result, unsigned timeout, unsigned int flags)
  {
@@ -283,7 +285,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  	int ret;
  
  	req = nvme_alloc_user_request(q, cmd, 0, 0);
-@@ -182,7 +355,15 @@ static int nvme_submit_user_cmd(struct r
+@@ -182,7 +355,15 @@ static int nvme_submit_user_cmd(struct request_queue *q,
  	req->timeout = timeout;
  	if (ubuffer && bufflen) {
  		ret = nvme_map_user_request(req, ubuffer, bufflen, meta_buffer,
@@ -300,7 +302,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  		if (ret)
  			return ret;
  	}
-@@ -190,16 +371,46 @@ static int nvme_submit_user_cmd(struct r
+@@ -190,16 +371,46 @@ static int nvme_submit_user_cmd(struct request_queue *q,
  	bio = req->bio;
  	ctrl = nvme_req(req)->ctrl;
  
@@ -347,7 +349,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  
  	return ret;
  }
-@@ -310,7 +521,11 @@ static int nvme_user_cmd(struct nvme_ctr
+@@ -310,7 +521,11 @@ static int nvme_user_cmd(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  	c.common.cdw14 = cpu_to_le32(cmd.cdw14);
  	c.common.cdw15 = cpu_to_le32(cmd.cdw15);
  
@@ -359,7 +361,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  		return -EACCES;
  
  	if (cmd.timeout_ms)
-@@ -357,7 +572,11 @@ static int nvme_user_cmd64(struct nvme_c
+@@ -357,7 +572,11 @@ static int nvme_user_cmd64(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  	c.common.cdw14 = cpu_to_le32(cmd.cdw14);
  	c.common.cdw15 = cpu_to_le32(cmd.cdw15);
  
@@ -379,7 +381,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  /*
   * This overlays struct io_uring_cmd pdu.
   * Expect build errors if this grows larger than that.
-@@ -468,7 +688,11 @@ static int nvme_uring_cmd_io(struct nvme
+@@ -468,7 +688,11 @@ static int nvme_uring_cmd_io(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  	c.common.cdw14 = cpu_to_le32(READ_ONCE(cmd->cdw14));
  	c.common.cdw15 = cpu_to_le32(READ_ONCE(cmd->cdw15));
  
@@ -391,7 +393,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  		return -EACCES;
  
  	d.metadata = READ_ONCE(cmd->metadata);
-@@ -505,13 +729,16 @@ static int nvme_uring_cmd_io(struct nvme
+@@ -505,13 +729,16 @@ static int nvme_uring_cmd_io(struct nvme_ctrl *ctrl, struct nvme_ns *ns,
  	blk_execute_rq_nowait(req, false);
  	return -EIOCBQUEUED;
  }
@@ -408,7 +410,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  	return false;
  }
  
-@@ -524,7 +751,11 @@ static int nvme_ctrl_ioctl(struct nvme_c
+@@ -524,7 +751,11 @@ static int nvme_ctrl_ioctl(struct nvme_ctrl *ctrl, unsigned int cmd,
  	case NVME_IOCTL_ADMIN64_CMD:
  		return nvme_user_cmd64(ctrl, NULL, argp, 0, open_for_write);
  	default:
@@ -420,7 +422,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  	}
  }
  
-@@ -565,9 +796,11 @@ static int nvme_ns_ioctl(struct nvme_ns
+@@ -565,9 +796,11 @@ static int nvme_ns_ioctl(struct nvme_ns *ns, unsigned int cmd,
  #endif
  	case NVME_IOCTL_SUBMIT_IO:
  		return nvme_submit_io(ns, argp);
@@ -432,7 +434,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  	case NVME_IOCTL_IO64_CMD:
  		return nvme_user_cmd64(ns->ctrl, ns, argp, flags,
  				       open_for_write);
-@@ -576,16 +809,27 @@ static int nvme_ns_ioctl(struct nvme_ns
+@@ -576,16 +809,27 @@ static int nvme_ns_ioctl(struct nvme_ns *ns, unsigned int cmd,
  	}
  }
  
@@ -460,7 +462,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  
  	if (is_ctrl_ioctl(cmd))
  		return nvme_ctrl_ioctl(ns->ctrl, cmd, argp, open_for_write);
-@@ -604,6 +848,7 @@ long nvme_ns_chr_ioctl(struct file *file
+@@ -604,6 +848,7 @@ long nvme_ns_chr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
  	return nvme_ns_ioctl(ns, cmd, argp, 0, open_for_write);
  }
  
@@ -468,7 +470,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  static int nvme_uring_cmd_checks(unsigned int issue_flags)
  {
  
-@@ -659,6 +904,7 @@ int nvme_ns_chr_uring_cmd_iopoll(struct
+@@ -659,6 +904,7 @@ int nvme_ns_chr_uring_cmd_iopoll(struct io_uring_cmd *ioucmd,
  		return blk_rq_poll(req, iob, poll_flags);
  	return 0;
  }
@@ -476,7 +478,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  #ifdef CONFIG_NVME_MULTIPATH
  static int nvme_ns_head_ctrl_ioctl(struct nvme_ns *ns, unsigned int cmd,
  		void __user *argp, struct nvme_ns_head *head, int srcu_idx,
-@@ -676,18 +922,29 @@ static int nvme_ns_head_ctrl_ioctl(struc
+@@ -676,18 +922,29 @@ static int nvme_ns_head_ctrl_ioctl(struct nvme_ns *ns, unsigned int cmd,
  	return ret;
  }
  
@@ -514,7 +516,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  int nvme_ns_head_chr_uring_cmd(struct io_uring_cmd *ioucmd,
  		unsigned int issue_flags)
  {
-@@ -749,8 +1007,10 @@ int nvme_ns_head_chr_uring_cmd(struct io
+@@ -749,8 +1007,10 @@ int nvme_ns_head_chr_uring_cmd(struct io_uring_cmd *ioucmd,
  	srcu_read_unlock(&head->srcu, srcu_idx);
  	return ret;
  }
@@ -525,7 +527,7 @@ Change-Id: I495544fc7f553ac56817394b073e87a7b31199a8
  int nvme_dev_uring_cmd(struct io_uring_cmd *ioucmd, unsigned int issue_flags)
  {
  	struct nvme_ctrl *ctrl = ioucmd->file->private_data;
-@@ -777,6 +1037,7 @@ int nvme_dev_uring_cmd(struct io_uring_c
+@@ -777,6 +1037,7 @@ int nvme_dev_uring_cmd(struct io_uring_cmd *ioucmd, unsigned int issue_flags)
  
  	return ret;
  }

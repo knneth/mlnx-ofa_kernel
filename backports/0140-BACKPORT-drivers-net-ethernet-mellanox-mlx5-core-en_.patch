@@ -7,6 +7,8 @@ Change-Id: I03aed7240070838fbdcb382f020e10d7d5a7dd00
  .../mellanox/mlx5/core/en_accel/ktls_utils.h       | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_utils.h
 @@ -19,9 +19,21 @@ enum {
@@ -31,7 +33,7 @@ Change-Id: I03aed7240070838fbdcb382f020e10d7d5a7dd00
  int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  		      struct tls_crypto_info *crypto_info, u32 start_offload_tcp_sn);
  void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx);
-@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_dev
+@@ -30,7 +42,9 @@ void mlx5e_ktls_rx_resync(struct net_device *netdev, struct sock *sk, u32 seq, u
  union mlx5e_crypto_info {
  	struct tls_crypto_info crypto_info;
  	struct tls12_crypto_info_aes_gcm_128 crypto_info_128;

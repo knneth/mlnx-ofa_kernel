@@ -3,17 +3,28 @@ Subject: [PATCH] BACKPORT: include/linux/mod_devicetable.h
 
 Change-Id: Ibd2d029a602007e9afb0e216d2fb5bd5564e642f
 ---
- include/linux/mod_devicetable.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ include/linux/mod_devicetable.h | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
 
+diff --git a/include/linux/mod_devicetable.h b/include/linux/mod_devicetable.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/mod_devicetable.h
 +++ b/include/linux/mod_devicetable.h
-@@ -8,10 +8,15 @@
- #ifndef LINUX_MOD_DEVICETABLE_H
- #define LINUX_MOD_DEVICETABLE_H
+@@ -5,13 +5,22 @@
+  * header.
+  */
  
+-#ifndef LINUX_MOD_DEVICETABLE_H
+-#define LINUX_MOD_DEVICETABLE_H
++#ifndef COMPAT_LINUX_MOD_DEVICETABLE_H
++#define COMPAT_LINUX_MOD_DEVICETABLE_H
++
 +#include "../../compat/config.h"
 +
++#ifdef HAVE_NATIVE_AUX
++#include_next <linux/mod_devicetable.h>
++#else
+ 
  #ifdef __KERNEL__
  #include <linux/mei.h>
  #include <linux/types.h>
@@ -24,7 +35,7 @@ Change-Id: Ibd2d029a602007e9afb0e216d2fb5bd5564e642f
  typedef unsigned long kernel_ulong_t;
  #endif
  
-@@ -46,7 +51,9 @@ struct pci_device_id {
+@@ -46,7 +55,9 @@ struct pci_device_id {
  	__u32 subvendor, subdevice;	/* Subsystem ID's or PCI_ANY_ID */
  	__u32 class, class_mask;	/* (class,subclass,prog-if) triplet */
  	kernel_ulong_t driver_data;	/* Data private to the driver */
@@ -34,3 +45,20 @@ Change-Id: Ibd2d029a602007e9afb0e216d2fb5bd5564e642f
  };
  
  
+@@ -601,7 +612,7 @@ struct dmi_system_id {
+ #define DMI_MATCH(a, b)	{ .slot = a, .substr = b }
+ #define DMI_EXACT_MATCH(a, b)	{ .slot = a, .substr = b, .exact_match = 1 }
+ 
+-#define PLATFORM_NAME_SIZE	20
++#define PLATFORM_NAME_SIZE	24
+ #define PLATFORM_MODULE_PREFIX	"platform:"
+ 
+ struct platform_device_id {
+@@ -971,5 +982,6 @@ struct coreboot_device_id {
+ 	__u32 tag;
+ 	kernel_ulong_t driver_data;
+ };
++#endif /* HAVE_NATIVE_AUX */
+ 
+-#endif /* LINUX_MOD_DEVICETABLE_H */
++#endif /* COMPAT_LINUX_MOD_DEVICETABLE_H */

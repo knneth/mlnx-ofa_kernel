@@ -6,6 +6,8 @@ Change-Id: I47f50c4fccbf45e9dbf584f5659e2161c25eb663
  drivers/nvme/host/auth.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/host/auth.c b/drivers/nvme/host/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/auth.c
 +++ b/drivers/nvme/host/auth.c
 @@ -2,7 +2,7 @@

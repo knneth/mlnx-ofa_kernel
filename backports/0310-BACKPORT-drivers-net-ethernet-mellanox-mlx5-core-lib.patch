@@ -7,9 +7,11 @@ Change-Id: I435452604a247596858318f0d853c3ea07c628b5
  drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/devcom.c
-@@ -120,8 +120,10 @@ mlx5_devcom_comp_alloc(u64 id, u64 key,
+@@ -120,8 +120,10 @@ mlx5_devcom_comp_alloc(u64 id, u64 key, mlx5_devcom_event_handler_t handler)
  	comp->key = key;
  	comp->handler = handler;
  	init_rwsem(&comp->sem);
@@ -20,7 +22,7 @@ Change-Id: I435452604a247596858318f0d853c3ea07c628b5
  	kref_init(&comp->ref);
  	INIT_LIST_HEAD(&comp->comp_dev_list_head);
  
-@@ -136,7 +138,9 @@ mlx5_devcom_comp_release(struct kref *re
+@@ -136,7 +138,9 @@ mlx5_devcom_comp_release(struct kref *ref)
  	mutex_lock(&comp_list_lock);
  	list_del(&comp->comp_list);
  	mutex_unlock(&comp_list_lock);

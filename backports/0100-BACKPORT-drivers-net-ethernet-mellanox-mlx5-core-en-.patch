@@ -7,9 +7,11 @@ Change-Id: Ic810ed699ae906404a319e660205ce0937d08ccf
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
-@@ -121,10 +121,12 @@ tc_act_can_offload_mirred(struct mlx5e_t
+@@ -121,10 +121,12 @@ tc_act_can_offload_mirred(struct mlx5e_tc_act_parse_state *parse_state,
  		return false;
  	}
  

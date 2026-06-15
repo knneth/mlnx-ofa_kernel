@@ -6,6 +6,8 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  drivers/infiniband/ulp/iser/iscsi_iser.c | 55 +++++++++++++++++++++++-
  1 file changed, 53 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/iser/iscsi_iser.c b/drivers/infiniband/ulp/iser/iscsi_iser.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/iser/iscsi_iser.c
 +++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
 @@ -76,6 +76,9 @@
@@ -18,7 +20,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  MODULE_AUTHOR("Alex Nezhinsky, Dan Bar Dov, Or Gerlitz");
  
  static const struct scsi_host_template iscsi_iser_sht;
-@@ -239,6 +242,7 @@ static int iscsi_iser_task_init(struct i
+@@ -239,6 +242,7 @@ static int iscsi_iser_task_init(struct iscsi_task *task)
  	if (ret) {
  		iser_err("Failed to init task %p, err = %d\n",
  			 iser_task, ret);
@@ -26,7 +28,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  		return ret;
  	}
  
-@@ -493,7 +497,9 @@ static int iscsi_iser_conn_bind(struct i
+@@ -493,7 +497,9 @@ static int iscsi_iser_conn_bind(struct iscsi_cls_session *cls_session,
  	iser_conn->iscsi_conn = conn;
  
  out:
@@ -36,7 +38,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  	mutex_unlock(&iser_conn->state_mutex);
  	return error;
  }
-@@ -568,7 +574,11 @@ static void iscsi_iser_session_destroy(s
+@@ -568,7 +574,11 @@ static void iscsi_iser_session_destroy(struct iscsi_cls_session *cls_session)
  	struct Scsi_Host *shost = iscsi_session_to_shost(cls_session);
  
  	iscsi_session_teardown(cls_session);
@@ -48,7 +50,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  	iscsi_host_free(shost);
  }
  
-@@ -649,10 +659,10 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -649,10 +659,10 @@ iscsi_iser_session_create(struct iscsi_endpoint *ep,
  			scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP |
  						   SHOST_DIX_GUARD_CRC);
  		}
@@ -61,7 +63,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  		if (iscsi_host_add(shost, ib_dev->dev.parent)) {
  			mutex_unlock(&iser_conn->state_mutex);
  			goto free_host;
-@@ -685,7 +695,11 @@ iscsi_iser_session_create(struct iscsi_e
+@@ -685,7 +695,11 @@ iscsi_iser_session_create(struct iscsi_endpoint *ep,
  	return cls_session;
  
  remove_host:
@@ -73,7 +75,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  free_host:
  	iscsi_host_free(shost);
  	return NULL;
-@@ -956,6 +970,31 @@ static umode_t iser_attr_is_visible(int
+@@ -956,6 +970,31 @@ static umode_t iser_attr_is_visible(int param_type, int param)
  	return 0;
  }
  
@@ -105,7 +107,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  static const struct scsi_host_template iscsi_iser_sht = {
  	.module                 = THIS_MODULE,
  	.name                   = "iSCSI Initiator over iSER",
-@@ -963,15 +1002,25 @@ static const struct scsi_host_template i
+@@ -963,15 +1002,25 @@ static const struct scsi_host_template iscsi_iser_sht = {
  	.change_queue_depth	= scsi_change_queue_depth,
  	.sg_tablesize           = ISCSI_ISER_DEF_SG_TABLESIZE,
  	.cmd_per_lun            = ISER_DEF_CMD_PER_LUN,
@@ -131,7 +133,7 @@ Change-Id: I7d2aeaac7b6c0b5dc2b62e573cf36d6b90e51a76
  };
  
  static struct iscsi_transport iscsi_iser_transport = {
-@@ -984,7 +1033,9 @@ static struct iscsi_transport iscsi_iser
+@@ -984,7 +1033,9 @@ static struct iscsi_transport iscsi_iser_transport = {
  	/* connection management */
  	.create_conn            = iscsi_iser_conn_create,
  	.bind_conn              = iscsi_iser_conn_bind,

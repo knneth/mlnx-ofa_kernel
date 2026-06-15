@@ -6,6 +6,8 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  drivers/nvme/target/admin-cmd.c | 30 ++++++++++++++++++++++++++++++
  1 file changed, 30 insertions(+)
 
+diff --git a/drivers/nvme/target/admin-cmd.c b/drivers/nvme/target/admin-cmd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/admin-cmd.c
 +++ b/drivers/nvme/target/admin-cmd.c
 @@ -9,7 +9,9 @@
@@ -18,7 +20,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  
  #include <generated/utsrelease.h>
  #include <linux/unaligned.h>
-@@ -88,12 +90,21 @@ static u16 nvmet_get_smart_log_nsid(stru
+@@ -88,12 +90,21 @@ static u16 nvmet_get_smart_log_nsid(struct nvmet_req *req,
  	if (!req->ns->bdev)
  		return NVME_SC_SUCCESS;
  
@@ -40,7 +42,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  
  	put_unaligned_le64(host_reads, &slog->host_reads[0]);
  	put_unaligned_le64(data_units_read, &slog->data_units_read[0]);
-@@ -117,12 +128,21 @@ static u16 nvmet_get_smart_log_all(struc
+@@ -117,12 +128,21 @@ static u16 nvmet_get_smart_log_all(struct nvmet_req *req,
  		/* we don't have the right data for file backed ns */
  		if (!ns->bdev)
  			continue;
@@ -62,7 +64,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  	}
  
  	put_unaligned_le64(host_reads, &slog->host_reads[0]);
-@@ -272,7 +292,11 @@ static u32 nvmet_format_ana_group(struct
+@@ -272,7 +292,11 @@ static u32 nvmet_format_ana_group(struct nvmet_req *req, u32 grpid,
  	desc->chgcnt = cpu_to_le64(nvmet_ana_chgcnt);
  	desc->state = req->port->ana_state[grpid];
  	memset(desc->rsvd17, 0, sizeof(desc->rsvd17));
@@ -74,7 +76,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  }
  
  static void nvmet_execute_get_log_page_ana(struct nvmet_req *req)
-@@ -391,7 +415,9 @@ static void nvmet_execute_identify_ctrl(
+@@ -391,7 +415,9 @@ static void nvmet_execute_identify_ctrl(struct nvmet_req *req)
  	memcpy_and_pad(id->fr, sizeof(id->fr),
  		       subsys->firmware_rev, strlen(subsys->firmware_rev), ' ');
  
@@ -84,7 +86,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  
  	id->rab = 6;
  
-@@ -727,6 +753,7 @@ static void nvmet_execute_identify(struc
+@@ -723,6 +749,7 @@ static void nvmet_execute_identify(struct nvmet_req *req)
  		nvmet_execute_identify_desclist(req);
  		return;
  	case NVME_ID_CNS_CS_NS:
@@ -92,7 +94,7 @@ Change-Id: If3663c22fd999b8fec92007bc092ac2662073d66
  		switch (req->cmd->identify.csi) {
  		case NVME_CSI_NVM:
  			/* Not supported */
-@@ -738,18 +765,21 @@ static void nvmet_execute_identify(struc
+@@ -734,18 +761,21 @@ static void nvmet_execute_identify(struct nvmet_req *req)
  			}
  			break;
  		}

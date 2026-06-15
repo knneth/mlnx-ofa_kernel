@@ -123,7 +123,9 @@ esw_qos_node_set_parent(struct mlx5_esw_sched_node *node, struct mlx5_esw_sched_
 	node->parent = parent;
 	if (parent)
 		node->esw = parent->esw;
-        esw_qos_node_attach_to_parent(node);
+	else if (node->vport)
+		node->esw = node->vport->dev->priv.eswitch;
+	esw_qos_node_attach_to_parent(node);
 }
 
 static void

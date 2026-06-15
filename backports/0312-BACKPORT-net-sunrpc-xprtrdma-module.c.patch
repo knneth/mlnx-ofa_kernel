@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/module.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/module.c b/net/sunrpc/xprtrdma/module.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/module.c
 +++ b/net/sunrpc/xprtrdma/module.c
 @@ -17,14 +17,18 @@

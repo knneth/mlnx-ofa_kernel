@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/ib_rep.c
+
+Change-Id: I1dbe601689949e04cfdfabed5567a77c00c1b8c8
+---
+ drivers/infiniband/hw/mlx5/ib_rep.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/infiniband/hw/mlx5/ib_rep.c b/drivers/infiniband/hw/mlx5/ib_rep.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/hw/mlx5/ib_rep.c
++++ b/drivers/infiniband/hw/mlx5/ib_rep.c
+@@ -254,7 +254,11 @@ static const struct auxiliary_device_id mlx5r_rep_id_table[] = {
+ 	{},
+ };
+ 
++#ifdef HAVE_NATIVE_AUX
++MODULE_DEVICE_TABLE(auxiliary, mlx5r_rep_id_table);
++#else
+ MODULE_DEVICE_TABLE(auxiliary_mlx5r_rep_id_table, mlx5r_rep_id_table);
++#endif
+ 
+ static struct auxiliary_driver mlx5r_rep_driver = {
+ 	.name = "rep",

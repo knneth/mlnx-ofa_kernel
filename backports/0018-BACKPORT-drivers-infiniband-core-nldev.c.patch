@@ -6,9 +6,11 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  drivers/infiniband/core/nldev.c | 153 +++++++++++++++++++++++++-------
  1 file changed, 120 insertions(+), 33 deletions(-)
 
+diff --git a/drivers/infiniband/core/nldev.c b/drivers/infiniband/core/nldev.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/nldev.c
 +++ b/drivers/infiniband/core/nldev.c
-@@ -75,9 +75,9 @@ static const struct nla_policy nldev_pol
+@@ -75,9 +75,9 @@ static const struct nla_policy nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
  	[RDMA_NLDEV_ATTR_DRIVER_PRINT_TYPE]	= { .type = NLA_U8 },
  	[RDMA_NLDEV_ATTR_DRIVER_STRING]		= { .type = NLA_NUL_STRING,
  					.len = RDMA_NLDEV_ATTR_EMPTY_STRING },
@@ -21,7 +23,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	[RDMA_NLDEV_ATTR_DRIVER_U64]		= { .type = NLA_U64 },
  	[RDMA_NLDEV_ATTR_FW_VERSION]		= { .type = NLA_NUL_STRING,
  					.len = RDMA_NLDEV_ATTR_EMPTY_STRING },
-@@ -396,9 +396,12 @@ static int fill_res_info_entry(struct sk
+@@ -396,9 +396,12 @@ static int fill_res_info_entry(struct sk_buff *msg,
  			       const char *name, u64 curr)
  {
  	struct nlattr *entry_attr;
@@ -35,7 +37,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	if (!entry_attr)
  		return -EMSGSIZE;
  
-@@ -434,7 +437,11 @@ static int fill_res_info(struct sk_buff
+@@ -434,7 +437,11 @@ static int fill_res_info(struct sk_buff *msg, struct ib_device *device)
  	if (fill_nldev_handle(msg, device))
  		return -EMSGSIZE;
  
@@ -47,7 +49,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	if (!table_attr)
  		return -EMSGSIZE;
  
-@@ -1071,7 +1078,11 @@ static int nldev_get_doit(struct sk_buff
+@@ -1071,7 +1078,11 @@ static int nldev_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	u32 index;
  	int err;
  
@@ -59,7 +61,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  				     nldev_policy, extack);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
-@@ -1120,8 +1131,13 @@ static int nldev_set_doit(struct sk_buff
+@@ -1120,8 +1131,13 @@ static int nldev_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	u32 index;
  	int err;
  
@@ -73,7 +75,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -1133,8 +1149,13 @@ static int nldev_set_doit(struct sk_buff
+@@ -1133,8 +1149,13 @@ static int nldev_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	if (tb[RDMA_NLDEV_ATTR_DEV_NAME]) {
  		char name[IB_DEVICE_NAME_MAX] = {};
  
@@ -87,7 +89,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  		if (strlen(name) == 0) {
  			err = -EINVAL;
  			goto done;
-@@ -1212,8 +1233,12 @@ static int nldev_port_get_doit(struct sk
+@@ -1212,8 +1233,12 @@ static int nldev_port_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	u32 port;
  	int err;
  
@@ -101,7 +103,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	if (err ||
  	    !tb[RDMA_NLDEV_ATTR_DEV_INDEX] ||
  	    !tb[RDMA_NLDEV_ATTR_PORT_INDEX])
-@@ -1251,7 +1276,7 @@ static int nldev_port_get_doit(struct sk
+@@ -1251,7 +1276,7 @@ static int nldev_port_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
  
@@ -110,7 +112,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  err_free:
  	nlmsg_free(msg);
-@@ -1272,7 +1297,11 @@ static int nldev_port_get_dumpit(struct
+@@ -1272,7 +1297,11 @@ static int nldev_port_get_dumpit(struct sk_buff *skb,
  	int err;
  	unsigned int p;
  
@@ -122,7 +124,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  				     nldev_policy, NULL);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
-@@ -1327,8 +1356,13 @@ static int nldev_res_get_doit(struct sk_
+@@ -1327,8 +1356,13 @@ static int nldev_res_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	u32 index;
  	int ret;
  
@@ -137,7 +139,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
  
-@@ -1357,7 +1391,7 @@ static int nldev_res_get_doit(struct sk_
+@@ -1357,7 +1391,7 @@ static int nldev_res_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -146,7 +148,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  err_free:
  	nlmsg_free(msg);
-@@ -1474,7 +1508,11 @@ static int res_get_common_doit(struct sk
+@@ -1474,7 +1508,11 @@ static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	struct sk_buff *msg;
  	int ret;
  
@@ -158,7 +160,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  				     nldev_policy, extack);
  	if (ret || !tb[RDMA_NLDEV_ATTR_DEV_INDEX] || !fe->id || !tb[fe->id])
  		return -EINVAL;
-@@ -1511,7 +1549,7 @@ static int res_get_common_doit(struct sk
+@@ -1511,7 +1549,7 @@ static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  		goto err_get;
  	}
  
@@ -167,7 +169,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  			RDMA_NL_GET_TYPE(RDMA_NL_NLDEV,
  					 RDMA_NL_GET_OP(nlh->nlmsg_type)),
  			0, 0);
-@@ -1521,7 +1559,7 @@ static int res_get_common_doit(struct sk
+@@ -1521,7 +1559,7 @@ static int res_get_common_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  		goto err_free;
  	}
  
@@ -176,7 +178,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  	ret = fill_func(msg, has_cap_net_admin, res, port);
  	if (ret)
-@@ -1561,7 +1599,11 @@ static int res_get_common_dumpit(struct
+@@ -1561,7 +1599,11 @@ static int res_get_common_dumpit(struct sk_buff *skb,
  	u32 index, port = 0;
  	bool filled = false;
  
@@ -188,7 +190,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  				     nldev_policy, NULL);
  	/*
  	 * Right now, we are expecting the device index to get res information,
-@@ -1600,13 +1642,17 @@ static int res_get_common_dumpit(struct
+@@ -1600,13 +1642,17 @@ static int res_get_common_dumpit(struct sk_buff *skb,
  		goto err;
  	}
  
@@ -207,7 +209,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  	rt = &device->res[res_type];
  	xa_lock(&rt->xa);
-@@ -1623,7 +1669,11 @@ static int res_get_common_dumpit(struct
+@@ -1623,7 +1669,11 @@ static int res_get_common_dumpit(struct sk_buff *skb,
  
  		filled = true;
  
@@ -227,7 +229,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  err:
  	nlmsg_cancel(skb, nlh);
  
-@@ -1737,8 +1786,9 @@ void rdma_link_unregister(struct rdma_li
+@@ -1737,8 +1786,9 @@ void rdma_link_unregister(struct rdma_link_ops *ops)
  }
  EXPORT_SYMBOL(rdma_link_unregister);
  
@@ -239,7 +241,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	char ibdev_name[IB_DEVICE_NAME_MAX];
-@@ -1748,20 +1798,35 @@ static int nldev_newlink(struct sk_buff
+@@ -1748,20 +1798,35 @@ static int nldev_newlink(struct sk_buff *skb, struct nlmsghdr *nlh,
  	char type[IFNAMSIZ];
  	int err;
  
@@ -275,7 +277,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  	ndev = dev_get_by_name(sock_net(skb->sk), ndev_name);
  	if (!ndev)
-@@ -1784,15 +1849,20 @@ static int nldev_newlink(struct sk_buff
+@@ -1784,15 +1849,20 @@ static int nldev_newlink(struct sk_buff *skb, struct nlmsghdr *nlh,
  	return err;
  }
  
@@ -298,7 +300,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  				     nldev_policy, extack);
  	if (err || !tb[RDMA_NLDEV_ATTR_DEV_INDEX])
  		return -EINVAL;
-@@ -1811,8 +1881,9 @@ static int nldev_dellink(struct sk_buff
+@@ -1811,8 +1881,9 @@ static int nldev_dellink(struct sk_buff *skb, struct nlmsghdr *nlh,
  	return 0;
  }
  
@@ -310,7 +312,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	char client_name[RDMA_NLDEV_ATTR_CHARDEV_TYPE_SIZE];
-@@ -1827,8 +1898,13 @@ static int nldev_get_chardev(struct sk_b
+@@ -1827,8 +1898,13 @@ static int nldev_get_chardev(struct sk_buff *skb, struct nlmsghdr *nlh,
  	if (err || !tb[RDMA_NLDEV_ATTR_CHARDEV_TYPE])
  		return -EINVAL;
  
@@ -336,7 +338,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct sk_buff *msg;
-@@ -1943,6 +2020,7 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1943,6 +2020,7 @@ static int nldev_sys_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  		nlmsg_free(msg);
  		return err;
  	}
@@ -344,7 +346,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  	/*
  	 * Copy-on-fork is supported.
  	 * See commits:
-@@ -1954,6 +2032,7 @@ static int nldev_sys_get_doit(struct sk_
+@@ -1954,6 +2032,7 @@ static int nldev_sys_get_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	 * supported in case of failure.
  	 */
  	nla_put_u8(msg, RDMA_NLDEV_SYS_ATTR_COPY_ON_FORK, 1);
@@ -352,7 +354,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  
  	nlmsg_end(msg, nlh);
  	return rdma_nl_unicast(sock_net(skb->sk), msg, NETLINK_CB(skb).portid);
-@@ -1986,8 +2065,9 @@ static int nldev_set_sys_set_pqkey_doit(
+@@ -1986,8 +2065,9 @@ static int nldev_set_sys_set_pqkey_doit(struct nlattr *tb[])
  	return 0;
  }
  
@@ -364,7 +366,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	int err;
-@@ -2025,7 +2105,8 @@ static int nldev_stat_set_mode_doit(stru
+@@ -2025,7 +2105,8 @@ static int nldev_stat_set_mode_doit(struct sk_buff *msg,
  		if (tb[RDMA_NLDEV_ATTR_STAT_AUTO_MODE_MASK])
  			mask = nla_get_u32(
  				tb[RDMA_NLDEV_ATTR_STAT_AUTO_MODE_MASK]);
@@ -385,7 +387,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -2149,7 +2230,9 @@ static int nldev_stat_set_doit(struct sk
+@@ -2149,7 +2230,9 @@ static int nldev_stat_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  	}
  
  	if (tb[RDMA_NLDEV_ATTR_STAT_MODE]) {
@@ -407,7 +409,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	struct ib_device *device;
-@@ -2232,7 +2315,7 @@ static int nldev_stat_del_doit(struct sk
+@@ -2232,7 +2315,7 @@ static int nldev_stat_del_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
  
  	nlmsg_end(msg, nlh);
  	ib_device_put(device);
@@ -427,7 +429,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
  	int ret;
-@@ -2464,8 +2547,8 @@ static int nldev_stat_get_dumpit(struct
+@@ -2464,8 +2547,8 @@ static int nldev_stat_get_dumpit(struct sk_buff *skb,
  }
  
  static int nldev_stat_get_counter_status_doit(struct sk_buff *skb,
@@ -438,7 +440,7 @@ Change-Id: I5d14fb3c5bee691bb4420d70af35a342a1e67346
  {
  	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX], *table, *entry;
  	struct rdma_hw_stats *stats;
-@@ -2572,7 +2655,11 @@ static int nldev_newdev(struct sk_buff *
+@@ -2572,7 +2655,11 @@ static int nldev_newdev(struct sk_buff *skb, struct nlmsghdr *nlh,
  		!tb[RDMA_NLDEV_ATTR_DEV_NAME] || !tb[RDMA_NLDEV_ATTR_DEV_TYPE])
  		return -EINVAL;
  

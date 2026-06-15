@@ -176,6 +176,8 @@ void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 					   void *cookie);
 void ib_umem_stop_invalidation_notifier(struct ib_umem *umem);
 
+int ib_umem_check_rereg(struct ib_umem *umem, int flags, int new_access_flags);
+
 #else /* CONFIG_INFINIBAND_USER_MEM */
 
 #include <linux/err.h>
@@ -248,6 +250,12 @@ static inline void ib_umem_activate_invalidation_notifier(
 }
 static inline void ib_umem_stop_invalidation_notifier(struct ib_umem *umem)
 {
+}
+
+static inline int ib_umem_check_rereg(struct ib_umem *umem, int flags,
+				      int new_access_flags)
+{
+	return -EOPNOTSUPP;
 }
 
 #endif /* CONFIG_INFINIBAND_USER_MEM */

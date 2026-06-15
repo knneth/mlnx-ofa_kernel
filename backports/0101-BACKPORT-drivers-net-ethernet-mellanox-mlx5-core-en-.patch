@@ -7,9 +7,11 @@ Change-Id: Id99ba78fef23d122e79e87a39cd7405710bf287d
  .../net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c   | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
-@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5
+@@ -11,6 +11,7 @@ tc_act_can_offload_mpls_push(struct mlx5e_tc_act_parse_state *parse_state,
  			     int act_index,
  			     struct mlx5_flow_attr *attr)
  {
@@ -17,7 +19,7 @@ Change-Id: Id99ba78fef23d122e79e87a39cd7405710bf287d
  	struct netlink_ext_ack *extack = parse_state->extack;
  	struct mlx5e_priv *priv = parse_state->flow->priv;
  
-@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5
+@@ -21,16 +22,21 @@ tc_act_can_offload_mpls_push(struct mlx5e_tc_act_parse_state *parse_state,
  	}
  
  	return true;
@@ -39,7 +41,7 @@ Change-Id: Id99ba78fef23d122e79e87a39cd7405710bf287d
  }
  
  static int
-@@ -67,10 +73,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e
+@@ -67,10 +73,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e_tc_act_parse_state *parse_state,
  		return false;
  	}
  
@@ -52,7 +54,7 @@ Change-Id: Id99ba78fef23d122e79e87a39cd7405710bf287d
  
  	return true;
  }
-@@ -81,7 +89,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_ac
+@@ -81,7 +89,9 @@ tc_act_parse_mpls_pop(struct mlx5e_tc_act_parse_state *parse_state,
  		      struct mlx5e_priv *priv,
  		      struct mlx5_flow_attr *attr)
  {

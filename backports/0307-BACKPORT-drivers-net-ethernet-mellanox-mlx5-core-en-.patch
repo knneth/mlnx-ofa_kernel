@@ -6,6 +6,8 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  .../ethernet/mellanox/mlx5/core/en/xsk/rx.c   | 454 +++++++++++++++++-
  1 file changed, 441 insertions(+), 13 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.c
 @@ -1,13 +1,26 @@
@@ -35,7 +37,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  static struct mlx5e_xdp_buff *xsk_buff_to_mxbuf(struct xdp_buff *xdp)
  {
  	/* mlx5e_xdp_buff shares its layout with xdp_buff_xsk
-@@ -15,24 +28,121 @@ static struct mlx5e_xdp_buff *xsk_buff_t
+@@ -15,24 +28,121 @@ static struct mlx5e_xdp_buff *xsk_buff_to_mxbuf(struct xdp_buff *xdp)
  	 */
  	return (struct mlx5e_xdp_buff *)xdp;
  }
@@ -158,7 +160,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  				     rq->mpwqe.pages_per_wqe);
  
  	/* If batch < pages_per_wqe, either:
-@@ -42,8 +152,24 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -42,8 +152,24 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  	 * the first error, which will mean there are no more valid descriptors.
  	 */
  	for (; batch < rq->mpwqe.pages_per_wqe; batch++) {
@@ -184,7 +186,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  			goto err_reuse_batch;
  	}
  
-@@ -53,31 +179,68 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -53,31 +179,68 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  
  	if (likely(rq->mpwqe.umr_mode == MLX5E_MPWRQ_UMR_MODE_ALIGNED)) {
  		for (i = 0; i < batch; i++) {
@@ -256,7 +258,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  
  			umr_wqe->inline_ksms[i << 2] = (struct mlx5_ksm) {
  				.key = rq->mkey_be,
-@@ -95,7 +258,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -95,7 +258,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  				.key = rq->mkey_be,
  				.va = cpu_to_be64(rq->wqe_overflow.addr),
  			};
@@ -266,7 +268,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  		}
  	} else {
  		__be32 pad_size = cpu_to_be32((1 << rq->mpwqe.page_shift) -
-@@ -103,8 +268,19 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -103,8 +268,19 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  		__be32 frame_size = cpu_to_be32(rq->xsk_pool->chunk_size);
  
  		for (i = 0; i < batch; i++) {
@@ -287,7 +289,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  
  			umr_wqe->inline_klms[i << 1] = (struct mlx5_klm) {
  				.key = rq->mkey_be,
-@@ -116,7 +292,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -116,7 +292,9 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  				.va = cpu_to_be64(rq->wqe_overflow.addr),
  				.bcount = pad_size,
  			};
@@ -297,7 +299,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  		}
  	}
  
-@@ -150,13 +328,20 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5
+@@ -150,13 +328,20 @@ int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix)
  
  err_reuse_batch:
  	while (--batch >= 0)
@@ -319,7 +321,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-@@ -194,7 +379,7 @@ int mlx5e_xsk_alloc_rx_wqes_batched(stru
+@@ -194,7 +379,7 @@ int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  
  	return alloc;
  }
@@ -328,7 +330,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  {
  	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-@@ -210,13 +395,43 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e
+@@ -210,13 +395,43 @@ int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk)
  		/* Assumes log_num_frags == 0. */
  		frag = &rq->wqe.frags[j];
  
@@ -342,6 +344,8 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
 +#endif
  		if (unlikely(!*frag->xskp))
  			return i;
+-
+-		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
 +#else /* HAVE_PAGE_POOL_DEFRAG_PAGE */
 +#ifdef HAVE_XSK_BUFF_ALLOC
 +		frag->au->xsk =
@@ -354,8 +358,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
 +			return i;
 +#endif
 +#endif /* HAVE_PAGE_POOL_DEFRAG_PAGE */
- 
--		addr = xsk_buff_xdp_get_frame_dma(*frag->xskp);
++
 +		addr =
 +#if defined(HAVE_PAGE_POOL_GET_DMA_ADDR) && defined(HAVE_XSK_BUFF_GET_FRAME_DMA)
 +				xsk_buff_xdp_get_frame_dma(
@@ -374,7 +377,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  	}
  
  	return wqe_bulk;
-@@ -244,6 +459,7 @@ static struct sk_buff *mlx5e_xsk_constru
+@@ -244,6 +459,7 @@ static struct sk_buff *mlx5e_xsk_construct_skb(struct mlx5e_rq *rq, struct xdp_b
  	return skb;
  }
  
@@ -382,7 +385,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  						    struct mlx5e_mpw_info *wi,
  						    struct mlx5_cqe64 *cqe,
-@@ -266,11 +482,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_m
+@@ -266,11 +482,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq,
  	 * head_offset should always be 0.
  	 */
  	WARN_ON_ONCE(head_offset);
@@ -400,7 +403,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  	net_prefetch(mxbuf->xdp.data);
  
  	/* Possible flows:
-@@ -315,11 +536,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -315,11 +536,16 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  	 * wi->offset should always be 0.
  	 */
  	WARN_ON_ONCE(wi->offset);
@@ -418,7 +421,7 @@ Change-Id: I0eff03bba44e660980686f3b47838bf71e4c3e57
  	net_prefetch(mxbuf->xdp.data);
  
  	prog = rcu_dereference(rq->xdp_prog);
-@@ -335,3 +561,205 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -335,3 +561,205 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  	 */
  	return mlx5e_xsk_construct_skb(rq, &mxbuf->xdp);
  }

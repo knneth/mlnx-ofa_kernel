@@ -6,6 +6,8 @@ Change-Id: Ib4cb9789a124419edc92267a67ebbd4e1a80aff2
  drivers/vfio/pci/mlx5/cmd.h | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/vfio/pci/mlx5/cmd.h b/drivers/vfio/pci/mlx5/cmd.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/vfio/pci/mlx5/cmd.h
 +++ b/drivers/vfio/pci/mlx5/cmd.h
 @@ -6,6 +6,7 @@
@@ -16,7 +18,7 @@ Change-Id: Ib4cb9789a124419edc92267a67ebbd4e1a80aff2
  #include <linux/kernel.h>
  #include <linux/vfio_pci_core.h>
  #include <linux/mlx5/driver.h>
-@@ -237,4 +238,5 @@ int mlx5vf_start_page_tracker(struct vfi
+@@ -237,4 +238,5 @@ int mlx5vf_start_page_tracker(struct vfio_device *vdev,
  int mlx5vf_stop_page_tracker(struct vfio_device *vdev);
  int mlx5vf_tracker_read_and_clear(struct vfio_device *vdev, unsigned long iova,
  			unsigned long length, struct iova_bitmap *dirty);

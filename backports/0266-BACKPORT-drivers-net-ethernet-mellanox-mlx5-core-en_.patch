@@ -7,6 +7,8 @@ Change-Id: Ic713f4a883caebbc41737edd7580005edaf3a223
  .../mellanox/mlx5/core/en_accel/ktls.h        | 35 ++++++++++++++++---
  1 file changed, 31 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls.h
 @@ -13,10 +13,16 @@
@@ -26,7 +28,7 @@ Change-Id: Ic713f4a883caebbc41737edd7580005edaf3a223
  
  static inline bool mlx5e_is_ktls_device(struct mlx5_core_dev *mdev)
  {
-@@ -41,16 +47,30 @@ static inline bool mlx5e_ktls_type_check
+@@ -41,16 +47,30 @@ static inline bool mlx5e_ktls_type_check(struct mlx5_core_dev *mdev,
  		if (crypto_info->version == TLS_1_2_VERSION)
  			return MLX5_CAP_TLS(mdev,  tls_1_2_aes_gcm_128);
  		break;
@@ -57,7 +59,7 @@ Change-Id: Ic713f4a883caebbc41737edd7580005edaf3a223
  int mlx5e_ktls_init_tx(struct mlx5e_priv *priv);
  void mlx5e_ktls_cleanup_tx(struct mlx5e_priv *priv);
  int mlx5e_ktls_init_rx(struct mlx5e_priv *priv);
-@@ -58,7 +78,12 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_
+@@ -58,7 +78,12 @@ void mlx5e_ktls_cleanup_rx(struct mlx5e_priv *priv);
  int mlx5e_ktls_set_feature_rx(struct net_device *netdev, bool enable);
  struct mlx5e_ktls_resync_resp *
  mlx5e_ktls_rx_resync_create_resp_list(void);
@@ -80,7 +82,7 @@ Change-Id: Ic713f4a883caebbc41737edd7580005edaf3a223
  	struct mlx5e_tls_debugfs debugfs;
  };
  
-@@ -103,16 +130,16 @@ static inline void mlx5e_ktls_build_netd
+@@ -103,16 +130,16 @@ static inline void mlx5e_ktls_build_netdev(struct mlx5e_priv *priv)
  {
  }
  

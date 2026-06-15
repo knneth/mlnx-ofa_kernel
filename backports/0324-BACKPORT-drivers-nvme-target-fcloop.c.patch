@@ -6,6 +6,8 @@ Change-Id: I0df1f66601895853dd098cdcf774ba69f2812c87
  drivers/nvme/target/fcloop.c | 39 ++++++++++++++++++++++++++++++++++--
  1 file changed, 37 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/target/fcloop.c b/drivers/nvme/target/fcloop.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/fcloop.c
 +++ b/drivers/nvme/target/fcloop.c
 @@ -2,6 +2,7 @@
@@ -16,7 +18,7 @@ Change-Id: I0df1f66601895853dd098cdcf774ba69f2812c87
  #ifdef pr_fmt
  #undef pr_fmt
  #endif
-@@ -1559,9 +1560,13 @@ static const struct attribute_group *fcl
+@@ -1559,9 +1560,13 @@ static const struct attribute_group *fcloop_dev_attr_groups[] = {
  	NULL,
  };
  

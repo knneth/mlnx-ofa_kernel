@@ -6,6 +6,8 @@ Change-Id: I33f5d82e8b98b48a56cfe3086dc5ee449b26a5da
  drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/rx.h
 @@ -4,10 +4,18 @@
@@ -27,7 +29,7 @@ Change-Id: I33f5d82e8b98b48a56cfe3086dc5ee449b26a5da
  int mlx5e_xsk_alloc_rx_mpwqe(struct mlx5e_rq *rq, u16 ix);
  int mlx5e_xsk_alloc_rx_wqes_batched(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
  int mlx5e_xsk_alloc_rx_wqes(struct mlx5e_rq *rq, u16 ix, int wqe_bulk);
-@@ -22,4 +30,5 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_l
+@@ -22,4 +30,5 @@ struct sk_buff *mlx5e_xsk_skb_from_cqe_linear(struct mlx5e_rq *rq,
  					      struct mlx5_cqe64 *cqe,
  					      u32 cqe_bcnt);
  

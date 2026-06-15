@@ -6,9 +6,11 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  net/mlxdevm/mlxdevm.c | 54 +++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 54 insertions(+)
 
+diff --git a/net/mlxdevm/mlxdevm.c b/net/mlxdevm/mlxdevm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/mlxdevm.c
 +++ b/net/mlxdevm/mlxdevm.c
-@@ -1502,7 +1502,11 @@ static int mlxdevm_nl_cmd_port_get_dumpi
+@@ -1445,7 +1445,11 @@ static int mlxdevm_nl_cmd_port_get_dumpit(struct sk_buff *msg,
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -20,7 +22,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->port_list_rwsem);
  				goto out;
-@@ -1847,7 +1851,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+@@ -1745,7 +1749,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -32,7 +34,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->rate_group_rwsem);
  				goto out;
-@@ -1869,7 +1877,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpi
+@@ -1767,7 +1775,11 @@ static int mlxdevm_nl_cmd_rate_get_dumpit(struct sk_buff *msg,
  						   NETLINK_CB(cb->skb).portid,
  						   cb->nlh->nlmsg_seq,
  						   NLM_F_MULTI,
@@ -44,7 +46,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  			if (err) {
  				up_read(&dev->port_list_rwsem);
  				goto out;
-@@ -2560,83 +2572,121 @@ static const struct nla_policy mlxdevm_n
+@@ -2372,83 +2384,121 @@ static const struct nla_policy mlxdevm_nl_policy[MLXDEVM_ATTR_MAX + 1] = {
  static const struct genl_ops mlxdevm_nl_ops[] = {
  	{
  		.cmd = MLXDEVM_CMD_DEV_GET,
@@ -166,7 +168,7 @@ Change-Id: I8f97a9c3252e0b7c81ff5c65c75c769f72acbbf9
  		.doit = mlxdevm_nl_cmd_rate_del_doit,
  		.flags = GENL_ADMIN_PERM,
  	},
-@@ -2646,13 +2696,17 @@ static struct genl_family mlxdevm_nl_fam
+@@ -2458,13 +2508,17 @@ static struct genl_family mlxdevm_nl_family __ro_after_init = {
  	.name = MLXDEVM_GENL_NAME,
  	.version = MLXDEVM_GENL_VERSION,
  	.maxattr = MLXDEVM_ATTR_MAX,

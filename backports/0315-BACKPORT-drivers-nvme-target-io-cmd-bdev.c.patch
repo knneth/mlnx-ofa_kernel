@@ -6,6 +6,8 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  drivers/nvme/target/io-cmd-bdev.c | 274 ++++++++++++++++++++++++++++--
  1 file changed, 261 insertions(+), 13 deletions(-)
 
+diff --git a/drivers/nvme/target/io-cmd-bdev.c b/drivers/nvme/target/io-cmd-bdev.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/io-cmd-bdev.c
 +++ b/drivers/nvme/target/io-cmd-bdev.c
 @@ -8,13 +8,18 @@
@@ -27,7 +29,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	/* Logical blocks per physical block, 0's based. */
  	const __le16 lpp0b = to0based(bdev_physical_block_size(bdev) /
  				      bdev_logical_block_size(bdev));
-@@ -43,8 +48,12 @@ void nvmet_bdev_set_limits(struct block_
+@@ -43,8 +48,12 @@ void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id)
  	/* NPWA = Namespace Preferred Write Alignment. 0's based */
  	id->npwa = id->npwg;
  	/* NPDG = Namespace Preferred Deallocate Granularity. 0's based */
@@ -40,7 +42,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	/* NPDG = Namespace Preferred Deallocate Alignment */
  	id->npda = id->npdg;
  	/* NOWS = Namespace Optimal Write Size */
-@@ -53,27 +62,63 @@ void nvmet_bdev_set_limits(struct block_
+@@ -53,27 +62,63 @@ void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id)
  
  void nvmet_bdev_ns_disable(struct nvmet_ns *ns)
  {
@@ -114,7 +116,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  }
  
  int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
-@@ -88,6 +133,7 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+@@ -88,6 +133,7 @@ int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
  	if (ns->buffered_io)
  		return -ENOTBLK;
  
@@ -122,7 +124,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	ns->bdev_file = bdev_file_open_by_path(ns->device_path,
  				BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
  	if (IS_ERR(ns->bdev_file)) {
-@@ -100,14 +146,60 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+@@ -100,14 +146,60 @@ int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
  		return ret;
  	}
  	ns->bdev = file_bdev(ns->bdev_file);
@@ -184,7 +186,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	if (bdev_is_zoned(ns->bdev)) {
  		if (!nvmet_bdev_zns_enable(ns)) {
  			nvmet_bdev_ns_disable(ns);
-@@ -115,13 +207,19 @@ int nvmet_bdev_ns_enable(struct nvmet_ns
+@@ -115,13 +207,19 @@ int nvmet_bdev_ns_enable(struct nvmet_ns *ns)
  		}
  		ns->csi = NVME_CSI_ZNS;
  	}
@@ -204,7 +206,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  }
  
  u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts)
-@@ -189,7 +287,8 @@ static void nvmet_bio_done(struct bio *b
+@@ -189,7 +287,8 @@ static void nvmet_bio_done(struct bio *bio)
  	nvmet_req_bio_put(req, bio);
  }
  
@@ -214,7 +216,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
  				struct sg_mapping_iter *miter)
  {
-@@ -204,13 +303,23 @@ static int nvmet_bdev_alloc_bip(struct n
+@@ -204,13 +303,23 @@ static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
  		return -ENODEV;
  	}
  
@@ -238,7 +240,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	/* virtual start sector must be in integrity interval units */
  	bip_set_seed(bip, bio->bi_iter.bi_sector >>
  		     (bi->interval_exp - SECTOR_SHIFT));
-@@ -244,13 +353,21 @@ static int nvmet_bdev_alloc_bip(struct n
+@@ -244,13 +353,21 @@ static int nvmet_bdev_alloc_bip(struct nvmet_req *req, struct bio *bio,
  
  static void nvmet_bdev_execute_rw(struct nvmet_req *req)
  {
@@ -260,7 +262,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	struct sg_mapping_iter prot_miter;
  	unsigned int iter_flags;
  	unsigned int total_len = nvmet_rw_data_len(req) + req->metadata_len;
-@@ -264,31 +381,85 @@ static void nvmet_bdev_execute_rw(struct
+@@ -264,31 +381,85 @@ static void nvmet_bdev_execute_rw(struct nvmet_req *req)
  	}
  
  	if (req->cmd->rw.opcode == nvme_cmd_write) {
@@ -346,7 +348,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  
  	blk_start_plug(&plug);
  	if (req->metadata_len)
-@@ -309,9 +480,32 @@ static void nvmet_bdev_execute_rw(struct
+@@ -309,9 +480,32 @@ static void nvmet_bdev_execute_rw(struct nvmet_req *req)
  				}
  			}
  
@@ -379,7 +381,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  
  			bio_chain(bio, prev);
  			submit_bio(prev);
-@@ -337,28 +531,60 @@ static void nvmet_bdev_execute_flush(str
+@@ -337,28 +531,60 @@ static void nvmet_bdev_execute_flush(struct nvmet_req *req)
  {
  	struct bio *bio = &req->b.inline_bio;
  
@@ -441,7 +443,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  		return NVME_SC_INTERNAL | NVME_SC_DNR;
  	return 0;
  }
-@@ -369,10 +595,24 @@ static u16 nvmet_bdev_discard_range(stru
+@@ -369,10 +595,24 @@ static u16 nvmet_bdev_discard_range(struct nvmet_req *req,
  	struct nvmet_ns *ns = req->ns;
  	int ret;
  
@@ -466,7 +468,7 @@ Change-Id: Ibf737b807ce1c81aae74a2afceb859684d8e8176
  	if (ret && ret != -EOPNOTSUPP) {
  		req->error_slba = le64_to_cpu(range->slba);
  		return errno_to_nvme_status(req, ret);
-@@ -443,8 +683,16 @@ static void nvmet_bdev_execute_write_zer
+@@ -443,8 +683,16 @@ static void nvmet_bdev_execute_write_zeroes(struct nvmet_req *req)
  	nr_sector = (((sector_t)le16_to_cpu(write_zeroes->length) + 1) <<
  		(req->ns->blksize_shift - 9));
  

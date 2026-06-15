@@ -6,6 +6,8 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  .../ethernet/mellanox/mlx5/core/lib/vxlan.c   | 98 +++++++++++++++++--
  1 file changed, 91 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/vxlan.c
 @@ -41,11 +41,17 @@ struct mlx5_vxlan {
@@ -26,7 +28,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  	u16 udp_port;
  };
  
-@@ -73,12 +79,13 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
+@@ -73,12 +79,13 @@ bool mlx5_vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 port)
  {
  	struct mlx5_vxlan_port *vxlanp;
  	bool found = false;
@@ -41,7 +43,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  		if (vxlanp->udp_port == port) {
  			found = true;
  			break;
-@@ -91,8 +98,9 @@ bool mlx5_vxlan_lookup_port(struct mlx5_
+@@ -91,8 +98,9 @@ bool mlx5_vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 port)
  static struct mlx5_vxlan_port *vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 port)
  {
  	struct mlx5_vxlan_port *vxlanp;
@@ -52,7 +54,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  		if (vxlanp->udp_port == port)
  			return vxlanp;
  	return NULL;
-@@ -101,24 +109,62 @@ static struct mlx5_vxlan_port *vxlan_loo
+@@ -101,24 +109,62 @@ static struct mlx5_vxlan_port *vxlan_lookup_port(struct mlx5_vxlan *vxlan, u16 p
  int mlx5_vxlan_add_port(struct mlx5_vxlan *vxlan, u16 port)
  {
  	struct mlx5_vxlan_port *vxlanp;
@@ -119,7 +121,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  }
  
  int mlx5_vxlan_del_port(struct mlx5_vxlan *vxlan, u16 port)
-@@ -129,15 +175,29 @@ int mlx5_vxlan_del_port(struct mlx5_vxla
+@@ -129,15 +175,29 @@ int mlx5_vxlan_del_port(struct mlx5_vxlan *vxlan, u16 port)
  	mutex_lock(&vxlan->sync_lock);
  
  	vxlanp = vxlan_lookup_port(vxlan, port);
@@ -149,7 +151,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  
  out_unlock:
  	mutex_unlock(&vxlan->sync_lock);
-@@ -165,6 +225,7 @@ struct mlx5_vxlan *mlx5_vxlan_create(str
+@@ -165,6 +225,7 @@ struct mlx5_vxlan *mlx5_vxlan_create(struct mlx5_core_dev *mdev)
  	return vxlan;
  }
  
@@ -157,7 +159,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  void mlx5_vxlan_destroy(struct mlx5_vxlan *vxlan)
  {
  	if (!mlx5_vxlan_allowed(vxlan))
-@@ -181,11 +242,12 @@ void mlx5_vxlan_reset_to_default(struct
+@@ -181,11 +242,12 @@ void mlx5_vxlan_reset_to_default(struct mlx5_vxlan *vxlan)
  	struct mlx5_vxlan_port *vxlanp;
  	struct hlist_node *tmp;
  	int bkt;
@@ -171,7 +173,7 @@ Change-Id: I9295ff10166d48cdd491712780549c3672d026b6
  		/* Don't delete default UDP port added by the HW.
  		 * Remove only user configured ports
  		 */
-@@ -194,3 +256,25 @@ void mlx5_vxlan_reset_to_default(struct
+@@ -194,3 +256,25 @@ void mlx5_vxlan_reset_to_default(struct mlx5_vxlan *vxlan)
  		mlx5_vxlan_del_port(vxlan, vxlanp->udp_port);
  	}
  }

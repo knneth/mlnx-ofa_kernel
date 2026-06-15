@@ -7,6 +7,8 @@ Change-Id: I02ad0020e73f2155c535bb2077660ed6d141c089
  .../mellanox/mlx5/core/steering/dr_icm_pool.c   | 17 +++++++++++++++++
  1 file changed, 17 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/dr_icm_pool.c
 @@ -3,6 +3,23 @@

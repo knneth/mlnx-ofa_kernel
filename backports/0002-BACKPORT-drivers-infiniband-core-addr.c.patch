@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
 
 Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
 ---
- drivers/infiniband/core/addr.c | 98 ++++++++++++++++++++++++++++++----
- 1 file changed, 89 insertions(+), 9 deletions(-)
+ drivers/infiniband/core/addr.c | 100 +++++++++++++++++++++++++++++----
+ 1 file changed, 90 insertions(+), 10 deletions(-)
 
+diff --git a/drivers/infiniband/core/addr.c b/drivers/infiniband/core/addr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
 @@ -41,7 +41,9 @@
@@ -43,7 +45,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  };
  
  static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
-@@ -87,9 +97,12 @@ static inline bool ib_nl_is_good_ip_resp
+@@ -87,9 +97,12 @@ static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
  
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return false;
@@ -58,7 +60,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  	if (ret)
  		return false;
  
-@@ -178,7 +191,11 @@ static int ib_nl_ip_send_msg(struct rdma
+@@ -178,7 +191,11 @@ static int ib_nl_ip_send_msg(struct rdma_dev_addr *dev_addr,
  	}
  
  	/* Construct the family header first */
@@ -71,7 +73,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  	header->ifindex = dev_addr->bound_dev_if;
  	nla_put(skb, attrtype, size, daddr);
  
-@@ -250,17 +267,26 @@ rdma_find_ndev_for_src_ip_rcu(struct net
+@@ -250,17 +267,26 @@ rdma_find_ndev_for_src_ip_rcu(struct net *net, const struct sockaddr *src_in)
  
  	switch (src_in->sa_family) {
  	case AF_INET:
@@ -99,7 +101,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  					  dev, 1)) {
  				ret = 0;
  				break;
-@@ -346,14 +372,24 @@ static int dst_fetch_ha(const struct dst
+@@ -346,14 +372,24 @@ static int dst_fetch_ha(const struct dst_entry *dst,
  	return ret;
  }
  
@@ -124,7 +126,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  	}
  
  	rt6 = container_of(dst, struct rt6_info, dst);
-@@ -374,8 +410,12 @@ static int fetch_ha(const struct dst_ent
+@@ -374,8 +410,12 @@ static int fetch_ha(const struct dst_entry *dst, struct rdma_dev_addr *dev_addr,
  
  	might_sleep();
  
@@ -137,7 +139,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  		return ib_nl_fetch_ha(dev_addr, daddr, seq, family);
  	else
  		return dst_fetch_ha(dst, dev_addr, daddr);
-@@ -405,6 +445,7 @@ static int addr4_resolve(struct sockaddr
+@@ -405,6 +445,7 @@ static int addr4_resolve(struct sockaddr *src_sock,
  	if (ret)
  		return ret;
  
@@ -145,7 +147,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  	src_in->sin_addr.s_addr = fl4.saddr;
  
  	addr->hoplimit = ip4_dst_hoplimit(&rt->dst);
-@@ -422,17 +463,38 @@ static int addr6_resolve(struct sockaddr
+@@ -422,17 +463,38 @@ static int addr6_resolve(struct sockaddr *src_sock,
  	struct sockaddr_in6 *src_in = (struct sockaddr_in6 *)src_sock;
  	const struct sockaddr_in6 *dst_in =
  				(const struct sockaddr_in6 *)dst_sock;
@@ -188,7 +190,7 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  
  	if (ipv6_addr_any(&src_in->sin6_addr))
  		src_in->sin6_addr = fl6.saddr;
-@@ -441,8 +503,13 @@ static int addr6_resolve(struct sockaddr
+@@ -441,8 +503,13 @@ static int addr6_resolve(struct sockaddr *src_sock,
  
  	*pdst = dst;
  	return 0;
@@ -203,7 +205,16 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
  static int addr6_resolve(struct sockaddr *src_sock,
  			 const struct sockaddr *dst_sock,
  			 struct rdma_dev_addr *addr,
-@@ -473,6 +540,15 @@ static int rdma_set_src_addr_rcu(struct
+@@ -450,7 +517,7 @@ static int addr6_resolve(struct sockaddr *src_sock,
+ {
+ 	return -EADDRNOTAVAIL;
+ }
+-#endif
++#endif /*IS_ENABLED(CONFIG_IPV6) */
+ 
+ static bool is_dst_local(const struct dst_entry *dst)
+ {
+@@ -483,6 +550,15 @@ static int rdma_set_src_addr_rcu(struct rdma_dev_addr *dev_addr,
  				 const struct dst_entry *dst)
  {
  	struct net_device *ndev = READ_ONCE(dst->dev);
@@ -217,9 +228,9 @@ Change-Id: I050eebe858a70503f4a2074c6e32e3080c32d65d
 +		(const void *)&dst_in6->sin6_addr;
 +#endif
  
- 	*ndev_flags = ndev->flags;
  	/* A physical device must be the RDMA device to use */
-@@ -499,7 +575,11 @@ static int rdma_set_src_addr_rcu(struct
+ 	if (is_dst_local(dst)) {
+@@ -508,7 +584,11 @@ static int rdma_set_src_addr_rcu(struct rdma_dev_addr *dev_addr,
  	 * we're definitely in RoCE v2 (as RoCE v1 isn't routable) set the
  	 * network type accordingly.
  	 */

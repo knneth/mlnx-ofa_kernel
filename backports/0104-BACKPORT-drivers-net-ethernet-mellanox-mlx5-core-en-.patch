@@ -7,9 +7,11 @@ Change-Id: I4f0cb666a0cc62541c89873a8400066882817646
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ptype.c
-@@ -10,6 +10,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+@@ -10,6 +10,7 @@ tc_act_parse_ptype(struct mlx5e_tc_act_parse_state *parse_state,
  		   struct mlx5e_priv *priv,
  		   struct mlx5_flow_attr *attr)
  {
@@ -17,7 +19,7 @@ Change-Id: I4f0cb666a0cc62541c89873a8400066882817646
  	struct netlink_ext_ack *extack = parse_state->extack;
  
  	if (act->ptype != PACKET_HOST) {
-@@ -19,6 +20,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_p
+@@ -19,6 +20,9 @@ tc_act_parse_ptype(struct mlx5e_tc_act_parse_state *parse_state,
  
  	parse_state->ptype_host = true;
  	return 0;

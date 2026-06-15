@@ -6,9 +6,11 @@ Change-Id: Ib6bc7eda1104c21e114b5f7315a3a84e9c19e197
  drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c | 10 +++++++---
  1 file changed, 7 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/rx_res.c
-@@ -564,9 +564,11 @@ void mlx5e_rx_res_channels_activate(stru
+@@ -564,9 +564,11 @@ void mlx5e_rx_res_channels_activate(struct mlx5e_rx_res *res, struct mlx5e_chann
  	for (ix = 0; ix < chs->num; ix++) {
  		u32 *vhca_id = get_vhca_ids(res, ix);
  
@@ -23,7 +25,7 @@ Change-Id: Ib6bc7eda1104c21e114b5f7315a3a84e9c19e197
  			mlx5e_channels_get_regular_rqn(chs, ix, &res->rss_rqns[ix], vhca_id);
  	}
  	res->rss_nch = chs->num;
-@@ -616,9 +618,11 @@ void mlx5e_rx_res_xsk_update(struct mlx5
+@@ -616,9 +618,11 @@ void mlx5e_rx_res_xsk_update(struct mlx5e_rx_res *res, struct mlx5e_channels *ch
  {
  	u32 *vhca_id = get_vhca_ids(res, ix);
  

@@ -455,7 +455,7 @@ m4trace:configure.ac:18: -1- AH_OUTPUT([SIZEOF_UNSIGNED_LONG_LONG], [/* The size
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14623: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14673: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX])
@@ -463,7 +463,7 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14623: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14673: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX_OBJ])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX_OBJ])
@@ -472,7 +472,7 @@ m4trace:configure.ac:33: -1- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 ../../lib/autoconf/general.m4:1492: AC_ARG_WITH is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14623: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14673: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([LINUX_CONFIG])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([LINUX_CONFIG])
@@ -480,7 +480,7 @@ m4trace:configure.ac:33: -1- m4_pattern_allow([^LINUX_CONFIG$])
 m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14623: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14673: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([CONFIG_INCLUDE])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([CONFIG_INCLUDE])
@@ -507,7 +507,7 @@ m4trace:configure.ac:33: -2- _m4_warn([obsolete], [The macro `AC_HELP_STRING' is
 You should run autoupdate.], [../../lib/autoconf/general.m4:207: AC_HELP_STRING is expanded from...
 aclocal.m4:1217: LB_LINUX_RELEASE is expanded from...
 aclocal.m4:1312: LB_LINUX_PATH is expanded from...
-aclocal.m4:14623: MLNX_PROG_LINUX is expanded from...
+aclocal.m4:14673: MLNX_PROG_LINUX is expanded from...
 configure.ac:33: the top level])
 m4trace:configure.ac:33: -1- AC_SUBST([RELEASE])
 m4trace:configure.ac:33: -1- AC_SUBST_TRACE([RELEASE])
@@ -531,6 +531,14 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_STRUCTS])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DPLL_STRUCTS$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_DPLL_STRUCTS], [/* have struct dpll_pin_ops */
 @%:@undef HAVE_DPLL_STRUCTS])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_DEVICE_PUT_TRACKER])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DPLL_DEVICE_PUT_TRACKER$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_DPLL_DEVICE_PUT_TRACKER], [/* dpll_device_put has tracker argument */
+@%:@undef HAVE_DPLL_DEVICE_PUT_TRACKER])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_DEVICE_PUT_TRACKER])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DPLL_DEVICE_PUT_TRACKER$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_DPLL_DEVICE_PUT_TRACKER], [/* dpll_device_put has tracker argument */
+@%:@undef HAVE_DPLL_DEVICE_PUT_TRACKER])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_PIN_OPS_HAS_FFO_GET])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_HAS_FFO_GET$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_DPLL_PIN_OPS_HAS_FFO_GET], [/* struct dpll_pin_ops has ffo_get */
@@ -2421,6 +2429,26 @@ m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_OFFLOAD_RX_RESYNC
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START], [/* net/tls.h has tls_offload_rx_resync_async_request_start */
 @%:@undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC], [/* tls_offload_rx_resync_async_request_start takes struct
+   tls_offload_resync_async * */
+@%:@undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC], [/* tls_offload_rx_resync_async_request_start takes struct
+   tls_offload_resync_async * */
+@%:@undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC], [/* tls_offload_rx_resync_async_request_end takes struct
+   tls_offload_resync_async * */
+@%:@undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC])
+m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC$])
+m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC], [/* tls_offload_rx_resync_async_request_end takes struct
+   tls_offload_resync_async * */
+@%:@undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC])
 m4trace:configure.ac:33: -1- AC_DEFINE_TRACE_LITERAL([HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES])
 m4trace:configure.ac:33: -1- m4_pattern_allow([^HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES$])
 m4trace:configure.ac:33: -1- AH_OUTPUT([HAVE_ETHTOOL_50G_PER_LANE_LINK_MODES], [/* ethtool supprts 50G-pre-lane link modes */

@@ -6,9 +6,11 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  drivers/infiniband/core/sysfs.c | 29 +++++++++++++++--------------
  1 file changed, 15 insertions(+), 14 deletions(-)
 
+diff --git a/drivers/infiniband/core/sysfs.c b/drivers/infiniband/core/sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/sysfs.c
 +++ b/drivers/infiniband/core/sysfs.c
-@@ -115,19 +115,6 @@ static ssize_t port_attr_show(struct kob
+@@ -115,19 +115,6 @@ static ssize_t port_attr_show(struct kobject *kobj,
  	return port_attr->show(p->ibdev, p->port_num, port_attr, buf);
  }
  
@@ -28,7 +30,7 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  struct ib_device *ib_port_sysfs_get_ibdev_kobj(struct kobject *kobj,
  					       u32 *port_num)
  {
-@@ -138,9 +125,12 @@ struct ib_device *ib_port_sysfs_get_ibde
+@@ -138,9 +125,12 @@ struct ib_device *ib_port_sysfs_get_ibdev_kobj(struct kobject *kobj,
  }
  EXPORT_SYMBOL(ib_port_sysfs_get_ibdev_kobj);
  
@@ -42,7 +44,7 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  };
  
  static ssize_t hw_stat_device_show(struct device *dev,
-@@ -206,7 +196,11 @@ static ssize_t gid_attr_show(struct kobj
+@@ -206,7 +196,11 @@ static ssize_t gid_attr_show(struct kobject *kobj,
  	return port_attr->show(p->ibdev, p->port_num, port_attr, buf);
  }
  
@@ -54,7 +56,7 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  	.show = gid_attr_show
  };
  
-@@ -455,7 +449,10 @@ static struct attribute *port_default_at
+@@ -455,7 +449,10 @@ static struct attribute *port_default_attrs[] = {
  	&ib_port_attr_link_layer.attr,
  	NULL
  };
@@ -65,7 +67,7 @@ Change-Id: I8d8892785f9d33eaad8a05a47c39a5f094f61ad6
  
  static ssize_t print_ndev(const struct ib_gid_attr *gid_attr, char *buf)
  {
-@@ -805,7 +802,11 @@ static void ib_port_gid_attr_release(str
+@@ -805,7 +802,11 @@ static void ib_port_gid_attr_release(struct kobject *kobj)
  static struct kobj_type port_type = {
  	.release       = ib_port_release,
  	.sysfs_ops     = &port_sysfs_ops,

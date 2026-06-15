@@ -6,6 +6,8 @@ Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
  include/linux/auxiliary_bus.h | 46 +++++++++++++++++++++++++++++++++++
  1 file changed, 46 insertions(+)
 
+diff --git a/include/linux/auxiliary_bus.h b/include/linux/auxiliary_bus.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/auxiliary_bus.h
 +++ b/include/linux/auxiliary_bus.h
 @@ -8,8 +8,11 @@
@@ -44,7 +46,7 @@ Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
  };
  
  /**
-@@ -213,10 +226,25 @@ int __auxiliary_device_add(struct auxili
+@@ -213,10 +226,25 @@ int __auxiliary_device_add(struct auxiliary_device *auxdev, const char *modname)
  #define auxiliary_device_add(auxdev) __auxiliary_device_add(auxdev, KBUILD_MODNAME)
  
  #ifdef CONFIG_SYSFS
@@ -70,7 +72,7 @@ Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
  static inline int
  mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  {
-@@ -226,9 +254,13 @@ mlx5_compat_sf_auxiliary_device_sysfs_ir
+@@ -226,9 +254,13 @@ mlx5_compat_sf_auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, i
  static inline void
  mlx5_compat_sf_auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
  #endif
@@ -84,7 +86,7 @@ Change-Id: I3921e10c82bf646d64821f93f0e1102a3120f8f2
  	put_device(&auxdev->dev);
  }
  
-@@ -259,8 +291,22 @@ void auxiliary_driver_unregister(struct
+@@ -259,8 +291,22 @@ void auxiliary_driver_unregister(struct auxiliary_driver *auxdrv);
  #define module_auxiliary_driver(__auxiliary_driver) \
  	module_driver(__auxiliary_driver, auxiliary_driver_register, auxiliary_driver_unregister)
  

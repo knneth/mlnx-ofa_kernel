@@ -6,9 +6,11 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  .../ethernet/mellanox/mlx5/core/fw_reset.c    | 135 ++++++++++++++++++
  1 file changed, 135 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw_reset.c
-@@ -30,8 +30,10 @@ struct mlx5_fw_reset {
+@@ -29,8 +29,10 @@ struct mlx5_fw_reset {
  	unsigned long reset_flags;
  	u8 reset_method;
  	struct timer_list timer;
@@ -19,7 +21,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  };
  
  enum {
-@@ -55,12 +57,22 @@ static void mlx5_set_fw_rst_ack(struct m
+@@ -54,12 +56,22 @@ static void mlx5_set_fw_rst_ack(struct mlx5_core_dev *dev)
  	iowrite32be(BIT(MLX5_RST_ACK_BIT_NUM), &dev->iseg->initializing);
  }
  
@@ -42,7 +44,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  	fw_reset = dev->priv.fw_reset;
  
  	if (ctx->val.vbool)
-@@ -76,12 +88,17 @@ static int mlx5_fw_reset_enable_remote_d
+@@ -75,12 +87,17 @@ static int mlx5_fw_reset_enable_remote_dev_reset_get(struct devlink *devlink, u3
  	struct mlx5_core_dev *dev = devlink_priv(devlink);
  	struct mlx5_fw_reset *fw_reset;
  
@@ -60,7 +62,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  
  static int mlx5_reg_mfrl_set(struct mlx5_core_dev *dev, u8 reset_level,
  			     u8 reset_type_sel, u8 sync_resp, bool sync_start)
-@@ -141,6 +158,7 @@ static int mlx5_fw_reset_get_request_inf
+@@ -140,6 +157,7 @@ static int mlx5_fw_reset_get_request_info(struct mlx5_core_dev *dev,
  	return mlx5_reg_mfrl_query(dev, NULL, NULL, NULL, reset_method, sync_flow);
  }
  
@@ -68,7 +70,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  static int mlx5_fw_reset_get_reset_state_err(struct mlx5_core_dev *dev,
  					     struct netlink_ext_ack *extack)
  {
-@@ -219,12 +237,14 @@ int mlx5_fw_reset_verify_fw_complete(str
+@@ -218,12 +236,14 @@ int mlx5_fw_reset_verify_fw_complete(struct mlx5_core_dev *dev,
  	NL_SET_ERR_MSG_MOD(extack, "Sync reset did not complete successfully");
  	return rst_state;
  }
@@ -83,7 +85,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  static void mlx5_fw_reset_complete_reload(struct mlx5_core_dev *dev, bool unloaded)
  {
  	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
-@@ -234,19 +254,26 @@ static void mlx5_fw_reset_complete_reloa
+@@ -233,19 +253,26 @@ static void mlx5_fw_reset_complete_reload(struct mlx5_core_dev *dev, bool unload
  	if (test_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP, &fw_reset->reset_flags)) {
  		complete(&fw_reset->done);
  	} else {
@@ -110,7 +112,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  
  static void mlx5_stop_sync_reset_poll(struct mlx5_core_dev *dev)
  {
-@@ -275,11 +302,32 @@ static void mlx5_sync_reset_reload_work(
+@@ -274,11 +301,32 @@ static void mlx5_sync_reset_reload_work(struct work_struct *work)
  	struct mlx5_fw_reset *fw_reset = container_of(work, struct mlx5_fw_reset,
  						      reset_reload_work);
  	struct mlx5_core_dev *dev = fw_reset->dev;
@@ -143,7 +145,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  }
  
  #define MLX5_RESET_POLL_INTERVAL	(HZ / 10)
-@@ -520,8 +568,16 @@ static int mlx5_pci_link_toggle(struct m
+@@ -514,8 +562,16 @@ static int mlx5_pci_link_toggle(struct mlx5_core_dev *dev, u16 dev_id)
  		return pcibios_err_to_errno(err);
  
  	/* Check link */
@@ -160,7 +162,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  		msleep(1000);
  		goto restore;
  	}
-@@ -667,9 +723,16 @@ static void mlx5_sync_reset_now_event(st
+@@ -661,9 +717,16 @@ static void mlx5_sync_reset_now_event(struct work_struct *work)
  	}
  
  	mlx5_enter_error_state(dev, true);
@@ -177,7 +179,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  }
  
  static void mlx5_sync_reset_unload_event(struct work_struct *work)
-@@ -696,9 +759,11 @@ static void mlx5_sync_reset_unload_event
+@@ -690,9 +753,11 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
  	else
  		mlx5_enter_error_state(dev, true);
  
@@ -189,7 +191,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  		mlx5_unload_one(dev, false);
  
  	mlx5_set_fw_rst_ack(dev);
-@@ -724,7 +789,9 @@ static void mlx5_sync_reset_unload_event
+@@ -718,7 +783,9 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
  	if (!reset_action) {
  		mlx5_core_err(dev, "Got timeout waiting for sync reset action, state = %u\n",
  			      rst_state);
@@ -199,7 +201,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  		goto done;
  	}
  
-@@ -733,12 +800,18 @@ static void mlx5_sync_reset_unload_event
+@@ -727,12 +794,18 @@ static void mlx5_sync_reset_unload_event(struct work_struct *work)
  		err = mlx5_sync_pci_reset(dev, fw_reset->reset_method);
  		if (err) {
  			mlx5_core_warn(dev, "mlx5_sync_pci_reset failed, err %d\n", err);
@@ -218,7 +220,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  }
  
  static void mlx5_sync_reset_abort_event(struct work_struct *work)
-@@ -811,6 +884,7 @@ static int fw_reset_event_notifier(struc
+@@ -805,6 +878,7 @@ static int fw_reset_event_notifier(struct notifier_block *nb, unsigned long acti
  	return NOTIFY_OK;
  }
  
@@ -226,7 +228,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  int mlx5_fw_reset_wait_reset_done(struct mlx5_core_dev *dev)
  {
  	unsigned long pci_sync_update_timeout = mlx5_tout_ms(dev, PCI_SYNC_UPDATE);
-@@ -829,13 +903,18 @@ int mlx5_fw_reset_wait_reset_done(struct
+@@ -823,13 +897,18 @@ int mlx5_fw_reset_wait_reset_done(struct mlx5_core_dev *dev)
  	}
  	err = fw_reset->ret;
  	if (test_and_clear_bit(MLX5_FW_RESET_FLAGS_RELOAD_REQUIRED, &fw_reset->reset_flags)) {
@@ -245,7 +247,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  
  void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
  {
-@@ -875,16 +954,48 @@ void mlx5_drain_fw_reset(struct mlx5_cor
+@@ -869,16 +948,48 @@ void mlx5_drain_fw_reset(struct mlx5_core_dev *dev)
  	cancel_delayed_work(&fw_reset->reset_timeout_work);
  }
  
@@ -294,7 +296,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  
  	if (!MLX5_CAP_MCAM_REG(dev, mfrl))
  		return 0;
-@@ -901,6 +1012,7 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -895,6 +1006,7 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
  	fw_reset->dev = dev;
  	dev->priv.fw_reset = fw_reset;
  
@@ -302,7 +304,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  	err = devl_params_register(priv_to_devlink(dev),
  				   mlx5_fw_reset_devlink_params,
  				   ARRAY_SIZE(mlx5_fw_reset_devlink_params));
-@@ -909,6 +1021,19 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -903,6 +1015,19 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
  		kfree(fw_reset);
  		return err;
  	}
@@ -322,7 +324,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  
  	INIT_WORK(&fw_reset->fw_live_patch_work, mlx5_fw_live_patch_event);
  	INIT_WORK(&fw_reset->reset_request_work, mlx5_sync_reset_request_event);
-@@ -918,7 +1043,9 @@ int mlx5_fw_reset_init(struct mlx5_core_
+@@ -912,7 +1037,9 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
  	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
  	INIT_DELAYED_WORK(&fw_reset->reset_timeout_work, mlx5_sync_reset_timeout_work);
  
@@ -332,7 +334,7 @@ Change-Id: If602dfea37251d304529f4e846974997b407697b
  	return 0;
  }
  
-@@ -929,9 +1056,17 @@ void mlx5_fw_reset_cleanup(struct mlx5_c
+@@ -923,9 +1050,17 @@ void mlx5_fw_reset_cleanup(struct mlx5_core_dev *dev)
  	if (!fw_reset)
  		return;
  

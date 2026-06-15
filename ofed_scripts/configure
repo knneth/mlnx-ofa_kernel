@@ -323,6 +323,13 @@ check_complex_defines()
 		unset_complex_define_to_config_h HAVE_BASECODE_EXTRAS
 	fi
 
+# Define HAVE_NATIVE_AUX if kernel has native auxiliary support
+	if check_inbox_auxiliary; then
+		set_complex_define_to_config_h HAVE_NATIVE_AUX
+	else
+		unset_complex_define_to_config_h HAVE_NATIVE_AUX
+	fi
+
 # Define HAVE_TC_SETUP_FLOW_ACTION from other flags
 	if check_compat_config_h_var HAVE_TC_SETUP_FLOW_ACTION_FUNC ||
 	   check_compat_config_h_var HAVE_TC_SETUP_OFFLOAD_ACTION_FUNC ||
@@ -365,6 +372,15 @@ check_complex_defines()
 		set_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
 	else
 		unset_complex_define_to_config_h HAVE_KTLS_RX_SUPPORT
+	fi
+
+# Define HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC from new helper signatures
+	if check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC &&
+	   check_compat_config_h_var HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC
+	then
+		set_complex_define_to_config_h HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC
+	else
+		unset_complex_define_to_config_h HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_FUNCS_TAKE_ASYNC
 	fi
 
 # Define HAVE_DEVLINK_PORT_ATRRS_SET_GET_SUPPORT from other flags

@@ -6,6 +6,8 @@ Change-Id: I8e55764c452cbc5e3295e6d1b705b5c50fd65165
  drivers/infiniband/core/ud_header.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/ud_header.c b/drivers/infiniband/core/ud_header.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/ud_header.c
 +++ b/drivers/infiniband/core/ud_header.c
 @@ -34,7 +34,7 @@

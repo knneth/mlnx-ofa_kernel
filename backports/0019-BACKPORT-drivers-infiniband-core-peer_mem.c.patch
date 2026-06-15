@@ -6,6 +6,8 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  drivers/infiniband/core/peer_mem.c | 230 +++++++++++++++++++++++++++++
  1 file changed, 230 insertions(+)
 
+diff --git a/drivers/infiniband/core/peer_mem.c b/drivers/infiniband/core/peer_mem.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/peer_mem.c
 +++ b/drivers/infiniband/core/peer_mem.c
 @@ -6,13 +6,139 @@
@@ -148,7 +150,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  static void ib_peer_memory_client_release(struct kobject *kobj)
  {
  	struct ib_peer_memory_client *ib_peer_client =
-@@ -22,6 +148,9 @@ static void ib_peer_memory_client_releas
+@@ -22,6 +148,9 @@ static void ib_peer_memory_client_release(struct kobject *kobj)
  }
  
  static struct kobj_type peer_mem_type = {
@@ -158,7 +160,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  	.release = ib_peer_memory_client_release,
  };
  
-@@ -58,6 +187,9 @@ ib_register_peer_memory_client(const str
+@@ -58,6 +187,9 @@ ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
  			       invalidate_peer_memory *invalidate_callback)
  {
  	struct ib_peer_memory_client *ib_peer_client;
@@ -168,7 +170,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  
  	if (ib_memory_peer_check_mandatory(peer_client))
  		return NULL;
-@@ -81,9 +213,37 @@ ib_register_peer_memory_client(const str
+@@ -81,9 +213,37 @@ ib_register_peer_memory_client(const struct peer_memory_client *peer_client,
  	}
  
  	mutex_lock(&peer_memory_mutex);
@@ -206,7 +208,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  }
  EXPORT_SYMBOL(ib_register_peer_memory_client);
  
-@@ -93,6 +253,12 @@ void ib_unregister_peer_memory_client(vo
+@@ -93,6 +253,12 @@ void ib_unregister_peer_memory_client(void *reg_handle)
  
  	mutex_lock(&peer_memory_mutex);
  	list_del(&ib_peer_client->core_peer_list);
@@ -219,7 +221,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  	mutex_unlock(&peer_memory_mutex);
  
  	/*
-@@ -179,21 +345,41 @@ static void ib_unmap_peer_client(struct
+@@ -179,21 +345,41 @@ static void ib_unmap_peer_client(struct ib_umem_peer *umem_p,
  		}
  
  		if (to_state == UMEM_PEER_UNMAPPED) {
@@ -261,7 +263,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  			     &ib_peer_client->stats.num_dereg_pages);
  		atomic64_add(umem->length,
  			     &ib_peer_client->stats.num_dereg_bytes);
-@@ -366,7 +552,11 @@ static void fix_peer_sgls(struct ib_umem
+@@ -366,7 +552,11 @@ static void fix_peer_sgls(struct ib_umem_peer *umem_p,
  	struct scatterlist *sg;
  	int i;
  
@@ -273,7 +275,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  		if (i == 0) {
  			unsigned long offset;
  
-@@ -382,7 +572,11 @@ static void fix_peer_sgls(struct ib_umem
+@@ -382,7 +572,11 @@ static void fix_peer_sgls(struct ib_umem_peer *umem_p,
  			sg->length -= offset;
  		}
  
@@ -285,7 +287,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  			unsigned long trim;
  
  			umem_p->last_sg = sg;
-@@ -421,7 +615,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -421,7 +615,11 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
  
  	kref_init(&umem_p->kref);
  	umem_p->umem = *old_umem;
@@ -297,7 +299,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  	umem_p->umem.is_peer = 1;
  	umem_p->ib_peer_client = ib_peer_client;
  	umem_p->peer_client_context = peer_client_context;
-@@ -453,10 +651,23 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -453,10 +651,23 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
  	if (ret)
  		goto err_xa;
  
@@ -321,7 +323,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  	if (ret)
  		goto err_pages;
  
-@@ -466,7 +677,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -466,7 +677,11 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
  		fix_peer_sgls(umem_p, peer_page_size);
  
  	umem_p->mapped_state = UMEM_PEER_MAPPED;
@@ -333,7 +335,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  	atomic64_add(umem_p->umem.length, &ib_peer_client->stats.num_reg_bytes);
  	atomic64_inc(&ib_peer_client->stats.num_alloc_mrs);
  
-@@ -487,7 +702,11 @@ struct ib_umem *ib_peer_umem_get(struct
+@@ -487,7 +702,11 @@ struct ib_umem *ib_peer_umem_get(struct ib_umem *old_umem, int old_ret,
  	return &umem_p->umem;
  
  err_pages:
@@ -345,7 +347,7 @@ Change-Id: Ieff72378f669a02d3f2d6ba61385f89be1a65acf
  					    umem_p->peer_client_context);
  err_xa:
  	if (umem_p->xa_id != PEER_NO_INVALIDATION_ID)
-@@ -520,7 +739,18 @@ void ib_peer_umem_release(struct ib_umem
+@@ -520,7 +739,18 @@ void ib_peer_umem_release(struct ib_umem *umem)
  	umem_p->ib_peer_client = NULL;
  
  	/* Must match ib_umem_release() */

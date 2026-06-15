@@ -3,12 +3,29 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/dpll.c
 
 Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
 ---
- .../net/ethernet/mellanox/mlx5/core/dpll.c    | 38 ++++++++++++++++++-
- 1 file changed, 36 insertions(+), 2 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/dpll.c    | 87 +++++++++++++++++--
+ 1 file changed, 79 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/dpll.c b/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/dpll.c
-@@ -40,9 +40,11 @@ struct mlx5_dpll_synce_status {
+@@ -9,7 +9,14 @@
+  */
+ struct mlx5_dpll {
+ 	struct dpll_device *dpll;
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): reference count tracking added */
++	dpll_tracker dpll_tracker;
++#endif
+ 	struct dpll_pin *dpll_pin;
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++	dpll_tracker pin_tracker;
++#endif
+ 	struct mlx5_core_dev *mdev;
+ 	struct workqueue_struct *wq;
+ 	struct delayed_work work;
+@@ -40,9 +47,11 @@ struct mlx5_dpll_synce_status {
  	enum mlx5_msees_admin_status admin_status;
  	enum mlx5_msees_oper_status oper_status;
  	bool ho_acq;
@@ -21,7 +38,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  };
  
  static int
-@@ -60,9 +62,11 @@ mlx5_dpll_synce_status_get(struct mlx5_c
+@@ -60,9 +69,11 @@ mlx5_dpll_synce_status_get(struct mlx5_core_dev *mdev,
  	synce_status->admin_status = MLX5_GET(msees_reg, out, admin_status);
  	synce_status->oper_status = MLX5_GET(msees_reg, out, oper_status);
  	synce_status->ho_acq = MLX5_GET(msees_reg, out, ho_acq);
@@ -34,7 +51,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  	return 0;
  }
  
-@@ -75,10 +79,14 @@ mlx5_dpll_synce_status_set(struct mlx5_c
+@@ -75,10 +86,14 @@ mlx5_dpll_synce_status_set(struct mlx5_core_dev *mdev,
  
  	MLX5_SET(msees_reg, in, field_select,
  		 MLX5_MSEES_FIELD_SELECT_ENABLE |
@@ -49,7 +66,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  	return mlx5_core_access_reg(mdev, in, sizeof(in), out, sizeof(out),
  				    MLX5_REG_MSEES, 0, 1);
  }
-@@ -101,6 +109,7 @@ mlx5_dpll_lock_status_get(struct mlx5_dp
+@@ -101,6 +116,7 @@ mlx5_dpll_lock_status_get(struct mlx5_dpll_synce_status *synce_status)
  	}
  }
  
@@ -57,7 +74,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  static enum dpll_lock_status_error
  mlx5_dpll_lock_status_error_get(struct mlx5_dpll_synce_status *synce_status)
  {
-@@ -120,6 +129,7 @@ mlx5_dpll_lock_status_error_get(struct m
+@@ -120,6 +136,7 @@ mlx5_dpll_lock_status_error_get(struct mlx5_dpll_synce_status *synce_status)
  		return DPLL_LOCK_STATUS_ERROR_NONE;
  	}
  }
@@ -65,7 +82,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  
  static enum dpll_pin_state
  mlx5_dpll_pin_state_get(struct mlx5_dpll_synce_status *synce_status)
-@@ -130,6 +140,7 @@ mlx5_dpll_pin_state_get(struct mlx5_dpll
+@@ -130,6 +147,7 @@ mlx5_dpll_pin_state_get(struct mlx5_dpll_synce_status *synce_status)
  	       DPLL_PIN_STATE_CONNECTED : DPLL_PIN_STATE_DISCONNECTED;
  }
  
@@ -73,7 +90,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  static int
  mlx5_dpll_pin_ffo_get(struct mlx5_dpll_synce_status *synce_status,
  		      s64 *ffo)
-@@ -139,12 +150,20 @@ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_s
+@@ -139,12 +157,20 @@ mlx5_dpll_pin_ffo_get(struct mlx5_dpll_synce_status *synce_status,
  	*ffo = synce_status->frequency_diff;
  	return 0;
  }
@@ -94,7 +111,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  {
  	struct mlx5_dpll_synce_status synce_status;
  	struct mlx5_dpll *mdpll = priv;
-@@ -154,7 +173,9 @@ mlx5_dpll_device_lock_status_get(const s
+@@ -154,7 +180,9 @@ mlx5_dpll_device_lock_status_get(const struct dpll_device *dpll, void *priv,
  	if (err)
  		return err;
  	*status = mlx5_dpll_lock_status_get(&synce_status);
@@ -104,7 +121,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  	return 0;
  }
  
-@@ -215,6 +236,7 @@ static int mlx5_dpll_state_on_dpll_set(c
+@@ -215,6 +243,7 @@ static int mlx5_dpll_state_on_dpll_set(const struct dpll_pin *pin,
  					  MLX5_MSEES_ADMIN_STATUS_FREE_RUNNING);
  }
  
@@ -112,7 +129,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  static int mlx5_dpll_ffo_get(const struct dpll_pin *pin, void *pin_priv,
  			     const struct dpll_device *dpll, void *dpll_priv,
  			     s64 *ffo, struct netlink_ext_ack *extack)
-@@ -228,12 +250,15 @@ static int mlx5_dpll_ffo_get(const struc
+@@ -228,12 +257,15 @@ static int mlx5_dpll_ffo_get(const struct dpll_pin *pin, void *pin_priv,
  		return err;
  	return mlx5_dpll_pin_ffo_get(&synce_status, ffo);
  }
@@ -128,7 +145,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  };
  
  static const struct dpll_pin_properties mlx5_dpll_pin_properties = {
-@@ -285,7 +310,12 @@ static void mlx5_dpll_netdev_dpll_pin_se
+@@ -285,7 +317,12 @@ static void mlx5_dpll_netdev_dpll_pin_set(struct mlx5_dpll *mdpll,
  {
  	if (mdpll->tracking_netdev)
  		return;
@@ -141,7 +158,7 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  	mdpll->tracking_netdev = netdev;
  }
  
-@@ -293,7 +323,11 @@ static void mlx5_dpll_netdev_dpll_pin_cl
+@@ -293,7 +330,11 @@ static void mlx5_dpll_netdev_dpll_pin_clear(struct mlx5_dpll *mdpll)
  {
  	if (!mdpll->tracking_netdev)
  		return;
@@ -153,3 +170,77 @@ Change-Id: Ied248da0e95ecd2d4d82568b94030157e9fd2234
  	mdpll->tracking_netdev = NULL;
  }
  
+@@ -357,7 +398,12 @@ static int mlx5_dpll_probe(struct auxiliary_device *adev,
+ 	auxiliary_set_drvdata(adev, mdpll);
+ 
+ 	/* Multiple mdev instances might share one DPLL device. */
+-	mdpll->dpll = dpll_device_get(clock_id, 0, THIS_MODULE);
++	mdpll->dpll = dpll_device_get(clock_id, 0, THIS_MODULE
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++				      , &mdpll->dpll_tracker
++#endif
++				      );
+ 	if (IS_ERR(mdpll->dpll)) {
+ 		err = PTR_ERR(mdpll->dpll);
+ 		goto err_free_mdpll;
+@@ -370,7 +416,12 @@ static int mlx5_dpll_probe(struct auxiliary_device *adev,
+ 
+ 	/* Multiple mdev instances might share one DPLL pin. */
+ 	mdpll->dpll_pin = dpll_pin_get(clock_id, mlx5_get_dev_index(mdev),
+-				       THIS_MODULE, &mlx5_dpll_pin_properties);
++				       THIS_MODULE, &mlx5_dpll_pin_properties
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++				       , &mdpll->pin_tracker
++#endif
++				       );
+ 	if (IS_ERR(mdpll->dpll_pin)) {
+ 		err = PTR_ERR(mdpll->dpll_pin);
+ 		goto err_unregister_dpll_device;
+@@ -398,11 +449,21 @@ err_unregister_dpll_pin:
+ 	dpll_pin_unregister(mdpll->dpll, mdpll->dpll_pin,
+ 			    &mlx5_dpll_pins_ops, mdpll);
+ err_put_dpll_pin:
+-	dpll_pin_put(mdpll->dpll_pin);
++	dpll_pin_put(mdpll->dpll_pin
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		     , &mdpll->pin_tracker
++#endif
++		     );
+ err_unregister_dpll_device:
+ 	dpll_device_unregister(mdpll->dpll, &mlx5_dpll_device_ops, mdpll);
+ err_put_dpll_device:
+-	dpll_device_put(mdpll->dpll);
++	dpll_device_put(mdpll->dpll
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		       , &mdpll->dpll_tracker
++#endif
++		       );
+ err_free_mdpll:
+ 	kfree(mdpll);
+ 	return err;
+@@ -418,9 +479,19 @@ static void mlx5_dpll_remove(struct auxiliary_device *adev)
+ 	destroy_workqueue(mdpll->wq);
+ 	dpll_pin_unregister(mdpll->dpll, mdpll->dpll_pin,
+ 			    &mlx5_dpll_pins_ops, mdpll);
+-	dpll_pin_put(mdpll->dpll_pin);
++	dpll_pin_put(mdpll->dpll_pin
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		     , &mdpll->pin_tracker
++#endif
++		     );
+ 	dpll_device_unregister(mdpll->dpll, &mlx5_dpll_device_ops, mdpll);
+-	dpll_device_put(mdpll->dpll);
++	dpll_device_put(mdpll->dpll
++#ifdef HAVE_DPLL_DEVICE_PUT_TRACKER
++/* Newer kernels (7.0+): tracker argument added */
++		       , &mdpll->dpll_tracker
++#endif
++		       );
+ 	kfree(mdpll);
+ 
+ 	mlx5_dpll_synce_status_set(mdev,

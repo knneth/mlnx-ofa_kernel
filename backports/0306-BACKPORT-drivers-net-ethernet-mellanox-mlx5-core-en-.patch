@@ -6,6 +6,8 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 398 ++++++++++++++++--
  1 file changed, 358 insertions(+), 40 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 @@ -30,12 +30,25 @@
@@ -35,7 +37,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk)
  {
-@@ -58,7 +71,11 @@ int mlx5e_xdp_max_mtu(struct mlx5e_param
+@@ -58,7 +71,11 @@ int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk)
  }
  
  static inline bool
@@ -48,7 +50,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		    struct xdp_buff *xdp)
  {
  	struct page *page = virt_to_page(xdp->data);
-@@ -68,15 +85,24 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -68,15 +85,24 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	dma_addr_t dma_addr;
  	int i;
  
@@ -73,7 +75,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  	if (xdp->rxq->mem.type == MEM_TYPE_XSK_BUFF_POOL) {
  		/* The xdp_buff was in the UMEM and was copied into a newly
  		 * allocated page. The UMEM page was returned via the ZCA, and
-@@ -115,6 +141,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -115,6 +141,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  				     (union mlx5e_xdp_info) { .frame.dma_addr = dma_addr });
  		return true;
  	}
@@ -81,7 +83,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	/* Driver assumes that xdp_convert_buff_to_frame returns an xdp_frame
  	 * that points to the same memory region as the original xdp_buff. It
-@@ -122,9 +149,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -122,9 +149,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	 * mode.
  	 */
  
@@ -100,7 +102,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  	if (xdptxd->has_frags) {
  		xdptxdf.sinfo = xdp_get_shared_info_from_frame(xdpf);
  		xdptxdf.dma_arr = NULL;
-@@ -141,6 +177,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -141,6 +177,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  						   DMA_BIDIRECTIONAL);
  		}
  	}
@@ -108,7 +110,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	xdptxd->dma_addr = dma_addr;
  
-@@ -152,29 +189,43 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -152,29 +189,43 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
  			     (union mlx5e_xdp_info) { .mode = MLX5E_XDP_XMIT_MODE_PAGE });
  
@@ -155,7 +157,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  static int mlx5e_xdp_rx_timestamp(const struct xdp_md *ctx, u64 *timestamp)
  {
  	const struct mlx5e_xdp_buff *_ctx = (void *)ctx;
-@@ -256,6 +307,7 @@ static int mlx5e_xdp_rx_hash(const struc
+@@ -256,6 +307,7 @@ static int mlx5e_xdp_rx_hash(const struct xdp_md *ctx, u32 *hash,
  	return 0;
  }
  
@@ -163,7 +165,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  static int mlx5e_xdp_rx_vlan_tag(const struct xdp_md *ctx, __be16 *vlan_proto,
  				 u16 *vlan_tci)
  {
-@@ -269,13 +321,17 @@ static int mlx5e_xdp_rx_vlan_tag(const s
+@@ -269,13 +321,17 @@ static int mlx5e_xdp_rx_vlan_tag(const struct xdp_md *ctx, __be16 *vlan_proto,
  	*vlan_tci = be16_to_cpu(cqe->vlan_info);
  	return 0;
  }
@@ -181,7 +183,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  struct mlx5e_xsk_tx_complete {
  	struct mlx5_cqe64 *cqe;
  	struct mlx5e_cq *cq;
-@@ -306,24 +362,55 @@ const struct xsk_tx_metadata_ops mlx5e_x
+@@ -306,24 +362,127 @@ const struct xsk_tx_metadata_ops mlx5e_xsk_tx_metadata_ops = {
  	.tmo_fill_timestamp		= mlx5e_xsk_fill_timestamp,
  	.tmo_request_checksum		= mlx5e_xsk_request_checksum,
  };
@@ -230,17 +232,17 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
 +#else
 +		if (unlikely(!mlx5e_xmit_xdp_buff(rq->xdpsq, rq, au, xdp)))
 +#endif
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
- 		return true;
++			goto xdp_abort;
++		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
++		return true;
 +#ifdef HAVE_XDP_SUPPORT
- 	case XDP_REDIRECT:
- 		/* When XDP enabled then page-refcnt==1 here */
- 		err = xdp_do_redirect(rq->netdev, xdp, prog);
-@@ -331,21 +418,109 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
- 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
++	case XDP_REDIRECT:
++		/* When XDP enabled then page-refcnt==1 here */
++		err = xdp_do_redirect(rq->netdev, xdp, prog);
++		if (unlikely(err))
++			goto xdp_abort;
++		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
++		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
 +#ifndef HAVE_PAGE_POOL_DEFRAG_PAGE
 +		if (au && xdp->rxq->mem.type != MEM_TYPE_XSK_BUFF_POOL) {
 +#ifdef HAVE_PAGE_DMA_ADDR
@@ -250,28 +252,28 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
 +#endif
 +	}
 +#endif
- 		rq->stats->xdp_redirect++;
- 		return true;
++		rq->stats->xdp_redirect++;
++		return true;
 +#endif
- 	default:
++	default:
 +#ifdef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
- 		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
++		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
 +#else
 +		bpf_warn_invalid_xdp_action(act);
 +#endif
- 		fallthrough;
- 	case XDP_ABORTED:
- xdp_abort:
++		fallthrough;
++	case XDP_ABORTED:
++xdp_abort:
 +#if !defined(MLX_DISABLE_TRACEPOINTS)
- 		trace_xdp_exception(rq->netdev, prog, act);
- 		fallthrough;
++		trace_xdp_exception(rq->netdev, prog, act);
++		fallthrough;
 +#endif
- 	case XDP_DROP:
- 		rq->stats->xdp_drop++;
- 		return true;
- 	}
- }
- 
++	case XDP_DROP:
++		rq->stats->xdp_drop++;
++		return true;
++	}
++}
++
 +#ifndef HAVE_XSK_BUFF_ALLOC
 +bool mlx5e_xdp_handle_old(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
 +		      struct bpf_prog *prog, struct xdp_buff *xdp)
@@ -302,17 +304,17 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
 +		return false;
 +	case XDP_TX:
 +		if (unlikely(!mlx5e_xmit_xdp_buff(rq->xdpsq, rq, au, xdp)))
-+			goto xdp_abort;
-+		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
-+		return true;
+ 			goto xdp_abort;
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
+ 		return true;
 +#ifdef HAVE_XDP_SUPPORT
-+	case XDP_REDIRECT:
-+		/* When XDP enabled then page-refcnt==1 here */
-+		err = xdp_do_redirect(rq->netdev, xdp, prog);
-+		if (unlikely(err))
-+			goto xdp_abort;
-+		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
-+		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
+ 	case XDP_REDIRECT:
+ 		/* When XDP enabled then page-refcnt==1 here */
+ 		err = xdp_do_redirect(rq->netdev, xdp, prog);
+@@ -331,20 +490,36 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
+ 			goto xdp_abort;
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
 +#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
 +		if (xdp->rxq->mem.type != MEM_TYPE_XSK_BUFF_POOL)
 +#endif
@@ -321,33 +323,32 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
 +#else
 +			mlx5e_page_dma_unmap(rq, au);
 +#endif
-+		rq->stats->xdp_redirect++;
-+		return true;
+ 		rq->stats->xdp_redirect++;
+ 		return true;
 +#endif
-+	default:
+ 	default:
 +#ifdef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
-+		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
+ 		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
 +#else
 +		bpf_warn_invalid_xdp_action(act);
 +#endif
-+		fallthrough;
-+	case XDP_ABORTED:
-+xdp_abort:
+ 		fallthrough;
+ 	case XDP_ABORTED:
+ xdp_abort:
 +#if !defined(MLX_DISABLE_TRACEPOINTS)
-+		trace_xdp_exception(rq->netdev, prog, act);
-+		fallthrough;
+ 		trace_xdp_exception(rq->netdev, prog, act);
+ 		fallthrough;
 +#endif
-+	case XDP_DROP:
-+		rq->stats->xdp_drop++;
-+		return true;
-+	}
-+}
+ 	case XDP_DROP:
+ 		rq->stats->xdp_drop++;
+ 		return true;
+ 	}
+ }
 +#endif
-+
+ 
  static u16 mlx5e_xdpsq_get_next_pi(struct mlx5e_xdpsq *sq, u16 size)
  {
- 	struct mlx5_wq_cyc *wq = &sq->wq;
-@@ -458,6 +633,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+@@ -458,6 +633,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  	struct mlx5e_tx_mpwqe *session = &sq->mpwqe;
  	struct mlx5e_xdpsq_stats *stats = sq->stats;
  	struct mlx5e_xmit_data *p = xdptxd;
@@ -355,7 +356,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  	struct mlx5e_xmit_data tmp;
  
  	if (xdptxd->has_frags) {
-@@ -484,6 +660,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+@@ -484,6 +660,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  			p = &tmp;
  		}
  	}
@@ -363,7 +364,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	if (unlikely(p->len > sq->hw_mtu)) {
  		stats->err++;
-@@ -501,7 +678,9 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+@@ -501,7 +678,9 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  		 * and it's safe to complete it at any time.
  		 */
  		mlx5e_xdp_mpwqe_session_start(sq);
@@ -430,7 +431,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  	if (sq->min_inline_mode != MLX5_INLINE_MODE_NONE)
  		inline_hdr_sz = MLX5E_XDP_MIN_INLINE;
  
-@@ -586,9 +784,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -586,9 +784,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  
  		check_result = mlx5e_xmit_xdp_frame_check_stop_room(sq, stop_room);
  	}
@@ -446,7 +447,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  	pi = mlx5e_xdpsq_get_next_pi(sq, num_wqebbs);
  	wqe = mlx5_wq_cyc_get_wqe(wq, pi);
  	net_prefetchw(wqe);
-@@ -596,6 +800,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -596,6 +800,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  	cseg = &wqe->ctrl;
  	eseg = &wqe->eth;
  	dseg = wqe->data;
@@ -456,7 +457,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	/* copy the inline part if required */
  	if (inline_hdr_sz) {
-@@ -605,29 +812,41 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -605,29 +812,41 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  		dma_len  -= inline_hdr_sz;
  		dma_addr += inline_hdr_sz;
  		dseg++;
@@ -499,7 +500,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		for (i = 0; i < num_frags; i++) {
  			skb_frag_t *frag = &xdptxdf->sinfo->frags[i];
  			dma_addr_t addr;
-@@ -641,8 +860,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -641,8 +860,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  			dseg->lkey = sq->mkey_be;
  			dseg++;
  		}
@@ -512,7 +513,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  		sq->db.wqe_info[pi] = (struct mlx5e_xdp_wqe_info) {
  			.num_wqebbs = num_wqebbs,
-@@ -656,7 +879,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -656,7 +879,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  		sq->pc++;
  	}
  
@@ -522,7 +523,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	sq->doorbell_cseg = cseg;
  
-@@ -665,10 +890,17 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -665,10 +890,17 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  }
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
@@ -544,7 +545,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  				  struct mlx5_cqe64 *cqe)
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
-@@ -690,6 +922,7 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -690,6 +922,7 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  			dma_unmap_single(sq->pdev, dma_addr,
  					 xdpf->len, DMA_TO_DEVICE);
@@ -552,7 +553,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  			if (xdp_frame_has_frags(xdpf)) {
  				struct skb_shared_info *sinfo;
  				int j;
-@@ -705,32 +938,47 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -705,32 +938,47 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  							 skb_frag_size(frag), DMA_TO_DEVICE);
  				}
  			}
@@ -604,7 +605,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  			struct xsk_tx_metadata_compl *compl = NULL;
  			struct mlx5e_xsk_tx_complete priv = {
  				.cqe = cqe,
-@@ -743,10 +991,12 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -743,10 +991,12 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  				xsk_tx_metadata_complete(compl, &mlx5e_xsk_tx_metadata_ops, &priv);
  			}
@@ -617,7 +618,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -755,14 +1005,20 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -755,14 +1005,20 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  {
@@ -638,7 +639,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	sq = container_of(cq, struct mlx5e_xdpsq, cq);
  
-@@ -795,7 +1051,17 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -795,7 +1051,17 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  
  			sqcc += wi->num_wqebbs;
  
@@ -657,7 +658,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -808,10 +1074,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -808,10 +1074,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
  
@@ -676,7 +677,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	sq->stats->cqes += i;
  
-@@ -826,12 +1100,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -826,12 +1100,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -695,7 +696,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -842,14 +1122,58 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -842,14 +1122,58 @@ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  
  		sq->cc += wi->num_wqebbs;
  
@@ -755,7 +756,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  }
  
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
-@@ -878,20 +1202,27 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -878,20 +1202,27 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  	for (i = 0; i < n; i++) {
  		struct mlx5e_xmit_data_frags xdptxdf = {};
  		struct xdp_frame *xdpf = frames[i];
@@ -783,7 +784,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		if (xdptxd->has_frags) {
  			int j;
  
-@@ -913,20 +1244,25 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -913,20 +1244,25 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  				goto out;
  			}
  		}
@@ -809,7 +810,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  			break;
  		}
  
-@@ -937,6 +1273,7 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -937,6 +1273,7 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  				     (union mlx5e_xdp_info) { .frame.xdpf = xdpf });
  		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
  				     (union mlx5e_xdp_info) { .frame.dma_addr = xdptxd->dma_addr });
@@ -817,7 +818,7 @@ Change-Id: I7800d19e3f94ad95651f73af96f0abacfe1b99ad
  		if (xdptxd->has_frags) {
  			int j;
  
-@@ -945,10 +1282,12 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -945,10 +1282,12 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  						     (union mlx5e_xdp_info)
  						     { .frame.dma_addr = dma_arr[j] });
  		}

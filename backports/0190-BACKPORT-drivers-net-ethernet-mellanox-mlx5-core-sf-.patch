@@ -7,9 +7,11 @@ Change-Id: I5ffb1e21843dfe1fef6ca86900a1e3d38a7fe0e5
  .../ethernet/mellanox/mlx5/core/sf/hw_table.c | 20 +++++++++++++++++--
  1 file changed, 18 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/hw_table.c
-@@ -246,7 +246,13 @@ static void mlx5_sf_hw_table_hwc_cleanup
+@@ -246,7 +246,13 @@ static void mlx5_sf_hw_table_hwc_cleanup(struct mlx5_sf_hwc_table *hwc)
  
  static void mlx5_sf_hw_table_res_unregister(struct mlx5_core_dev *dev)
  {
@@ -23,7 +25,7 @@ Change-Id: I5ffb1e21843dfe1fef6ca86900a1e3d38a7fe0e5
  }
  
  static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
-@@ -258,16 +264,27 @@ static int mlx5_sf_hw_table_res_register
+@@ -258,16 +264,27 @@ static int mlx5_sf_hw_table_res_register(struct mlx5_core_dev *dev, u16 max_fn,
  
  	devlink_resource_size_params_init(&size_params, max_fn, max_fn, 1,
  					  DEVLINK_RESOURCE_UNIT_ENTRY);
@@ -51,7 +53,7 @@ Change-Id: I5ffb1e21843dfe1fef6ca86900a1e3d38a7fe0e5
  }
  
  int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
-@@ -287,10 +304,8 @@ int mlx5_sf_hw_table_init(struct mlx5_co
+@@ -287,10 +304,8 @@ int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
  	err = mlx5_esw_sf_max_hpf_functions(dev, &max_ext_fn, &ext_base_id);
  	if (err)
  		return err;
@@ -62,7 +64,7 @@ Change-Id: I5ffb1e21843dfe1fef6ca86900a1e3d38a7fe0e5
  	if (!max_fn && !max_ext_fn)
  		return 0;
  
-@@ -340,6 +355,7 @@ void mlx5_sf_hw_table_cleanup(struct mlx
+@@ -340,6 +355,7 @@ void mlx5_sf_hw_table_cleanup(struct mlx5_core_dev *dev)
  	kfree(table);
  res_unregister:
  	mlx5_sf_hw_table_res_unregister(dev);

@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/svc_rdma_pcl.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_pcl.c b/net/sunrpc/xprtrdma/svc_rdma_pcl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_pcl.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_pcl.c
 @@ -3,11 +3,14 @@
@@ -24,7 +26,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  /**
   * pcl_free - Release all memory associated with a parsed chunk list
-@@ -76,7 +79,9 @@ static void pcl_set_read_segment(const s
+@@ -76,7 +79,9 @@ static void pcl_set_read_segment(const struct svc_rdma_recv_ctxt *rctxt,
  	segment->rs_length = length;
  	segment->rs_offset = offset;
  
@@ -34,7 +36,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  	chunk->ch_length += length;
  	chunk->ch_segcount++;
-@@ -220,7 +225,9 @@ bool pcl_alloc_write(struct svc_rdma_rec
+@@ -220,7 +225,9 @@ bool pcl_alloc_write(struct svc_rdma_recv_ctxt *rctxt,
  			p = xdr_decode_rdma_segment(p, &segment->rs_handle,
  						    &segment->rs_length,
  						    &segment->rs_offset);
@@ -44,7 +46,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  			chunk->ch_length += segment->rs_length;
  			chunk->ch_segcount++;
-@@ -238,7 +245,11 @@ static int pcl_process_region(const stru
+@@ -238,7 +245,11 @@ static int pcl_process_region(const struct xdr_buf *xdr,
  
  	if (!length)
  		return 0;
@@ -56,7 +58,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		return -EMSGSIZE;
  	return actor(&subbuf, data);
  }
-@@ -304,3 +315,4 @@ int pcl_process_nonpayloads(const struct
+@@ -304,3 +315,4 @@ int pcl_process_nonpayloads(const struct svc_rdma_pcl *pcl,
  
  	return 0;
  }

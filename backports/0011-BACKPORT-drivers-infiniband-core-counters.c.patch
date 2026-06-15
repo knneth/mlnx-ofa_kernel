@@ -6,9 +6,11 @@ Change-Id: Ibae19ce51b4239edf6f89db200aae66e7ce68555
  drivers/infiniband/core/counters.c | 5 ++---
  1 file changed, 2 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/counters.c b/drivers/infiniband/core/counters.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/counters.c
 +++ b/drivers/infiniband/core/counters.c
-@@ -40,8 +40,8 @@ static int __counter_set_mode(struct rdm
+@@ -40,8 +40,8 @@ static int __counter_set_mode(struct rdma_port_counter *port_counter,
   *
   */
  int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
@@ -19,7 +21,7 @@ Change-Id: Ibae19ce51b4239edf6f89db200aae66e7ce68555
  {
  	struct rdma_port_counter *port_counter;
  	enum rdma_nl_counter_mode mode;
-@@ -63,7 +63,6 @@ int rdma_counter_set_auto_mode(struct ib
+@@ -63,7 +63,6 @@ int rdma_counter_set_auto_mode(struct ib_device *dev, u32 port,
  		ret = 0;
  		goto out;
  	}

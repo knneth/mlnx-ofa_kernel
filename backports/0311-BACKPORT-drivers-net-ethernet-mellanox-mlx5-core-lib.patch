@@ -6,9 +6,11 @@ Change-Id: Ic717c4cbae97a9093b29ada43f7ab3f29a3d8c2b
  drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/sd.c
-@@ -445,7 +445,11 @@ int mlx5_sd_init(struct mlx5_core_dev *d
+@@ -438,7 +438,11 @@ int mlx5_sd_init(struct mlx5_core_dev *dev)
  	primary = mlx5_sd_get_primary(dev);
  
  	for (i = 0; i < ACCESS_KEY_LEN; i++)

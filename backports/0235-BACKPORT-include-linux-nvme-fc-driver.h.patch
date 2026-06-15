@@ -6,6 +6,8 @@ Change-Id: If5a14d9cf17518046fb201c7720396abe2352590
  include/linux/nvme-fc-driver.h | 11 +++++++++++
  1 file changed, 11 insertions(+)
 
+diff --git a/include/linux/nvme-fc-driver.h b/include/linux/nvme-fc-driver.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/nvme-fc-driver.h
 +++ b/include/linux/nvme-fc-driver.h
 @@ -6,6 +6,8 @@

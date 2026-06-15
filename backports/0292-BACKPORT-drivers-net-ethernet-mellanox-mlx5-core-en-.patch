@@ -7,6 +7,8 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  .../mellanox/mlx5/core/en/xsk/setup.c         | 34 +++++++++++++++++--
  1 file changed, 32 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/setup.c
 @@ -1,11 +1,14 @@
@@ -24,7 +26,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  
  static int mlx5e_legacy_rq_validate_xsk(struct mlx5_core_dev *mdev,
  					struct mlx5e_params *params,
-@@ -22,7 +25,11 @@ static int mlx5e_legacy_rq_validate_xsk(
+@@ -22,7 +25,11 @@ static int mlx5e_legacy_rq_validate_xsk(struct mlx5_core_dev *mdev,
  /* The limitation of 2048 can be altered, but shouldn't go beyond the minimal
   * stride size of striding RQ.
   */
@@ -36,7 +38,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  
  bool mlx5e_validate_xsk_param(struct mlx5e_params *params,
  			      struct mlx5e_xsk_param *xsk,
-@@ -59,7 +66,11 @@ static void mlx5e_build_xsk_cparam(struc
+@@ -57,7 +64,11 @@ static void mlx5e_build_xsk_cparam(struct mlx5_core_dev *mdev,
  
  static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
  			     struct mlx5e_params *params,
@@ -48,7 +50,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  			     struct mlx5e_xsk_param *xsk,
  			     struct mlx5e_rq *rq)
  {
-@@ -79,7 +90,11 @@ static int mlx5e_init_xsk_rq(struct mlx5
+@@ -77,7 +88,11 @@ static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
  	rq->mdev         = mdev;
  	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
  	rq->xdpsq        = &c->rq_xdpsq;
@@ -60,7 +62,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  	rq->stats        = &c->priv->channel_stats[c->ix]->xskrq;
  	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
  	rq_xdp_ix        = c->ix;
-@@ -87,11 +102,20 @@ static int mlx5e_init_xsk_rq(struct mlx5
+@@ -85,11 +100,20 @@ static int mlx5e_init_xsk_rq(struct mlx5e_channel *c,
  	if (err)
  		return err;
  
@@ -82,7 +84,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  			     struct mlx5e_create_cq_param *ccp, struct mlx5e_xsk_param *xsk)
  {
  	u16 q_counter = c->priv->q_counter[c->sd_ix];
-@@ -111,7 +135,12 @@ static int mlx5e_open_xsk_rq(struct mlx5
+@@ -109,7 +133,12 @@ static int mlx5e_open_xsk_rq(struct mlx5e_channel *c, struct mlx5e_params *param
  }
  
  int mlx5e_open_xsk(struct mlx5e_priv *priv, struct mlx5e_params *params,
@@ -96,7 +98,7 @@ Change-Id: I6ed79d9b6794878086b00ab149c24c77f5119dfd
  		   struct mlx5e_channel *c)
  {
  	struct mlx5e_channel_param *cparam;
-@@ -202,3 +231,4 @@ void mlx5e_deactivate_xsk(struct mlx5e_c
+@@ -200,3 +229,4 @@ void mlx5e_deactivate_xsk(struct mlx5e_channel *c)
  
  	/* TX queue is disabled on close. */
  }

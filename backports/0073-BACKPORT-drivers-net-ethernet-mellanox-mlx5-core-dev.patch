@@ -6,6 +6,8 @@ Change-Id: Iab157991316475268048477f6cd2bcf98b941043
  .../net/ethernet/mellanox/mlx5/core/devlink.h | 29 +++++++++++++++++++
  1 file changed, 29 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/devlink.h
 @@ -25,6 +25,9 @@ enum mlx5_devlink_param_id {
@@ -26,7 +28,7 @@ Change-Id: Iab157991316475268048477f6cd2bcf98b941043
  struct mlx5_core_dev;
  void mlx5_devlink_trap_report(struct mlx5_core_dev *dev, int trap_id, struct sk_buff *skb,
  			      struct devlink_port *dl_port);
-@@ -51,32 +55,57 @@ int mlx5_devlink_traps_get_action(struct
+@@ -51,32 +55,57 @@ int mlx5_devlink_traps_get_action(struct mlx5_core_dev *dev, int trap_id,
  				  enum devlink_trap_action *action);
  int mlx5_devlink_traps_register(struct devlink *devlink);
  void mlx5_devlink_traps_unregister(struct devlink *devlink);

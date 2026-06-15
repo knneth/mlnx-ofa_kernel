@@ -6,9 +6,11 @@ Change-Id: Ifd32cb89048b584d19736829355d1dcc70b916a0
  drivers/nvme/target/discovery.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/target/discovery.c b/drivers/nvme/target/discovery.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/discovery.c
 +++ b/drivers/nvme/target/discovery.c
-@@ -253,6 +253,7 @@ static void nvmet_execute_disc_identify(
+@@ -253,6 +253,7 @@ static void nvmet_execute_disc_identify(struct nvmet_req *req)
  	struct nvmet_ctrl *ctrl = req->sq->ctrl;
  	struct nvme_id_ctrl *id;
  	u16 status = 0;
@@ -16,7 +18,7 @@ Change-Id: Ifd32cb89048b584d19736829355d1dcc70b916a0
  
  	if (!nvmet_check_transfer_len(req, NVME_IDENTIFY_DATA_SIZE))
  		return;
-@@ -295,7 +296,7 @@ static void nvmet_execute_disc_identify(
+@@ -295,7 +296,7 @@ static void nvmet_execute_disc_identify(struct nvmet_req *req)
  
  	id->oaes = cpu_to_le32(NVMET_DISC_AEN_CFG_OPTIONAL);
  

@@ -6,9 +6,11 @@ Change-Id: I17bd1a2dfb074f55f03bdf8307b9b7429a5e8990
  drivers/infiniband/core/uverbs_ioctl.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/uverbs_ioctl.c b/drivers/infiniband/core/uverbs_ioctl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_ioctl.c
 +++ b/drivers/infiniband/core/uverbs_ioctl.c
-@@ -131,7 +131,11 @@ __malloc void *_uverbs_alloc(struct uver
+@@ -131,7 +131,11 @@ __malloc void *_uverbs_alloc(struct uverbs_attr_bundle *bundle, size_t size,
  	res = (void *)pbundle->internal_buffer + pbundle->internal_used;
  	pbundle->internal_used =
  		ALIGN(new_used, sizeof(*pbundle->internal_buffer));
@@ -20,7 +22,7 @@ Change-Id: I17bd1a2dfb074f55f03bdf8307b9b7429a5e8990
  		memset(res, 0, size);
  	return res;
  }
-@@ -569,7 +573,6 @@ static int ib_uverbs_cmd_verbs(struct ib
+@@ -569,7 +573,6 @@ static int ib_uverbs_cmd_verbs(struct ib_uverbs_file *ufile,
  
  	if (unlikely(hdr->driver_id != uapi->driver_id))
  		return -EINVAL;

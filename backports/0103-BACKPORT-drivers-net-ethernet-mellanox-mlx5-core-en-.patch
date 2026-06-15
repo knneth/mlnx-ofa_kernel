@@ -7,9 +7,11 @@ Change-Id: I9f00a9689b994e95a1a53768053d85405cb3ed11
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/prio.c
-@@ -12,10 +12,12 @@ tc_act_can_offload_prio(struct mlx5e_tc_
+@@ -12,10 +12,12 @@ tc_act_can_offload_prio(struct mlx5e_tc_act_parse_state *parse_state,
  			int act_index,
  			struct mlx5_flow_attr *attr)
  {
@@ -22,7 +24,7 @@ Change-Id: I9f00a9689b994e95a1a53768053d85405cb3ed11
  
  	return true;
  }
-@@ -27,6 +29,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
+@@ -27,6 +29,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_parse_state *parse_state,
  			 struct mlx5e_priv *priv,
  			 struct mlx5_flow_attr *attr)
  {
@@ -30,7 +32,7 @@ Change-Id: I9f00a9689b994e95a1a53768053d85405cb3ed11
  	int err;
  
  	attr->nic_attr->user_prio = act->priority;
-@@ -37,6 +40,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_pa
+@@ -37,6 +40,7 @@ tc_act_parse_prio(struct mlx5e_tc_act_parse_state *parse_state,
  		return err;
  
  	attr->action |= MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;

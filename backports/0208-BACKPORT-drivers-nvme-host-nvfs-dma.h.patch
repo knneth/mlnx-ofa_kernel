@@ -6,9 +6,11 @@ Change-Id: Icd1c2b42d34cbc010e99b19b13425a6a9fc17278
  drivers/nvme/host/nvfs-dma.h | 93 +++++++++++++++++++++++++++++++-----
  1 file changed, 80 insertions(+), 13 deletions(-)
 
+diff --git a/drivers/nvme/host/nvfs-dma.h b/drivers/nvme/host/nvfs-dma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/nvfs-dma.h
 +++ b/drivers/nvme/host/nvfs-dma.h
-@@ -10,29 +10,46 @@ static blk_status_t nvme_pci_setup_prps(
+@@ -10,29 +10,46 @@ static blk_status_t nvme_pci_setup_prps(struct nvme_dev *dev,
                  struct request *req, struct nvme_rw_command *cmnd);
  
  static blk_status_t nvme_pci_setup_sgls(struct nvme_dev *dev,
@@ -63,7 +65,7 @@ Change-Id: Icd1c2b42d34cbc010e99b19b13425a6a9fc17278
          return false;
  }
  
-@@ -49,61 +66,111 @@ static blk_status_t nvme_nvfs_map_data(s
+@@ -49,61 +66,111 @@ static blk_status_t nvme_nvfs_map_data(struct nvme_dev *dev, struct request *req
         *is_nvfs_io = false;
  
         if (!blk_integrity_rq(req) && nvfs_get_ops()) {

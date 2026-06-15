@@ -6,6 +6,8 @@ Change-Id: I91406fcf80c407272bbaf85114e9d393e0a63813
  drivers/infiniband/core/cm_trace.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/cm_trace.c b/drivers/infiniband/core/cm_trace.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cm_trace.c
 +++ b/drivers/infiniband/core/cm_trace.c
 @@ -11,5 +11,6 @@

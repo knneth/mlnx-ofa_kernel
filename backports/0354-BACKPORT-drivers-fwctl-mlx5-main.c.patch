@@ -3,9 +3,11 @@ Subject: [PATCH] BACKPORT: drivers/fwctl/mlx5/main.c
 
 Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
 ---
- drivers/fwctl/mlx5/main.c | 15 +++++++++++++++
- 1 file changed, 15 insertions(+)
+ drivers/fwctl/mlx5/main.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
+diff --git a/drivers/fwctl/mlx5/main.c b/drivers/fwctl/mlx5/main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/fwctl/mlx5/main.c
 +++ b/drivers/fwctl/mlx5/main.c
 @@ -26,6 +26,7 @@ struct mlx5ctl_dev {
@@ -16,7 +18,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  
  struct mlx5_ifc_mbox_in_hdr_bits {
  	u8 opcode[0x10];
-@@ -224,7 +225,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
+@@ -224,7 +225,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
  		container_of(uctx->fwctl, struct mlx5ctl_dev, fwctl);
  	struct mlx5ctl_uctx *mfd =
  		container_of(uctx, struct mlx5ctl_uctx, uctx);
@@ -28,7 +30,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	void *rpc_out;
  	int ret;
  
-@@ -274,7 +279,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl
+@@ -274,7 +279,11 @@ static void *mlx5ctl_fw_rpc(struct fwctl_uctx *uctx, enum fwctl_rpc_scope scope,
  		return ERR_PTR(ret);
  	if (rpc_out == rpc_in)
  		return rpc_in;
@@ -40,7 +42,7 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  }
  
  static const struct fwctl_ops mlx5ctl_ops = {
-@@ -304,7 +313,13 @@ static int mlx5ctl_probe(struct auxiliar
+@@ -304,7 +313,13 @@ static int mlx5ctl_probe(struct auxiliary_device *adev,
  	ret = fwctl_register(&mcdev->fwctl);
  	if (ret)
  		return ret;
@@ -54,3 +56,15 @@ Change-Id: I91d113174408d80bd2c276028142bef4a56eda22
  	return 0;
  }
  
+@@ -319,7 +334,11 @@ static const struct auxiliary_device_id mlx5ctl_id_table[] = {
+ 	{.name = MLX5_ADEV_NAME ".fwctl",},
+ 	{},
+ };
++#ifdef HAVE_NATIVE_AUX
+ MODULE_DEVICE_TABLE(auxiliary, mlx5ctl_id_table);
++#else
++MODULE_ALIAS("auxiliary:" MLX5_ADEV_NAME ".fwctl");
++#endif
+ 
+ static struct auxiliary_driver mlx5ctl_driver = {
+ 	.name = "mlx5_fwctl",

@@ -6,6 +6,8 @@ Change-Id: I848649a0a40bf5422291b83f3e43d81b39759102
  include/net/xfrm.h | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
+diff --git a/include/net/xfrm.h b/include/net/xfrm.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/net/xfrm.h
 +++ b/include/net/xfrm.h
 @@ -17,4 +17,20 @@

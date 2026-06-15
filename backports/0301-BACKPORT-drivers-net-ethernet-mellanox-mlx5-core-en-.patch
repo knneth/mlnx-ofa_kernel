@@ -7,6 +7,8 @@ Change-Id: I7a24acb1b6433177bc2d6019458383a13ef7b0a4
  .../ethernet/mellanox/mlx5/core/en/xsk/pool.c | 159 +++++++++++++++++-
  1 file changed, 153 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.c
 @@ -1,31 +1,90 @@
@@ -101,7 +103,7 @@ Change-Id: I7a24acb1b6433177bc2d6019458383a13ef7b0a4
  			return -ENOMEM;
  	}
  
-@@ -38,12 +97,23 @@ static int mlx5e_xsk_get_pools(struct ml
+@@ -38,12 +97,23 @@ static int mlx5e_xsk_get_pools(struct mlx5e_xsk *xsk)
  static void mlx5e_xsk_put_pools(struct mlx5e_xsk *xsk)
  {
  	if (!--xsk->refcnt) {
@@ -126,7 +128,7 @@ Change-Id: I7a24acb1b6433177bc2d6019458383a13ef7b0a4
  {
  	int err;
  
-@@ -51,32 +121,79 @@ static int mlx5e_xsk_add_pool(struct mlx
+@@ -51,32 +121,79 @@ static int mlx5e_xsk_add_pool(struct mlx5e_xsk *xsk, struct xsk_buff_pool *pool,
  	if (unlikely(err))
  		return err;
  
@@ -235,7 +237,7 @@ Change-Id: I7a24acb1b6433177bc2d6019458383a13ef7b0a4
  {
  	int err;
  
-@@ -217,7 +343,13 @@ static int mlx5e_xsk_disable_pool(struct
+@@ -217,7 +343,13 @@ static int mlx5e_xsk_disable_pool(struct mlx5e_priv *priv, u16 ix)
  	return err;
  }
  
@@ -250,7 +252,7 @@ Change-Id: I7a24acb1b6433177bc2d6019458383a13ef7b0a4
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5e_params *params = &priv->channels.params;
-@@ -228,3 +360,18 @@ int mlx5e_xsk_setup_pool(struct net_devi
+@@ -228,3 +360,18 @@ int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16
  	return pool ? mlx5e_xsk_enable_pool(priv, pool, qid) :
  		      mlx5e_xsk_disable_pool(priv, qid);
  }

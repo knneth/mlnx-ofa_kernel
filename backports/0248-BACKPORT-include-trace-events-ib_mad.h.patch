@@ -6,6 +6,8 @@ Change-Id: I958e57b9a90aa782c5d46e8518a48ff8f4c0f094
  include/trace/events/ib_mad.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/include/trace/events/ib_mad.h b/include/trace/events/ib_mad.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/trace/events/ib_mad.h
 +++ b/include/trace/events/ib_mad.h
 @@ -4,20 +4,26 @@
@@ -35,7 +37,7 @@ Change-Id: I958e57b9a90aa782c5d46e8518a48ff8f4c0f094
  #endif
  
  DECLARE_EVENT_CLASS(ib_mad_send_template,
-@@ -380,6 +386,8 @@ DEFINE_EVENT(ib_mad_opa_ib_template, ib_
+@@ -380,6 +386,8 @@ DEFINE_EVENT(ib_mad_opa_ib_template, ib_mad_handle_out_ib_smi,
  	TP_PROTO(struct ib_smp *smp),
  	TP_ARGS(smp));
  

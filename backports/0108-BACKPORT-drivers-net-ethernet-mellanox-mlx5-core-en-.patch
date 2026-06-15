@@ -7,9 +7,11 @@ Change-Id: Ia0473ec39ad21998c16317819e85f2b536fc28af
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/ct_fs_smfs.c
-@@ -250,10 +250,10 @@ mlx5_ct_fs_smfs_ct_validate_flow_rule(st
+@@ -250,10 +250,10 @@ mlx5_ct_fs_smfs_ct_validate_flow_rule(struct mlx5_ct_fs *fs, struct flow_rule *f
  	struct flow_match_basic basic;
  	struct flow_match_ports ports;
  	struct flow_match_tcp tcp;

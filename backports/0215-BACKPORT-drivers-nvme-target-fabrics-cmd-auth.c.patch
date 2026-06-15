@@ -6,6 +6,8 @@ Change-Id: Ie6378f405fa27233b73f448d0720feb19bb21936
  drivers/nvme/target/fabrics-cmd-auth.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/nvme/target/fabrics-cmd-auth.c b/drivers/nvme/target/fabrics-cmd-auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/fabrics-cmd-auth.c
 +++ b/drivers/nvme/target/fabrics-cmd-auth.c
 @@ -4,10 +4,18 @@

@@ -7,9 +7,11 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  .../ethernet/mellanox/mlx5/core/fs_counters.c | 51 ++++++++++++++++---
  1 file changed, 44 insertions(+), 7 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c b/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_counters.c
-@@ -106,14 +106,18 @@ static void mlx5_fc_pool_release_counter
+@@ -106,14 +106,18 @@ static void mlx5_fc_pool_release_counter(struct mlx5_fc_pool *fc_pool, struct ml
   *   elapsed, the thread will actually query the hardware.
   */
  
@@ -32,7 +34,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  	rcu_read_lock();
  	/* skip counters that are in idr, but not yet in counters list */
  	idr_for_each_entry_continue_ul(&fc_stats->counters_idr,
-@@ -123,7 +127,24 @@ static struct list_head *mlx5_fc_counter
+@@ -123,7 +127,24 @@ static struct list_head *mlx5_fc_counters_lookup_next(struct mlx5_core_dev *dev,
  	}
  	rcu_read_unlock();
  
@@ -58,7 +60,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  }
  
  static void mlx5_fc_stats_insert(struct mlx5_core_dev *dev,
-@@ -137,13 +158,17 @@ static void mlx5_fc_stats_insert(struct
+@@ -137,13 +158,17 @@ static void mlx5_fc_stats_insert(struct mlx5_core_dev *dev,
  static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
  				 struct mlx5_fc *counter)
  {
@@ -76,7 +78,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  }
  
  static int get_init_bulk_query_len(struct mlx5_core_dev *dev)
-@@ -350,21 +375,27 @@ struct mlx5_fc *mlx5_fc_create_ex(struct
+@@ -350,21 +375,27 @@ struct mlx5_fc *mlx5_fc_create_ex(struct mlx5_core_dev *dev, bool aging)
  {
  	struct mlx5_fc *counter = mlx5_fc_acquire(dev, aging);
  	struct mlx5_fc_stats *fc_stats = &dev->priv.fc_stats;
@@ -105,7 +107,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  		idr_preload(GFP_KERNEL);
  		spin_lock(&fc_stats->counters_idr_lock);
  
-@@ -375,15 +406,18 @@ struct mlx5_fc *mlx5_fc_create_ex(struct
+@@ -375,15 +406,18 @@ struct mlx5_fc *mlx5_fc_create_ex(struct mlx5_core_dev *dev, bool aging)
  		idr_preload_end();
  		if (err)
  			goto err_out_alloc;
@@ -124,7 +126,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  }
  
  struct mlx5_fc *mlx5_fc_create(struct mlx5_core_dev *dev, bool aging)
-@@ -426,8 +460,10 @@ int mlx5_init_fc_stats(struct mlx5_core_
+@@ -426,8 +460,10 @@ int mlx5_init_fc_stats(struct mlx5_core_dev *dev)
  	int init_bulk_len;
  	int init_out_len;
  
@@ -135,7 +137,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  	INIT_LIST_HEAD(&fc_stats->counters);
  	init_llist_head(&fc_stats->addlist);
  	init_llist_head(&fc_stats->dellist);
-@@ -473,7 +509,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_c
+@@ -473,7 +509,9 @@ void mlx5_cleanup_fc_stats(struct mlx5_core_dev *dev)
  		mlx5_fc_release(dev, counter);
  
  	mlx5_fc_pool_cleanup(&fc_stats->fc_pool);
@@ -145,7 +147,7 @@ Change-Id: I5bbc9bf56578c83d7d19aebcb6b9504ea0133684
  	kfree(fc_stats->bulk_query_out);
  }
  
-@@ -537,7 +575,6 @@ void mlx5_fc_update_sampling_interval(st
+@@ -537,7 +575,6 @@ void mlx5_fc_update_sampling_interval(struct mlx5_core_dev *dev,
  	fc_stats->sampling_interval = min_t(unsigned long, interval,
  					    fc_stats->sampling_interval);
  }

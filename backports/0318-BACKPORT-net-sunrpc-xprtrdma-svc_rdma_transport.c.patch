@@ -7,6 +7,8 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  net/sunrpc/xprtrdma/svc_rdma_transport.c | 104 ++++++++++++++++++++++-
  1 file changed, 103 insertions(+), 1 deletion(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_transport.c b/net/sunrpc/xprtrdma/svc_rdma_transport.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_transport.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_transport.c
 @@ -59,7 +59,9 @@
@@ -19,7 +21,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  
  #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
  
-@@ -70,21 +72,52 @@ static struct svc_xprt *svc_rdma_create(
+@@ -70,21 +72,52 @@ static struct svc_xprt *svc_rdma_create(struct svc_serv *serv,
  					struct sockaddr *sa, int salen,
  					int flags);
  static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt);
@@ -108,7 +110,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	switch (event->event) {
  	/* These are considered benign events */
  	case IB_EVENT_PATH_MIG:
-@@ -117,7 +173,12 @@ static void qp_event_handler(struct ib_e
+@@ -117,7 +173,12 @@ static void qp_event_handler(struct ib_event *event, void *context)
  	case IB_EVENT_QP_ACCESS_ERR:
  	case IB_EVENT_DEVICE_FATAL:
  	default:
@@ -121,7 +123,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		break;
  	}
  }
-@@ -289,7 +350,12 @@ static int svc_rdma_cma_handler(struct r
+@@ -289,7 +350,12 @@ static int svc_rdma_cma_handler(struct rdma_cm_id *cma_id,
  		break;
  	case RDMA_CM_EVENT_DISCONNECTED:
  	case RDMA_CM_EVENT_DEVICE_REMOVAL:
@@ -134,7 +136,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		break;
  	default:
  		break;
-@@ -401,7 +467,6 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -401,7 +467,6 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	newxprt->sc_max_req_size = svcrdma_max_req_size;
  	newxprt->sc_max_requests = svcrdma_max_requests;
  	newxprt->sc_max_bc_requests = svcrdma_max_bc_requests;
@@ -142,7 +144,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  	newxprt->sc_fc_credits = cpu_to_be32(newxprt->sc_max_requests);
  
  	/* Qualify the transport's resource defaults with the
-@@ -414,11 +479,18 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -414,11 +479,18 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	newxprt->sc_max_send_sges += (svcrdma_max_req_size / PAGE_SIZE) + 1;
  	if (newxprt->sc_max_send_sges > dev->attrs.max_send_sge)
  		newxprt->sc_max_send_sges = dev->attrs.max_send_sge;
@@ -161,7 +163,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		newxprt->sc_max_requests = rq_depth - 2;
  		newxprt->sc_max_bc_requests = 2;
  	}
-@@ -436,7 +508,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -436,7 +508,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  
  	newxprt->sc_pd = ib_alloc_pd(dev, 0);
  	if (IS_ERR(newxprt->sc_pd)) {
@@ -171,7 +173,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto errout;
  	}
  	newxprt->sc_sq_cq = ib_alloc_cq_any(dev, newxprt, newxprt->sc_sq_depth,
-@@ -469,7 +543,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -469,7 +543,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_sq_depth, rq_depth);
  	ret = rdma_create_qp(newxprt->sc_cm_id, newxprt->sc_pd, &qp_attr);
  	if (ret) {
@@ -181,7 +183,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto errout;
  	}
  	newxprt->sc_max_send_sges = qp_attr.cap.max_send_sge;
-@@ -479,7 +555,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -479,7 +555,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_snd_w_inv = false;
  	if (!rdma_protocol_iwarp(dev, newxprt->sc_port_num) &&
  	    !rdma_ib_or_roce(dev, newxprt->sc_port_num)) {
@@ -191,7 +193,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto errout;
  	}
  
-@@ -501,7 +579,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -501,7 +579,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  					   dev->attrs.max_qp_init_rd_atom);
  	if (!conn_param.initiator_depth) {
  		ret = -EINVAL;
@@ -201,7 +203,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto errout;
  	}
  	conn_param.private_data = &pmsg;
-@@ -511,7 +591,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -511,7 +591,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	ret = rdma_accept(newxprt->sc_cm_id, &conn_param);
  	rdma_unlock_handler(newxprt->sc_cm_id);
  	if (ret) {
@@ -211,7 +213,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  		goto errout;
  	}
  
-@@ -541,6 +623,12 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -541,6 +623,12 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	return NULL;
  }
  
@@ -224,7 +226,7 @@ Signed-off-by: Tom Wu <tomwu@nvidia.com>
  static void svc_rdma_detach(struct svc_xprt *xprt)
  {
  	struct svcxprt_rdma *rdma =
-@@ -609,6 +697,20 @@ static int svc_rdma_has_wspace(struct sv
+@@ -609,6 +697,20 @@ static int svc_rdma_has_wspace(struct svc_xprt *xprt)
  	return 1;
  }
  

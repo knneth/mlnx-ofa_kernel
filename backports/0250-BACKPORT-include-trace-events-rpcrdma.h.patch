@@ -6,6 +6,8 @@ Change-Id: I0c900ef857643c207d90a1a40e0b790c577f5dd7
  include/trace/events/rpcrdma.h | 108 +++++++++++++++++++++++++++++++++
  1 file changed, 108 insertions(+)
 
+diff --git a/include/trace/events/rpcrdma.h b/include/trace/events/rpcrdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/trace/events/rpcrdma.h
 +++ b/include/trace/events/rpcrdma.h
 @@ -10,6 +10,8 @@
@@ -17,7 +19,7 @@ Change-Id: I0c900ef857643c207d90a1a40e0b790c577f5dd7
  #include <linux/scatterlist.h>
  #include <linux/sunrpc/rpc_rdma_cid.h>
  #include <linux/tracepoint.h>
-@@ -304,8 +306,16 @@ DECLARE_EVENT_CLASS(xprtrdma_reply_class
+@@ -304,8 +306,16 @@ DECLARE_EVENT_CLASS(xprtrdma_reply_class,
  		__entry->xid = be32_to_cpu(rep->rr_xid);
  		__entry->version = be32_to_cpu(rep->rr_vers);
  		__entry->proc = be32_to_cpu(rep->rr_proc);
@@ -51,7 +53,7 @@ Change-Id: I0c900ef857643c207d90a1a40e0b790c577f5dd7
  	),
  
  	TP_printk("peer=[%s]:%s",
-@@ -369,8 +387,16 @@ DECLARE_EVENT_CLASS(xprtrdma_connect_cla
+@@ -369,8 +387,16 @@ DECLARE_EVENT_CLASS(xprtrdma_connect_class,
  	TP_fast_assign(
  		__entry->rc = rc;
  		__entry->connect_status = r_xprt->rx_ep->re_connect_status;
@@ -68,7 +70,7 @@ Change-Id: I0c900ef857643c207d90a1a40e0b790c577f5dd7
  	),
  
  	TP_printk("peer=[%s]:%s rc=%d connection status=%d",
-@@ -608,8 +634,16 @@ DECLARE_EVENT_CLASS(xprtrdma_callback_cl
+@@ -608,8 +634,16 @@ DECLARE_EVENT_CLASS(xprtrdma_callback_class,
  
  	TP_fast_assign(
  		__entry->xid = be32_to_cpu(rqst->rq_xid);
@@ -204,7 +206,7 @@ Change-Id: I0c900ef857643c207d90a1a40e0b790c577f5dd7
  	),
  
  	TP_printk("peer=[%s]:%s %u reqs",
-@@ -1476,7 +1566,11 @@ DECLARE_EVENT_CLASS(svcrdma_accept_class
+@@ -1476,7 +1566,11 @@ DECLARE_EVENT_CLASS(svcrdma_accept_class,
  
  	TP_fast_assign(
  		__entry->status = status;

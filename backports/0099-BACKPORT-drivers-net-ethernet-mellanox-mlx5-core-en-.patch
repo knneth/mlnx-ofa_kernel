@@ -7,9 +7,11 @@ Change-Id: I5f7ead1b66adb0dd1f1013f0ca429b1062b1221f
  drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/ct.c
-@@ -43,8 +43,10 @@ tc_act_is_multi_table_act_ct(struct mlx5
+@@ -43,8 +43,10 @@ tc_act_is_multi_table_act_ct(struct mlx5e_priv *priv,
  			     const struct flow_action_entry *act,
  			     struct mlx5_flow_attr *attr)
  {
@@ -20,7 +22,7 @@ Change-Id: I5f7ead1b66adb0dd1f1013f0ca429b1062b1221f
  
  	return true;
  }
-@@ -52,7 +54,11 @@ tc_act_is_multi_table_act_ct(struct mlx5
+@@ -52,7 +54,11 @@ tc_act_is_multi_table_act_ct(struct mlx5e_priv *priv,
  static bool
  tc_act_is_missable_ct(const struct flow_action_entry *act)
  {

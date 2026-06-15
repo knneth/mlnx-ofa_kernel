@@ -6,6 +6,8 @@ Change-Id: I84f09482eab0dab7c6dfbe29cd51b67d9a3a1df6
  .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 24 +++++++++++++++++++
  1 file changed, 24 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 @@ -92,6 +92,10 @@ struct mlx5_rep_uplink_priv {
@@ -29,7 +31,7 @@ Change-Id: I84f09482eab0dab7c6dfbe29cd51b67d9a3a1df6
  };
  
  static inline
-@@ -289,12 +295,30 @@ static inline bool mlx5e_eswitch_rep(con
+@@ -289,12 +295,30 @@ static inline bool mlx5e_eswitch_rep(const struct net_device *netdev)
  	       mlx5e_eswitch_uplink_rep(netdev);
  }
  

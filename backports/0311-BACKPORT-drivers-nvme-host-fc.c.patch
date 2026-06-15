@@ -6,6 +6,8 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  drivers/nvme/host/fc.c | 104 +++++++++++++++++++++++++++++++++++++++--
  1 file changed, 100 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/nvme/host/fc.c b/drivers/nvme/host/fc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fc.c
 +++ b/drivers/nvme/host/fc.c
 @@ -2,6 +2,7 @@
@@ -50,7 +52,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	ida_destroy(&lport->endp_cnt);
  
  	put_device(lport->dev);
-@@ -395,7 +407,11 @@ nvme_fc_register_localport(struct nvme_f
+@@ -395,7 +407,11 @@ nvme_fc_register_localport(struct nvme_fc_port_info *pinfo,
  		goto out_reghost_failed;
  	}
  
@@ -62,7 +64,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (idx < 0) {
  		ret = -ENOSPC;
  		goto out_fail_kfree;
-@@ -435,7 +451,11 @@ nvme_fc_register_localport(struct nvme_f
+@@ -435,7 +451,11 @@ nvme_fc_register_localport(struct nvme_fc_port_info *pinfo,
  	return 0;
  
  out_ida_put:
@@ -86,7 +88,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  
  	kfree(rport);
  
-@@ -709,7 +733,11 @@ nvme_fc_register_remoteport(struct nvme_
+@@ -709,7 +733,11 @@ nvme_fc_register_remoteport(struct nvme_fc_local_port *localport,
  		goto out_lport_put;
  	}
  
@@ -98,7 +100,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (idx < 0) {
  		ret = -ENOSPC;
  		goto out_kfree_rport;
-@@ -1922,7 +1950,11 @@ char *nvme_fc_io_getuuid(struct nvmefc_f
+@@ -1922,7 +1950,11 @@ char *nvme_fc_io_getuuid(struct nvmefc_fcp_req *req)
  
  	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !rq || !rq->bio)
  		return NULL;
@@ -122,7 +124,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (ctrl->ctrl.opts)
  		nvmf_free_options(ctrl->ctrl.opts);
  	kfree(ctrl);
-@@ -2453,7 +2489,13 @@ nvme_fc_nvme_ctrl_freed(struct nvme_ctrl
+@@ -2453,7 +2489,13 @@ nvme_fc_nvme_ctrl_freed(struct nvme_ctrl *nctrl)
   * status. The done path will return the io request back to the block
   * layer with an error status.
   */
@@ -136,7 +138,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  {
  	struct nvme_ctrl *nctrl = data;
  	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(nctrl);
-@@ -2461,7 +2503,9 @@ static bool nvme_fc_terminate_exchange(s
+@@ -2461,7 +2503,9 @@ static bool nvme_fc_terminate_exchange(struct request *req, void *data)
  
  	op->nreq.flags |= NVME_REQ_CANCELLED;
  	__nvme_fc_abort_op(ctrl, op);
@@ -146,7 +148,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  }
  
  /*
-@@ -2566,7 +2610,12 @@ nvme_fc_error_recovery(struct nvme_fc_ct
+@@ -2566,7 +2610,12 @@ nvme_fc_error_recovery(struct nvme_fc_ctrl *ctrl, char *errmsg)
  	nvme_reset_ctrl(&ctrl->ctrl);
  }
  
@@ -160,7 +162,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  {
  	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
  	struct nvme_fc_ctrl *ctrl = op->ctrl;
-@@ -2608,9 +2657,15 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ct
+@@ -2608,9 +2657,15 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ctrl, struct request *rq,
  		return 0;
  
  	freq->sg_table.sgl = freq->first_sgl;
@@ -176,7 +178,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (ret)
  		return -ENOMEM;
  
-@@ -2619,7 +2674,11 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ct
+@@ -2619,7 +2674,11 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ctrl, struct request *rq,
  	freq->sg_cnt = fc_dma_map_sg(ctrl->lport->dev, freq->sg_table.sgl,
  				op->nents, rq_dma_dir(rq));
  	if (unlikely(freq->sg_cnt <= 0)) {
@@ -188,7 +190,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  		freq->sg_cnt = 0;
  		return -EFAULT;
  	}
-@@ -2642,7 +2701,11 @@ nvme_fc_unmap_data(struct nvme_fc_ctrl *
+@@ -2642,7 +2701,11 @@ nvme_fc_unmap_data(struct nvme_fc_ctrl *ctrl, struct request *rq,
  	fc_dma_unmap_sg(ctrl->lport->dev, freq->sg_table.sgl, op->nents,
  			rq_dma_dir(rq));
  
@@ -213,7 +215,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  {
  	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(set->driver_data);
  	int i;
-@@ -2882,7 +2950,11 @@ static void nvme_fc_map_queues(struct bl
+@@ -2882,7 +2950,11 @@ static void nvme_fc_map_queues(struct blk_mq_tag_set *set)
  		else
  			blk_mq_map_queues(map);
  	}
@@ -225,7 +227,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  
  static const struct blk_mq_ops nvme_fc_mq_ops = {
  	.queue_rq	= nvme_fc_queue_rq,
-@@ -2891,7 +2963,9 @@ static const struct blk_mq_ops nvme_fc_m
+@@ -2891,7 +2963,9 @@ static const struct blk_mq_ops nvme_fc_mq_ops = {
  	.exit_request	= nvme_fc_exit_request,
  	.init_hctx	= nvme_fc_init_hctx,
  	.timeout	= nvme_fc_timeout,
@@ -235,7 +237,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  };
  
  static int
-@@ -2918,8 +2992,12 @@ nvme_fc_create_io_queues(struct nvme_fc_
+@@ -2918,8 +2992,12 @@ nvme_fc_create_io_queues(struct nvme_fc_ctrl *ctrl)
  
  	ret = nvme_alloc_io_tag_set(&ctrl->ctrl, &ctrl->tag_set,
  			&nvme_fc_mq_ops, 1,
@@ -249,7 +251,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (ret)
  		return ret;
  
-@@ -3411,7 +3489,6 @@ nvme_fc_connect_ctrl_work(struct work_st
+@@ -3411,7 +3489,6 @@ nvme_fc_connect_ctrl_work(struct work_struct *work)
  			ctrl->cnum);
  }
  
@@ -257,7 +259,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  static const struct blk_mq_ops nvme_fc_admin_mq_ops = {
  	.queue_rq	= nvme_fc_queue_rq,
  	.complete	= nvme_fc_complete_rq,
-@@ -3475,7 +3552,11 @@ nvme_fc_init_ctrl(struct device *dev, st
+@@ -3475,7 +3552,11 @@ nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
  		goto out_fail;
  	}
  
@@ -269,7 +271,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  	if (idx < 0) {
  		ret = -ENOSPC;
  		goto out_free_ctrl;
-@@ -3547,8 +3628,12 @@ nvme_fc_init_ctrl(struct device *dev, st
+@@ -3547,8 +3628,12 @@ nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
  
  	ret = nvme_alloc_admin_tag_set(&ctrl->ctrl, &ctrl->admin_tag_set,
  			&nvme_fc_admin_mq_ops,
@@ -295,7 +297,7 @@ Change-Id: I7c036ad977e0e57c964f6faca0106d27ef31002a
  out_free_ctrl:
  	kfree(ctrl);
  out_fail:
-@@ -3886,6 +3975,9 @@ static const struct attribute_group *nvm
+@@ -3886,6 +3975,9 @@ static const struct attribute_group *nvme_fc_attr_groups[] = {
  static struct class fc_class = {
  	.name = "fc",
  	.dev_groups = nvme_fc_attr_groups,

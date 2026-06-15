@@ -6,9 +6,11 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  drivers/base/auxiliary_sysfs.c | 40 ++++++++++++++++++++++++++++++++++
  1 file changed, 40 insertions(+)
 
+diff --git a/drivers/base/auxiliary_sysfs.c b/drivers/base/auxiliary_sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/base/auxiliary_sysfs.c
 +++ b/drivers/base/auxiliary_sysfs.c
-@@ -26,16 +26,33 @@ static int auxiliary_irq_dir_prepare(str
+@@ -26,16 +26,33 @@ static int auxiliary_irq_dir_prepare(struct auxiliary_device *auxdev)
  {
  	int ret = 0;
  
@@ -42,7 +44,7 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  	return 0;
  }
  
-@@ -55,7 +72,11 @@ static int auxiliary_irq_dir_prepare(str
+@@ -55,7 +72,11 @@ static int auxiliary_irq_dir_prepare(struct auxiliary_device *auxdev)
   */
  int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  {
@@ -54,7 +56,7 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  	struct device *dev = &auxdev->dev;
  	int ret;
  
-@@ -72,7 +93,12 @@ int auxiliary_device_sysfs_irq_add(struc
+@@ -72,7 +93,12 @@ int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  
  	ret = xa_insert(&auxdev->sysfs.irqs, irq, info, GFP_KERNEL);
  	if (ret)
@@ -67,7 +69,7 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  
  	info->sysfs_attr.attr.name = info->name;
  	ret = sysfs_add_file_to_group(&dev->kobj, &info->sysfs_attr.attr,
-@@ -80,11 +106,18 @@ int auxiliary_device_sysfs_irq_add(struc
+@@ -80,11 +106,18 @@ int auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  	if (ret)
  		goto sysfs_add_err;
  
@@ -86,7 +88,7 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  	return ret;
  }
  EXPORT_SYMBOL_GPL(auxiliary_device_sysfs_irq_add);
-@@ -99,7 +132,11 @@ EXPORT_SYMBOL_GPL(auxiliary_device_sysfs
+@@ -99,7 +132,11 @@ EXPORT_SYMBOL_GPL(auxiliary_device_sysfs_irq_add);
   */
  void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq)
  {
@@ -98,7 +100,7 @@ Change-Id: Iadb4ce94b1cbcffe0ebf47a4eef1c0cb3f064b6b
  	struct device *dev = &auxdev->dev;
  
  	if (!info) {
-@@ -109,5 +146,8 @@ void auxiliary_device_sysfs_irq_remove(s
+@@ -109,5 +146,8 @@ void auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq)
  	sysfs_remove_file_from_group(&dev->kobj, &info->sysfs_attr.attr,
  				     auxiliary_irqs_group.name);
  	xa_erase(&auxdev->sysfs.irqs, irq);

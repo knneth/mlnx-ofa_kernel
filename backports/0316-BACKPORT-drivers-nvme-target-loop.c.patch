@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  drivers/nvme/target/loop.c | 21 +++++++++++++++++++++
  1 file changed, 21 insertions(+)
 
+diff --git a/drivers/nvme/target/loop.c b/drivers/nvme/target/loop.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/loop.c
 +++ b/drivers/nvme/target/loop.c
-@@ -78,7 +78,11 @@ static void nvme_loop_complete_rq(struct
+@@ -78,7 +78,11 @@ static void nvme_loop_complete_rq(struct request *req)
  {
  	struct nvme_loop_iod *iod = blk_mq_rq_to_pdu(req);
  
@@ -19,7 +21,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  	nvme_complete_rq(req);
  }
  
-@@ -157,9 +161,15 @@ static blk_status_t nvme_loop_queue_rq(s
+@@ -157,9 +161,15 @@ static blk_status_t nvme_loop_queue_rq(struct blk_mq_hw_ctx *hctx,
  
  	if (blk_rq_nr_phys_segments(req)) {
  		iod->sg_table.sgl = iod->first_sgl;
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  			nvme_cleanup_cmd(req);
  			return BLK_STS_RESOURCE;
  		}
-@@ -216,7 +226,9 @@ static int nvme_loop_init_request(struct
+@@ -216,7 +226,9 @@ static int nvme_loop_init_request(struct blk_mq_tag_set *set,
  			(set == &ctrl->tag_set) ? hctx_idx + 1 : 0);
  }
  
@@ -45,7 +47,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  
  static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  		unsigned int hctx_idx)
-@@ -232,7 +244,9 @@ static int nvme_loop_init_hctx(struct bl
+@@ -232,7 +244,9 @@ static int nvme_loop_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
  	 * then we can remove the dynamically allocated lock class for each
  	 * flush queue, that way may cause horrible boot delay.
  	 */
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/loop.c
  
  	hctx->driver_data = queue;
  	return 0;
-@@ -376,7 +390,11 @@ static int nvme_loop_configure_admin_que
+@@ -376,7 +390,11 @@ static int nvme_loop_configure_admin_queue(struct nvme_loop_ctrl *ctrl)
  		goto out_cleanup_tagset;
  
  	ctrl->ctrl.max_hw_sectors =

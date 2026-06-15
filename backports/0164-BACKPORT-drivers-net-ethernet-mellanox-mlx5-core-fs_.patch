@@ -6,6 +6,8 @@ Change-Id: Ifd06d7b58c175cd324710603eea719c0d8b6486b
  drivers/net/ethernet/mellanox/mlx5/core/fs_core.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
 @@ -37,7 +37,7 @@

@@ -7,6 +7,8 @@ Change-Id: Ia6d789c6f7fc44ec4ba991262635be8686c46e79
  drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h | 7 ++++++-
  1 file changed, 6 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.h
 @@ -118,7 +118,12 @@ struct mlx5i_tx_wqe {

@@ -6,9 +6,11 @@ Change-Id: Ia0bac103584a315402408d8f62ccbe1500f05c6e
  drivers/infiniband/ulp/ipoib/ipoib_multicast.c | 9 +++++----
  1 file changed, 5 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_multicast.c b/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
-@@ -897,13 +897,14 @@ void ipoib_mcast_restart_task(struct wor
+@@ -897,13 +897,14 @@ void ipoib_mcast_restart_task(struct work_struct *work)
  		clear_bit(IPOIB_MCAST_FLAG_FOUND, &mcast->flags);
  
  	/* Mark all of the entries that are found or don't exist */

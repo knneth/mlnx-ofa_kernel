@@ -6,9 +6,11 @@ Change-Id: I0f080a538cd3fb6b79b2234d65e35ebf079dc568
  drivers/nvme/host/fault_inject.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/nvme/host/fault_inject.c b/drivers/nvme/host/fault_inject.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/fault_inject.c
 +++ b/drivers/nvme/host/fault_inject.c
-@@ -56,7 +56,11 @@ void nvme_fault_inject_fini(struct nvme_
+@@ -56,7 +56,11 @@ void nvme_fault_inject_fini(struct nvme_fault_inject *fault_inject)
  
  void nvme_should_fail(struct request *req)
  {

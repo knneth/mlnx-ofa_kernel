@@ -6,9 +6,11 @@ Change-Id: I7f59f031f1fb00a5211bc9ac6cd7741dd6fc3f2b
  drivers/infiniband/hw/mlx5/data_direct.c | 57 +++++++++++++++++++++++-
  1 file changed, 56 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/data_direct.c b/drivers/infiniband/hw/mlx5/data_direct.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/data_direct.c
 +++ b/drivers/infiniband/hw/mlx5/data_direct.c
-@@ -25,19 +25,80 @@ static const struct pci_device_id mlx5_d
+@@ -25,19 +25,80 @@ static const struct pci_device_id mlx5_data_direct_pci_table[] = {
  	{ 0, }
  };
  

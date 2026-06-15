@@ -6,6 +6,8 @@ Change-Id: I5a7bc9850a7cdae751547f740bf3f4b0cf45be2e
  drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h | 1 +
  1 file changed, 1 insertion(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/lag.h
 @@ -5,6 +5,7 @@

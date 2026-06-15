@@ -771,6 +771,9 @@
 /* dma-mapping.h has dma_zalloc_coherent function */
 #undef HAVE_DMA_ZALLOC_COHERENT
 
+/* dpll_device_put has tracker argument */
+#undef HAVE_DPLL_DEVICE_PUT_TRACKER
+
 /* dpll.h has dpll_netdev_pin_set */
 #undef HAVE_DPLL_NETDEV_PIN_SET
 
@@ -2126,8 +2129,16 @@
 /* net/tls.h has tls_offload_rx_force_resync_request */
 #undef HAVE_TLS_OFFLOAD_RX_FORCE_RESYNC_REQUEST
 
+/* tls_offload_rx_resync_async_request_end takes struct
+   tls_offload_resync_async * */
+#undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_END_TAKES_ASYNC
+
 /* net/tls.h has tls_offload_rx_resync_async_request_start */
 #undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START
+
+/* tls_offload_rx_resync_async_request_start takes struct
+   tls_offload_resync_async * */
+#undef HAVE_TLS_OFFLOAD_RX_RESYNC_ASYNC_REQUEST_START_TAKES_ASYNC
 
 /* trace_block_bio_complete has 2 param */
 #undef HAVE_TRACE_BLOCK_BIO_COMPLETE_2_PARAM

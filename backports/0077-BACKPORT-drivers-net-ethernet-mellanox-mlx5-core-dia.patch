@@ -7,6 +7,8 @@ Change-Id: I188f4246c1933239619466a6fdf523b91957d887
  .../mellanox/mlx5/core/diag/fs_tracepoint.h   | 38 ++++++++++++++-----
  1 file changed, 28 insertions(+), 10 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
 @@ -30,6 +30,22 @@

@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  drivers/nvme/target/fc.c | 35 +++++++++++++++++++++++++++++++----
  1 file changed, 31 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/nvme/target/fc.c b/drivers/nvme/target/fc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/fc.c
 +++ b/drivers/nvme/target/fc.c
 @@ -2,6 +2,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  #ifdef pr_fmt
  #undef pr_fmt
  #endif
-@@ -1146,7 +1147,11 @@ nvmet_fc_alloc_target_assoc(struct nvmet
+@@ -1146,7 +1147,11 @@ nvmet_fc_alloc_target_assoc(struct nvmet_fc_tgtport *tgtport, void *hosthandle)
  	if (!assoc)
  		return NULL;
  
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  	if (idx < 0)
  		goto out_free_assoc;
  
-@@ -1180,7 +1185,11 @@ nvmet_fc_alloc_target_assoc(struct nvmet
+@@ -1180,7 +1185,11 @@ nvmet_fc_alloc_target_assoc(struct nvmet_fc_tgtport *tgtport, void *hosthandle)
  	return assoc;
  
  out_ida:
@@ -40,7 +42,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  out_free_assoc:
  	kfree(assoc);
  	return NULL;
-@@ -1211,7 +1220,11 @@ nvmet_fc_target_assoc_free(struct kref *
+@@ -1211,7 +1220,11 @@ nvmet_fc_target_assoc_free(struct kref *ref)
  	/* if pending Rcv Disconnect Association LS, send rsp now */
  	if (oldls)
  		nvmet_fc_xmt_ls_rsp(tgtport, oldls);
@@ -52,7 +54,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  	dev_info(tgtport->dev,
  		"{%d:%d} Association freed\n",
  		tgtport->fc_target_port.port_num, assoc->a_id);
-@@ -1402,7 +1415,11 @@ nvmet_fc_register_targetport(struct nvme
+@@ -1402,7 +1415,11 @@ nvmet_fc_register_targetport(struct nvmet_fc_port_info *pinfo,
  		goto out_regtgt_failed;
  	}
  
@@ -64,7 +66,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  	if (idx < 0) {
  		ret = -ENOSPC;
  		goto out_fail_kfree;
-@@ -1453,7 +1470,11 @@ nvmet_fc_register_targetport(struct nvme
+@@ -1453,7 +1470,11 @@ nvmet_fc_register_targetport(struct nvmet_fc_port_info *pinfo,
  out_free_newrec:
  	put_device(dev);
  out_ida_put:
@@ -90,7 +92,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  
  	ida_destroy(&tgtport->assoc_cnt);
  
-@@ -2096,11 +2122,9 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+@@ -2096,11 +2122,9 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_fcp_iod *fod)
  {
  	struct scatterlist *sg;
  	unsigned int nent;
@@ -102,7 +104,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/fc.c
  	fod->data_sg = sg;
  	fod->data_sg_cnt = nent;
  	fod->data_sg_cnt = fc_dma_map_sg(fod->tgtport->dev, sg, nent,
-@@ -2110,7 +2134,6 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_f
+@@ -2110,7 +2134,6 @@ nvmet_fc_alloc_tgt_pgs(struct nvmet_fc_fcp_iod *fod)
  	fod->next_sg = fod->data_sg;
  
  	return 0;

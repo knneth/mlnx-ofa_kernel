@@ -6,6 +6,8 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 44 +++++++++++++++++--
  1 file changed, 41 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
 @@ -1,13 +1,22 @@
@@ -33,7 +35,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  {
  	struct mlx5e_priv *priv = netdev_priv(dev);
  	struct mlx5e_params *params = &priv->channels.params;
-@@ -55,15 +64,21 @@ static void mlx5e_xsk_tx_post_err(struct
+@@ -55,15 +64,21 @@ static void mlx5e_xsk_tx_post_err(struct mlx5e_xdpsq *sq,
  
  	nopwqe = mlx5e_post_nop(&sq->wq, sq->sqn, &sq->pc);
  	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, *xdpi);
@@ -55,7 +57,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  	struct xsk_tx_metadata *meta = NULL;
  	union mlx5e_xdp_info xdpi;
  	bool work_done = true;
-@@ -84,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+@@ -84,8 +99,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
  			work_done = false;
  			break;
  		}
@@ -68,7 +70,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  			/* TX will get stuck until something wakes it up by
  			 * triggering NAPI. Currently it's expected that the
  			 * application calls sendto() if there are consumed, but
-@@ -94,12 +112,25 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+@@ -94,12 +112,25 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
  			break;
  		}
  
@@ -94,7 +96,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  
  		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
  				      mlx5e_xmit_xdp_frame, sq, &xdptxd,
-@@ -111,6 +142,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+@@ -111,6 +142,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
  			mlx5e_xsk_tx_post_err(sq, &xdpi);
  		} else {
  			mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, xdpi);
@@ -102,7 +104,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  			if (xp_tx_metadata_enabled(sq->xsk_pool)) {
  				struct xsk_tx_metadata_compl compl;
  
-@@ -121,6 +153,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+@@ -121,6 +153,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
  						     (union mlx5e_xdp_info)
  						     { .xsk_meta = compl });
  			}
@@ -110,7 +112,7 @@ Change-Id: I91785ebefe680d79d040bdaf8d1639667eedf0ae
  		}
  
  		flush = true;
-@@ -131,8 +164,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq
+@@ -131,8 +164,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
  			mlx5e_xdp_mpwqe_complete(sq);
  		mlx5e_xmit_xdp_doorbell(sq);
  

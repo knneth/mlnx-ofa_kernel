@@ -6,6 +6,8 @@ Change-Id: Ia102aba65406155ea270605f73c2ecd7c7ebe4b0
  drivers/nvme/target/auth.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/nvme/target/auth.c b/drivers/nvme/target/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/auth.c
 +++ b/drivers/nvme/target/auth.c
 @@ -4,6 +4,12 @@
@@ -21,7 +23,7 @@ Change-Id: Ia102aba65406155ea270605f73c2ecd7c7ebe4b0
  #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
  #include <linux/module.h>
  #include <linux/init.h>
-@@ -529,3 +535,5 @@ int nvmet_auth_ctrl_sesskey(struct nvmet
+@@ -529,3 +535,5 @@ int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
  
  	return ret;
  }

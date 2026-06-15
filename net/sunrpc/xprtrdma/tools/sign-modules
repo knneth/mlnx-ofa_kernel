@@ -1,22 +1,129 @@
 #! /bin/bash
+#
+# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
 
-moddir=$1; shift
+set -e
+MODDIR=$1; shift
 KBUILD=$1; shift
+
+IFS_SAV="$IFS"
+
+modinfo="/sbin/modinfo"
+test_signed_mod() {
+    if [ -x "$modinfo" ]; then
+        test "`/sbin/modinfo -Fsig_hashalgo "$1" 2>/dev/null`" != ''
+        return $?
+    fi
+    # kmod not installed. Fallback to looking at the module file directly.
+    case "$1" in
+    *.ko) cat=cat;;
+    *.ko.gz) cat=zcat;;
+    *.ko.xz) cat=xzcat;;
+    *.ko.zst) cat=zstdcat;;
+    *)
+        echo >&2 "$0: Failed to check for signing without kmod installed with unsupported module format: $1"
+        exit 2
+        ;;
+    esac
+    tail=`$cat "$1"  | tail -c 28`
+    [ "$tail" = "~Module signature appended~" ]
+    return $?
+
+}
+
+test_signed() {
+    set +e
+    for m in "$@"; do
+        if ! test_signed_mod "$m"; then
+            echo "*** Modules are unsigned ($m)! ***"
+            set -e
+            exit 1
+        fi
+    done
+    set -e
+}
+
+sign_script() {
+    cd "$MODDIR"
+    output_dir="$PWD/signing_output"
+    IFS='
+'
+    # sed: remove leading './':
+    set -- `find . -name '*.ko' -o -name '*.ko.?z' -o -name '*.ko.zst' | sed -e 's|^./||'`
+    IFS="$IFS_SAV"
+    ppc_opt=
+    case "${ARCH:-`uname -m`}" in
+    ppc64*) ppc_opt=--ppc-platform;;
+    esac
+    rm -rf "$output_dir"
+    mkdir -p "$output_dir"
+    tarball="$output_dir/modules.tgz"
+    output_tarball="$output_dir/modules-out.tgz"
+    tar czf "$tarball" "$@"
+    (
+        cd `dirname "$MODULES_SIGN_SCRIPT"`
+        if ! "$MODULES_SIGN_SCRIPT" --file `realpath "$tarball"` \
+	    $ppc_opt \
+            --job-type KERNEL --prod \
+            --description "Signing mlnx-ofa_kernel" \
+            --out-file "$output_tarball" >"$output_dir/script_output.log"
+        then
+            if [ -f "$output_dir/sign-tool.log" ]; then
+                cat "$output_dir/sign-tool.log"
+            else
+                cat "$output_dir/script_output.log"
+            fi
+            exit 2
+        fi
+    )
+    tar xf "$output_tarball"
+    test_signed "$@"
+    rm -rf "$output_dir"
+    exit $?
+}
+
+if [ -x "${MODULES_SIGN_SCRIPT}" ]; then
+    sign_script
+fi
 
 SOURCES_DIR=
 case "$KBUILD" in
     *linux-obj*)
-    SOURCES_DIR=$(readlink -f $KBUILD 2>/dev/null | sed -e 's/-obj.*//g')
+    SOURCES_DIR=$(readlink -f "$KBUILD" 2>/dev/null | sed -e 's/-obj.*//g')
     ;;
     */usr/src/linux-*-obj/*)
-    SOURCES_DIR=$(readlink -f $KBUILD 2>/dev/null | sed -e 's/-obj.*//g')
+    SOURCES_DIR=$(readlink -f "$KBUILD" 2>/dev/null | sed -e 's/-obj.*//g')
     ;;
     *)
-    SOURCES_DIR=$(readlink -f ${KBUILD/build/source})
+    SOURCES_DIR=$(readlink -f "${KBUILD/build/source}")
     ;;
 esac
 if [ ! -e "$SOURCES_DIR" ]; then
-    SOURCES_DIR=$KBUILD
+    SOURCES_DIR="$KBUILD"
 fi
 
 SIGN_FILE=
@@ -39,20 +146,15 @@ if [ ! -e "${MODULE_SIGN_PUB_KEY}" ]; then
     exit 1
 fi
 
-modules=`find $moddir -name '*.ko' -o -name '*.ko.gz'`
-for mod in $modules
+IFS='
+'
+set -- `find "$MODDIR" -name '*.ko'`
+IFS="$IFS_SAV"
+for mod in "$@"
 do
-    dir=`dirname $mod`
-    file=`basename $mod`
-
-    ${SIGN_FILE} sha256 ${MODULE_SIGN_PRIV_KEY} ${MODULE_SIGN_PUB_KEY} ${dir}/${file}
-    rm -f ${dir}/${file}.{sig,dig}
+    "${SIGN_FILE}" sha256 "${MODULE_SIGN_PRIV_KEY}" "${MODULE_SIGN_PUB_KEY}" "$mod"
+    rm -f "$mod".{sig,dig}
 done
 
-RANDOMMOD=$(find $moddir -type f -name '*.ko' -o -name '*.ko.gz' | sort -R | tail -n 1)
-if [ "~Module signature appended~" != "$(tail -c 28 $RANDOMMOD)" ]; then
-    echo "*** Modules are unsigned! ***"
-    exit 1
-fi
-
+test_signed "$@"
 exit 0

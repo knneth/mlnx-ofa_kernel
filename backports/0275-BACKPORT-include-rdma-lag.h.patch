@@ -6,6 +6,8 @@ Change-Id: If2980e6a02e531e5b148150409df8910f246df8b
  include/rdma/lag.h | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/include/rdma/lag.h b/include/rdma/lag.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/lag.h
 +++ b/include/rdma/lag.h
 @@ -6,7 +6,11 @@

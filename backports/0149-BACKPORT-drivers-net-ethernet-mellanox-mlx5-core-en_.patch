@@ -6,6 +6,8 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 87 ++++++++++++++++++-
  1 file changed, 84 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 @@ -32,6 +32,9 @@
@@ -18,7 +20,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  #include "en.h"
  #include "en_tc.h"
  #include "eswitch.h"
-@@ -64,7 +67,7 @@ static ssize_t mlx5e_store_tc_num(struct
+@@ -64,7 +67,7 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
  {
  	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
  	struct net_device *netdev = priv->netdev;
@@ -27,7 +29,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  	int tc_num;
  	int err = 0;
  
-@@ -944,11 +947,9 @@ static ssize_t mlx5e_store_force_local_l
+@@ -935,11 +938,9 @@ static ssize_t mlx5e_store_force_local_lb(struct device *device,
  	struct mlx5_core_dev *mdev = priv->mdev;
  	bool disable;
  	int err;
@@ -39,7 +41,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  	if (mdev->local_lb.user_force_disable != disable) {
  		mdev->local_lb.user_force_disable = disable;
  		mlx5_nic_vport_update_local_lb(mdev,
-@@ -962,6 +963,64 @@ static DEVICE_ATTR(force_local_lb_disabl
+@@ -953,6 +954,64 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
  		   mlx5e_show_force_local_lb,
  		   mlx5e_store_force_local_lb);
  
@@ -104,7 +106,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  static struct attribute *mlx5e_settings_attrs[] = {
  	&dev_attr_hfunc.attr,
  	&dev_attr_pfc_stall_prevention.attr,
-@@ -1176,11 +1235,17 @@ static struct attribute *prio_hp_attrs[]
+@@ -1167,11 +1226,17 @@ static struct attribute *prio_hp_attrs[] = {
  	NULL
  };
  
@@ -122,7 +124,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  };
  
  int create_prio_hp_sysfs(struct mlx5e_priv *priv, int prio)
-@@ -1502,9 +1567,18 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1493,9 +1558,18 @@ int mlx5e_sysfs_create(struct net_device *dev)
  	if (err)
  		goto remove_debug_group;
  
@@ -141,7 +143,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  
  	mlx5_eswitch_compat_sysfs_init(dev);
  
-@@ -1522,6 +1596,10 @@ int mlx5e_sysfs_create(struct net_device
+@@ -1513,6 +1587,10 @@ int mlx5e_sysfs_create(struct net_device *dev)
  
  	return 0;
  
@@ -152,7 +154,7 @@ Change-Id: If5bb810ac740e075846ec48b8b70a6b6fa14b1d6
  remove_phy_stat_group:
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);
  remove_debug_group:
-@@ -1549,6 +1627,9 @@ void mlx5e_sysfs_remove(struct net_devic
+@@ -1540,6 +1618,9 @@ void mlx5e_sysfs_remove(struct net_device *dev)
  	sysfs_remove_group(&dev->dev.kobj, &debug_group);
  	sysfs_remove_group(&dev->dev.kobj, &settings_group);
  	sysfs_remove_group(&dev->dev.kobj, &phy_stat_group);

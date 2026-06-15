@@ -6,9 +6,11 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 29 +++++++++++++++++--
  1 file changed, 26 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-@@ -141,11 +141,13 @@ mlx5e_ptp_metadata_map_remove(struct mlx
+@@ -141,11 +141,13 @@ mlx5e_ptp_metadata_map_remove(struct mlx5e_ptp_metadata_map *map, u16 metadata)
  	return skb;
  }
  
@@ -22,7 +24,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  
  static void mlx5e_ptpsq_mark_ts_cqes_undelivered(struct mlx5e_ptpsq *ptpsq,
  						 ktime_t port_tstamp)
-@@ -214,9 +216,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
+@@ -214,9 +216,11 @@ static void mlx5e_ptp_handle_ts_cqe(struct mlx5e_ptpsq *ptpsq,
  out:
  	napi_consume_skb(skb, budget);
  	md_buff[(*md_buff_sz)++] = metadata_id;
@@ -34,7 +36,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  }
  
  static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int napi_budget)
-@@ -294,7 +298,6 @@ static int mlx5e_ptp_napi_poll(struct na
+@@ -294,7 +298,6 @@ static int mlx5e_ptp_napi_poll(struct napi_struct *napi, int budget)
  
  	if (unlikely(!napi_complete_done(napi, work_done)))
  		goto out;
@@ -42,7 +44,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  	ch_stats->arm++;
  
  	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
-@@ -444,6 +447,7 @@ static void mlx5e_ptp_free_traffic_db(st
+@@ -444,6 +447,7 @@ static void mlx5e_ptp_free_traffic_db(struct mlx5e_ptpsq *ptpsq)
  	kvfree(ptpsq->ts_cqe_pending_list);
  }
  
@@ -50,7 +52,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  static void mlx5e_ptpsq_unhealthy_work(struct work_struct *work)
  {
  	struct mlx5e_ptpsq *ptpsq =
-@@ -451,6 +455,7 @@ static void mlx5e_ptpsq_unhealthy_work(s
+@@ -451,6 +455,7 @@ static void mlx5e_ptpsq_unhealthy_work(struct work_struct *work)
  
  	mlx5e_reporter_tx_ptpsq_unhealthy(ptpsq);
  }
@@ -58,7 +60,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  
  static int mlx5e_ptp_open_txqsq(struct mlx5e_ptp *c, u32 tisn,
  				int txq_ix, struct mlx5e_ptp_params *cparams,
-@@ -481,7 +486,9 @@ static int mlx5e_ptp_open_txqsq(struct m
+@@ -481,7 +486,9 @@ static int mlx5e_ptp_open_txqsq(struct mlx5e_ptp *c, u32 tisn,
  	if (err)
  		goto err_free_txqsq;
  
@@ -68,7 +70,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  
  	return 0;
  
-@@ -496,8 +503,10 @@ static void mlx5e_ptp_close_txqsq(struct
+@@ -496,8 +503,10 @@ static void mlx5e_ptp_close_txqsq(struct mlx5e_ptpsq *ptpsq)
  	struct mlx5e_txqsq *sq = &ptpsq->txqsq;
  	struct mlx5_core_dev *mdev = sq->mdev;
  
@@ -79,7 +81,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  	mlx5e_ptp_free_traffic_db(ptpsq);
  	cancel_work_sync(&sq->recover_work);
  	mlx5e_ptp_destroy_sq(mdev, sq->sqn);
-@@ -620,7 +629,14 @@ static int mlx5e_init_ptp_rq(struct mlx5
+@@ -620,7 +629,14 @@ static int mlx5e_init_ptp_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
  	if (err)
  		return err;
  
@@ -95,7 +97,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  }
  
  static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-@@ -637,7 +653,6 @@ static int mlx5e_ptp_open_rq(struct mlx5
+@@ -637,7 +653,6 @@ static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
  	ccp.ch_stats = c->stats;
  	ccp.napi     = &c->napi;
  	ccp.ix       = MLX5E_PTP_CHANNEL_IX;
@@ -103,7 +105,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  	err = mlx5e_init_ptp_rq(c, params, &c->rq);
  	if (err)
  		return err;
-@@ -871,7 +886,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+@@ -871,7 +886,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
  	if (err)
  		goto err_free;
  
@@ -115,7 +117,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  
  	mlx5e_ptp_build_params(c, cparams, params);
  
-@@ -917,7 +936,9 @@ void mlx5e_ptp_activate_channel(struct m
+@@ -917,7 +936,9 @@ void mlx5e_ptp_activate_channel(struct mlx5e_ptp *c)
  	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
  		mlx5e_ptp_rx_set_fs(c->priv);
  		mlx5e_activate_rq(&c->rq);
@@ -125,7 +127,7 @@ Change-Id: I02aab7b842e5f388db52833932597e8783b40a0e
  	}
  	mlx5e_trigger_napi_sched(&c->napi);
  }
-@@ -927,7 +948,9 @@ void mlx5e_ptp_deactivate_channel(struct
+@@ -927,7 +948,9 @@ void mlx5e_ptp_deactivate_channel(struct mlx5e_ptp *c)
  	int tc;
  
  	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {

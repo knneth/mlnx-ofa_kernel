@@ -7,6 +7,8 @@ Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
  .../mlx5/core/diag/en_tc_tracepoint.h         | 32 +++++++++++++++++++
  1 file changed, 32 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_tc_tracepoint.h
 @@ -1,6 +1,7 @@
@@ -17,7 +19,7 @@ Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
  #undef TRACE_SYSTEM
  #define TRACE_SYSTEM mlx5
  
-@@ -27,10 +28,18 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+@@ -27,10 +28,18 @@ DECLARE_EVENT_CLASS(mlx5e_flower_template,
  		    TP_ARGS(f),
  		    TP_STRUCT__entry(__field(void *, cookie)
  				     __field(unsigned int, num)
@@ -36,7 +38,7 @@ Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
  			__entry->num = (f->rule ?
  				f->rule->action.num_entries : 0);
  			if (__entry->num)
-@@ -38,6 +47,15 @@ DECLARE_EVENT_CLASS(mlx5e_flower_templat
+@@ -38,6 +47,15 @@ DECLARE_EVENT_CLASS(mlx5e_flower_template,
  						 f->rule->action.entries,
  						 f->rule->action.num_entries);
  			),
@@ -80,7 +82,7 @@ Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
  );
  
  TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
-@@ -86,7 +112,11 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+@@ -86,7 +112,11 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
  			struct in6_addr *pin6;
  			__be32 *p32;
  
@@ -92,7 +94,7 @@ Change-Id: I02618c0a14aa98c96c1e1fc5c7937f48e29be521
  			__entry->neigh_used = neigh_used;
  
  			p32 = (__be32 *)__entry->v4;
-@@ -112,3 +142,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_v
+@@ -112,3 +142,5 @@ TRACE_EVENT(mlx5e_tc_update_neigh_used_value,
  #undef TRACE_INCLUDE_FILE
  #define TRACE_INCLUDE_FILE en_tc_tracepoint
  #include <trace/define_trace.h>

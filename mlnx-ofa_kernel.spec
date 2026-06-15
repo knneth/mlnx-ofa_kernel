@@ -43,6 +43,7 @@
 
 %global IS_RHEL_VENDOR "%{_vendor}" == "redhat" || ("%{_vendor}" == "bclinux") || ("%{_vendor}" == "openEuler")
 %global KMOD_PREAMBLE "%{_vendor}" != "openEuler"
+%global NEED_CHKCONFIG_DEP 0%{?rhel} >= 8
 
 # MarinerOS 1.0 sets -fPIE in the hardening cflags
 # (in the gcc specs file).
@@ -78,7 +79,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 24.10}
-%{!?_release: %global _release OFED.24.10.4.1.4.1}
+%{!?_release: %global _release OFED.24.10.5.1.6.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 
 %global utils_pname %{_name}
@@ -113,6 +114,10 @@ Requires: grep
 Requires: procps
 Requires: module-init-tools
 Requires: lsof
+%if %{NEED_CHKCONFIG_DEP}
+# For the symlink /etc/init.d -> /etc/rc.d/init.d that conflicts with openibd
+Requires: chkconfig
+%endif
 %if "%{KMP}" == "1"
 BuildRequires: %kernel_module_package_buildreqs
 BuildRequires: /usr/bin/perl
@@ -125,7 +130,7 @@ Requires: systemd-sysvcompat
 %description 
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-4.1.4.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-5.1.6.tgz
 
 
 # build KMP rpms?
@@ -169,7 +174,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-4.1.4.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-5.1.6.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -200,7 +205,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-4.1.4.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-24.10-5.1.6.tgz
 
 %package source
 Summary: Source of the MLNX_OFED main kernel driver
@@ -522,6 +527,25 @@ else
 		%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION} \
 		20
 fi
+
+%if %{NEED_CHKCONFIG_DEP}
+%pretrans -n %{utils_pname}
+# We add a dependency on chkconfig, to be sure it is OK to have a file
+# under /etc/init.d .
+# However, we need to make sure that upgrading from a previous version
+# without that version will not break chkconfig.
+if [ ! -f /etc/init.d/openibd ]; then
+	# Do nothing on new install
+	exit 0
+fi
+if [ -f /etc/rc.d/init.d/openibd ]; then
+	# Do nothing if the chkconfig symlink is already in place.
+	exit 0
+fi
+# Will be added by the package install in time for postinst:
+rm -f /etc/init.d/openibd
+rmdir --ignore-fail-on-non-empty /etc/init.d
+%endif
 
 %posttrans -n %{devel_pname}
 symlink="%{_prefix}/src/ofa_kernel/default"
