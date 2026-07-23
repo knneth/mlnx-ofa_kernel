@@ -402,6 +402,9 @@
 /* __cgroup_bpf_run_filter_sysctl have 7 parameters */
 #undef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
 
+/* check_add_overflow accepts mixed argument types */
+#undef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+
 /* vxlan_build_gbp_hdr is defined */
 #undef HAVE_CHECK_VXLAN_BUILD_GBP_HDR
 
@@ -803,6 +806,9 @@
 
 /* dpll.h has dpll_netdev_pin_set */
 #undef HAVE_DPLL_NETDEV_PIN_SET
+
+/* struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param */
+#undef HAVE_DPLL_PIN_OPS_FFO_GET_PARAM
 
 /* struct dpll_pin_ops has ffo_get */
 #undef HAVE_DPLL_PIN_OPS_HAS_FFO_GET

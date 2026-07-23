@@ -104,7 +104,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 26.04}
-%{!?_release: %global _release OFED.26.04.0.8.5.1}
+%{!?_release: %global _release OFED.26.04.1.1.0.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 %global dkms_version %{version}-%{_release}
 
@@ -158,7 +158,7 @@ Requires: systemd-sysvcompat
 %description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-1.1.0.tgz
 
 
 %if %{with building_kmods}
@@ -204,7 +204,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-1.1.0.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -235,7 +235,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-0.8.5.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-26.04-1.1.0.tgz
 %endif # end building_kmods
 
 %package source

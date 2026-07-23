@@ -3055,6 +3055,56 @@ EOF
 	
 	if false; then
 		
+printf "%s\n" "@%:@define HAVE_DPLL_PIN_OPS_FFO_GET_PARAM -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_DPLL_PIN_OPS_FFO_GET_PARAM
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+        #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         
+static int __maybe_unused test_func (void) {
+
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
 printf "%s\n" "@%:@define HAVE_DPLL_NETDEV_PIN_SET -1" >>confdefs.h
 
 	fi
@@ -21968,6 +22018,51 @@ endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "linux/overflow.h has size_add size_mul size_sub" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
+printf "%s\n" "@%:@define HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	
+static int __maybe_unused test_func (void) {
+
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "check_add_overflow accepts mixed argument types" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
 	

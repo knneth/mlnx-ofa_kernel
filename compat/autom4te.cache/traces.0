@@ -748,7 +748,7 @@ m4_if([$1], [v7],
 AC_SUBST([am__tar])
 AC_SUBST([am__untar])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:5: -1- AC_DEFUN([LB_CHECK_FILE], [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
 AC_CACHE_CHECK([for $1], lb_File,
 [if test -r "$1"; then
     AS_VAR_SET(lb_File, yes)
@@ -758,7 +758,7 @@ fi])
 AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:18: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:18: -1- AC_DEFUN([LB_ARG_REPLACE_PATH], [
 	new_configure_args=
 	eval "set x $ac_configure_args"
 	shift
@@ -777,14 +777,14 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	done
 	ac_configure_args=$new_configure_args
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:39: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:39: -1- AC_DEFUN([__LB_ARG_CANON_PATH], [
 	[$3]=$(readlink -f $with_$2)
 	LB_ARG_REPLACE_PATH([$1], $[$3])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:46: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:46: -1- AC_DEFUN([LB_ARG_CANON_PATH], [
 	__LB_ARG_CANON_PATH([$1], m4_translit([$1], [-.], [__]), [$2])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:56: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:56: -1- AC_DEFUN([LB_LINUX_PATH], [# prep some default values
 for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
 	if readlink -q -e $DEFAULT_LINUX >/dev/null; then
 		break
@@ -847,7 +847,7 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:124: -1- AC_DEFUN([LB_IS_LLVM], [AC_MSG_CHECKING([kernel built with clang])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:124: -1- AC_DEFUN([LB_IS_LLVM], [AC_MSG_CHECKING([kernel built with clang])
 	_lb_is_clang=no
 	if test -f "$LINUX_OBJ/include/generated/autoconf.h"; then
 		if grep -q 2>/dev/null "define CONFIG_CLANG_VERSION 1"  "$LINUX_OBJ/include/generated/autoconf.h"; then
@@ -867,7 +867,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	fi
 	AC_MSG_RESULT($_lb_is_clang)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:149: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:149: -1- AC_DEFUN([LB_LINUX_SYMVERFILE], [AC_MSG_CHECKING([name of module symbol version file])
 	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
 		SYMVERFILE=Modules.symvers
 	else
@@ -876,7 +876,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	AC_MSG_RESULT($SYMVERFILE)
 	AC_SUBST(SYMVERFILE)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:170: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/build-linux.m4:170: -1- AC_DEFUN([LB_CHECK_SYMBOL_EXPORT], [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
@@ -901,7 +901,7 @@ else
 	$3
 fi
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:3: -1- AC_DEFUN([MLNX_RDMA_SET_GLOBALS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:3: -1- AC_DEFUN([MLNX_RDMA_SET_GLOBALS], [
 	MLNX_RDMA_MODULES_DIR="$PWD/modtest"
 	MLNX_RDMA_TEST_MOD="testmod"
 	MLNX_RDMA_RUN_LOG="$MLNX_RDMA_MODULES_DIR/run.log"
@@ -915,7 +915,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	# -Wno-missing-braces: Harmless and almost always wrong
 	ERROR_FLAGS="-Werror -Wno-unused-variable -Wno-unused-value -Wno-uninitialized -Wno-missing-braces"
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:19: -1- AC_DEFUN([MLNX_RDMA_TEST_CASE], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:19: -1- AC_DEFUN([MLNX_RDMA_TEST_CASE], [
 	if false; then
 		AC_DEFINE($1, -1, [$2])
 	fi
@@ -947,12 +947,12 @@ EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "$2" > "$MLNX_RDMA_MODULES_DIR/desc"
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:53: -1- AC_DEFUN([MLNX_RDMA_BUILD_MODULES], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:53: -1- AC_DEFUN([MLNX_RDMA_BUILD_MODULES], [
 	AC_MSG_NOTICE([Test-building kernel modules test-builds])
 	make -s -C "$LINUX_OBJ" -k -j${NJOBS:-1} ccflags-y="$ERROR_FLAGS" "M=$MLNX_RDMA_MODULES_DIR" MLNX_TEST=m MLNX_RDMA_SILENT=$silent modules 2>"$MLNX_RDMA_RUN_LOG"
 	echo '' # FIXME: Silence in quiet mode
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:60: -1- AC_DEFUN([MLNX_RDMA_CHECK_RESULTS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:60: -1- AC_DEFUN([MLNX_RDMA_CHECK_RESULTS], [
 	AC_MSG_CHECKING([for results from kernel modules test-builds])
 	for mlnx_rdma_mod_dir in $MLNX_RDMA_MODULES_DIR/HAVE_*; do
 		if test ! -d "$mlnx_rdma_mod_dir"; then continue; fi
@@ -965,7 +965,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	done
 	AC_MSG_RESULT([done])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:75: -1- AC_DEFUN([MLNX_RDMA_CHECK_BUILD_SANITY], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:75: -1- AC_DEFUN([MLNX_RDMA_CHECK_BUILD_SANITY], [
 	AC_MSG_CHECKING([for a working kernel modules build system])
 	MLNX_RDMA_TEST_CASE(KBUILD_WORKS, [building a kernel module works], [
 	],[
@@ -978,7 +978,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	fi
 	AC_MSG_RESULT([yes])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:90: -1- AC_DEFUN([MLNX_RDMA_CREATE_MODULES], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:90: -1- AC_DEFUN([MLNX_RDMA_CREATE_MODULES], [
 	rm -rf ${MLNX_RDMA_MODULES_DIR}
 	mkdir -p ${MLNX_RDMA_MODULES_DIR}
 
@@ -1031,6 +1031,24 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 		pin_ops.ffo_get = NULL;
 
 		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_DPLL_PIN_OPS_FFO_GET_PARAM, [struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param], [
+        #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         ],[
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
 	])
 
 	MLNX_RDMA_TEST_CASE(HAVE_DPLL_NETDEV_PIN_SET, [dpll.h has dpll_netdev_pin_set], [
@@ -5314,6 +5332,19 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES, [check_add_overflow accepts mixed argument types], [
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	],[
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_KVFREE_CALL_RCU, [function kvfree_call_rcu is defined], [
 		#include <linux/rcupdate.h>
 	],[
@@ -8809,13 +8840,13 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 		return 0;
 	])
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7923: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7954: -1- AC_DEFUN([LINUX_CONFIG_COMPAT], [
 MLNX_RDMA_SET_GLOBALS
 MLNX_RDMA_CREATE_MODULES
 MLNX_RDMA_BUILD_MODULES
 MLNX_RDMA_CHECK_RESULTS
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7936: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7967: -1- AC_DEFUN([COMPAT_CONFIG_HEADERS], [
 #
 #	Generate the config.h header file
 #
@@ -8823,7 +8854,7 @@ m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_
 	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 	AC_SUBST(EXTRA_KCFLAGS)
 ])
-m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_200_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7945: -1- AC_DEFUN([MLNX_PROG_LINUX], [
+m4trace:/home/jenkins/agent/workspace/build_ofed_internal/tmp_build_dir/builder_201_daemon/mlnx-ofa_kernel_build/mlnx-ofa_kernel/compat/config/rdma.m4:7976: -1- AC_DEFUN([MLNX_PROG_LINUX], [
 LB_LINUX_PATH
 LB_IS_LLVM
 LB_LINUX_SYMVERFILE
@@ -9053,6 +9084,24 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DPLL_PIN_OPS_HAS_FFO_GET]
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_HAS_FFO_GET$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DPLL_PIN_OPS_FFO_GET_PARAM], [struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param], [
+        #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         ], [
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_FFO_GET_PARAM$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_DPLL_NETDEV_PIN_SET], [dpll.h has dpll_netdev_pin_set], [
 	#include <linux/dpll.h>
 	], [
@@ -13296,6 +13345,19 @@ m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_SIZE_MUL_SUB_ADD], [linux
 		return 0;
 	])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SIZE_MUL_SUB_ADD$])
+m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES], [check_add_overflow accepts mixed argument types], [
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	], [
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
+
+		return 0;
+	])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES$])
 m4trace:configure.ac:23: -1- MLNX_RDMA_TEST_CASE([HAVE_KVFREE_CALL_RCU], [function kvfree_call_rcu is defined], [
 		#include <linux/rcupdate.h>
 	], [

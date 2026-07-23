@@ -12,7 +12,7 @@ index xxxxxxx..xxxxxxx 100644
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 @@ -45,6 +45,10 @@
  
- #define DRIVER_VERSION	"26.04-0.8.5"
+ #define DRIVER_VERSION	"26.04-1.1.0"
  
 +#ifndef BITS_TO_BYTES
 +#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)

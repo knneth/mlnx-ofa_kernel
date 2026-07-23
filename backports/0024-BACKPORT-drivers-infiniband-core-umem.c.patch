@@ -2,8 +2,8 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
 
 ---
- drivers/infiniband/core/umem.c | 311 ++++++++++++++++++++++++++++++++-
- 1 file changed, 307 insertions(+), 4 deletions(-)
+ drivers/infiniband/core/umem.c | 315 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 311 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
 index xxxxxxx..xxxxxxx 100644
@@ -88,7 +88,7 @@ index xxxxxxx..xxxxxxx 100644
  }
  
  /**
-@@ -99,6 +142,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+@@ -102,6 +145,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  
  	umem->iova = va = virt;
  
@@ -96,7 +96,7 @@ index xxxxxxx..xxxxxxx 100644
  	if (umem->is_odp) {
  		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
  
-@@ -107,6 +151,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+@@ -110,12 +154,17 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  			return 0;
  		return page_size;
  	}
@@ -104,7 +104,17 @@ index xxxxxxx..xxxxxxx 100644
  
  	/* The best result is the smallest page size that results in the minimum
  	 * number of required pages. Compute the largest page size that could
-@@ -118,11 +163,16 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ 	 * work based on VA address bits that don't change.
+ 	 */
++#ifdef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+ 	if (check_add_overflow(umem->length - 1, virt, &last_va))
++#else
++	if (check_add_overflow((u64)umem->length - 1, virt, &last_va))
++#endif
+ 		return 0;
+ 	bits = bits_per(virt ^ last_va);
+ 	if (bits < BITS_PER_LONG)
+@@ -124,11 +173,16 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  	/* offset into first SGL */
  	pgoff = umem->address & ~PAGE_MASK;
  
@@ -122,7 +132,7 @@ index xxxxxxx..xxxxxxx 100644
  		    end != sg_dma_address(sg)) {
  
  			curr_base = sg_dma_address(sg);
-@@ -156,6 +206,64 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+@@ -162,6 +216,64 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
  }
  EXPORT_SYMBOL(ib_umem_find_best_pgsz);
  
@@ -187,7 +197,7 @@ index xxxxxxx..xxxxxxx 100644
  /**
   * __ib_umem_get - Pin and DMA map userspace memory.
   *
-@@ -165,20 +273,55 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+@@ -171,20 +283,55 @@ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
   * @access: IB_ACCESS_xxx flags for memory being pinned
   * @peer_mem_flags: IB_PEER_MEM_xxx flags for memory being used
   */
@@ -243,7 +253,7 @@ index xxxxxxx..xxxxxxx 100644
  
  	/*
  	 * If the combination of the addr and size requested for this memory
-@@ -201,7 +344,11 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+@@ -207,7 +354,11 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	umem = kzalloc(sizeof(*umem), GFP_KERNEL);
  	if (!umem)
  		return ERR_PTR(-ENOMEM);
@@ -255,7 +265,7 @@ index xxxxxxx..xxxxxxx 100644
  	umem->length     = size;
  	umem->address    = addr;
  	/*
-@@ -218,7 +365,6 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+@@ -224,7 +375,6 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  		ret = -ENOMEM;
  		goto umem_kfree;
  	}
@@ -263,7 +273,7 @@ index xxxxxxx..xxxxxxx 100644
  	npages = ib_umem_num_pages(umem);
  	if (npages == 0 || npages > UINT_MAX) {
  		ret = -EINVAL;
-@@ -229,6 +375,7 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+@@ -235,6 +385,7 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  
  	new_pinned = atomic64_add_return(npages, &mm->pinned_vm);
  	if (new_pinned > lock_limit && !capable(CAP_IPC_LOCK)) {
@@ -271,7 +281,7 @@ index xxxxxxx..xxxxxxx 100644
  		atomic64_sub(npages, &mm->pinned_vm);
  		ret = -ENOMEM;
  		goto out;
-@@ -236,22 +383,46 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+@@ -242,22 +393,46 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  
  	cur_base = addr & PAGE_MASK;
  
@@ -319,7 +329,7 @@ index xxxxxxx..xxxxxxx 100644
  			goto umem_release;
  		}
  
-@@ -279,8 +450,115 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+@@ -285,8 +460,115 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
  	}
  	goto out;
  
@@ -435,7 +445,7 @@ index xxxxxxx..xxxxxxx 100644
  
  	/*
  	 * If the address belongs to peer memory client, then the first
-@@ -312,19 +590,36 @@ umem_kfree:
+@@ -318,19 +600,36 @@ umem_kfree:
  	return ret ? ERR_PTR(ret) : umem;
  }
  
@@ -472,7 +482,7 @@ index xxxxxxx..xxxxxxx 100644
  }
  EXPORT_SYMBOL(ib_umem_get_peer);
  
-@@ -336,10 +631,14 @@ void ib_umem_release(struct ib_umem *umem)
+@@ -342,10 +641,14 @@ void ib_umem_release(struct ib_umem *umem)
  {
  	if (!umem)
  		return;
@@ -487,7 +497,7 @@ index xxxxxxx..xxxxxxx 100644
  
  	if (umem->is_peer)
  		return ib_peer_umem_release(umem);
-@@ -373,8 +672,12 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
+@@ -379,8 +682,12 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
  		return -EINVAL;
  	}
  

@@ -293,6 +293,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_PIN_OPS_HAS_FFO_
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_HAS_FFO_GET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_PIN_OPS_HAS_FFO_GET], [/* struct dpll_pin_ops has ffo_get */
 @%:@undef HAVE_DPLL_PIN_OPS_HAS_FFO_GET])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_PIN_OPS_FFO_GET_PARAM])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_FFO_GET_PARAM$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_PIN_OPS_FFO_GET_PARAM], [/* struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param */
+@%:@undef HAVE_DPLL_PIN_OPS_FFO_GET_PARAM])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_NETDEV_PIN_SET])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_NETDEV_PIN_SET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_NETDEV_PIN_SET], [/* dpll.h has dpll_netdev_pin_set */
@@ -2217,6 +2221,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SIZE_MUL_SUB_ADD])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SIZE_MUL_SUB_ADD$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SIZE_MUL_SUB_ADD], [/* linux/overflow.h has size_add size_mul size_sub */
 @%:@undef HAVE_SIZE_MUL_SUB_ADD])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES], [/* check_add_overflow accepts mixed argument types */
+@%:@undef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_KVFREE_CALL_RCU])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_KVFREE_CALL_RCU$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_KVFREE_CALL_RCU], [/* function kvfree_call_rcu is defined */

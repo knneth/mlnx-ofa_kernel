@@ -143,6 +143,24 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_DPLL_PIN_OPS_FFO_GET_PARAM, [struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param], [
+        #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         ],[
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_DPLL_NETDEV_PIN_SET, [dpll.h has dpll_netdev_pin_set], [
 	#include <linux/dpll.h>
 	],[
@@ -4420,6 +4438,19 @@ MLNX_RDMA_TEST_CASE(HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS, [devlink num_do
 
 		if ( size_add(a,b) && size_mul(a,b) && size_sub(a,b) )
 			return 0;
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES, [check_add_overflow accepts mixed argument types], [
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	],[
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
 
 		return 0;
 	])
