@@ -133,6 +133,7 @@ struct mlxdevm_rate {
 struct mlxdevm_port {
 	struct list_head list;
 	struct list_head region_list;
+	struct list_head resource_list;
 	struct mlxdevm *mlxdevm;
 	struct devlink_port *dl_port;
 	const struct mlxdevm_port_ops *ops;
@@ -433,9 +434,7 @@ typedef u64 mlxdevm_resource_occ_get_t(void *priv);
 
 #define MLXDEVM_RESOURCE_ID_PARENT_TOP 0
 
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 #define MLXDEVM_RESOURCE_GENERIC_NAME_PORTS "physical_ports"
-#endif
 
 #define __MLXDEVM_PARAM_MAX_STRING_VALUE 32
 #define __MLXDEVM_PARAM_ARRAY_MAX_DATA 64
@@ -501,6 +500,10 @@ struct mlxdevm_flash_notify {
  * @set: set parameter value, used for runtime and permanent
  *       configuration modes
  * @validate: validate input value is applicable (within value range, etc.)
+ * @get_default: get parameter default value, used for runtime and permanent
+ *               configuration modes
+ * @reset_default: reset parameter to default value, used for runtime and permanent
+ *                 configuration modes
  *
  * This struct should be used by the driver to fill the data for
  * a parameter it registers.
@@ -512,13 +515,20 @@ struct mlxdevm_param {
 	enum mlxdevm_param_type type;
 	unsigned long supported_cmodes;
 	int (*get)(struct mlxdevm *mlxdevm, u32 id,
-		   struct mlxdevm_param_gset_ctx *ctx);
+		   struct mlxdevm_param_gset_ctx *ctx,
+		   struct netlink_ext_ack *extack);
 	int (*set)(struct mlxdevm *mlxdevm, u32 id,
 		   struct mlxdevm_param_gset_ctx *ctx,
 		   struct netlink_ext_ack *extack);
 	int (*validate)(struct mlxdevm *mlxdevm, u32 id,
 			union mlxdevm_param_value val,
 			struct netlink_ext_ack *extack);
+	int (*get_default)(struct mlxdevm *mlxdevm, u32 id,
+			   struct mlxdevm_param_gset_ctx *ctx,
+			   struct netlink_ext_ack *extack);
+	int (*reset_default)(struct mlxdevm *mlxdevm, u32 id,
+			     enum mlxdevm_param_cmode cmode,
+			     struct netlink_ext_ack *extack);
 };
 
 struct mlxdevm_param_item {
@@ -530,6 +540,7 @@ struct mlxdevm_param_item {
 							 * until reload.
 							 */
 	bool driverinit_value_new_valid;
+	union mlxdevm_param_value driverinit_default;
 };
 
 enum mlxdevm_param_generic_id {
@@ -554,6 +565,7 @@ enum mlxdevm_param_generic_id {
 	MLXDEVM_PARAM_GENERIC_ID_CLOCK_ID,
 	MLXDEVM_PARAM_GENERIC_ID_TOTAL_VFS,
 	MLXDEVM_PARAM_GENERIC_ID_NUM_DOORBELLS,
+	MLXDEVM_PARAM_GENERIC_ID_MAX_MAC_PER_VF,
 
 	/* add new param generic ids above here*/
 	__MLXDEVM_PARAM_GENERIC_ID_MAX,
@@ -624,6 +636,9 @@ enum mlxdevm_param_generic_id {
 #define MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_NAME "num_doorbells"
 #define MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_TYPE MLXDEVM_PARAM_TYPE_U32
 
+#define MLXDEVM_PARAM_GENERIC_MAX_MAC_PER_VF_NAME "max_mac_per_vf"
+#define MLXDEVM_PARAM_GENERIC_MAX_MAC_PER_VF_TYPE MLXDEVM_PARAM_TYPE_U32
+
 #define MLXDEVM_PARAM_GENERIC(_id, _cmodes, _get, _set, _validate)	\
 {									\
 	.id = MLXDEVM_PARAM_GENERIC_ID_##_id,				\
@@ -646,7 +661,39 @@ enum mlxdevm_param_generic_id {
 	.set = _set,							\
 	.validate = _validate,						\
 }
+
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
+#define DEVLINK_PARAM_GENERIC_WITH_DEFAULTS(_id, _cmodes, _get, _set,	      \
+					    _validate, _get_default,	      \
+					    _reset_default)		      \
+{									      \
+	.id = DEVLINK_PARAM_GENERIC_ID_##_id,				      \
+	.name = DEVLINK_PARAM_GENERIC_##_id##_NAME,			      \
+	.type = DEVLINK_PARAM_GENERIC_##_id##_TYPE,			      \
+	.generic = true,						      \
+	.supported_cmodes = _cmodes,					      \
+	.get = _get,							      \
+	.set = _set,							      \
+	.validate = _validate,						      \
+	.get_default = _get_default,					      \
+	.reset_default = _reset_default,				      \
+}
+
+#define DEVLINK_PARAM_DRIVER_WITH_DEFAULTS(_id, _name, _type, _cmodes,	      \
+					   _get, _set, _validate,	      \
+					   _get_default, _reset_default)      \
+{									      \
+	.id = _id,							      \
+	.name = _name,							      \
+	.type = _type,							      \
+	.supported_cmodes = _cmodes,					      \
+	.get = _get,							      \
+	.set = _set,							      \
+	.validate = _validate,						      \
+	.get_default = _get_default,					      \
+	.reset_default = _reset_default,				      \
+}
+
 /* Identifier of board design */
 #define DEVLINK_INFO_VERSION_GENERIC_BOARD_ID	"board.id"
 /* Revision of board design */
@@ -1530,7 +1577,7 @@ struct mlxdevm_ops {
 	int (*port_new)(struct mlxdevm *mlxdevm,
 			const struct mlxdevm_port_new_attrs *attrs,
 			struct netlink_ext_ack *extack,
-			unsigned int *new_port_index);
+			struct mlxdevm_port **mlxdevm_port);
 
 	/**
 	 * Rate control callbacks.
@@ -1569,6 +1616,15 @@ struct mlxdevm_ops {
 				    struct mlxdevm_rate *parent,
 				    void *priv_child, void *priv_parent,
 				    struct netlink_ext_ack *extack);
+	/* Indicates if cross-device rate nodes are supported.
+	 * This also requires a shared common ancestor object all devices that
+	 * could share rate nodes are nested in.
+	 * If enabled, rate operations may be called on an instance with only
+	 * the common ancestor lock held and *without that instance lock held*.
+	 * It is the driver's responsibility to ensure proper serialization
+	 * with other operations.
+	 */
+	bool supported_cross_device_rate_nodes;
 	/**
 	 * selftests_check() - queries if selftest is supported
 	 * @mlxdevm: mlxdevm instance
@@ -1591,12 +1647,15 @@ struct mlxdevm_ops {
 	(*selftest_run)(struct mlxdevm *mlxdevm, unsigned int id,
 			struct netlink_ext_ack *extack);
 };
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
-void *devlink_priv(struct devlink *devlink);
-struct devlink *priv_to_devlink(void *priv);
-#endif
+void *mlxdevm_priv(struct mlxdevm *mlxdevm);
+struct mlxdevm *priv_to_mlxdevm(void *priv);
 struct device *mlxdevm_to_dev(const struct mlxdevm *mlxdevm);
+const char *mlxdevm_bus_name(const struct mlxdevm *mlxdevm);
+const char *mlxdevm_dev_name(const struct mlxdevm *mlxdevm);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
+const char *devlink_dev_driver_name(const struct devlink *devlink);
+#endif
 
 /* Devlink instance explicit locking */
 void devm_lock(struct mlxdevm *mlxdevm);
@@ -1613,30 +1672,33 @@ struct ib_device;
 #endif
 
 struct net *mlxdevm_net(const struct mlxdevm *mlxdevm);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* This call is intended for software devices that can create
- * devlink instances in other namespaces than init_net.
+ * mlxdevm instances in other namespaces than init_net.
  *
- * Drivers that operate on real HW must use devlink_alloc() instead.
+ * Drivers that operate on real HW must use mlxdevm_alloc() instead.
  */
-struct devlink *devlink_alloc_ns(const struct devlink_ops *ops,
+struct mlxdevm *mlxdevm_alloc_ns(const struct mlxdevm_ops *ops,
 				 size_t priv_size, struct net *net,
 				 struct device *dev);
-static inline struct devlink *devlink_alloc(const struct devlink_ops *ops,
+static inline struct mlxdevm *mlxdevm_alloc(const struct mlxdevm_ops *ops,
 					    size_t priv_size,
 					    struct device *dev)
 {
-	return devlink_alloc_ns(ops, priv_size, &init_net, dev);
+	return mlxdevm_alloc_ns(ops, priv_size, &init_net, dev);
 }
-#endif
 
 int devm_register(struct mlxdevm *mlxdevm);
 void devm_unregister(struct mlxdevm *mlxdevm);
 int mlxdevm_register(struct mlxdevm *mldevm);
 void mlxdevm_unregister(struct mlxdevm *mlxdevm);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-void devlink_free(struct devlink *devlink);
-#endif
+void mlxdevm_free(struct mlxdevm *mlxdevm);
+struct mlxdevm *mlxdevm_shd_get(const char *id,
+				const struct mlxdevm_ops *ops,
+				size_t priv_size,
+				const struct device_driver *driver,
+				struct devlink *shd_devlink);
+void mlxdevm_shd_put(struct mlxdevm *mlxdevm);
+void *mlxdevm_shd_get_priv(struct mlxdevm *mlxdevm);
 
 /**
  * struct mlxdevm_port_ops - Port operations
@@ -1829,9 +1891,9 @@ void mlxdevm_port_attrs_pci_vf_set(struct mlxdevm_port *mlxdevm_port, u32 contro
 void mlxdevm_port_attrs_pci_sf_set(struct mlxdevm_port *mlxdevm_port,
 				   u32 controller, u16 pf, u32 sf,
 				   bool external);
+int devm_port_fn_mlxdevm_set(struct mlxdevm_port *mlxdevm_port,
+			     struct mlxdevm *fn_mlxdevm);
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
-int devl_port_fn_devlink_set(struct devlink_port *devlink_port,
-			     struct devlink *fn_devlink);
 struct devlink_rate *
 devl_rate_node_create(struct devlink *devlink, void *priv, char *node_name,
 		      struct devlink_rate *parent);
@@ -1896,13 +1958,20 @@ int devm_resource_register(struct mlxdevm *mlxdevm,
 			   u64 resource_size,
 			   u64 resource_id,
 			   u64 parent_resource_id,
-			   const struct mlxdevm_resource_size_params *size_params);
+			   const struct mlxdevm_resource_size_params *params);
 void devm_resources_unregister(struct mlxdevm *mlxdevm);
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
 void devlink_resources_unregister(struct devlink *devlink);
 int devl_resource_size_get(struct devlink *devlink,
 			   u64 resource_id,
 			   u64 *p_resource_size);
+int
+devl_port_resource_register(struct devlink_port *devlink_port,
+			    const char *resource_name,
+			    u64 resource_size, u64 resource_id,
+			    u64 parent_resource_id,
+			    const struct devlink_resource_size_params *params);
+void devl_port_resources_unregister(struct devlink_port *devlink_port);
 int devl_dpipe_table_resource_set(struct devlink *devlink,
 				  const char *table_name, u64 resource_id,
 				  u64 resource_units);
@@ -2047,9 +2116,12 @@ devlink_health_reporter_state_update(struct devlink_health_reporter *reporter,
 				     enum devlink_health_reporter_state state);
 void
 devlink_health_reporter_recovery_done(struct devlink_health_reporter *reporter);
+#endif
 
-int devl_nested_devlink_set(struct devlink *devlink,
-			    struct devlink *nested_devlink);
+int devm_nested_mlxdevm_set(struct mlxdevm *mlxdevm,
+			    struct mlxdevm *nested_mlxdevm);
+
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 bool devlink_is_reload_failed(const struct devlink *devlink);
 void devlink_remote_reload_actions_performed(struct devlink *devlink,
 					     enum devlink_reload_limit limit,
@@ -2109,11 +2181,12 @@ void
 devl_trap_policers_unregister(struct devlink *devlink,
 			      const struct devlink_trap_policer *policers,
 			      size_t policers_count);
-#endif
 
+#endif
 struct mlxdevm *__must_check mlxdevm_try_get(struct mlxdevm *mlxdevm);
 void mlxdevm_put(struct mlxdevm *mlxdevm);
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
+
 void devlink_compat_running_version(struct devlink *devlink,
 				    char *buf, size_t len);
 int devlink_compat_flash_update(struct devlink *devlink, const char *file_name);
@@ -2125,6 +2198,6 @@ int devlink_compat_switch_id_get(struct net_device *dev,
 int devlink_nl_port_handle_fill(struct sk_buff *msg, struct devlink_port *devlink_port);
 size_t devlink_nl_port_handle_size(struct devlink_port *devlink_port);
 void devlink_fmsg_dump_skb(struct devlink_fmsg *fmsg, const struct sk_buff *skb);
-#endif
 
+#endif
 #endif /* _COMPAT_NET_MLXDEVM_H_ */

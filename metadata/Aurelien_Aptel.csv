@@ -1,0 +1,16 @@
+sep=;
+Change-Id=Iec50a9016df3103dc893db64dd52df40a6c2acc0; subject=nvmet: fix race in enabling/disabling namespace on target; feature=backports; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I66aeb81ab9b476668d647a48574edb437f4030e9; subject=import vfs from v7.0 rebase; feature=virtiofs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I344238feb877d803874700aedbb70c20456400ff; subject=virtiofs: add missing backport and rdma.m4 changes, enable in configure; feature=backports; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=I6a1850c0093106998f8ee89ed1db4e32071f117b; subject=BACKPORTS: nvmf; feature=backports; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=I1ba83ed7c59a9108581486577953360ff09a4888; subject=virtiofs: workaround for packaging; feature=backports; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=I2a5f217cbd09e75821f7014a9cf11fd1dd7a1c86; subject=drivers/nvme/host: fix unconditional CONFIG_NVFS flag causing undefined symbols; feature=backports; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Iad8e5983fcb89b49a893e6795ef55adbd5c17003; subject=nvmf: fix nvme-auth unknown symbols; feature=backports; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=I8cc359e3b359b20cb77da9edb93e3886635d303c; subject=nvmet-rdma: security: bound recv/send queue sizes for admin and I/O queues; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4af0915792bcc1325da0636a640d99e0753d8a9a; subject=nvmet: security: bound discovery log page offset against alloc_len; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I12a6781109fb4208f2e2fa5c710be282718dab1d; subject=nvmet: security: enforce MQES on admin queue to prevent u16 wrap of sqsize+1; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4eb167e995439ca1561d9a1691ffe70682044f10; subject=nvmet-tcp: security: validate H2C data PDU length against remaining transfer; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I8881ffd19b7094845b96bb951b91ce1b931d0bb5; subject=nvmet: security: fix buffer overflow due to sizeof on wrong pointer; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib72a6e01053587bccb9f82a37d2938a296b9316a; subject=nvmet-rdma: security: fix u64 overflow in inline SGL bounds check; feature=security; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Id9f2c2a716dddbe32a6782a5a204284bd980bb9a; subject=fuse: Fix inverted abort logic in fuse_abort_conn(); feature=virtiofs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I041b9b6daba519099dc4117e82786b13af6b5523; subject=xprtrdma: Reject Read chunk position past the Receive buffer head; feature=security; upstream_status=NA; upstream_issue=; general=;

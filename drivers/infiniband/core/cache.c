@@ -116,9 +116,9 @@ struct ib_gid_table {
 	/* rwlock protects data_vec[ix]->state and entry pointer.
 	 */
 	rwlock_t			rwlock;
-	struct ib_gid_table_entry	**data_vec;
 	/* bit field, each bit indicates the index of default GID */
 	u32				default_gid_indices;
+	struct ib_gid_table_entry	*data_vec[] __counted_by(sz);
 };
 
 static void dispatch_gid_change_event(struct ib_device *ib_dev, u32 port)
@@ -296,14 +296,13 @@ alloc_gid_entry(const struct ib_gid_attr *attr)
 	struct ib_gid_table_entry *entry;
 	struct net_device *ndev;
 
-	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+	entry = kzalloc_obj(*entry);
 	if (!entry)
 		return NULL;
 
 	ndev = rcu_dereference_protected(attr->ndev, 1);
 	if (ndev) {
-		entry->ndev_storage = kzalloc(sizeof(*entry->ndev_storage),
-					      GFP_KERNEL);
+		entry->ndev_storage = kzalloc_obj(*entry->ndev_storage);
 		if (!entry->ndev_storage) {
 			kfree(entry);
 			return NULL;
@@ -771,24 +770,16 @@ const struct ib_gid_attr *rdma_find_gid_by_filter(
 
 static struct ib_gid_table *alloc_gid_table(int sz)
 {
-	struct ib_gid_table *table = kzalloc(sizeof(*table), GFP_KERNEL);
+	struct ib_gid_table *table = kzalloc_flex(*table, data_vec, sz);
 
 	if (!table)
 		return NULL;
 
-	table->data_vec = kcalloc(sz, sizeof(*table->data_vec), GFP_KERNEL);
-	if (!table->data_vec)
-		goto err_free_table;
+	table->sz = sz;
 
 	mutex_init(&table->lock);
-
-	table->sz = sz;
 	rwlock_init(&table->rwlock);
 	return table;
-
-err_free_table:
-	kfree(table);
-	return NULL;
 }
 
 static void release_gid_table(struct ib_device *device,
@@ -810,7 +801,6 @@ static void release_gid_table(struct ib_device *device,
 	}
 
 	mutex_destroy(&table->lock);
-	kfree(table->data_vec);
 	kfree(table);
 }
 
@@ -1485,7 +1475,7 @@ ib_cache_update(struct ib_device *device, u32 port, bool update_gids,
 	if (!rdma_is_port_valid(device, port))
 		return -EINVAL;
 
-	tprops = kmalloc(sizeof *tprops, GFP_KERNEL);
+	tprops = kmalloc_obj(*tprops);
 	if (!tprops)
 		return -ENOMEM;
 
@@ -1505,9 +1495,8 @@ ib_cache_update(struct ib_device *device, u32 port, bool update_gids,
 	update_pkeys &= !!tprops->pkey_tbl_len;
 
 	if (update_pkeys) {
-		pkey_cache = kmalloc(struct_size(pkey_cache, table,
-						 tprops->pkey_tbl_len),
-				     GFP_KERNEL);
+		pkey_cache = kmalloc_flex(*pkey_cache, table,
+					  tprops->pkey_tbl_len);
 		if (!pkey_cache) {
 			ret = -ENOMEM;
 			goto err;
@@ -1616,7 +1605,7 @@ void ib_dispatch_event(const struct ib_event *event)
 {
 	struct ib_update_work *work;
 
-	work = kzalloc(sizeof(*work), GFP_ATOMIC);
+	work = kzalloc_obj(*work, GFP_ATOMIC);
 	if (!work)
 		return;
 

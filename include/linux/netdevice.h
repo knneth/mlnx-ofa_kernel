@@ -14,10 +14,8 @@
 #define alloc_netdev(sizeof_priv, name, name_assign_type, setup) \
 	        alloc_netdev_mqs(sizeof_priv, name, name_assign_type, setup, 1, 1)
 
-#ifndef SET_ETHTOOL_OPS
 #define SET_ETHTOOL_OPS(netdev,ops) \
     ( (netdev)->ethtool_ops = (ops) )
-#endif
 
 static inline int netdev_set_master(struct net_device *dev,
 				    struct net_device *master)

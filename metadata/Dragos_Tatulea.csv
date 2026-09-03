@@ -1,0 +1,5 @@
+sep=;
+Change-Id=Ia586b791172bd608a1e2fce168b3fbe7ce26b4fb; subject=IB/IPoIB: ndo_set_rx_mode_async conversion; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=134567890; general=upstream commit ID: cfd08f09723c, tag: v7.1-rc5;
+Change-Id=Ifcda2c7388492a4f6a1a7d45c6efc98b6e50b3cf; subject=net/mlx5e: xsk: Fix unlocked writing to ICOSQ; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=1234567890; general=upstream commit ID: c326f9c68921, tag: v7.1-rc5;
+Change-Id=Ia96131a1e1a7273b625784b8b5c72ac9ca87da80; subject=net/mlx5e: xsk: Fix DMA and xdp_frame leak on XDP_TX xmit failure; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: b69004f5a6ad, tag: v7.1;
+Change-Id=I9ccfb40fb396dbaa6756bd25c6652024ecc08a23; subject=net/mlx5: Check max_macs devlink param value against max capability; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: d7b0413b3571, tag: v7.2-rc1;

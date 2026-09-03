@@ -259,7 +259,7 @@ static void destroy_unused_implicit_child_mr(struct mlx5_ib_mr *mr)
 
 	/* Freeing a MR is a sleeping operation, so bounce to a work queue */
 	INIT_WORK(&mr->odp_destroy.work, free_implicit_child_mr_work);
-	queue_work(system_unbound_wq, &mr->odp_destroy.work);
+	queue_work(system_dfl_wq, &mr->odp_destroy.work);
 }
 
 static bool mlx5_ib_invalidate_range(struct mmu_interval_notifier *mni,
@@ -1092,7 +1092,7 @@ next_mr:
 				continue;
 			}
 
-			frame = kzalloc(sizeof(*frame), GFP_KERNEL);
+			frame = kzalloc_obj(*frame);
 			if (!frame) {
 				ret = -ENOMEM;
 				goto end;
@@ -1875,25 +1875,6 @@ mlx5_ib_odp_destroy_eq(struct mlx5_ib_dev *dev, struct mlx5_ib_pf_eq *eq)
 	return err;
 }
 
-int mlx5_odp_init_mkey_cache(struct mlx5_ib_dev *dev)
-{
-	struct mlx5r_cache_rb_key rb_key = {
-		.access_mode = MLX5_MKC_ACCESS_MODE_KSM,
-		.ndescs = mlx5_imr_ksm_entries,
-		.ph = MLX5_IB_NO_PH,
-	};
-	struct mlx5_cache_ent *ent;
-
-	if (!(dev->odp_caps.general_caps & IB_ODP_SUPPORT_IMPLICIT))
-		return 0;
-
-	ent = mlx5r_cache_create_ent_locked(dev, rb_key, true);
-	if (IS_ERR(ent))
-		return PTR_ERR(ent);
-
-	return 0;
-}
-
 static const struct ib_device_ops mlx5_ib_dev_odp_ops = {
 	.advise_mr = mlx5_ib_advise_mr,
 };
@@ -1930,11 +1911,8 @@ int mlx5_ib_odp_init(void)
 	/* 56 is x86-64, 5-level paging */
 	else if (log_va_pages <= 56 - PAGE_SHIFT)
 		mlx5_imr_mtt_shift = 34;
-	else {
-		pr_warn("mlx5_ib_odp_init:  implicit ODP is not supported for task size=%lu\n",
-			TASK_SIZE);
+	else
 		return 0;
-	}
 
 	mlx5_imr_mtt_size = BIT_ULL(mlx5_imr_mtt_shift);
 	mlx5_imr_mtt_bits = mlx5_imr_mtt_shift - PAGE_SHIFT;
@@ -2100,7 +2078,7 @@ int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
 		return mlx5_ib_prefetch_sg_list(pd, advice, pf_flags, sg_list,
 						num_sge);
 
-	work = kvzalloc(struct_size(work, frags, num_sge), GFP_KERNEL);
+	work = kvzalloc_flex(*work, frags, num_sge);
 	if (!work)
 		return -ENOMEM;
 
@@ -2109,6 +2087,6 @@ int mlx5_ib_advise_mr_prefetch(struct ib_pd *pd,
 		destroy_prefetch_work(work);
 		return rc;
 	}
-	queue_work(system_unbound_wq, &work->work);
+	queue_work(system_dfl_wq, &work->work);
 	return 0;
 }

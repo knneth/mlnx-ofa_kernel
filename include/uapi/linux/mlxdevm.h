@@ -21,6 +21,8 @@
 #define MLXDEVM_GENL_VERSION 0x1
 #define MLXDEVM_GENL_MCGRP_CONFIG_NAME "config"
 
+#define MLXDEVM_INDEX_BUS_NAME "mlxdevm_index"
+
 enum mlxdevm_command {
 	/* don't change the order or add anything between, this is ABI! */
 	MLXDEVM_CMD_UNSPEC,
@@ -302,11 +304,13 @@ enum devlink_attr_selftest_id {
 	DEVLINK_ATTR_SELFTEST_ID_MAX = __DEVLINK_ATTR_SELFTEST_ID_MAX - 1
 };
 
-enum devlink_selftest_status {
-	DEVLINK_SELFTEST_STATUS_SKIP,
-	DEVLINK_SELFTEST_STATUS_PASS,
-	DEVLINK_SELFTEST_STATUS_FAIL
+#endif
+enum mlxdevm_selftest_status {
+	MLXDEVM_SELFTEST_STATUS_SKIP,
+	MLXDEVM_SELFTEST_STATUS_PASS,
+	MLXDEVM_SELFTEST_STATUS_FAIL
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 enum devlink_attr_selftest_result {
 	DEVLINK_ATTR_SELFTEST_RESULT_UNSPEC,
@@ -650,6 +654,14 @@ enum mlxdevm_attr {
 
 	MLXDEVM_ATTR_HEALTH_REPORTER_BURST_PERIOD,	/* u64 */
 
+	MLXDEVM_ATTR_PARAM_VALUE_DEFAULT,	/* dynamic */
+	MLXDEVM_ATTR_PARAM_RESET_DEFAULT,	/* flag */
+
+	MLXDEVM_ATTR_INDEX,			/* uint */
+	MLXDEVM_ATTR_RESOURCE_SCOPE_MASK,	/* u32 */
+
+	MLXDEVM_ATTR_PARENT_DEV,                /* nested */
+
 	/* Add new attributes above here, update the spec in
 	 * Documentation/netlink/specs/mlxdevm.yaml and re-generate
 	 * net/mlxdevm/netlink_gen.c.
@@ -711,7 +723,19 @@ enum devlink_dpipe_header_id {
 enum mlxdevm_resource_unit {
 	MLXDEVM_RESOURCE_UNIT_ENTRY,
 };
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
+enum devlink_resource_scope {
+	DEVLINK_RESOURCE_SCOPE_DEV_BIT,
+	DEVLINK_RESOURCE_SCOPE_PORT_BIT,
+};
+
+#define DEVLINK_RESOURCE_SCOPE_DEV \
+	_BITUL(DEVLINK_RESOURCE_SCOPE_DEV_BIT)
+#define DEVLINK_RESOURCE_SCOPE_PORT \
+	_BITUL(DEVLINK_RESOURCE_SCOPE_PORT_BIT)
+
+#endif
 enum mlxdevm_port_fn_attr_cap {
 	MLXDEVM_PORT_FN_ATTR_CAP_ROCE_BIT,
 	MLXDEVM_PORT_FN_ATTR_CAP_MIGRATABLE_BIT,

@@ -1,19 +1,110 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h | 1 -
- 1 file changed, 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/lib/st.c  | 28 ++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c b/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/clock.h
-@@ -101,7 +101,6 @@ static inline ktime_t mlx5_timecounter_cyc2time(struct mlx5_clock *clock,
- 	struct mlx5_timer *timer = &clock->timer;
- 	unsigned int seq;
- 	u64 nsec;
--
- #if defined(CONFIG_PTP_1588_CLOCK) || defined(CONFIG_PTP_1588_CLOCK_MODULE)
- 	do {
- 		seq = read_seqbegin(&clock->lock);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/lib/st.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved
+  */
+ 
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_SIZE
+ #include <linux/mlx5/driver.h>
+ #include <linux/mlx5/device.h>
+ 
+@@ -19,16 +20,21 @@ struct mlx5_st {
+ 	struct mutex lock;
+ 	struct xa_limit index_limit;
+ 	struct xarray idx_xa; /* key == index, value == struct mlx5_st_idx_data */
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
++/* Newer kernels (6.19+): direct ST mode supported */
+ 	u8 direct_mode : 1;
++#endif
+ };
+ 
+ struct mlx5_st *mlx5_st_create(struct mlx5_core_dev *dev)
+ {
+ 	struct pci_dev *pdev = dev->pdev;
+ 	struct mlx5_st *st;
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
+ 	u8 direct_mode = 0;
+-	u16 num_entries;
+ 	u32 tbl_loc;
++#endif
++	u16 num_entries;
+ 	int ret;
+ 
+ 	if (!MLX5_CAP_GEN(dev, mkey_pcie_tph))
+@@ -43,6 +49,8 @@ struct mlx5_st *mlx5_st_create(struct mlx5_core_dev *dev)
+ 	if (!pdev->tph_cap)
+ 		return NULL;
+ 
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
++	/* Newer kernels (6.19+): detect direct ST mode; skip table size query in direct mode */
+ 	tbl_loc = pcie_tph_get_st_table_loc(pdev);
+ 	if (tbl_loc == PCI_TPH_LOC_NONE)
+ 		direct_mode = 1;
+@@ -53,6 +61,13 @@ struct mlx5_st *mlx5_st_create(struct mlx5_core_dev *dev)
+ 		if (num_entries < 2)
+ 			return NULL;
+ 	}
++#else
++	/* Older kernels: only table mode supported */
++	num_entries = pcie_tph_get_st_table_size(pdev);
++	/* We need a reserved entry for non TPH cases */
++	if (num_entries < 2)
++		return NULL;
++#endif
+ 
+ 	/* The OS doesn't support ST */
+ 	ret = pcie_enable_tph(pdev, PCI_TPH_ST_DS_MODE);
+@@ -65,9 +80,12 @@ struct mlx5_st *mlx5_st_create(struct mlx5_core_dev *dev)
+ 
+ 	mutex_init(&st->lock);
+ 	xa_init_flags(&st->idx_xa, XA_FLAGS_ALLOC);
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
++	/* Newer kernels (6.19+): in direct mode skip index allocation */
+ 	st->direct_mode = direct_mode;
+ 	if (st->direct_mode)
+ 		return st;
++#endif
+ 
+ 	/* entry 0 is reserved for non TPH cases */
+ 	st->index_limit.min = MLX5_MKC_PCIE_TPH_NO_STEERING_TAG_INDEX + 1;
+@@ -109,10 +127,13 @@ int mlx5_st_alloc_index(struct mlx5_core_dev *dev, enum tph_mem_type mem_type,
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
++	/* Newer kernels (6.19+): in direct mode, use tag directly as index */
+ 	if (st->direct_mode) {
+ 		*st_index = tag;
+ 		return 0;
+ 	}
++#endif
+ 
+ 	mutex_lock(&st->lock);
+ 
+@@ -163,8 +184,11 @@ int mlx5_st_dealloc_index(struct mlx5_core_dev *dev, u16 st_index)
+ 	if (!st)
+ 		return -EOPNOTSUPP;
+ 
++#ifdef HAVE_PCIE_TPH_GET_ST_TABLE_LOC
++	/* Newer kernels (6.19+): nothing to release in direct mode */
+ 	if (st->direct_mode)
+ 		return 0;
++#endif
+ 
+ 	mutex_lock(&st->lock);
+ 	idx_data = xa_load(&st->idx_xa, st_index);
+@@ -183,3 +207,5 @@ end:
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(mlx5_st_dealloc_index);
++#endif /* HAVE_PCIE_TPH_GET_ST_TABLE_SIZE */
++

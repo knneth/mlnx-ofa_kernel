@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I3d21196d9ba05c73c1659055b8e33b692809791e; subject=net/mlx5e: fix BQL reset on SQ re-activation; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: e7386770be1b, tag: v7.2-rc7;

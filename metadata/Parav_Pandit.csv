@@ -1,0 +1,16 @@
+sep=;
+Change-Id=I3955098d099c1e48dd3bd7923f3e6cb6662b7247; subject=IB/core: Introduce and honor bond_device flag; feature=ib_core_bugs_in_review; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I6f769128b981e4e784b582f69d3b038de6cc3553; subject=IB/mlx5: Expose rdma bond device; feature=expose_rdma_bond; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I5ab369ba9a9843ecacc9167559196a0056b3d13f; subject=net/mlx5: SF_CFG, SF config dummy driver; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ia0078a875a4a7e15423c8f14e5fe2f194aaeaa77; subject=net/mlx5: SF, Support attributes set by config driver; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Id9b969c2cdf9e099f3154ab2d78c412970dbb6dc; subject=net/mlx5: DEVM, prefix controller number for SF; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I78434b2ac1e6f6705830b031e521bb6c6c923544; subject=net/mlx5e: Do not create physical port specific files for SF; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib8f3aa80e11279366efe7c55313e8232abcece16; subject=net/mlx5: Disable command cache for SFs; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I6df32e1c2a775a8a1aedf64ad3a2139f30ed7acc; subject=net/mlx5e: Support SF eswitch representor; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Iad153fdc0c13c620f47003276c5e0c40227b1270; subject=net/mlx5: SF Enable user to configure EQ params; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Idfdc78e6acb2a90089222e5d8fb44093ff650161; subject=net/mlx5: Disable Fast unload when SF is allocated; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I5f6c84b4339ff03c99f3b87ddce809f4e4577518; subject=IB/ipoib: Allow setting mac address for the VF; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ic162601fa5bbce864d1ae05f5fe17fd93a25ffad; subject=IB/core: Introduce rdma_is_gid_attr_valid() to check GID attribute; feature=ib_namespace; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I5b82de025824e5bf24d26d1246608e47da8f2b8a; subject=IB/core: Make ib_nl_ip_send_msg() non blocking; feature=ib_namespace; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I174b2c0f35f278f0c98d850097f3804c0e390011; subject=IB/core: Validate net ns of RoCE gid during destination resolve; feature=ib_namespace; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib3f31f528fa14e2e054faccc6b8be7a4c1f0cffa; subject=RDMA/core: Validate net ns of RoCE gid and gid attribute sysfs entries; feature=ib_namespace; upstream_status=NA; upstream_issue=; general=;

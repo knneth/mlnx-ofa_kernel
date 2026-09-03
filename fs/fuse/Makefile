@@ -5,5 +5,4 @@
 ccflags-y += -Wframe-larger-than=2048
 
 obj-$(CONFIG_VIRTIO_FS) := virtiofs.o
-virtiofs-y := dev.o inode.o dir.o file.o xattr.o acl.o readdir.o ioctl.o iomode.o virtio_fs.o
-
+virtiofs-y := dev.o dir.o file.o inode.o xattr.o acl.o readdir.o ioctl.o iomode.o virtio_fs.o

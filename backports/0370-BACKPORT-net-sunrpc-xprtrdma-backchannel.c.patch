@@ -1,0 +1,118 @@
+From: Israel Rukshin <israelr@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/backchannel.c
+
+Gate xprt_enqueue_bc_request() against the open-coded enqueue fallback via
+HAVE_XPRT_ENQUEUE_BC_REQUEST; declare bc_serv only when the fallback is used.
+
+Change-Id: Ibf03e5155ee124abf545182f818d8648c2076e9c
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Signed-off-by: Israel Rukshin <israelr@nvidia.com>
+---
+ net/sunrpc/xprtrdma/backchannel.c | 39 +++++++++++++++++++++++++++++--
+ 1 file changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/net/sunrpc/xprtrdma/backchannel.c b/net/sunrpc/xprtrdma/backchannel.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/sunrpc/xprtrdma/backchannel.c
++++ b/net/sunrpc/xprtrdma/backchannel.c
+@@ -12,10 +12,18 @@
+ #include <linux/sunrpc/bc_xprt.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ #undef RPCRDMA_BACKCHANNEL_DEBUG
+ 
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
++
+ /**
+  * xprt_rdma_bc_setup - Pre-allocate resources for handling backchannel requests
+  * @xprt: transport associated with these backchannel resources
+@@ -28,10 +36,13 @@ int xprt_rdma_bc_setup(struct rpc_xprt *xprt, unsigned int reqs)
+ 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
+ 
+ 	r_xprt->rx_buf.rb_bc_srv_max_requests = RPCRDMA_BACKWARD_WRS >> 1;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_cb_setup(r_xprt, reqs);
++#endif
+ 	return 0;
+ }
+ 
++
+ /**
+  * xprt_rdma_bc_maxpayload - Return maximum backchannel message size
+  * @xprt: transport
+@@ -79,7 +90,9 @@ static int rpcrdma_bc_marshal_reply(struct rpc_rqst *rqst)
+ 				      &rqst->rq_snd_buf, rpcrdma_noch_pullup))
+ 		return -EIO;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_cb_reply(r_xprt, rqst);
++#endif
+ 	return 0;
+ }
+ 
+@@ -139,7 +152,6 @@ void xprt_rdma_bc_destroy(struct rpc_xprt *xprt, unsigned int reqs)
+ 		spin_unlock(&xprt->bc_pa_lock);
+ 
+ 		rpcrdma_req_destroy(rpcr_to_rdmar(rqst));
+-
+ 		spin_lock(&xprt->bc_pa_lock);
+ 	}
+ 	spin_unlock(&xprt->bc_pa_lock);
+@@ -221,6 +233,9 @@ void rpcrdma_bc_receive_call(struct rpcrdma_xprt *r_xprt,
+ 			     struct rpcrdma_rep *rep)
+ {
+ 	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
++#ifndef HAVE_XPRT_ENQUEUE_BC_REQUEST
++	struct svc_serv *bc_serv;
++#endif
+ 	struct rpcrdma_req *req;
+ 	struct rpc_rqst *rqst;
+ 	struct xdr_buf *buf;
+@@ -239,7 +254,6 @@ void rpcrdma_bc_receive_call(struct rpcrdma_xprt *r_xprt,
+ 	rqst = rpcrdma_bc_rqst_get(r_xprt);
+ 	if (!rqst)
+ 		goto out_overflow;
+-
+ 	rqst->rq_reply_bytes_recvd = 0;
+ 	rqst->rq_xid = *p;
+ 
+@@ -258,10 +272,31 @@ void rpcrdma_bc_receive_call(struct rpcrdma_xprt *r_xprt,
+ 	 */
+ 	req = rpcr_to_rdmar(rqst);
+ 	req->rl_reply = rep;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_cb_call(r_xprt, rqst);
++#endif
+ 
+ 	/* Queue rqst for ULP's callback service */
++#ifdef HAVE_XPRT_ENQUEUE_BC_REQUEST
+ 	xprt_enqueue_bc_request(rqst);
++#else
++	bc_serv = xprt->bc_serv;
++	xprt_get(xprt);
++#ifdef HAVE_SVC_SERV_SV_CB_LIST_LWQ
++	lwq_enqueue(&rqst->rq_bc_list, &bc_serv->sv_cb_list);
++#endif
++#ifdef HAVE_SVC_SERV_SV_CB_LIST_LIST_HEAD
++	spin_lock(&bc_serv->sv_cb_lock);
++	list_add(&rqst->rq_bc_list, &bc_serv->sv_cb_list);
++	spin_unlock(&bc_serv->sv_cb_lock);
++#endif
++
++#ifdef HAVE_SVC_POOL_WAKE_IDLE_THREAD
++	svc_pool_wake_idle_thread(&bc_serv->sv_pools[0]);
++#else
++	wake_up(&bc_serv->sv_cb_waitq);
++#endif
++#endif /* HAVE_XPRT_ENQUEUE_BC_REQUEST */
+ 
+ 	r_xprt->rx_stats.bcall_count++;
+ 	return;

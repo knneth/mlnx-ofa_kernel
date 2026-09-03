@@ -58,6 +58,8 @@
 %endif
 %global _kmp_rel %{_release1}%{?_kmp_build_num}%{?_dist}
 
+%global __requires_exclude ^/usr/bin/dh-exec$
+
 Summary: %{_name} Driver
 Name: %{_name}
 Version: %{_version}
@@ -265,11 +267,12 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ "${old_ver}" != "%{dkms_version}" ] || continue
 	rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
-/usr/sbin/dkms install %{name}/%{dkms_version}
+dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
+dkms install %{name}/%{dkms_version}
 
 %preun dkms
-/usr/sbin/dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null || :
+[ ! -d /var/lib/dkms/%{name}/%{dkms_version} ] || \
+	dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null
 
 %if %{with building_kmods}
 %if "%{KMP}" != "1"

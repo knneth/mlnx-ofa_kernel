@@ -1,0 +1,9 @@
+sep=;
+Change-Id=I4decdfc2d288e317e14225e9319018a9ab5eb231; subject=IB/mlx5: Add TTL global value sysfs; feature=mlx5_set_ttl; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I1de496ee219ed773f898ec639b6178bd08674dfe; subject=net/mlx5: Lag: refactor representor reload handling; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: b501400fa66d, tag: v7.2-rc1;
+Change-Id=I0407df0cde47897cc3828db29d03eea8787b4f15; subject=net/mlx5: E-Switch, let esw work callers choose GFP flags; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 386ef557f6df, tag: v7.2-rc1;
+Change-Id=I48984043e2f18ca7acd5a8bed5dae5979b8f17b8; subject=net/mlx5: E-Switch, add representor lifecycle lock; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 9b8468f001e4, tag: v7.2-rc1;
+Change-Id=Ib8bd1a28f31ec75691ae08a31e7a276beda7ddfc; subject=net/mlx5: Lag, avoid LAG and representor lock cycles; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 63ec6c69e613, tag: v7.2-rc1;
+Change-Id=I30fa5f825b9387b27199fc4be4f4526e3e062eae; subject=net/mlx5: E-Switch, serialize representor lifecycle; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 32a72840ee30, tag: v7.2-rc1;
+Change-Id=Idb8d8cff25e93795f99c4dfb90a286e36b8cdd3c; subject=net/mlx5: E-Switch, unwind only newly loaded representor types; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 8a6712925d38, tag: v7.2-rc1;
+Change-Id=Iacdffbbd58851519902e5b7cbcbf467438edc2c9; subject=net/mlx5: E-Switch, load reps via work queue after registration; feature=bytedance_arp_replay; upstream_status=accepted; upstream_issue=5105915; general=upstream commit ID: 25933aca1012, tag: v7.2-rc1;

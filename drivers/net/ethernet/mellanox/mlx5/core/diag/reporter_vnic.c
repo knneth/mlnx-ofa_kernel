@@ -55,7 +55,7 @@ static void mlx5_reporter_vnic_diagnose_counter_icm(struct mlx5_core_dev *dev,
 		mlx5_core_warn(dev, "Reading vhca_icm_ctrl failed. err = %d\n", err);
 		return;
 	}
-	cur_alloc_icm = MLX5_GET(vhca_icm_ctrl_reg, out_icm_reg, max_alloc_icm_th);
+	cur_alloc_icm = MLX5_GET(vhca_icm_ctrl_reg, out_icm_reg, cur_alloc_icm);
 	devlink_fmsg_u32_pair_put(fmsg, "icm_consumption", cur_alloc_icm);
 }
 

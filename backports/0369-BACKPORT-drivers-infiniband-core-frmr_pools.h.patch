@@ -1,0 +1,28 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/frmr_pools.h
+
+Change-Id: Ib28f187f473c62f7adc5849448d83a8f496e6ea2
+---
+ drivers/infiniband/core/frmr_pools.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/infiniband/core/frmr_pools.h b/drivers/infiniband/core/frmr_pools.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/frmr_pools.h
++++ b/drivers/infiniband/core/frmr_pools.h
+@@ -6,8 +6,15 @@
+ #ifndef RDMA_CORE_FRMR_POOLS_H
+ #define RDMA_CORE_FRMR_POOLS_H
+ 
++#include "../../../compat/config.h"
+ #include <rdma/frmr_pools.h>
++#ifdef HAVE_LINUX_RBTREE_TYPES_H
++/* Newer kernels (5.14+): rbtree type defs split out */
+ #include <linux/rbtree_types.h>
++#else
++/* Older kernels: rbtree types live in rbtree.h */
++#include <linux/rbtree.h>
++#endif
+ #include <linux/spinlock_types.h>
+ #include <linux/types.h>
+ #include <asm/page.h>

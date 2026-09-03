@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I7ac854d41d960288292e5956929f63bf018fed68; subject=net/mlx5: qos: Fix double increment of parent->num_vports; feature=mlx5_qos_sysfs_cleanup_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Icb10445c599ca6ef47e25742e584fe3b58c1ae20; subject=net/mlx5: qos: Guard against NULL parent in esw_qos_node_set_parent(); feature=mlx5_qos_sysfs_cleanup_bugs; upstream_status=NA; upstream_issue=; general=;

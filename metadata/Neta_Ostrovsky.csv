@@ -1,0 +1,7 @@
+sep=;
+Change-Id=If1bd4841feaf745f4543364b71a7c1e0a517c306; subject=IB/mlx5: Update traffic_class from sysfs files in DCT; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I3f6ef4a91b8ed8ce4d66b29ea90363d680aa3ab3; subject=net/mlx5: SF_CFG, Add max num EQs parameter; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I8db9104405faad780fbdaa6b156215e09bfb10fd; subject=net/mlx5: Add mlx5 support for mlxdevm; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I715da5ebb09f70ca386b1172971634bded3c7bdc; subject=net/mlx5: Add changes required to support mlx5_devm shim layer; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Idda7a619b9564c68c081e64c3635f5986d0d59b9; subject=net/mlx5: mlx5_devm support for function hca_cap; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I45ed6b548b9ccd48d6370e07e1c83bd93a47d4ec; subject=mlx5: Sync RoCE enablement via sysfs and via devlink; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;

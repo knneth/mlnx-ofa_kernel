@@ -91,30 +91,6 @@ static const struct class uverbs_class = {
 	.devnode = uverbs_devnode,
 };
 
-/*
- * Must be called with the ufile->device->disassociate_srcu held, and the lock
- * must be held until use of the ucontext is finished.
- */
-struct ib_ucontext *ib_uverbs_get_ucontext_file(struct ib_uverbs_file *ufile)
-{
-	/*
-	 * We do not hold the hw_destroy_rwsem lock for this flow, instead
-	 * srcu is used. It does not matter if someone races this with
-	 * get_context, we get NULL or valid ucontext.
-	 */
-	struct ib_ucontext *ucontext = smp_load_acquire(&ufile->ucontext);
-
-	if (!srcu_dereference(ufile->device->ib_dev,
-			      &ufile->device->disassociate_srcu))
-		return ERR_PTR(-EIO);
-
-	if (!ucontext)
-		return ERR_PTR(-EINVAL);
-
-	return ucontext;
-}
-EXPORT_SYMBOL(ib_uverbs_get_ucontext_file);
-
 int uverbs_dealloc_mw(struct ib_mw *mw)
 {
 	struct ib_pd *pd = mw->pd;
@@ -382,7 +358,7 @@ void ib_uverbs_comp_handler(struct ib_cq *cq, void *cq_context)
 		return;
 	}
 
-	entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
+	entry = kmalloc_obj(*entry, GFP_ATOMIC);
 	if (!entry) {
 		spin_unlock_irqrestore(&ev_queue->lock, flags);
 		return;
@@ -417,7 +393,7 @@ void ib_uverbs_async_handler(struct ib_uverbs_async_event_file *async_file,
 		return;
 	}
 
-	entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
+	entry = kmalloc_obj(*entry, GFP_ATOMIC);
 	if (!entry) {
 		spin_unlock_irqrestore(&async_file->ev_queue.lock, flags);
 		return;
@@ -702,12 +678,24 @@ static int ib_uverbs_mmap(struct file *filp, struct vm_area_struct *vma)
 		goto out;
 	}
 
+	if (!down_read_trylock(&file->hw_destroy_rwsem)) {
+		ret = -EIO;
+		goto out;
+	}
+
 	mutex_lock(&file->disassociation_lock);
+	if (file->disassociating) {
+		ret = -EIO;
+		mutex_unlock(&file->disassociation_lock);
+		up_read(&file->hw_destroy_rwsem);
+		goto out;
+	}
 
 	vma->vm_ops = &rdma_umap_ops;
 	ret = ucontext->device->ops.mmap(ucontext, vma);
 
 	mutex_unlock(&file->disassociation_lock);
+	up_read(&file->hw_destroy_rwsem);
 out:
 	srcu_read_unlock(&file->device->disassociate_srcu, srcu_key);
 	return ret;
@@ -734,10 +722,10 @@ static void rdma_umap_open(struct vm_area_struct *vma)
 	/*
 	 * Disassociation already completed, the VMA should already be zapped.
 	 */
-	if (!ufile->ucontext)
+	if (!ufile->ucontext || ufile->disassociating)
 		goto out_unlock;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	priv = kzalloc_obj(*priv);
 	if (!priv)
 		goto out_unlock;
 	rdma_umap_priv_init(priv, vma, opriv->entry);
@@ -756,7 +744,7 @@ out_zap:
 	 * point, so zap it.
 	 */
 	vma->vm_private_data = NULL;
-	zap_vma_ptes(vma, vma->vm_start, vma->vm_end - vma->vm_start);
+	zap_special_vma_range(vma, vma->vm_start, vma->vm_end - vma->vm_start);
 }
 
 static void rdma_umap_close(struct vm_area_struct *vma)
@@ -782,7 +770,7 @@ static void rdma_umap_close(struct vm_area_struct *vma)
 }
 
 /*
- * Once the zap_vma_ptes has been called touches to the VMA will come here and
+ * Once the zap_special_vma_range has been called touches to the VMA will come here and
  * we return a dummy writable zero page for all the pfns.
  */
 static vm_fault_t rdma_umap_fault(struct vm_fault *vmf)
@@ -831,7 +819,27 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 {
 	struct rdma_umap_priv *priv, *next_priv;
 
+	/*
+	 * uverbs_user_mmap_disassociate() is called from two paths:
+	 *
+	 *   uverbs_destroy_ufile_hw(): hw_destroy_rwsem is held for write,
+	 *   so the down_read_trylock() in rdma_umap_open() and
+	 *   ib_uverbs_mmap() already prevents new VMAs from being added;
+	 *   the disassociating flag is set but redundant on this path.
+	 *
+	 *   rdma_user_mmap_disassociate(): hw_destroy_rwsem is NOT held,
+	 *   so the disassociating flag is the only gate that stops
+	 *   rdma_umap_open() and ib_uverbs_mmap() from adding new VMAs.
+	 *
+	 * In both cases disassociation_lock is released before
+	 * mmap_read_lock(), avoiding the ABBA deadlock that would arise
+	 * if disassociation_lock were held across mmap_read_lock() while
+	 * rdma_umap_open()/ib_uverbs_mmap() hold mmap_lock and wait for
+	 * disassociation_lock.
+	 */
 	mutex_lock(&ufile->disassociation_lock);
+	ufile->disassociating = true;
+	mutex_unlock(&ufile->disassociation_lock);
 
 	while (1) {
 		struct mm_struct *mm = NULL;
@@ -857,10 +865,8 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 			break;
 		}
 		mutex_unlock(&ufile->umap_lock);
-		if (!mm) {
-			mutex_unlock(&ufile->disassociation_lock);
-			return;
-		}
+		if (!mm)
+			break;
 
 		/*
 		 * The umap_lock is nested under mmap_lock since it used within
@@ -878,7 +884,7 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 				continue;
 			list_del_init(&priv->list);
 
-			zap_vma_ptes(vma, vma->vm_start,
+			zap_special_vma_range(vma, vma->vm_start,
 				     vma->vm_end - vma->vm_start);
 
 			if (priv->entry) {
@@ -891,6 +897,8 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 		mmput(mm);
 	}
 
+	mutex_lock(&ufile->disassociation_lock);
+	ufile->disassociating = false;
 	mutex_unlock(&ufile->disassociation_lock);
 }
 
@@ -966,7 +974,7 @@ static int ib_uverbs_open(struct inode *inode, struct file *filp)
 		}
 	}
 
-	file = kzalloc(sizeof(*file), GFP_KERNEL);
+	file = kzalloc_obj(*file);
 	if (!file) {
 		ret = -ENOMEM;
 		if (module_dependent)
@@ -1154,7 +1162,7 @@ static int ib_uverbs_add_one(struct ib_device *device)
 	    device->type == RDMA_DEVICE_TYPE_SMI)
 		return -EOPNOTSUPP;
 
-	uverbs_dev = kzalloc(sizeof(*uverbs_dev), GFP_KERNEL);
+	uverbs_dev = kzalloc_obj(*uverbs_dev);
 	if (!uverbs_dev)
 		return -ENOMEM;
 

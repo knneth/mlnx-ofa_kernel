@@ -606,6 +606,16 @@ check_complex_defines()
 	else
 		unset_complex_define_to_config_h HAVE_PAGE_POOL_DEFRAG_PAGE
 	fi
+
+# define HAVE_PP_FLAG_PAGE_FRAG from other flags (the flag lives in the old
+# net/page_pool.h or in the newer net/page_pool/types.h depending on kernel)
+	if check_compat_config_h_var HAVE_PP_FLAG_PAGE_FRAG_IN_PAGE_POOL_H ||
+	   check_compat_config_h_var HAVE_PP_FLAG_PAGE_FRAG_IN_TYPES_H
+	then
+		set_complex_define_to_config_h HAVE_PP_FLAG_PAGE_FRAG
+	else
+		unset_complex_define_to_config_h HAVE_PP_FLAG_PAGE_FRAG
+	fi
 # Define HAVE_NETMEM_SUPPORT from other flags
 	if check_compat_config_h_var HAVE_PAGE_POOL_UNREF_NETMEM &&
 	   check_compat_config_h_var HAVE_NETMEM_DMA_UNMAP_ADDR_SET &&
@@ -655,7 +665,7 @@ check_complex_defines()
 
 # Define HAVE_LIGHT_SFS from other flags
         if check_compat_config_h_var HAVE_DEVL_PARAM_DRIVERINIT_VALUE_GET &&
-           !(check_compat_config_h_var HAVE_DEVLINK_SET_FEATURES)
+           ! check_compat_config_h_var HAVE_DEVLINK_SET_FEATURES
         then
                 set_complex_define_to_config_h HAVE_LIGHT_SFS
         else
@@ -853,6 +863,20 @@ function add_conf {
     fi
 }
 
+set_driver_version() {
+	local deb_ver git_ver
+
+	if [ -f debian/changelog ]; then
+		deb_ver=`head -n1 debian/changelog | cut -d'(' -f2 | cut -d- -f1`
+		if [ "$deb_ver" != "@VERSION@" ]; then
+			CONFIG_MLNX_DRIVER_VERSION="$deb_ver"
+			return
+		fi
+	fi
+	git_ver=`git describe --tags 2>/dev/null`
+	CONFIG_MLNX_DRIVER_VERSION="$git_ver"
+}
+
 # set defaults
 
 SKIP_AUTOCONF=${SKIP_AUTOCONF:-0}
@@ -916,7 +940,6 @@ CONFIG_MLX5_GCOV=""
 CONFIG_COMPAT_KOBJECT_BACKPORT=${CONFIG_COMPAT_KOBJECT_BACKPORT:-''}
 CONFIG_COMPAT_VERSION=${CONFIG_COMPAT_VERSION:-''}
 CONFIG_IPOIB_ALL_MULTI=${CONFIG_IPOIB_ALL_MULTI:-''}
-CONFIG_IPOIB_VERSION=${CONFIG_IPOIB_VERSION:-''}
 
 # From OFED 5.3 FPGA feature disabled and inbox FPGA configs unset
 CONFIG_MLX5_FPGA_TLS=""
@@ -981,29 +1004,30 @@ CONFIG_ENABLE_BASECODE_EXTRAS="y"
 
 # should be unset once backport finished
 # block RHEL supports
-OFED_BASE_KVERSION="6.18"
+OFED_BASE_KVERSION="7.1"
 MIN_KVERSION="5.4"
 
 # Rebase stage UPSTREAM/BASE/BACKPORTS
 REBASE_STAGE="BACKPORTS"
 
 # Non-supported version thresholds (features disabled at these versions and above)
-NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
-BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+NFSRDMA_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+NVMF_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+ISER_ISERT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+SRP_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+SWITCH_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+CLS_ACT_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
+BRIDGE_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
 
 # VIRTIOFS version requirements
 VIRTIOFS_SUPPORTED_KVERSION="6.6.0"
-VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="7.2"
+VIRTIOFS_NON_SUPPORTED_KVERSION_AND_ABOVE="7.3"
 
 KVERSION=${KVERSION:-$(uname -r)}
 ENABLE_CONTAINER_BUILD=${ENABLE_CONTAINER_BUILD:-0}
 
 ignored_autofconf_vars=""
+string_autoconf_vars="CONFIG_MLNX_DRIVER_VERSION"
 
 # Run after compat/configure failed
 # Run from compat/
@@ -1775,6 +1799,7 @@ main()
 MODULES_DIR=${MODULES_DIR:-/lib/modules/${KVERSION}/updates}
 
 set_ksrc_vars
+set_driver_version
 
 # DKMS >= 3.3 sources the build_environment file before building, but
 # older versions silently ignore it. Source it here so that builds on
@@ -2252,6 +2277,10 @@ EOFAUTOCONF
     for config_var in $defined_vars; do
         echo "#define $config_var 1"
     done >>${AUTOCONF_H}
+    for config_var in $string_autoconf_vars; do
+        val="${!config_var}"
+        echo "#define $config_var \"$val\""
+    done >>${AUTOCONF_H}
 
 cat >> ${AUTOCONF_H} << EOFAUTOCONF
 
@@ -2263,6 +2292,10 @@ EOFAUTOCONF
 
     for config_var in $defined_vars; do
         echo "#define $config_var 1"
+    done >>${AUTOCONF_H}
+    for config_var in $string_autoconf_vars; do
+        val="${!config_var}"
+        echo "#define $config_var \"$val\""
     done >>${AUTOCONF_H}
     echo '#endif' >>${AUTOCONF_H}
 

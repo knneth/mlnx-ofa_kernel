@@ -1,0 +1,4 @@
+sep=;
+Change-Id=I795de92feb5f320a0586d9d2fd121991edc9fbab; subject=IB/isert: Reject login PDUs shorter than ISER_HEADERS_LEN; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 29e7b925ae6d, tag: v7.1;
+Change-Id=I82d4ace3bd87cfdae4e5557953d85057a5a55bbd; subject=RDMA/srp: bound SRP_RSP sense copy by the received length; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 13e91fd07630, tag: v7.1;
+Change-Id=I224458b69e36fe4b01370a79c554dfa215533443; subject=IB/mad: Drop unmatched RMPP responses before reassembly; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=1234567890; general=upstream commit ID: d2e52d610b9b, tag: v7.2-rc4;

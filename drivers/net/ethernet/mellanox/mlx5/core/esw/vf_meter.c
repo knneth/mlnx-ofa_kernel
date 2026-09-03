@@ -14,7 +14,7 @@ enum {
 static void
 esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
 {
-	u64 bytes, packets;
+	u64 bytes = 0, packets = 0;
 
 	if (meter->drop_red_rule) {
 		mlx5_del_flow_rules(meter->drop_red_rule);

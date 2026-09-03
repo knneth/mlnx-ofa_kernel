@@ -36,7 +36,6 @@
 #include "mlx5_core.h"
 #include "mlx5_irq.h"
 #include "eswitch.h"
-#include "mlx5_devm.h"
 
 static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf, u16 func_id)
 {
@@ -48,7 +47,7 @@ static int sriov_restore_guids(struct mlx5_core_dev *dev, int vf, u16 func_id)
 	if (sriov->vfs_ctx[vf].node_guid ||
 	    sriov->vfs_ctx[vf].port_guid ||
 	    sriov->vfs_ctx[vf].policy != MLX5_POLICY_INVALID) {
-		in = kzalloc(sizeof(*in), GFP_KERNEL);
+		in = kzalloc_obj(*in);
 		if (!in)
 			return -ENOMEM;
 
@@ -193,13 +192,10 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
 {
 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
 	struct devlink *devlink = priv_to_devlink(dev);
-	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(dev)->device;
 	int err;
 
 	devl_lock(devlink);
-	devm_lock(mlxdevm);
 	err = mlx5_device_enable_sriov(dev, num_vfs);
-	devm_unlock(mlxdevm);
 	devl_unlock(devlink);
 	if (err) {
 		mlx5_core_warn(dev, "mlx5_device_enable_sriov failed : %d\n", err);
@@ -210,9 +206,7 @@ static int mlx5_sriov_enable(struct pci_dev *pdev, int num_vfs)
 	if (err) {
 		mlx5_core_warn(dev, "pci_enable_sriov failed : %d\n", err);
 		devl_lock(devlink);
-		devm_lock(mlxdevm);
 		mlx5_device_disable_sriov(dev, num_vfs, true, true);
-		devm_unlock(mlxdevm);
 		devl_unlock(devlink);
 	}
 	return err;
@@ -222,14 +216,11 @@ void mlx5_sriov_disable(struct pci_dev *pdev, bool num_vf_change)
 {
 	struct mlx5_core_dev *dev  = pci_get_drvdata(pdev);
 	struct devlink *devlink = priv_to_devlink(dev);
-	struct mlxdevm *mlxdevm = &mlx5_devm_device_get(dev)->device;
 	int num_vfs = pci_num_vf(dev->pdev);
 
 	pci_disable_sriov(pdev);
 	devl_lock(devlink);
-	devm_lock(mlxdevm);
 	mlx5_device_disable_sriov(dev, num_vfs, true, num_vf_change);
-	devm_unlock(mlxdevm);
 	devl_unlock(devlink);
 }
 
@@ -345,7 +336,7 @@ int mlx5_sriov_init(struct mlx5_core_dev *dev)
 	sriov->max_vfs = mlx5_get_max_vfs(dev);
 	sriov->num_vfs = pci_num_vf(pdev);
 	sriov->max_ec_vfs = mlx5_core_ec_sriov_enabled(dev) ? pci_sriov_get_totalvfs(dev->pdev) : 0;
-	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);
+	sriov->vfs_ctx = kzalloc_objs(*sriov->vfs_ctx, total_vfs);
 	if (!sriov->vfs_ctx)
 		return -ENOMEM;
 

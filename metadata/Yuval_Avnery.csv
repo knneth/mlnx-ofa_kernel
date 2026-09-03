@@ -1,0 +1,8 @@
+sep=;
+Change-Id=Ibd4237c0de6141eba3583fc139db3883ff7cb068; subject=net/mlx5e: Update host PF mac address on vport enable; feature=mlx5_en_bugs_in_review; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I2130cb7b5313727b156a0e1d3f2fa1ad125e1a66; subject=mlx5/core: OFED ONLY COMMIT - few more tests mlx5e_ethtool_set_channels; feature=mlx5e_leftovers_pp_special_q; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I125bb373b5bf2d54db59ebece308bed97ba01598; subject=net/mlx5: sysfs for setting PF's max_tx_rate via ECPF; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If5a1b48e93c5f574415bdf82cd53895b415cbeb1; subject=net/mlx5: config display and mac sysfs of PF via ECPF; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I02ecb5f2cbb50e7fe08210b198968898cda5d124; subject=net/mlx5: Support VF mac and tx_rate conf from ECPF; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ie672b54e660b4034744e152f80742da7885a9be0; subject=net/mlx5: Add regex enable sysfs from SmartNic; feature=regex; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ic06fb9ed3c3b480079138518297c1143ac141fb8; subject=net/mlx5: Update set hca cap command layout to support regex and other; feature=regex; upstream_status=NA; upstream_issue=; general=;

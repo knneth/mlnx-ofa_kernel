@@ -1,0 +1,14 @@
+sep=;
+Change-Id=I548347f18a9df326d985612703acf86f25282f9c; subject=net/mlx5: Add sysfs API to control RoCE enablement; feature=disable_roce; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I24b90a3fef3278d0b16b871b1fbaec499cfb5a00; subject=RDMA/mlx5: Fix mkey creation error flow rollback; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: c70fcfa98812, tag: v7.2-rc1;
+Change-Id=Ifbdbf90544a5bf05e305884d949fabe4ce44a063; subject=RDMA/mlx5: Fix TPH extraction in FRMR pool key; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: fe683274fee4, tag: v7.2-rc1;
+Change-Id=I9657d8f8a739e1714a249472316ab0dfd5b19872; subject=RDMA/core: Fix skipped usage for driver built FRMR key; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: 3d7fd88aeff7, tag: v7.2-rc1;
+Change-Id=I77749d3183c92f71961168ed671415f38c14baf6; subject=RDMA/core: Fix FRMR aging push to queue error flow; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: c6936506ed55, tag: v7.2-rc1;
+Change-Id=I23b28f3618e5227a6f4f190e3ac4d045fb662c8d; subject=RDMA/core: Fix FRMR set pinned push error path; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: 41a707d0275c, tag: v7.2-rc1;
+Change-Id=I1ef3b83495d5254e35fc96799609dcb77b090bbd; subject=RDMA/core: Avoid NULL dereference on FRMR bad usage; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: 3937243095b5, tag: v7.2-rc1;
+Change-Id=Ib6daa422d7b72653ee1ef4a2ca3f3d16f15d7115; subject=RDMA/core: Fix FRMR handle leak on push failure; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: 8c76126b8666, tag: v7.2-rc1;
+Change-Id=Id7aafedc5f07baa378afdcccbc9faf8978ec8fa8; subject=RDMA/core: Add ib_frmr_pool_drop for unrecoverable handles; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: ddbc251be18f, tag: v7.2-rc1;
+Change-Id=Iedcc0933fbc126d05c556c3ce08163cd3fa9d30f; subject=RDMA/mlx5: Drop FRMR pool handle on UMR revoke failure; feature=mlx5_ib_bugs; upstream_status=accepted; upstream_issue=NA; general=upstream commit ID: c37d79dd967d, tag: v7.2-rc1;
+Change-Id=I36f45793389b578a665baa86ecc4eafc3b7d98f0; subject=metadata: update FRMR fixes series; feature=ofed_scripts; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I14ec467a1e1c5db1340f733da6bf867ff13ed3e2; subject=backports: Backport min() usage in FRMR pools; feature=backports; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=Ia097c5518051d6bd528c112d7c904c69ed780d6c; subject=net/mlx5: fw_tracer, return NULL on create error; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: af39eb111ce6, tag: v7.2-rc7;

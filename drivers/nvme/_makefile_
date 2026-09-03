@@ -30,6 +30,13 @@ ifeq ($(CONFIG_GPU_DIRECT_STORAGE),y)
 override WITH_MAKE_PARAMS += CONFIG_GPU_DIRECT_STORAGE=y
 endif
 
+# Build nvme-apple only if the kernel enables CONFIG_NVME_APPLE and
+# apple-rtkit.ko is shipped for the target kernel.
+override WITH_MAKE_PARAMS += CONFIG_NVME_APPLE=$(shell \
+	! { grep -q CONFIG_NVME_APPLE $(autoconf_h) && \
+	    grep -q '/apple-rtkit\.ko' /lib/modules/$(KVER)/modules.dep; } 2>/dev/null \
+	|| printf 'm')
+
 ifeq ($(CONFIG_NVME_HOST_WITHOUT_FC),m)
 MY_NVMF_KCONFIGS :=	CONFIG_NVME_HOST_WITHOUT_FC=m \
 			CONFIG_NVME_TARGET= \

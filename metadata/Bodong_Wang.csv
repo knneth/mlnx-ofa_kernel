@@ -1,0 +1,7 @@
+sep=;
+Change-Id=I755a77db718a92055a63ae8ec48eb9c1eb686488; subject=IB/core: Add mcion support to mst dump; feature=mlx5_sysfs_ecn_mstdump; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ida318815f03e0e15327c47368f20e0819bedc2c7; subject=net/mlx5e: Update ethtool dump register map; feature=mlx5_sysfs_ecn_mstdump; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I13aaae33c3faebd616f62e508e7bc3d1d1052cf7; subject=mlx5/core: Restore IB guid/policy for virtual functions; feature=restore_ib_guid; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I30b876f09989b9fdc4f43554f11e85acb0f659fc; subject=net/mlx5: E-Switch, Early bail out from switchdev mode if VF is enabled; feature=mlx5_bf; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=If091df14ab893f7551a464fda8418877539721d0; subject=net/mlx5: Update regexp mmo support with new rpm; feature=regex; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ie2cefe68126e5ecab9a5473a725e1c0ae8605a2f; subject=mlx5/core: Add knobs to configure regex on PCI dev layer; feature=regex; upstream_status=NA; upstream_issue=; general=;

@@ -1,62 +1,60 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+ drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
 
 ---
- .../ethernet/mellanox/mlx5/core/esw/bridge.c  | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ .../mellanox/mlx5/core/esw/diag/qos_tracepoint.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/bridge.c
-@@ -1863,9 +1863,15 @@ int mlx5_esw_bridge_port_mdb_add(struct net_device *dev, u16 vport_num, u16 esw_
- 		esw_warn(br_offloads->esw->dev,
- 			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)\n",
- 			 addr, vport_num);
-+#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
- 		NL_SET_ERR_MSG_FMT_MOD(extack,
- 				       "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)",
- 				       addr, vport_num);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
+@@ -18,7 +18,11 @@ TRACE_EVENT(mlx5_esw_vport_qos_destroy,
+ 			     __field(unsigned short, vport_id)
+ 			     __field(unsigned int,   sched_elem_ix)
+ 			     ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
 +#else
-+		esw_info(br_offloads->esw->dev,
-+			 "Failed to lookup bridge port to add MDB (MAC=%pM,vport=%u)",
-+			 addr, vport_num);
++ 	    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
 +#endif
- 		return -EINVAL;
- 	}
- 
-@@ -1876,20 +1882,33 @@ int mlx5_esw_bridge_port_mdb_add(struct net_device *dev, u16 vport_num, u16 esw_
- 			esw_warn(br_offloads->esw->dev,
- 				 "Failed to lookup bridge port vlan metadata to create MDB (MAC=%pM,vid=%u,vport=%u)\n",
- 				 addr, vid, vport_num);
-+#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
- 			NL_SET_ERR_MSG_FMT_MOD(extack,
- 					       "Failed to lookup vlan metadata for MDB (MAC=%pM,vid=%u,vport=%u)",
- 					       addr, vid, vport_num);
+ 		    __entry->vport_id = vport->vport;
+ 		    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
+ 	    ),
+@@ -38,7 +42,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_template,
+ 				     __field(unsigned int, max_rate)
+ 				     __field(void *, parent)
+ 				     ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		    TP_fast_assign(__assign_str(devname);
 +#else
-+		esw_info(br_offloads->esw->dev,
-+			 "Failed to lookup vlan metadata for MDB (MAC=%pM,vid=%u,vport=%u)",
-+			 addr, vid, vport_num);
++		    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
 +#endif
-+
- 			return -EINVAL;
- 		}
- 	}
- 
- 	err = mlx5_esw_bridge_port_mdb_attach(dev, port, addr, vid);
- 	if (err) {
-+#ifdef HAVE_NL_SET_ERR_MSG_FMT_MOD
- 		NL_SET_ERR_MSG_FMT_MOD(extack, "Failed to add MDB (MAC=%pM,vid=%u,vport=%u)",
- 				       addr, vid, vport_num);
+ 			    __entry->vport_id = vport->vport;
+ 			    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
+ 			    __entry->bw_share = bw_share;
+@@ -72,7 +80,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_node_qos_template,
+ 				     __field(const void *, node)
+ 				     __field(unsigned int, tsar_ix)
+ 				     ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 		    TP_fast_assign(__assign_str(devname);
 +#else
-+		esw_info(br_offloads->esw->dev,"Failed to add MDB (MAC=%pM,vid=%u,vport=%u)",
-+			 addr, vid, vport_num);
++		    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
 +#endif
- 		return err;
- 	}
- 
-+
- 	return 0;
- }
- 
+ 			    __entry->node = node;
+ 			    __entry->tsar_ix = tsar_ix;
+ 		    ),
+@@ -106,7 +118,11 @@ TRACE_EVENT(mlx5_esw_node_qos_config,
+ 			     __field(unsigned int, bw_share)
+ 			     __field(unsigned int, max_rate)
+ 			     ),
++#ifdef HAVE_ASSIGN_STR_1_PARAM
+ 	    TP_fast_assign(__assign_str(devname);
++#else
++	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
++#endif
+ 		    __entry->node = node;
+ 		    __entry->tsar_ix = tsar_ix;
+ 		    __entry->bw_share = bw_share;

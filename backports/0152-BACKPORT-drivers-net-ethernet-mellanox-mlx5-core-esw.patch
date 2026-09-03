@@ -1,76 +1,92 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 
 ---
- .../net/ethernet/mellanox/mlx5/core/esw/vf_meter.c | 14 +++++++++++++-
- 1 file changed, 13 insertions(+), 1 deletion(-)
+ .../net/ethernet/mellanox/mlx5/core/esw/qos.h | 51 ++++++++++++++++---
+ 1 file changed, 43 insertions(+), 8 deletions(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/vf_meter.c
-@@ -54,10 +54,12 @@ esw_acl_destrory_meter(struct mlx5_vport *vport, struct vport_meter *meter)
- 		meter->meter_grp = NULL;
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
+@@ -89,18 +89,46 @@ int mlx5_esw_qos_set_sysfs_node_min_rate(struct mlx5_eswitch *esw,
+ void sysfs_esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
+ 				struct netlink_ext_ack *extack);
  
-+#ifdef CONFIG_MLX5_CLS_ACT
- 	if (meter->meter_hndl) {
- 		mlx5e_free_flow_meter(meter->meter_hndl);
- 		meter->meter_hndl = NULL;
- 	}
+-int mlx5_esw_devlink_rate_leaf_tx_share_set(struct devlink_rate *rate_leaf, void *priv,
++int mlx5_esw_qos_link_speed_verify(struct mlx5_core_dev *mdev,
++				  const char *name, u32 link_speed_max,
++				  u64 value, struct netlink_ext_ack *extack);
++int esw_qos_devlink_rate_to_mbps(struct mlx5_core_dev *mdev, const char *name,
++				 u64 *rate, struct netlink_ext_ack *extack);
++int mlx5_esw_devlink_rate_leaf_tx_share_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					    struct devlink_rate *rate_leaf,
 +#endif
- 
- 	if (meter->meter_tbl) {
- 		mlx5_destroy_flow_table(meter->meter_tbl);
-@@ -226,7 +228,9 @@ static int
- esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
- 			    int rx_tx, int xps, u64 rate, u64 burst)
- {
--	struct mlx5e_flow_meter_handle *meter_hndl;
-+#ifdef CONFIG_MLX5_CLS_ACT
-+	struct mlx5e_flow_meter_handle *meter_hndl = NULL;
++					    void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_leaf_tx_max_set(struct devlink_rate *rate_leaf, void *priv,
++int mlx5_esw_devlink_rate_leaf_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_leaf,
 +#endif
- 	struct mlx5e_flow_meter_params params;
- 	int ns, prio;
- 	int err;
-@@ -239,19 +243,25 @@ esw_vf_meter_set_rate_limit(struct mlx5_vport *vport, struct vport_meter *meter,
- 		goto update;
- 	}
- 
-+#ifdef CONFIG_MLX5_CLS_ACT
- 	if (!meter->meter_hndl) {
- 		meter_hndl = mlx5e_alloc_flow_meter(vport->dev);
- 		if (IS_ERR(meter_hndl))
- 			return PTR_ERR(meter_hndl);
- 		meter->meter_hndl = meter_hndl;
- 	}
-+#else
-+	return -EOPNOTSUPP;
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_share_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					    struct devlink_rate *rate_node,
 +#endif
- 
- 	params.rate = rate;
- 	params.burst = burst;
- 	params.mode = xps;
-+#ifdef CONFIG_MLX5_CLS_ACT
- 	err = mlx5e_tc_meter_modify(vport->dev, meter->meter_hndl, &params);
- 	if (err)
- 		goto check_and_free_meter_aso;
++					    void *priv,
+ 					    u64 tx_share, struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *priv,
++int mlx5_esw_devlink_rate_node_tx_max_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++					  struct devlink_rate *rate_node,
 +#endif
- 
- 	if (!meter->meter_tbl) {
- 		if (rx_tx == MLX5_RATE_LIMIT_TX)
-@@ -275,11 +285,13 @@ update:
- 
- 	return 0;
- 
-+#ifdef CONFIG_MLX5_CLS_ACT
- check_and_free_meter_aso:
- 	if (!meter->meter_tbl) {
- 		mlx5e_free_flow_meter(meter->meter_hndl);
- 		meter->meter_hndl = NULL;
- 	}
++					  void *priv,
+ 					  u64 tx_max, struct netlink_ext_ack *extack);
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
+ 				   struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
 +#endif
- 	return err;
- }
++int mlx5_esw_devlink_rate_node_del(
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++				   struct devlink_rate *rate_node,
++#endif
++				   void *priv,
+ 				   struct netlink_ext_ack *extack);
++#ifdef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
+ int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+ 					  void *priv, void *parent_priv,
+@@ -109,11 +137,18 @@ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
+ 					  struct devlink_rate *parent,
+ 					  void *priv, void *parent_priv,
+ 					  struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_node_tc_bw_set(struct devlink_rate *rate_node,
++#endif
++int mlx5_esw_devlink_rate_node_tc_bw_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
++					 struct devlink_rate *rate_node,
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack);
+-int mlx5_esw_devlink_rate_leaf_tc_bw_set(struct devlink_rate *rate_node,
++int mlx5_esw_devlink_rate_leaf_tc_bw_set(
++#ifdef HAVE_DEVLINK_HAS_RATE_TC_BW_SET
++					 struct devlink_rate *rate_node,
++#endif
+ 					 void *priv,
+ 					 u32 *tc_bw,
+ 					 struct netlink_ext_ack *extack);
+@@ -123,6 +158,6 @@ int mlx5_esw_common_rate_leaf_parent_set(struct mlx5_esw_sched_node *node,
+ 					 struct netlink_ext_ack *extack);
+ int mlx5_esw_common_rate_node_new(struct mlx5_eswitch *esw, void **priv,
+ 				  struct netlink_ext_ack *extack);
+-#endif
  
++#endif /* CONFIG_MLX5_ESWITCH */
+ #endif

@@ -1,0 +1,5 @@
+sep=;
+Change-Id=Ic2dce26f04a650656d6540d4248e67d6d6cfbcc0; subject=net/mlx5_core: Query special contexts; feature=special_context; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I74cc8e8466f85681067697edb02076656ebb6280; subject=RDMA: Backward compatibility for Lustre; feature=lustre_support; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I929447170aad1d54d475d116cfc000cd91d17fa7; subject=IB/mlx5: Adjust hop-limit for R-RoCE; feature=roce_hop_limit; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I6df93e1ea255901736238f89d94cfab278f22e5e; subject=mlx5_core: E-switch, Add compat sysfs to control vport match mode; feature=vport_match_control; upstream_status=NA; upstream_issue=; general=;

@@ -1,0 +1,320 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rw.c
+
+---
+ drivers/infiniband/core/rw.c | 167 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 166 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/infiniband/core/rw.c b/drivers/infiniband/core/rw.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/rw.c
++++ b/drivers/infiniband/core/rw.c
+@@ -244,9 +244,20 @@ static int rdma_rw_init_mr_wrs_bvec(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 	ctx->reg[0].sgt.orig_nents = nents;
+ 
+ 	/* DMA map the scatterlist */
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	ret = ib_dma_map_sgtable_attrs(dev, &ctx->reg[0].sgt, dir, 0);
+ 	if (ret)
+ 		goto out_free_sgl;
++#else
++	ret = ib_dma_map_sg(dev, ctx->reg[0].sgt.sgl,
++			    ctx->reg[0].sgt.orig_nents, dir);
++	if (!ret) {
++		ret = -ENOMEM;
++		goto out_free_sgl;
++	}
++	ctx->reg[0].sgt.nents = ret;
++	ret = 0;
++#endif
+ 
+ 	ctx->nr_ops = DIV_ROUND_UP(ctx->reg[0].sgt.nents, pages_per_mr);
+ 
+@@ -277,7 +288,12 @@ static int rdma_rw_init_mr_wrs_bvec(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ out_free_mrs:
+ 	while (--i >= 0)
+ 		ib_mr_pool_put(qp, &qp->rdma_mrs, ctx->reg[i].mr);
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	ib_dma_unmap_sgtable_attrs(dev, &ctx->reg[0].sgt, dir, 0);
++#else
++	ib_dma_unmap_sg(dev, ctx->reg[0].sgt.sgl,
++			ctx->reg[0].sgt.orig_nents, dir);
++#endif
+ out_free_sgl:
+ 	kfree(ctx->reg[0].sgt.sgl);
+ out_free_reg:
+@@ -504,15 +520,30 @@ static int rdma_rw_init_iova_wrs_bvec(struct rdma_rw_ctx *ctx,
+ 	/* Try to allocate contiguous IOVA space */
+ 	first_bv = mp_bvec_iter_bvec(bvec, *iter);
+ 	if (!dma_iova_try_alloc(dma_dev, &ctx->iova.state,
+-				bvec_phys(&first_bv), total_len))
++#ifdef HAVE_BVEC_PHYS
++				/* Newer kernels (6.11+): bvec_phys helper */
++				bvec_phys(&first_bv),
++#else
++				/* Older kernels: open-code phys addr from bv_page */
++				PFN_PHYS(page_to_pfn(first_bv.bv_page)) + first_bv.bv_offset,
++#endif
++				total_len))
+ 		return -EOPNOTSUPP;
+ 
+ 	/* Link all bvecs into the IOVA space */
+ 	while (iter->bi_size) {
+ 		struct bio_vec bv = mp_bvec_iter_bvec(bvec, *iter);
+ 
++#ifdef HAVE_BVEC_PHYS
++		/* Newer kernels (6.11+): bvec_phys helper */
+ 		ret = dma_iova_link(dma_dev, &ctx->iova.state, bvec_phys(&bv),
+ 				    mapped_len, bv.bv_len, dir, 0);
++#else
++		/* Older kernels: open-code phys addr from bv_page */
++		ret = dma_iova_link(dma_dev, &ctx->iova.state,
++				    PFN_PHYS(page_to_pfn(bv.bv_page)) + bv.bv_offset,
++				    mapped_len, bv.bv_len, dir, 0);
++#endif
+ 		if (ret)
+ 			goto out_destroy;
+ 
+@@ -557,6 +588,52 @@ out_destroy:
+ 	return ret;
+ }
+ 
++#if !defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) && !defined(HAVE_LINUX_IOMMU_DMA_H)
++static void rdma_rw_unmap_sg(struct ib_device *dev, struct scatterlist *sg,
++			     u32 sg_cnt, enum dma_data_direction dir)
++{
++	if (is_pci_p2pdma_page(sg_page(sg)))
++		pci_p2pdma_unmap_sg(dev->dma_device, sg, sg_cnt, dir);
++	else
++		ib_dma_unmap_sg(dev, sg, sg_cnt, dir);
++}
++
++#ifdef HAVE_DMA_MAP_SGTABLE
++static int rdma_rw_map_sgtable(struct ib_device *dev, struct sg_table *sgt,
++			       enum dma_data_direction dir)
++#else
++static int rdma_rw_map_sg(struct ib_device *dev, struct scatterlist *sg,
++                       u32 sg_cnt, enum dma_data_direction dir)
++#endif
++{
++#ifdef HAVE_DMA_MAP_SGTABLE
++	int nents;
++
++	if (is_pci_p2pdma_page(sg_page(sgt->sgl))) {
++#else
++	if (is_pci_p2pdma_page(sg_page(sg))) {
++#endif
++		if (WARN_ON_ONCE(ib_uses_virt_dma(dev)))
++			return 0;
++#ifdef HAVE_DMA_MAP_SGTABLE
++		nents = pci_p2pdma_map_sg(dev->dma_device, sgt->sgl,
++					  sgt->orig_nents, dir);
++		if (!nents)
++			return -EIO;
++		sgt->nents = nents;
++		return 0;
++#else
++		return pci_p2pdma_map_sg(dev->dma_device, sg, sg_cnt, dir);
++#endif
++
++	}
++#ifdef HAVE_DMA_MAP_SGTABLE
++	return ib_dma_map_sgtable_attrs(dev, sgt, dir, 0);
++#else
++	return ib_dma_map_sg(dev, sg, sg_cnt, dir);
++#endif
++}
++#endif/* HAVE_DMA_F_PCI_P2PDMA_SUPPORTED */
+ /**
+  * rdma_rw_ctx_init - initialize a RDMA READ/WRITE context
+  * @ctx:	context to initialize
+@@ -577,16 +654,29 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u32 port_num,
+ 		u64 remote_addr, u32 rkey, enum dma_data_direction dir)
+ {
+ 	struct ib_device *dev = qp->pd->device;
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	struct sg_table sgt = {
+ 		.sgl = sg,
+ 		.orig_nents = sg_cnt,
+ 	};
++#endif
+ 	int ret;
+ 
++#ifdef HAVE_DMA_MAP_SGTABLE
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 	ret = ib_dma_map_sgtable_attrs(dev, &sgt, dir, 0);
++#else
++	ret = rdma_rw_map_sgtable(dev, &sgt, dir);
++#endif
+ 	if (ret)
+ 		return ret;
+ 	sg_cnt = sgt.nents;
++#else
++       ret = rdma_rw_map_sg(dev, sg, sg_cnt, dir);
++       if (!ret)
++              return -ENOMEM;
++       sg_cnt = ret;
++#endif
+ 
+ 	/*
+ 	 * Skip to the S/G entry that sg_offset falls into:
+@@ -637,7 +727,15 @@ out:
+ 	return ret;
+ 
+ out_unmap_sg:
++#ifdef HAVE_DMA_MAP_SGTABLE
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 	ib_dma_unmap_sgtable_attrs(dev, &sgt, dir, 0);
++#else
++	rdma_rw_unmap_sg(dev, sgt.sgl, sgt.orig_nents, dir);
++#endif
++#else
++	rdma_rw_unmap_sg(dev, sg, sg_cnt, dir);
++#endif
+ 	return ret;
+ }
+ EXPORT_SYMBOL(rdma_rw_ctx_init);
+@@ -743,6 +841,7 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 	struct ib_device *dev = qp->pd->device;
+ 	u32 pages_per_mr = rdma_rw_fr_page_list_len(qp->pd->device,
+ 						    qp->integrity_en);
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	struct sg_table sgt = {
+ 		.sgl = sg,
+ 		.orig_nents = sg_cnt,
+@@ -751,6 +850,7 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 		.sgl = prot_sg,
+ 		.orig_nents = prot_sg_cnt,
+ 	};
++#endif
+ 	struct ib_rdma_wr *rdma_wr;
+ 	int count = 0, ret;
+ 
+@@ -760,14 +860,39 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_DMA_MAP_SGTABLE
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 	ret = ib_dma_map_sgtable_attrs(dev, &sgt, dir, 0);
++#else
++	ret = rdma_rw_map_sgtable(dev, &sgt, dir);
++#endif
+ 	if (ret)
+ 		return ret;
++#else
++	ret = rdma_rw_map_sg(dev, sg, sg_cnt, dir);
++	if (!ret)
++		return -ENOMEM;
++	sg_cnt = ret;
++#endif
+ 
+ 	if (prot_sg_cnt) {
++#ifdef HAVE_DMA_MAP_SGTABLE
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 		ret = ib_dma_map_sgtable_attrs(dev, &prot_sgt, dir, 0);
++#else
++		ret = rdma_rw_map_sgtable(dev, &prot_sgt, dir);
++#endif
+ 		if (ret)
++#else
++			ret = rdma_rw_map_sg(dev, prot_sg, prot_sg_cnt, dir);
++		if (!ret) {
++			ret = -ENOMEM;
++#endif
+ 			goto out_unmap_sg;
++#ifndef HAVE_DMA_MAP_SGTABLE
++		}
++		prot_sg_cnt = ret;
++#endif
+ 	}
+ 
+ 	ctx->type = RDMA_RW_SIG_MR;
+@@ -788,11 +913,20 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 
+ 	memcpy(ctx->reg->mr->sig_attrs, sig_attrs, sizeof(struct ib_sig_attrs));
+ 
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	ret = ib_map_mr_sg_pi(ctx->reg->mr, sg, sgt.nents, NULL, prot_sg,
+ 			      prot_sgt.nents, NULL, SZ_4K);
++#else
++       ret = ib_map_mr_sg_pi(ctx->reg->mr, sg, sg_cnt, NULL, prot_sg,
++                           prot_sg_cnt, NULL, SZ_4K);
++#endif
+ 	if (unlikely(ret)) {
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 		pr_err("failed to map PI sg (%u)\n",
+ 		       sgt.nents + prot_sgt.nents);
++#else
++		pr_err("failed to map PI sg (%u)\n", sg_cnt + prot_sg_cnt);
++#endif
+ 		goto out_destroy_sig_mr;
+ 	}
+ 
+@@ -831,10 +965,27 @@ out_destroy_sig_mr:
+ out_free_ctx:
+ 	kfree(ctx->reg);
+ out_unmap_prot_sg:
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 	if (prot_sgt.nents)
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 		ib_dma_unmap_sgtable_attrs(dev, &prot_sgt, dir, 0);
++#else
++ 		rdma_rw_unmap_sg(dev, prot_sgt.sgl, prot_sgt.orig_nents, dir);
++#endif
++#else
++	if (prot_sg_cnt)
++		rdma_rw_unmap_sg(dev, prot_sg, prot_sg_cnt, dir);
++#endif
+ out_unmap_sg:
++#ifdef HAVE_DMA_MAP_SGTABLE
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 	ib_dma_unmap_sgtable_attrs(dev, &sgt, dir, 0);
++#else
++	rdma_rw_unmap_sg(dev, sgt.sgl, sgt.orig_nents, dir);
++#endif
++#else
++	rdma_rw_unmap_sg(dev, sg, sg_cnt, dir);
++#endif
+ 	return ret;
+ }
+ EXPORT_SYMBOL(rdma_rw_ctx_signature_init);
+@@ -977,7 +1128,11 @@ void rdma_rw_ctx_destroy(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 		break;
+ 	}
+ 
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
++#else
++	rdma_rw_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
++#endif
+ }
+ EXPORT_SYMBOL(rdma_rw_ctx_destroy);
+ 
+@@ -1008,7 +1163,12 @@ void rdma_rw_ctx_destroy_bvec(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 	case RDMA_RW_MR:
+ 		for (i = 0; i < ctx->nr_ops; i++)
+ 			ib_mr_pool_put(qp, &qp->rdma_mrs, ctx->reg[i].mr);
++#ifdef HAVE_DMA_MAP_SGTABLE
+ 		ib_dma_unmap_sgtable_attrs(dev, &ctx->reg[0].sgt, dir, 0);
++#else
++		ib_dma_unmap_sg(dev, ctx->reg[0].sgt.sgl,
++				ctx->reg[0].sgt.orig_nents, dir);
++#endif
+ 		kfree(ctx->reg[0].sgt.sgl);
+ 		kfree(ctx->reg);
+ 		break;
+@@ -1057,8 +1217,13 @@ void rdma_rw_ctx_destroy_signature(struct rdma_rw_ctx *ctx, struct ib_qp *qp,
+ 	kfree(ctx->reg);
+ 
+ 	if (prot_sg_cnt)
++#if defined(HAVE_DMA_F_PCI_P2PDMA_SUPPORTED) || defined(HAVE_LINUX_IOMMU_DMA_H)
+ 		ib_dma_unmap_sg(qp->pd->device, prot_sg, prot_sg_cnt, dir);
+ 	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
++#else
++		rdma_rw_unmap_sg(qp->pd->device, prot_sg, prot_sg_cnt, dir);
++	rdma_rw_unmap_sg(qp->pd->device, sg, sg_cnt, dir);
++#endif
+ }
+ EXPORT_SYMBOL(rdma_rw_ctx_destroy_signature);
+ 

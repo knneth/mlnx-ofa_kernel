@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I7944b2c7e8ac4b51332714f0874ace0e8e5c67c1; subject=vfio/mlx5: Fix racy bitfields and tighten struct layout; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: f2365a63b02d, tag: v7.2-rc2;

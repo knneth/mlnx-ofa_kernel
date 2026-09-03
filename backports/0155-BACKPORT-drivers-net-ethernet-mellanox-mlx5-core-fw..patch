@@ -9,7 +9,7 @@ diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fw.c b/drivers/net/ethernet
 index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/fw.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/fw.c
-@@ -729,8 +729,8 @@ static const struct mlxfw_dev_ops mlx5_mlxfw_dev_ops = {
+@@ -735,8 +735,8 @@ static const struct mlxfw_dev_ops mlx5_mlxfw_dev_ops = {
  };
  
  int mlx5_firmware_flash(struct mlx5_core_dev *dev,
@@ -20,7 +20,7 @@ index xxxxxxx..xxxxxxx 100644
  {
  	struct mlx5_mlxfw_dev mlx5_mlxfw_dev = {
  		.mlxfw_dev = {
-@@ -751,7 +751,7 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
+@@ -757,7 +757,7 @@ int mlx5_firmware_flash(struct mlx5_core_dev *dev,
  	}
  
  	return mlxfw_firmware_flash(&mlx5_mlxfw_dev.mlxfw_dev,

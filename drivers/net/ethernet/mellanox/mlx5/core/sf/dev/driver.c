@@ -24,6 +24,39 @@ static int mlx5_core_peer_devlink_set(struct mlx5_sf_dev *sf_dev, struct devlink
 	return ret == NOTIFY_OK ? event_ctx.err : 0;
 }
 
+static int mlx5_core_peer_mlxdevm_set(struct mlx5_sf_dev *sf_dev, struct mlxdevm *mlxdevm)
+{
+	struct mlx5_sf_peer_mlxdevm_event_ctx event_ctx = {
+		.fn_id = sf_dev->fn_id,
+		.mlxdevm = mlxdevm,
+	};
+	int ret;
+
+	ret = mlx5_blocking_notifier_call_chain(sf_dev->parent_mdev,
+						MLX5_DRIVER_EVENT_SF_PEER_MLXDEVM,
+						&event_ctx);
+	return ret == NOTIFY_OK ? event_ctx.err : 0;
+}
+
+/* Recover the SF aux device from its core dev and fire the peer mlxdevm event.
+ * The SF's mlxdevm instance is born inside mlx5_devm_register (during full
+ * init), so unlike the devlink peer-set (driven from the SF probe) this is
+ * driven from there.
+ *
+ * Caller must ensure @mdev is an SF (coredev_type == MLX5_COREDEV_SF); only
+ * then is @mdev->device the SF auxiliary device the container_of() below
+ * recovers.
+ */
+int mlx5_sf_peer_mlxdevm_set(struct mlx5_core_dev *mdev, struct mlxdevm *mlxdevm)
+{
+	struct auxiliary_device *adev;
+	struct mlx5_sf_dev *sf_dev;
+
+	adev = container_of(mdev->device, struct auxiliary_device, dev);
+	sf_dev = container_of(adev, struct mlx5_sf_dev, adev);
+	return mlx5_core_peer_mlxdevm_set(sf_dev, mlxdevm);
+}
+
 static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxiliary_device_id *id)
 {
 	struct mlx5_sf_dev *sf_dev = container_of(adev, struct mlx5_sf_dev, adev);
@@ -39,11 +72,14 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
 	mdev->device = &adev->dev;
 	mdev->pdev = sf_dev->parent_mdev->pdev;
 	mdev->bar_addr = sf_dev->bar_base_addr;
-	mdev->iseg_base = sf_dev->bar_base_addr;
 	mdev->coredev_type = MLX5_COREDEV_SF;
 	mdev->priv.parent_mdev = sf_dev->parent_mdev;
 	mdev->priv.adev_idx = adev->id;
 	sf_dev->mdev = mdev;
+
+	err = mlx5_devm_alloc(mdev);
+	if (err)
+		goto devm_alloc_err;
 
 	/* Only local SFs do light probe */
 	if (MLX5_ESWITCH_MANAGER(sf_dev->parent_mdev) &&
@@ -64,7 +100,7 @@ static int mlx5_sf_dev_probe(struct auxiliary_device *adev, const struct auxilia
 	mdev->max_cmpl_eq_count = sf_dev->max_cmpl_eqs;
 #endif
 
-	mdev->iseg = ioremap(mdev->iseg_base, sizeof(*mdev->iseg));
+	mdev->iseg = ioremap(mdev->bar_addr, sizeof(*mdev->iseg));
 	if (!mdev->iseg) {
 		mlx5_core_warn(mdev, "remap error\n");
 		err = -ENOMEM;
@@ -96,6 +132,8 @@ peer_devlink_set_err:
 remap_err:
 	mlx5_mdev_uninit(mdev);
 mdev_err:
+	mlx5_devm_free(mdev);
+devm_alloc_err:
 	mlx5_devlink_free(devlink);
 	return err;
 }
@@ -115,6 +153,7 @@ static void mlx5_sf_dev_remove(struct auxiliary_device *adev)
 		mlx5_uninit_one(mdev);
 	iounmap(mdev->iseg);
 	mlx5_mdev_uninit(mdev);
+	mlx5_devm_free(mdev);
 	mlx5_devlink_free(devlink);
 }
 

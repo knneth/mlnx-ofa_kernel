@@ -1,0 +1,10 @@
+sep=;
+Change-Id=I6b8bdbebbda942762dddd254aa0f54cf4654895e; subject=net/mlx5: Redesign mlxdevm and devlink SF management; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I64bdb1161247140a28f26f093b68143f76bb3acc; subject=net/mlx5: Adding the ability to limit VF page consumption; feature=vf_page_limit; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ifc9628936ab692ab177f6af4a41ad2a7256e0cc0; subject=net/mlx5: Enable VFs to consume pages until their limit; feature=vf_page_limit; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I8e5e60e642366c0195219d325faa375c3374df72; subject=net/mlx5: Prevent usage of freed evport after driver restart; feature=vf_page_limit; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ic19272ccb1677d069db34984468116fd8cdc4e9f; subject=IB/mlx5: Fix memory leak from SIGERR workqueue; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I12a0129dc0bf21f4ce48825249b3c2ad49731614; subject=net/mlx5e: Do not create ECN control files for VFs; feature=mlx5_core_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I2f7dba6ae07448e5de8779236b9f6f0d7a2ee410; subject=net/mlx5: Add verbosity to page alloc error flow; feature=vf_page_limit; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I11b92550fb4e677c58d49c54573ae5c4ee5ad0c6; subject=net/mlx5: limit VF memory via VHCA_ICM_CTRL register; feature=vf_page_limit; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I1db32c639298921734b775306d6ca414202d93c0; subject=net/mlx5: Enforce maximum page limit setting precisely; feature=vf_page_limit; upstream_status=NA; upstream_issue=; general=;

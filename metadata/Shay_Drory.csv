@@ -1,0 +1,18 @@
+sep=;
+Change-Id=Ic922135a573ba1a7ddba44785d8018b2c96adb43; subject=net/mlx5: SF_CFG, Rename dev params functions to avoid double naming; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Icf6b44f5bd8ad2e19b0ce2b4cca49b426f8110ba; subject=net/mlx5: Full probe SFs created by mlxdevm; feature=mlx5_devm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I829899003140bff81efe8f3a72844c2dcc7fcc02; subject=net/mlx5: Clean up mlx5_devm SFs upon eswitch mode change; feature=mlx5_devm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ief077ff41886402f82873c9031739e5a023f4566; subject=net/mlx5: mlx5_devm support for param cpu_affinity; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I57db4e5c3416edf5dc3807366213081834e819e8; subject=net/mlx5: Fix max_num_eqs in case user provided affinity; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I780f4ff2d7f6e3e61ff79b8476a8d5bb67a41c30; subject=net/mlx5: add devlink error message in case SF failed to reload due to lack of IRQs; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I8791b2c198b701c776a4830718cd4a0604575322; subject=net/mlx5: Validate CPUs array; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ia890b7303d1fbfbff605db5268d66b51463046d5; subject=net/mlx5: Block switchdev mode over light SFs; feature=light_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I8fc181134e8289b7e0ea3a6d86a57315e267e470; subject=NOT FOR UPSTREAM, net/mlx5: fw_reset, add 200ms sleep as WA; feature=fw_reset_fixes; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ieb758733f33cf175332fa05bcf278b53f4a8ab88; subject=net/mlx5: request IRQs on device probe; feature=qemu_msix_wa; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib27d4771ac7d1c6b9e49bfc711621186f918aead; subject=net/mlx5: irq: print requesting dev instead of pool dev; feature=mlx5_sfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If61ca0f8dac7ccb34148a12075f9efc13e06028b; subject=net/mlx5: Fix race between vport speed set and rep open; feature=query_effective_VF_bandwidth; upstream_status=in_progress; upstream_issue=4529371; general=;
+Change-Id=I9a21e109cf7a5a6a8914b2f06063e7b0535ce52b; subject=net/mlx5: Query max speed only when needed.; feature=query_effective_VF_bandwidth; upstream_status=in_progress; upstream_issue=4529371; general=;
+Change-Id=I4cf3562912fe2e37642d30ec3bf762211d1630a5; subject=net/mlx5: Restore host PF enable for ECPF that isn't eswitch manager; feature=mlx5_core_bugs; upstream_status=in_progress; upstream_issue=5016456; general=;
+Change-Id=Ibefcdc8aa6784be5bbe05c9e0c8983599af5aba8; subject=net/mlx5: LAG, MPESW, Fix missing complete() on devcom error; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: d4b85f9a668b, tag: v7.2-rc3;
+Change-Id=I8dd2422dc7d601f8a178ab8a7506ab6bc4ca0f63; subject=net/mlx5: LAG, reload IB reps of LAG master before the rest; feature=rebase_upstream_fixes; upstream_status=in_progress; upstream_issue=5122168; general=;
+Change-Id=I205d951cd2f4929604eed6dab62b58d95f7c03e9; subject=net/mlx5e: TC, Check if flow is PEER before acquiring devcom lock; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 6ddfba2ea98d, tag: v7.2-rc7;

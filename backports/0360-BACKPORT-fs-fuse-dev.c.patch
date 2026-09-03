@@ -1,0 +1,156 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/dev.c
+
+---
+ fs/fuse/dev.c | 40 +++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 39 insertions(+), 1 deletion(-)
+
+diff --git a/fs/fuse/dev.c b/fs/fuse/dev.c
+index xxxxxxx..xxxxxxx 100644
+--- a/fs/fuse/dev.c
++++ b/fs/fuse/dev.c
+@@ -28,7 +28,11 @@
+ #include "fuse_trace.h"
+ 
+ const unsigned long fuse_timeout_timer_freq =
++#ifdef HAVE_SECS_TO_JIFFIES
+ 	secs_to_jiffies(FUSE_TIMEOUT_TIMER_FREQ);
++#else
++	FUSE_TIMEOUT_TIMER_FREQ * HZ;
++#endif
+ 
+ bool fuse_request_expired(struct fuse_conn *fc, struct list_head *list)
+ {
+@@ -113,7 +117,13 @@ void fuse_check_timeout(struct work_struct *work)
+ 	    goto abort_conn;
+ 
+ out:
+-	queue_delayed_work(system_percpu_wq, &fc->timeout.work,
++	queue_delayed_work(
++#ifdef HAVE_SYSTEM_PERCPU_WQ
++			   system_percpu_wq,
++#else
++			   system_wq,
++#endif
++			   &fc->timeout.work,
+ 			   fuse_timeout_timer_freq);
+ 	return;
+ 
+@@ -135,6 +145,7 @@ void fuse_creds(struct fuse_req *req)
+ {
+ 	struct fuse_conn *fc = req->fm->fc;
+ 
++#ifdef HAVE_SB_I_NOIDMAP
+ 	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+ 		req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
+ 		req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
+@@ -142,6 +153,10 @@ void fuse_creds(struct fuse_req *req)
+ 		req->in.h.uid = FUSE_INVALID_UIDGID;
+ 		req->in.h.gid = FUSE_INVALID_UIDGID;
+ 	}
++#else
++	req->in.h.uid = from_kuid(fc->user_ns, current_fsuid());
++	req->in.h.gid = from_kgid(fc->user_ns, current_fsgid());
++#endif
+ 
+ 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
+ }
+@@ -210,6 +225,7 @@ void fuse_force_creds(struct fuse_req *req)
+ {
+ 	struct fuse_conn *fc = req->fm->fc;
+ 
++#ifdef HAVE_SB_I_NOIDMAP
+ 	if (!req->fm->sb || req->fm->sb->s_iflags & SB_I_NOIDMAP) {
+ 		req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
+ 		req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
+@@ -217,6 +233,10 @@ void fuse_force_creds(struct fuse_req *req)
+ 		req->in.h.uid = FUSE_INVALID_UIDGID;
+ 		req->in.h.gid = FUSE_INVALID_UIDGID;
+ 	}
++#else
++	req->in.h.uid = from_kuid_munged(fc->user_ns, current_fsuid());
++	req->in.h.gid = from_kgid_munged(fc->user_ns, current_fsgid());
++#endif
+ 
+ 	req->in.h.pid = pid_nr_ns(task_pid(current), fc->pid_ns);
+ }
+@@ -429,7 +449,11 @@ static int fuse_check_folio(struct folio *folio)
+ {
+ 	if (folio_mapped(folio) ||
+ 	    folio->mapping != NULL ||
++#ifdef HAVE_FOLIO_FLAGS_F
+ 	    (folio->flags.f & PAGE_FLAGS_CHECK_AT_PREP &
++#else
++	    (folio->flags & PAGE_FLAGS_CHECK_AT_PREP &
++#endif
+ 	     ~(1 << PG_locked |
+ 	       1 << PG_referenced |
+ 	       1 << PG_lru |
+@@ -837,7 +861,11 @@ static int fuse_notify_store(struct fuse_conn *fc, unsigned int size,
+ 			goto out_iput;
+ 
+ 		folio_offset = ((index - folio->index) << PAGE_SHIFT) + offset;
++#ifdef HAVE_UMIN
+ 		nr_bytes = min(num, folio_size(folio) - folio_offset);
++#else
++		nr_bytes = min_t(unsigned int, num, folio_size(folio) - folio_offset);
++#endif
+ 		nr_pages = (offset + nr_bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
+ 
+ 		err = fuse_copy_folio(cs, &folio, folio_offset, nr_bytes, 0);
+@@ -941,7 +969,11 @@ static int fuse_retrieve(struct fuse_mount *fm, struct inode *inode,
+ 			break;
+ 
+ 		folio_offset = ((index - folio->index) << PAGE_SHIFT) + offset;
++#ifdef HAVE_UMIN
+ 		nr_bytes = min(folio_size(folio) - folio_offset, num);
++#else
++		nr_bytes = min_t(unsigned int, folio_size(folio) - folio_offset, num);
++#endif
+ 		nr_pages = (offset + nr_bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
+ 
+ 		ap->folios[ap->num_folios] = folio;
+@@ -1000,6 +1032,7 @@ static int fuse_notify_retrieve(struct fuse_conn *fc, unsigned int size,
+ 	return err;
+ }
+ 
++#ifdef HAVE_FUSE_NOTIFY_RESEND
+ /*
+  * Resending all processing queue requests.
+  *
+@@ -1034,6 +1067,7 @@ static int fuse_notify_resend(struct fuse_conn *fc)
+ 	fuse_resend(fc);
+ 	return 0;
+ }
++#endif
+ 
+ /*
+  * Increments the fuse connection epoch.  This will result of dentries from
+@@ -1109,9 +1143,11 @@ int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
+ 
+ 	case FUSE_NOTIFY_DELETE:
+ 		return fuse_notify_delete(fc, size, cs);
++#ifdef HAVE_FUSE_NOTIFY_RESEND
+ 
+ 	case FUSE_NOTIFY_RESEND:
+ 		return fuse_notify_resend(fc);
++#endif
+ 
+ 	case FUSE_NOTIFY_INC_EPOCH:
+ 		return fuse_notify_inc_epoch(fc);
+@@ -1124,6 +1160,7 @@ int fuse_notify(struct fuse_conn *fc, enum fuse_notify_code code,
+ 	}
+ }
+ 
++#ifdef HAVE_FUSE_NOTIFY_RESEND
+ /*
+  * Abort all requests.
+  *
+@@ -1159,6 +1196,7 @@ void fuse_abort_conn(struct fuse_conn *fc)
+ out:
+ 	spin_unlock(&fc->lock);
+ }
++#endif
+ 
+ void fuse_wait_aborted(struct fuse_conn *fc)
+ {

@@ -1,59 +1,134 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
 
 ---
- .../ethernet/mellanox/mlx5/core/en/xsk/pool.h | 27 ++++++++++++++++++-
- 1 file changed, 26 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en/xsk/tx.c   | 47 ++++++++++++++++++-
+ 1 file changed, 46 insertions(+), 1 deletion(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
-@@ -4,8 +4,10 @@
- #ifndef __MLX5_EN_XSK_POOL_H__
- #define __MLX5_EN_XSK_POOL_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/tx.c
+@@ -1,11 +1,16 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ /* Copyright (c) 2019 Mellanox Technologies. */
  
 +#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
- #include "en.h"
+ #include "tx.h"
+ #include "pool.h"
+ #include "en/xdp.h"
+ #include "en/params.h"
++#ifdef HAVE_XDP_SOCK_DRV_H
+ #include <net/xdp_sock_drv.h>
++#else
++#include <net/xdp_sock.h>
++#endif
  
-+#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
- static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *params,
- 						       struct mlx5e_xsk *xsk, u16 ix)
+ int mlx5e_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags)
  {
-@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *para
+@@ -57,15 +62,21 @@ static void mlx5e_xsk_tx_post_err(struct mlx5e_xdpsq *sq,
  
- 	return xsk->pools[ix];
+ 	nopwqe = mlx5e_post_nop(&sq->wq, sq->sqn, &sq->pc);
+ 	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, *xdpi);
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 	if (xp_tx_metadata_enabled(sq->xsk_pool))
+ 		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
+ 				     (union mlx5e_xdp_info) { .xsk_meta = {} });
++#endif
+ 	sq->doorbell_cseg = &nopwqe->ctrl;
  }
-+#else
-+static inline struct xdp_umem *mlx5e_xsk_get_pool(struct mlx5e_params *params,
-+						       struct mlx5e_xsk *xsk, u16 ix)
-+{
-+	if (!xsk || !xsk->umems)
-+		return NULL;
-+
-+	if (unlikely(ix >= params->num_channels))
-+		return NULL;
-+
-+	return xsk->umems[ix];
-+}
-+#endif
  
- struct mlx5e_xsk_param;
--void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
- 
- /* .ndo_bpf callback. */
+ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ {
 +#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
-+void mlx5e_build_xsk_param(struct xsk_buff_pool *pool, struct mlx5e_xsk_param *xsk);
- int mlx5e_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool, u16 qid);
+ 	struct xsk_buff_pool *pool = sq->xsk_pool;
 +#else
-+void mlx5e_build_xsk_param(struct xdp_umem *umem, struct mlx5e_xsk_param *xsk);
-+int mlx5e_xsk_setup_pool(struct net_device *dev, struct xdp_umem *pool, u16 qid);
++	struct xdp_umem *pool = sq->umem;
 +#endif
-+
-+#ifndef HAVE_XSK_BUFF_ALLOC
-+int mlx5e_xsk_resize_reuseq(struct xdp_umem *umem, u32 nentries);
+ 	struct xsk_tx_metadata *meta = NULL;
+ 	union mlx5e_xdp_info xdpi;
+ 	bool work_done = true;
+@@ -86,8 +97,11 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ 			work_done = false;
+ 			break;
+ 		}
+-
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		if (!xsk_tx_peek_desc(pool, &desc)) {
++#else
++		if (!xsk_umem_consume_tx(pool, &desc)) {
++#endif
+ 			/* TX will get stuck until something wakes it up by
+ 			 * triggering NAPI. Currently it's expected that the
+ 			 * application calls sendto() if there are consumed, but
+@@ -96,16 +110,40 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ 			break;
+ 		}
+ 
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xdptxd.dma_addr = xsk_buff_raw_get_dma(pool, desc.addr);
+ 		xdptxd.data = xsk_buff_raw_get_data(pool, desc.addr);
++#else
++		xdptxd.dma_addr = xdp_umem_get_dma(pool, desc.addr);
++		xdptxd.data = xdp_umem_get_data(pool, desc.addr);
++#endif
+ 		xdptxd.len = desc.len;
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 		meta = xsk_buff_get_metadata(pool, desc.addr);
 +#endif
  
++#ifdef HAVE_XSK_BUFF_ALLOC
+ 		xsk_buff_raw_dma_sync_for_device(pool, xdptxd.dma_addr, xdptxd.len);
++#else
++		dma_sync_single_for_device(sq->pdev, xdptxd.dma_addr,
++					   xdptxd.len, DMA_BIDIRECTIONAL);
++
 +#endif
- #endif /* __MLX5_EN_XSK_POOL_H__ */
+ 
++#ifdef HAVE_XSK_TX_METADATA_REQUEST_4_PARAMS
++		/* Upstream commit 19366db6dfccac9b0867a151678cd7b89fb8fd99
++		 * ("xsk: pass TX metadata pointer by reference", 7.2+):
++		 * meta is cleared by the xmit callback when no timestamp was
++		 * requested, so the completion below skips it.
++		 */
++		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
++				      mlx5e_xmit_xdp_frame, sq, &xdptxd,
++				      check_result, &meta);
++#else
+ 		ret = INDIRECT_CALL_2(sq->xmit_xdp_frame, mlx5e_xmit_xdp_frame_mpwqe,
+ 				      mlx5e_xmit_xdp_frame, sq, &xdptxd,
+ 				      check_result, meta);
++#endif
+ 		if (unlikely(!ret)) {
+ 			if (sq->mpwqe.wqe)
+ 				mlx5e_xdp_mpwqe_complete(sq);
+@@ -113,6 +151,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ 			mlx5e_xsk_tx_post_err(sq, &xdpi);
+ 		} else {
+ 			mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo, xdpi);
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 			if (xp_tx_metadata_enabled(sq->xsk_pool)) {
+ 				struct xsk_tx_metadata_compl compl;
+ 
+@@ -123,6 +162,7 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ 						     (union mlx5e_xdp_info)
+ 						     { .xsk_meta = compl });
+ 			}
++#endif
+ 		}
+ 
+ 		flush = true;
+@@ -133,8 +173,13 @@ bool mlx5e_xsk_tx(struct mlx5e_xdpsq *sq, unsigned int budget)
+ 			mlx5e_xdp_mpwqe_complete(sq);
+ 		mlx5e_xmit_xdp_doorbell(sq);
+ 
++#ifdef HAVE_NETDEV_BPF_XSK_BUFF_POOL
+ 		xsk_tx_release(pool);
++#else
++		xsk_umem_consume_tx_done(pool);
++#endif
+ 	}
+ 
+ 	return !(budget && work_done);
+ }
++#endif /* HAVE_XSK_ZERO_COPY_SUPPORT */

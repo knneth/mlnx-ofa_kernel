@@ -302,7 +302,7 @@ nla_put_failure:
 int mlxdevm_nl_trap_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_trap_item *trap_item;
 	struct sk_buff *msg;
 	int err;
@@ -412,7 +412,7 @@ static int mlxdevm_trap_action_set(struct mlxdevm *mlxdevm,
 int mlxdevm_nl_trap_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_trap_item *trap_item;
 
 	if (list_empty(&mlxdevm->trap_list))
@@ -511,7 +511,7 @@ nla_put_failure:
 int mlxdevm_nl_trap_group_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_trap_group_item *group_item;
 	struct sk_buff *msg;
 	int err;
@@ -682,7 +682,7 @@ static int mlxdevm_trap_group_set(struct mlxdevm *mlxdevm,
 int mlxdevm_nl_trap_group_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_trap_group_item *group_item;
 	bool modified = false;
 	int err;
@@ -1277,7 +1277,7 @@ mlxdevm_trap_register(struct mlxdevm *mlxdevm,
 	if (mlxdevm_trap_item_lookup(mlxdevm, trap->name))
 		return -EEXIST;
 
-	trap_item = kzalloc(sizeof(*trap_item), GFP_KERNEL);
+	trap_item = kzalloc_obj(*trap_item);
 	if (!trap_item)
 		return -ENOMEM;
 
@@ -1555,7 +1555,7 @@ mlxdevm_trap_group_register(struct mlxdevm *mlxdevm,
 	if (mlxdevm_trap_group_item_lookup(mlxdevm, group->name))
 		return -EEXIST;
 
-	group_item = kzalloc(sizeof(*group_item), GFP_KERNEL);
+	group_item = kzalloc_obj(*group_item);
 	if (!group_item)
 		return -ENOMEM;
 
@@ -1764,7 +1764,7 @@ devlink_trap_policer_register(struct devlink *devlink,
 	if (devlink_trap_policer_item_lookup(devlink, policer->id))
 		return -EEXIST;
 
-	policer_item = kzalloc(sizeof(*policer_item), GFP_KERNEL);
+	policer_item = kzalloc_obj(*policer_item);
 	if (!policer_item)
 		return -ENOMEM;
 

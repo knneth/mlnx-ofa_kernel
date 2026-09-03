@@ -45,9 +45,9 @@ struct l2addr_node {
 	u8                addr[ETH_ALEN];
 };
 
-#define mlx5_mpfs_foreach(hs, tmp, mpfs) \
-	for (int j = 0; j < MLX5_L2_ADDR_HASH_SIZE; j++) \
-		hlist_for_each_entry_safe(hs, tmp, &(mpfs)->hash[j], node.hlist)
+#define mlx5_mpfs_foreach(hs, tmp, mpfs, i) \
+	for (i = 0; i < MLX5_L2_ADDR_HASH_SIZE; i++) \
+		hlist_for_each_entry_safe(hs, tmp, &(mpfs)->hash[i], node.hlist)
 
 #define for_each_l2hash_node(hn, tmp, hash, i) \
 	for (i = 0; i < MLX5_L2_ADDR_HASH_SIZE; i++) \
@@ -72,7 +72,7 @@ struct l2addr_node {
 	int ix = MLX5_L2_ADDR_HASH(mac);                    \
 	type *ptr = NULL;                                   \
 							    \
-	ptr = kzalloc(sizeof(type), gfp);                   \
+	ptr = kzalloc_obj(type, gfp);                       \
 	if (ptr) {                                          \
 		ether_addr_copy(ptr->node.addr, mac);       \
 		hlist_add_head(&ptr->node.hlist, &(hash)[ix]);\

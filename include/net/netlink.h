@@ -28,6 +28,49 @@ static inline int nla_put_bitfield32(struct sk_buff *skb, int attrtype,
 }
 #endif
 
+#ifndef HAVE_NLA_PUT_UINT
+/* NLA_UINT/NLA_SINT (added in v6.7) are not known to the host netlink
+ * validator, so map them to the closest fixed-width enum value. Wire
+ * payload is always 4 bytes here since current readers use nla_get_u32.
+ */
+#define NLA_UINT NLA_U32
+#define NLA_SINT NLA_S32
+
+static inline int nla_put_uint(struct sk_buff *skb, int attrtype, u64 value)
+{
+	u64 tmp64 = value;
+	u32 tmp32 = value;
+
+	if (tmp64 == tmp32)
+		return nla_put_u32(skb, attrtype, tmp32);
+	return nla_put(skb, attrtype, sizeof(u64), &tmp64);
+}
+
+static inline int nla_put_sint(struct sk_buff *skb, int attrtype, s64 value)
+{
+	s64 tmp64 = value;
+	s32 tmp32 = value;
+
+	if (tmp64 == tmp32)
+		return nla_put_s32(skb, attrtype, tmp32);
+	return nla_put(skb, attrtype, sizeof(s64), &tmp64);
+}
+
+static inline u64 nla_get_uint(const struct nlattr *nla)
+{
+	if (nla_len(nla) == sizeof(u32))
+		return nla_get_u32(nla);
+	return nla_get_u64(nla);
+}
+
+static inline s64 nla_get_sint(const struct nlattr *nla)
+{
+	if (nla_len(nla) == sizeof(s32))
+		return nla_get_s32(nla);
+	return nla_get_s64(nla);
+}
+#endif /* HAVE_NLA_PUT_UINT */
+
 
 #ifndef HAVE_NLMSG_FOR_EACH_ATTR_TYPE
 /**

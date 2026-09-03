@@ -210,11 +210,6 @@ static int auxiliary_uevent(const struct device *dev, struct kobj_uevent_env *en
 			      (int)(p - name), name);
 }
 
-static const struct dev_pm_ops auxiliary_dev_pm_ops = {
-	SET_RUNTIME_PM_OPS(pm_generic_runtime_suspend, pm_generic_runtime_resume, NULL)
-	SET_SYSTEM_SLEEP_PM_OPS(pm_generic_suspend, pm_generic_resume)
-};
-
 static void auxiliary_bus_sysfs_remove(struct auxiliary_device *auxdev)
 {
 	xa_destroy(&auxdev->sysfs.irqs);
@@ -275,7 +270,6 @@ static const struct bus_type auxiliary_bus_type = {
 	.shutdown = auxiliary_bus_shutdown,
 	.match = auxiliary_match,
 	.uevent = auxiliary_uevent,
-	.pm = &auxiliary_dev_pm_ops,
 };
 
 /**
@@ -437,7 +431,7 @@ struct auxiliary_device *auxiliary_device_create(struct device *dev,
 	struct auxiliary_device *auxdev;
 	int ret;
 
-	auxdev = kzalloc(sizeof(*auxdev), GFP_KERNEL);
+	auxdev = kzalloc_obj(*auxdev);
 	if (!auxdev)
 		return NULL;
 
@@ -518,6 +512,16 @@ struct auxiliary_device *__devm_auxiliary_device_create(struct device *dev,
 	return auxdev;
 }
 EXPORT_SYMBOL_GPL(__devm_auxiliary_device_create);
+
+/**
+ * dev_is_auxiliary - check if the device is an auxiliary one
+ * @dev: device to check
+ */
+bool dev_is_auxiliary(struct device *dev)
+{
+	return dev->bus == &auxiliary_bus_type;
+}
+EXPORT_SYMBOL_GPL(dev_is_auxiliary);
 
 void __init auxiliary_bus_init(void)
 {

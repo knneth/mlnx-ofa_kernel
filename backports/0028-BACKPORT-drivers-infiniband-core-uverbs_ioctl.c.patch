@@ -9,7 +9,7 @@ diff --git a/drivers/infiniband/core/uverbs_ioctl.c b/drivers/infiniband/core/uv
 index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_ioctl.c
 +++ b/drivers/infiniband/core/uverbs_ioctl.c
-@@ -569,7 +569,6 @@ static int ib_uverbs_cmd_verbs(struct ib_uverbs_file *ufile,
+@@ -582,7 +582,6 @@ static int ib_uverbs_cmd_verbs(struct ib_uverbs_file *ufile,
  
  	if (unlikely(hdr->driver_id != uapi->driver_id))
  		return -EINVAL;

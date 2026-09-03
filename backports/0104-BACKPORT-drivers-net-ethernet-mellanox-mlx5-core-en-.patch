@@ -1,24 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
-@@ -242,7 +242,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_int_port_priv *priv,
- 		mlx5_del_flow_rules(int_port->rx_rule);
- 	mapping_remove(ctx, int_port->mapping);
- 	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(int_port);
-+#else
-+	kfree_rcu(int_port, rcu_head);
-+#endif
- 	priv->num_ports--;
- }
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+@@ -1,6 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
+ // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/skbuff.h>
++#endif
+ #include <net/psample.h>
+ #include "act.h"
+ #include "en/tc_priv.h"

@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Ibf6f1b9642ae157e4ba4b00aa6cc4f3cdfaa0e1d; subject=net/mlx5: E-switch, Setting steering mode in devlink-compat (OFED only); feature=sw_steering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I9467c5689d148d5003914bbee8c8b6d99de0bdd6; subject=net/mlx5: HWS, Check if device is down while polling for completion; feature=hws; upstream_status=accepted; upstream_issue=4901361; general=upstream commit ID: e3ec1570895b, tag: v7.2-rc1;

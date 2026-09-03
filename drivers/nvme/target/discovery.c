@@ -245,6 +245,13 @@ static void nvmet_execute_disc_get_log_page(struct nvmet_req *req)
 
 	up_read(&nvmet_config_sem);
 
+	if (offset >= alloc_len) {
+		offset = 0;
+		data_len = 0;
+	} else if (data_len > alloc_len - offset) {
+		data_len = alloc_len - offset;
+	}
+
 	status = nvmet_copy_to_sgl(req, 0, buffer + offset, data_len);
 	kfree(buffer);
 out:
@@ -266,7 +273,7 @@ static void nvmet_execute_disc_identify(struct nvmet_req *req)
 		goto out;
 	}
 
-	id = kzalloc(sizeof(*id), GFP_KERNEL);
+	id = kzalloc_obj(*id);
 	if (!id) {
 		status = NVME_SC_INTERNAL;
 		goto out;

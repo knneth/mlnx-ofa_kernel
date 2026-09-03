@@ -1,70 +1,22 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
 
 ---
- .../mellanox/mlx5/core/en_accel/macsec.c       | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
-@@ -603,7 +603,11 @@ static int mlx5e_macsec_upd_txsa(struct macsec_context *ctx)
- 		goto out;
- 	}
- 
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+@@ -35,6 +35,9 @@
+ #include "en.h"
+ #include "en/rx_res.h"
+ #include "en/rss.h"
++#ifdef HAVE_BASECODE_EXTRAS
++#include "linux/namei.h"
 +#endif
- 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
- 			   assoc_num);
- 		err = -EINVAL;
-@@ -662,7 +666,11 @@ static int mlx5e_macsec_del_txsa(struct macsec_context *ctx)
  
- 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
- 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(tx_sa);
-+#else
-+	kfree_rcu(tx_sa, rcu_head);
-+#endif
- 	macsec_device->tx_sa[assoc_num] = NULL;
- 
- out:
-@@ -830,7 +838,11 @@ static void macsec_del_rxsc_ctx(struct mlx5e_macsec *macsec, struct mlx5e_macsec
- 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
- 	metadata_dst_free(rx_sc->md_dst);
- 	kfree(rx_sc->sc_xarray_element);
-+#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
- 	kfree_rcu_mightsleep(rx_sc);
-+#else
-+	kfree_rcu(rx_sc, rcu_head);
-+#endif
- }
- 
- static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
-@@ -996,7 +1008,11 @@ static int mlx5e_macsec_upd_rxsa(struct macsec_context *ctx)
- 		goto out;
- 	}
- 
-+#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
- 	if (ctx->sa.update_pn) {
-+#else
-+	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
-+#endif
- 		netdev_err(ctx->netdev,
- 			   "MACsec offload update RX sa %d PN isn't supported\n",
- 			   assoc_num);
-@@ -1644,7 +1660,9 @@ static const struct macsec_ops macsec_offload_ops = {
- 	.mdo_add_secy = mlx5e_macsec_add_secy,
- 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
- 	.mdo_del_secy = mlx5e_macsec_del_secy,
-+#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
- 	.rx_uses_md_dst = true,
-+#endif
- };
- 
- bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)
+ /* For non-default namespaces, add suffix in format "@<pci_id>" */
+ /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */

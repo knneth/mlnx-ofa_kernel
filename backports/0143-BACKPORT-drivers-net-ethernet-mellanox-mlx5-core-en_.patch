@@ -1,22 +1,61 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c | 3 +++
- 1 file changed, 3 insertions(+)
+ .../net/ethernet/mellanox/mlx5/core/en_rep.h  | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_debugfs.c
-@@ -35,6 +35,9 @@
- #include "en.h"
- #include "en/rx_res.h"
- #include "en/rss.h"
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include "linux/namei.h"
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rep.h
+@@ -92,6 +92,10 @@ struct mlx5_rep_uplink_priv {
+ 
+ 	/* support eswitch vports bonding */
+ 	struct mlx5e_rep_bond *bond;
++#ifndef HAVE_FLOW_INDR_DEV_REGISTER
++	struct notifier_block       netdevice_nb;
++	struct netdev_net_notifier  netdevice_nn;
 +#endif
  
- /* For non-default namespaces, add suffix in format "@<pci_id>" */
- /* PCI id format: "%04x:%02x:%02x.%d" pci_domain bus_num pci_slot pci_func */
+ 	/* tc tunneling encapsulation private data */
+ 	struct mlx5e_tc_tun_encap *encap;
+@@ -140,7 +144,9 @@ struct mlx5e_rep_priv {
+ 	struct mlx5_rep_sysfs rep_sysfs;
+ 	struct mlx5_flow_handle *send_to_vport_meta_rule;
+ 	struct rhashtable tc_ht;
++#if defined(HAVE_DEVLINK_HEALTH_REPORT_SUPPORT) && defined(HAVE_NETDEV_DEVLINK_PORT)
+ 	struct devlink_health_reporter *rep_vnic_reporter;
++#endif
+ };
+ 
+ static inline
+@@ -288,12 +294,28 @@ static inline bool mlx5e_eswitch_rep(const struct net_device *netdev)
+ 	       mlx5e_eswitch_uplink_rep(netdev);
+ }
+ 
++#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++int mlx5e_rep_get_phys_port_name(struct net_device *dev,
++				 char *buf, size_t len);
++#endif
++
++#ifdef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++void
++#else
++int
++#endif
++mlx5e_rep_get_port_parent_id(struct net_device *dev,
++			     struct netdev_phys_item_id *ppid);
+ #else /* CONFIG_MLX5_ESWITCH */
+ static inline bool mlx5e_is_uplink_rep(struct mlx5e_priv *priv) { return false; }
+ static inline void mlx5e_rep_activate_channels(struct mlx5e_priv *priv) {}
+ static inline void mlx5e_rep_deactivate_channels(struct mlx5e_priv *priv) {}
+ static inline int mlx5e_rep_init(void) { return 0; };
+ static inline void mlx5e_rep_cleanup(void) {};
++#ifndef HAVE_DEVLINK_PORT_ATTRS_PCI_PF_SET
++static inline int mlx5e_rep_get_phys_port_name(struct net_device *dev,
++					       char *buf, size_t len) { return 0; }
++#endif
+ static inline bool mlx5e_rep_has_offload_stats(const struct net_device *dev,
+ 					       int attr_id) { return false; }
+ static inline int mlx5e_rep_get_offload_stats(int attr_id,

@@ -162,6 +162,10 @@ static ssize_t max_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 	if (err != 1)
 		return -EINVAL;
 
+	/* A max rate of 0 means unlimited, so it never conflicts. */
+	if (max_rate && max_rate < g->min_rate)
+		return -EINVAL;
+
 	err = mlx5_esw_qos_set_sysfs_node_max_rate(esw, g, max_rate);
 
 	return err ? err : count;
@@ -186,6 +190,9 @@ static ssize_t min_tx_rate_group_store(struct mlx5_esw_sched_node *g,
 
 	err = sscanf(buf, "%u", &min_rate);
 	if (err != 1)
+		return -EINVAL;
+
+	if (g->max_rate && min_rate > g->max_rate)
 		return -EINVAL;
 
 	err = mlx5_esw_qos_set_sysfs_node_min_rate(esw, g, min_rate);
@@ -647,6 +654,11 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 	if (err)
 		return err;
 
+	/* A max rate of 0 means unlimited, so it never conflicts. */
+	if (vport->qos.sched_node && max_tx_rate &&
+	    max_tx_rate < vport->qos.sched_node->min_rate)
+		return -EINVAL;
+
 	if (!vport->qos.sched_node) {
 		/* QoS is not enabled, return if setting 0 to avoid enabling
 		 * vport QoS unnecessarily.
@@ -656,13 +668,19 @@ static ssize_t max_tx_rate_store(struct mlx5_sriov_vf *g,
 	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
 					   max_tx_rate,
 					   vport->qos.sched_node->min_rate)) {
+		mutex_lock(&esw->state_lock);
+		esw->qos.sysfs_qos_in_progress = true;
 		mlx5_esw_qos_vport_disable(vport);
+		esw->qos.sysfs_qos_in_progress = false;
+		mutex_unlock(&esw->state_lock);
 		return count;
 	}
 
-	esw_qos_lock(esw);
+	mutex_lock(&esw->state_lock);
+	esw->qos.sysfs_qos_in_progress = true;
 	err = mlx5_esw_qos_set_vport_max_rate(vport, max_tx_rate, NULL);
-	esw_qos_unlock(esw);
+	esw->qos.sysfs_qos_in_progress = false;
+	mutex_unlock(&esw->state_lock);
 	return err ? err : count;
 }
 
@@ -696,7 +714,11 @@ static ssize_t group_store(struct mlx5_sriov_vf *g,
 	if (IS_ERR(vport))
 		return PTR_ERR(vport);
 
+	mutex_lock(&esw->state_lock);
+	esw->qos.sysfs_qos_in_progress = true;
 	err = mlx5_esw_qos_vport_update_sysfs_node(esw, node_id, vport);
+	esw->qos.sysfs_qos_in_progress = false;
+	mutex_unlock(&esw->state_lock);
 
 	return err ? err : count;
 }
@@ -723,6 +745,10 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 	if (err)
 		return err;
 
+	if (vport->qos.sched_node && vport->qos.sched_node->max_rate &&
+	    min_tx_rate > vport->qos.sched_node->max_rate)
+		return -EINVAL;
+
 	if (!vport->qos.sched_node) {
 		/* QoS is not enabled, return if setting 0 to avoid enabling
 		 * vport QoS unnecessarily.
@@ -732,13 +758,19 @@ static ssize_t min_tx_rate_store(struct mlx5_sriov_vf *g,
 	} else if (!mlx5_esw_qos_is_needed(vport->qos.sched_node->parent,
 					   vport->qos.sched_node->max_rate,
 					   min_tx_rate)) {
+		mutex_lock(&esw->state_lock);
+		esw->qos.sysfs_qos_in_progress = true;
 		mlx5_esw_qos_vport_disable(vport);
+		esw->qos.sysfs_qos_in_progress = false;
+		mutex_unlock(&esw->state_lock);
 		return count;
 	}
 
-	esw_qos_lock(esw);
+	mutex_lock(&esw->state_lock);
+	esw->qos.sysfs_qos_in_progress = true;
 	err = mlx5_esw_qos_set_vport_min_rate(vport, min_tx_rate, NULL);
-	esw_qos_unlock(esw);
+	esw->qos.sysfs_qos_in_progress = false;
+	mutex_unlock(&esw->state_lock);
 	return err ? err : count;
 }
 

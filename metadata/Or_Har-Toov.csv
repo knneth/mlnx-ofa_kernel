@@ -1,0 +1,4 @@
+sep=;
+Change-Id=I4a4b92caf7eab0eb0f8858be47835aae342491b4; subject=RDMA/mad: Limit SMP MADs on the wire; feature=mad_fc; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I263669ae1e6751ee079057d8abd9ac88686cc03a; subject=IB/mad: Add sysfs parameters to control SA MADs; feature=mad_fc; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ia0854f96777277159d72f2f928a9d7b83c8e318c; subject=net/mlx5: Skip disabled vports when setting max TX speed; feature=query_effective_VF_bandwidth; upstream_status=accepted; upstream_issue=4529371; general=upstream commit ID: c6df9a65cbb0, tag: v7.1-rc5;

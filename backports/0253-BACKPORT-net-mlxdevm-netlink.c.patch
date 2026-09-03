@@ -1,0 +1,450 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/netlink.c
+
+---
+ net/mlxdevm/netlink.c | 218 +++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 216 insertions(+), 2 deletions(-)
+
+diff --git a/net/mlxdevm/netlink.c b/net/mlxdevm/netlink.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/mlxdevm/netlink.c
++++ b/net/mlxdevm/netlink.c
+@@ -5,7 +5,9 @@
+  */
+ #include <net/genetlink.h>
+ #include <net/sock.h>
++#ifdef HAVE_DEVL_PORT_REGISTER
+ #include <net/devlink.h>
++#endif
+ 
+ #include "devl_internal.h"
+ 
+@@ -19,6 +21,7 @@ static const struct genl_multicast_group mlxdevm_nl_mcgrps[] = {
+ 	[MLXDEVM_MCGRP_CONFIG] = { .name = MLXDEVM_GENL_MCGRP_CONFIG_NAME },
+ };
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ struct mlxdevm_nl_sock_priv {
+ 	struct mlxdevm_obj_desc __rcu *flt;
+ 	spinlock_t flt_lock; /* Protects flt. */
+@@ -39,8 +42,9 @@ static void mlxdevm_nl_sock_priv_destroy(void *priv)
+ 	flt = rcu_dereference_protected(sk_priv->flt, true);
+ 	kfree_rcu(flt, rcu);
+ }
+-#ifdef HAVE_BLOCKED_DEVLINK_CODE
++#endif
+ 
++#ifdef HAVE_BLOCKED_DEVLINK_CODE
+ int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
+ 				      struct genl_info *info)
+ {
+@@ -107,6 +111,7 @@ int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
+ }
+ #endif
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ static bool mlxdevm_obj_desc_match(const struct mlxdevm_obj_desc *desc,
+ 				   const struct mlxdevm_obj_desc *flt)
+ {
+@@ -138,6 +143,7 @@ static bool mlxdevm_obj_desc_match(const struct mlxdevm_obj_desc *desc,
+  * Return: valid pointer on success, otherwise negative error value
+  * encoded by ERR_PTR(), NULL in case priv does not exist.
+  */
++
+ static void *mlxdevm__genl_sk_priv_get(struct genl_family *family, struct sock *sk)
+ {
+ 	if (WARN_ON_ONCE(!family->sock_privs))
+@@ -162,12 +168,15 @@ int mlxdevm_nl_notify_filter(struct sock *dsk, struct sk_buff *skb, void *data)
+ 	rcu_read_unlock();
+ 	return ret;
+ }
++#endif
+ 
+ int mlxdevm_nl_put_nested_handle(struct sk_buff *msg, struct net *net,
+ 				 struct mlxdevm *mlxdevm, int attrtype)
+ {
+ 	struct nlattr *nested_attr;
++#ifdef HAVE_READ_PNET_RCU
+ 	struct net *devl_net;
++#endif
+ 
+ 	nested_attr = nla_nest_start(msg, attrtype);
+ 	if (!nested_attr)
+@@ -175,16 +184,23 @@ int mlxdevm_nl_put_nested_handle(struct sk_buff *msg, struct net *net,
+ 	if (mlxdevm_nl_put_handle(msg, mlxdevm))
+ 		goto nla_put_failure;
+ 
++#ifdef HAVE_READ_PNET_RCU
+ 	rcu_read_lock();
+ 	devl_net = read_pnet_rcu(&mlxdevm->_net);
+ 	if (!net_eq(net, devl_net)) {
+ 		int id = peernet2id_alloc(net, devl_net, GFP_ATOMIC);
+ 
+ 		rcu_read_unlock();
++#else
++	if (!net_eq(net, read_pnet(&mlxdevm->_net))) {
++		int id = peernet2id_alloc(net, read_pnet(&mlxdevm->_net),GFP_KERNEL);
++#endif
+ 		if (nla_put_s32(msg, MLXDEVM_ATTR_NETNS_ID, id))
+ 			return -EMSGSIZE;
++#ifdef HAVE_READ_PNET_RCU
+ 	} else {
+ 		rcu_read_unlock();
++#endif
+ 	}
+ 
+ 	nla_nest_end(msg, nested_attr);
+@@ -215,6 +231,9 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
+ 			    bool dev_lock)
+ {
+ 	struct mlxdevm *mlxdevm;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	unsigned long index;
+ 	char *busname;
+ 	char *devname;
+@@ -255,10 +274,25 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
+ 	return ERR_PTR(-ENODEV);
+ 
+ found:
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = mlxdevm->devlink;
++	if (devlink)
++		devl_lock(devlink);
++#endif
+ 	devm_dev_lock(mlxdevm, dev_lock);
++#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
++	mlxdevm->mlxdevm_flow = true;
++#endif
+ 	if (devm_is_registered(mlxdevm))
+ 		return mlxdevm;
++#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
++	mlxdevm->mlxdevm_flow = false;
++#endif
+ 	devm_dev_unlock(mlxdevm, dev_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	if (devlink)
++		devl_unlock(devlink);
++#endif
+ 	mlxdevm_put(mlxdevm);
+ 	return ERR_PTR(-ENODEV);
+ }
+@@ -300,12 +334,26 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
+ 	struct net *net = genl_info_net(info);
+ 	struct nlattr **attrs = info->attrs;
+ 	struct mlxdevm_port *mlxdevm_port;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	int err;
+ 
++#ifndef HAVE_GENL_INFO_CTX
++	/* Older kernels: genl_info has no ctx field, allocate context explicitly */
++	info->user_ptr[0] = kzalloc(sizeof(struct mlxdevm_nl_ctx), GFP_KERNEL);
++	if (!info->user_ptr[0])
++		return -ENOMEM;
++#endif
++
+ 	if (parent_dev && attrs[MLXDEVM_ATTR_PARENT_DEV]) {
+ 		parent_mlxdevm = mlxdevm_get_parent_from_attrs_lock(net, attrs);
+-		if (IS_ERR(parent_mlxdevm))
++		if (IS_ERR(parent_mlxdevm)) {
++#ifndef HAVE_GENL_INFO_CTX
++			kfree(info->user_ptr[0]);
++#endif
+ 			return PTR_ERR(parent_mlxdevm);
++		}
+ 		mlxdevm_nl_ctx(info)->parent_mlxdevm = parent_mlxdevm;
+ 		/* Drop the parent mlxdevm lock but don't release the reference.
+ 		 * This will keep it alive until the end of the request.
+@@ -336,17 +384,47 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
+ 
+ unlock:
+ 	devm_dev_unlock(mlxdevm, dev_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = mlxdevm->devlink;
++	if (devlink)
++		devl_unlock(devlink);
++#endif
+ 	mlxdevm_put(mlxdevm);
+ parent_put:
+ 	if (parent_dev && parent_mlxdevm)
+ 		mlxdevm_put(parent_mlxdevm);
++#ifndef HAVE_GENL_INFO_CTX
++	kfree(info->user_ptr[0]);
++#endif
+ 	return err;
+ }
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ int mlxdevm_nl_pre_doit(const struct genl_split_ops *ops,
++#else
++int mlxdevm_nl_pre_doit(const struct genl_ops *ops,
++#endif
+ 			struct sk_buff *skb, struct genl_info *info)
+ {
++#ifndef HAVE_STRUCT_GENL_SPLIT_OPS
++	/*
++	 * When HAVE_STRUCT_GENL_SPLIT_OPS is set each cmd has its own
++	 * pre_doit callback.
++	 * When the flag is unset, no per command pre_doit callback exist.
++	 * mlxdevm_nl_pre_doit() is called for all cmds.
++	 * force mlxdevm_nl_pre_doit() to call the correct callback.
++	 */
++	switch (ops->cmd) {
++		case MLXDEVM_CMD_RATE_SET:
++		case MLXDEVM_CMD_RATE_NEW:
++			return mlxdevm_nl_pre_doit_parent_dev_optional(ops, skb, info);
++			break;
++		default:
++		;
++	}
++#endif
+ 	return __mlxdevm_nl_pre_doit(skb, info, 0);
++
+ }
+ 
+ int mlxdevm_nl_pre_doit_port(const struct genl_split_ops *ops,
+@@ -367,7 +445,11 @@ int mlxdevm_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
+ 	return __mlxdevm_nl_pre_doit(skb, info, MLXDEVM_NL_FLAG_NEED_DEVLINK_OR_PORT);
+ }
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ int mlxdevm_nl_pre_doit_parent_dev_optional(const struct genl_split_ops *ops,
++#else
++int mlxdevm_nl_pre_doit_parent_dev_optional(const struct genl_ops *ops,
++#endif
+ 					    struct sk_buff *skb,
+ 					    struct genl_info *info)
+ {
+@@ -380,17 +462,52 @@ static void __mlxdevm_nl_post_doit(struct sk_buff *skb, struct genl_info *info,
+ {
+ 	bool dev_lock = flags & MLXDEVM_NL_FLAG_NEED_DEV_LOCK;
+ 	struct mlxdevm *mlxdevm;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 
+ 	mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
++#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
++	mlxdevm->mlxdevm_flow = false;
++#endif
+ 	devm_dev_unlock(mlxdevm, dev_lock);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = mlxdevm->devlink;
++	if (devlink)
++		devl_unlock(devlink);
++#endif
+ 	mlxdevm_put(mlxdevm);
+ 	if (mlxdevm_nl_ctx(info)->parent_mlxdevm)
+ 		mlxdevm_put(mlxdevm_nl_ctx(info)->parent_mlxdevm);
++#ifndef HAVE_GENL_INFO_CTX
++	kfree(info->user_ptr[0]);
++#endif
+ }
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ void mlxdevm_nl_post_doit(const struct genl_split_ops *ops,
++#else
++void mlxdevm_nl_post_doit(const struct genl_ops *ops,
++#endif
+ 			  struct sk_buff *skb, struct genl_info *info)
+ {
++#ifndef HAVE_STRUCT_GENL_SPLIT_OPS
++	/*
++	 * When HAVE_STRUCT_GENL_SPLIT_OPS is set each cmd has its own
++	 * post_doit callback.
++	 * When the flag is unset, no per command post_doit callback exist.
++	 * mlxdevm_nl_post_doit() is called for all cmds.
++	 * force mlxdevm_nl_post_doit() to call the correct callback.
++	 */
++	switch (ops->cmd) {
++		case MLXDEVM_CMD_RATE_SET:
++		case MLXDEVM_CMD_RATE_NEW:
++			return mlxdevm_nl_post_doit_parent_dev_optional(ops, skb, info);
++			break;
++		default:
++		;
++	}
++#endif
+ 	__mlxdevm_nl_post_doit(skb, info, 0);
+ }
+ 
+@@ -402,19 +519,27 @@ mlxdevm_nl_post_doit_dev_lock(const struct genl_split_ops *ops,
+ }
+ 
+ void
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ mlxdevm_nl_post_doit_parent_dev_optional(const struct genl_split_ops *ops,
++#else
++mlxdevm_nl_post_doit_parent_dev_optional(const struct genl_ops *ops,
++#endif
+ 					 struct sk_buff *skb,
+ 					 struct genl_info *info)
+ {
+ 	__mlxdevm_nl_post_doit(skb, info, MLXDEVM_NL_FLAG_OPTIONAL_PARENT_DEV);
+ }
+ 
++#if defined(HAVE_GENL_INFO_DUMP) || defined (HAVE_GENL_DUMPIT_INFO)
+ static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
+ 					 struct netlink_callback *cb, int flags,
+ 					 mlxdevm_nl_dump_one_func_t *dump_one,
+ 					 struct nlattr **attrs)
+ {
+ 	struct mlxdevm *mlxdevm;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	int err;
+ 
+ 	mlxdevm = mlxdevm_get_from_attrs_lock(sock_net(msg->sk), attrs, false);
+@@ -423,12 +548,18 @@ static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
+ 	err = dump_one(msg, mlxdevm, cb, flags | NLM_F_DUMP_FILTERED);
+ 
+ 	devm_unlock(mlxdevm);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	devlink = mlxdevm->devlink;
++	if (devlink)
++		devl_unlock(devlink);
++#endif
+ 	mlxdevm_put(mlxdevm);
+ 
+ 	if (err != -EMSGSIZE)
+ 		return err;
+ 	return msg->len;
+ }
++#endif
+ 
+ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
+ 				       struct netlink_callback *cb, int flags,
+@@ -436,10 +567,18 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
+ {
+ 	struct mlxdevm_nl_dump_state *state = mlxdevm_dump_state(cb);
+ 	struct mlxdevm *mlxdevm;
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++	struct devlink *devlink;
++#endif
+ 	int err = 0;
+ 
+ 	while ((mlxdevm = mlxdevms_xa_find_get(sock_net(msg->sk),
+ 					       &state->instance))) {
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++		devlink = mlxdevm->devlink;
++		if (devlink)
++			devl_lock(devlink);
++#endif
+ 		devm_lock(mlxdevm);
+ 
+ 		if (devm_is_registered(mlxdevm))
+@@ -448,6 +587,10 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
+ 			err = 0;
+ 
+ 		devm_unlock(mlxdevm);
++#if defined(HAVE_DEVL_PORT_REGISTER) && !defined(HAVE_DEVL_TRAP_GROUPS_REGISTER)
++		if (devlink)
++			devl_unlock(devlink);
++#endif
+ 		mlxdevm_put(mlxdevm);
+ 
+ 		if (err)
+@@ -469,7 +612,13 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
+ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
+ 		      mlxdevm_nl_dump_one_func_t *dump_one)
+ {
++#if defined(HAVE_GENL_INFO_DUMP) || defined (HAVE_GENL_DUMPIT_INFO)
++#ifdef HAVE_GENL_INFO_DUMP
+ 	const struct genl_info *info = genl_info_dump(cb);
++#else
++	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
++#endif
++
+ 	struct nlattr **attrs = info->attrs;
+ 	int flags = NLM_F_MULTI;
+ 
+@@ -480,20 +629,85 @@ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
+ 						     attrs);
+ 	else
+ 		return mlxdevm_nl_inst_iter_dumpit(msg, cb, flags, dump_one);
++#else
++	int flags = NLM_F_MULTI;
++
++	return mlxdevm_nl_inst_iter_dumpit(msg, cb, flags, dump_one);
++#endif
+ }
+ 
++#ifndef HAVE_GENL_OPS_MAXATTR
++struct nla_policy mlxdevm_nl_policy[MLXDEVM_ATTR_MAX + 1] = {
++	[MLXDEVM_ATTR_UNSPEC] = { .strict_start_type =
++		MLXDEVM_ATTR_TRAP_POLICER_ID },
++	[MLXDEVM_ATTR_BUS_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_DEV_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_PORT_INDEX] = { .type = NLA_U32 },
++	[MLXDEVM_ATTR_PORT_FLAVOUR] = NLA_POLICY_MAX(NLA_U16, 7),
++	[MLXDEVM_ATTR_PORT_PCI_PF_NUMBER] = { .type = NLA_U16, },
++	[MLXDEVM_ATTR_PORT_PCI_SF_NUMBER] = { .type = NLA_U32, },
++	[MLXDEVM_ATTR_PORT_CONTROLLER_NUMBER] = { .type = NLA_U32, },
++	[MLXDEVM_ATTR_PORT_TYPE] = { .type = NLA_U16 },
++	[MLXDEVM_ATTR_ESWITCH_MODE] = { .type = NLA_U16 },
++	[MLXDEVM_ATTR_ESWITCH_INLINE_MODE] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_ESWITCH_ENCAP_MODE] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_DPIPE_TABLE_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_PARAM_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_PARAM_TYPE] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_PARAM_VALUE_CMODE] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_FLASH_UPDATE_FILE_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_FLASH_UPDATE_COMPONENT] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_FLASH_UPDATE_OVERWRITE_MASK] = NLA_POLICY_BITFIELD32(3),
++	[MLXDEVM_ATTR_TRAP_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_TRAP_ACTION] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_TRAP_GROUP_NAME] = { .type = NLA_NUL_STRING },
++	[MLXDEVM_ATTR_TRAP_POLICER_ID] = { .type = NLA_U32, },
++	[MLXDEVM_ATTR_RELOAD_ACTION] = { .type = NLA_U8 },
++	[MLXDEVM_ATTR_RELOAD_LIMITS] = NLA_POLICY_BITFIELD32(6),
++	[MLXDEVM_ATTR_NETNS_PID] = { .type = NLA_U32 },
++	[MLXDEVM_ATTR_NETNS_FD] = { .type = NLA_U32 },
++	[MLXDEVM_ATTR_NETNS_ID] = { .type = NLA_U32 },
++	[MLXDEVM_ATTR_RATE_NODE_NAME] = { .type = NLA_NUL_STRING, },
++	[MLXDEVM_ATTR_RATE_TX_SHARE] = { .type = NLA_U64, },
++	[MLXDEVM_ATTR_RATE_TX_MAX] = { .type = NLA_U64, },
++	[MLXDEVM_ATTR_RATE_TX_PRIORITY] = { .type = NLA_U32, },
++	[MLXDEVM_ATTR_RATE_TX_WEIGHT] = { .type = NLA_U32, },
++	[MLXDEVM_ATTR_RATE_PARENT_NODE_NAME] = { .type = NLA_NUL_STRING, },
++	[MLXDEVM_ATTR_RATE_TC_BWS] = NLA_POLICY_NESTED(mlxdevm_dl_rate_tc_bws_nl_policy),
++	[MLXDEVM_ATTR_PORT_FUNCTION] = { .type = NLA_NESTED },
++};
++#endif
++
+ struct genl_family mlxdevm_nl_family  = {
+ 	.name		= MLXDEVM_GENL_NAME,
+ 	.version	= MLXDEVM_GENL_VERSION,
++	.maxattr = MLXDEVM_ATTR_MAX,
++#ifndef HAVE_GENL_OPS_MAXATTR
++        .policy = mlxdevm_nl_policy,
++#endif
+ 	.netnsok	= true,
+ 	.parallel_ops	= true,
++#ifndef HAVE_STRUCT_GENL_SPLIT_OPS
++	.pre_doit	= mlxdevm_nl_pre_doit,
++	.post_doit	= mlxdevm_nl_post_doit,
++#endif
+ 	.module		= THIS_MODULE,
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
+ 	.split_ops	= mlxdevm_nl_ops,
+ 	.n_split_ops	= ARRAY_SIZE(mlxdevm_nl_ops),
++#else
++	.ops	= mlxdevm_nl_ops,
++	.n_ops	= ARRAY_SIZE(mlxdevm_nl_ops),
++#endif
++#ifdef HAVE_GENL_FAMILY_RESV_START_OP
+ 	.resv_start_op	= MLXDEVM_CMD_SELFTESTS_RUN + 1,
++#endif
+ 	.mcgrps		= mlxdevm_nl_mcgrps,
+ 	.n_mcgrps	= ARRAY_SIZE(mlxdevm_nl_mcgrps),
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	.sock_priv_size		= sizeof(struct mlxdevm_nl_sock_priv),
+ 	.sock_priv_init		= mlxdevm_nl_sock_priv_init,
+ 	.sock_priv_destroy	= mlxdevm_nl_sock_priv_destroy,
++#endif
+ };

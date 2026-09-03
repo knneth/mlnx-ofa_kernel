@@ -118,7 +118,8 @@ svc_rdma_next_recv_ctxt(struct list_head *list)
 static struct svc_rdma_recv_ctxt *
 svc_rdma_recv_ctxt_alloc(struct svcxprt_rdma *rdma)
 {
-	int node = ibdev_to_node(rdma->sc_cm_id->device);
+	struct ib_device *device = rdma->sc_cm_id->device;
+	int node = ibdev_to_node(device);
 	struct svc_rdma_recv_ctxt *ctxt;
 	unsigned long pages;
 	dma_addr_t addr;
@@ -133,9 +134,9 @@ svc_rdma_recv_ctxt_alloc(struct svcxprt_rdma *rdma)
 	buffer = kmalloc_node(rdma->sc_max_req_size, GFP_KERNEL, node);
 	if (!buffer)
 		goto fail1;
-	addr = ib_dma_map_single(rdma->sc_pd->device, buffer,
-				 rdma->sc_max_req_size, DMA_FROM_DEVICE);
-	if (ib_dma_mapping_error(rdma->sc_pd->device, addr))
+	addr = ib_dma_map_single(device, buffer, rdma->sc_max_req_size,
+				 DMA_FROM_DEVICE);
+	if (ib_dma_mapping_error(device, addr))
 		goto fail2;
 
 	svc_rdma_recv_cid_init(rdma, &ctxt->rc_cid);
@@ -167,7 +168,7 @@ fail0:
 static void svc_rdma_recv_ctxt_destroy(struct svcxprt_rdma *rdma,
 				       struct svc_rdma_recv_ctxt *ctxt)
 {
-	ib_dma_unmap_single(rdma->sc_pd->device, ctxt->rc_recv_sge.addr,
+	ib_dma_unmap_single(rdma->sc_cm_id->device, ctxt->rc_recv_sge.addr,
 			    ctxt->rc_recv_sge.length, DMA_FROM_DEVICE);
 	kfree(ctxt->rc_recv_buf);
 	kfree(ctxt);
@@ -785,12 +786,20 @@ static bool svc_rdma_is_reverse_direction_reply(struct svc_xprt *xprt,
  * with a single Read chunk (only the upper layer data payload
  * was conveyed via RDMA Read).
  */
-static void svc_rdma_read_complete_one(struct svc_rqst *rqstp,
-				       struct svc_rdma_recv_ctxt *ctxt)
+static int svc_rdma_read_complete_one(struct svc_rqst *rqstp,
+				      struct svc_rdma_recv_ctxt *ctxt)
 {
 	struct svc_rdma_chunk *chunk = pcl_first_chunk(&ctxt->rc_read_pcl);
 	struct xdr_buf *buf = &rqstp->rq_arg;
 	unsigned int length;
+
+	/* The client-supplied Read chunk position must fall within the
+	 * Receive buffer's head. Otherwise the unsigned subtraction that
+	 * sizes the tail below underflows, leaving tail[0] pointing past
+	 * the buffer with a bogus length.
+	 */
+	if (chunk->ch_position > buf->head[0].iov_len)
+		return -EINVAL;
 
 	/* Split the Receive buffer between the head and tail
 	 * buffers at Read chunk's position. XDR roundup of the
@@ -815,6 +824,8 @@ static void svc_rdma_read_complete_one(struct svc_rqst *rqstp,
 	buf->page_len = length;
 	buf->len += length;
 	buf->buflen += length;
+
+	return 0;
 }
 
 /* Finish constructing the RPC Call message in rqstp::rq_arg.
@@ -855,23 +866,18 @@ static void svc_rdma_read_complete_pzrc(struct svc_rqst *rqstp,
 	buf->page_len = ctxt->rc_readbytes - buf->head[0].iov_len;
 }
 
-static noinline void svc_rdma_read_complete(struct svc_rqst *rqstp,
-					    struct svc_rdma_recv_ctxt *ctxt)
+static noinline int svc_rdma_read_complete(struct svc_rqst *rqstp,
+					   struct svc_rdma_recv_ctxt *ctxt)
 {
 	unsigned int i;
+	int ret;
 
 	/* Transfer the Read chunk pages into @rqstp.rq_pages, replacing
-	 * the rq_pages that were already allocated for this rqstp.
+	 * the receive buffer pages already allocated for this rqstp.
 	 */
-	release_pages(rqstp->rq_respages, ctxt->rc_page_count);
+	release_pages(rqstp->rq_pages, ctxt->rc_page_count);
 	for (i = 0; i < ctxt->rc_page_count; i++)
 		rqstp->rq_pages[i] = ctxt->rc_pages[i];
-
-	/* Update @rqstp's result send buffer to start after the
-	 * last page in the RDMA Read payload.
-	 */
-	rqstp->rq_respages = &rqstp->rq_pages[ctxt->rc_page_count];
-	rqstp->rq_next_page = rqstp->rq_respages + 1;
 
 	/* Prevent svc_rdma_recv_ctxt_put() from releasing the
 	 * pages in ctxt::rc_pages a second time.
@@ -884,15 +890,19 @@ static noinline void svc_rdma_read_complete(struct svc_rqst *rqstp,
 	 */
 	rqstp->rq_arg = ctxt->rc_saved_arg;
 	if (pcl_is_empty(&ctxt->rc_call_pcl)) {
-		if (ctxt->rc_read_pcl.cl_count == 1)
-			svc_rdma_read_complete_one(rqstp, ctxt);
-		else
+		if (ctxt->rc_read_pcl.cl_count == 1) {
+			ret = svc_rdma_read_complete_one(rqstp, ctxt);
+			if (ret < 0)
+				return ret;
+		} else {
 			svc_rdma_read_complete_multiple(rqstp, ctxt);
+		}
 	} else {
 		svc_rdma_read_complete_pzrc(rqstp, ctxt);
 	}
 
 	trace_svcrdma_read_finished(&ctxt->rc_cid);
+	return 0;
 }
 
 /**
@@ -931,10 +941,9 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
 	struct svc_rdma_recv_ctxt *ctxt;
 	int ret;
 
-	/* Prevent svc_xprt_release() from releasing pages in rq_pages
-	 * when returning 0 or an error.
+	/* Precaution: a zero page count on error return causes
+	 * svc_rqst_release_pages() to release nothing.
 	 */
-	rqstp->rq_respages = rqstp->rq_pages;
 	rqstp->rq_next_page = rqstp->rq_respages;
 
 	rqstp->rq_xprt_ctxt = NULL;
@@ -945,7 +954,9 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
 		list_del(&ctxt->rc_list);
 		spin_unlock(&rdma_xprt->sc_rq_dto_lock);
 		svc_xprt_received(xprt);
-		svc_rdma_read_complete(rqstp, ctxt);
+		ret = svc_rdma_read_complete(rqstp, ctxt);
+		if (ret < 0)
+			goto out_readfail;
 		goto complete;
 	}
 	ctxt = svc_rdma_next_recv_ctxt(&rdma_xprt->sc_rq_dto_q);
@@ -962,7 +973,7 @@ int svc_rdma_recvfrom(struct svc_rqst *rqstp)
 		return 0;
 
 	percpu_counter_inc(&svcrdma_stat_recv);
-	ib_dma_sync_single_for_cpu(rdma_xprt->sc_pd->device,
+	ib_dma_sync_single_for_cpu(rdma_xprt->sc_cm_id->device,
 				   ctxt->rc_recv_sge.addr, ctxt->rc_byte_len,
 				   DMA_FROM_DEVICE);
 	svc_rdma_build_arg_xdr(rqstp, ctxt);
@@ -993,6 +1004,12 @@ out_err:
 	svc_rdma_send_error(rdma_xprt, ctxt, ret);
 	svc_rdma_recv_ctxt_put(rdma_xprt, ctxt);
 	return 0;
+
+out_readfail:
+	svc_rdma_send_error(rdma_xprt, ctxt, ret);
+	svc_rdma_recv_ctxt_put(rdma_xprt, ctxt);
+	svc_xprt_deferred_close(xprt);
+	return ret;
 
 out_readlist:
 	/* This @rqstp is about to be recycled. Save the work

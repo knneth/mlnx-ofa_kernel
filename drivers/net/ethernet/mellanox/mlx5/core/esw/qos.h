@@ -10,6 +10,7 @@
 #ifdef CONFIG_MLX5_ESWITCH
 
 enum sched_node_type {
+	SCHED_NODE_TYPE_ROOT,
 	SCHED_NODE_TYPE_VPORTS_TSAR,
 	SCHED_NODE_TYPE_VPORT,
 	SCHED_NODE_TYPE_TC_ARBITER_TSAR,
@@ -36,7 +37,9 @@ struct mlx5_esw_sched_node {
 	enum sched_node_type type;
 	/* The eswitch this node belongs to. */
 	struct mlx5_eswitch *esw;
-	/* The children nodes of this node, empty list for leaf nodes. */
+	/* The children nodes of this node, empty list for leaf nodes.
+	 * Can be from multiple E-Switches.
+	 */
 	struct list_head children;
 	/* Valid only if this node is associated with a vport. */
 	struct mlx5_vport *vport;
@@ -55,11 +58,11 @@ struct mlx5_esw_sched_node {
 };
 
 int mlx5_esw_qos_init(struct mlx5_eswitch *esw);
-void mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs);
 void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw);
+void mlx5_esw_qos_sysfs_nodes_cleanup(struct mlx5_eswitch *esw);
 
-void esw_qos_lock(struct mlx5_eswitch *esw);
-void esw_qos_unlock(struct mlx5_eswitch *esw);
+void esw_qos_lock(struct mlx5_core_dev *dev);
+void esw_qos_unlock(struct mlx5_core_dev *dev);
 
 int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
 				    struct netlink_ext_ack *extack);
@@ -78,6 +81,10 @@ void mlx5_esw_qos_vport_qos_free(struct mlx5_vport *vport);
 u32 mlx5_esw_qos_vport_get_sched_elem_ix(const struct mlx5_vport *vport);
 struct mlx5_esw_sched_node *mlx5_esw_qos_vport_get_parent(const struct mlx5_vport *vport);
 
+int
+mlx5_esw_qos_vport_update_parent(struct mlx5_vport *vport,
+				 struct mlx5_esw_sched_node *parent,
+				 struct netlink_ext_ack *extack);
 int mlx5_esw_qos_vport_update_sysfs_node(struct mlx5_eswitch *group_esw, u32 node_id,
 					 struct mlx5_vport *vport);
 int mlx5_esw_qos_set_sysfs_node_max_rate(struct mlx5_eswitch *esw,

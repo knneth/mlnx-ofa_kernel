@@ -1,0 +1,12 @@
+sep=;
+Change-Id=I58eab1beb9b9a1a425a484007aa4dfd46cc57ab9; subject=IB/core: Introduce signature pipelining API; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Id46219e25ed66156f1301065aac7118e3ee97a08; subject=IB/mlx5: Add IB_QP_CREATE_SIGNATURE_PIPELINE support; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ifc54f8fd18d580609afddfcc4d5e332fba2ac1f1; subject=IB/mlx5: Add IB_SEND_SIG_PIPELINED support; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If525f904f97d3685ff62f17456530a1a12b84b42; subject=IB/mlx5: Handle SIGERR SQD event; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I40715d0393e58e20b491769da808fa261dd6b50f; subject=IB/mlx5: Update a status for the canceled WR; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I27b8d6790e809884ece0f23765b1e30ae43ac50a; subject=mlx5: Expose the signature pipeline feature; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I02e5c30745f78942c68b32dbeb4a3dddec9d3183; subject=IB/isert: Add sig_pipeline flag for isert_conn; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I503ba12eabdbb3dcf58ea5979e4b4f49f5bbf542; subject=IB/isert: Split the isert_init_send_wr function; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib96820d320a5d11bb4562cf6fb511ec51945c321; subject=IB/isert: Use the signature pipeline feature; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I35f960e12d86fc6fa82dd65ee112d2f0324994eb; subject=IB/isert: Fix NULL pointer dereference if MR registration is failed; feature=signature_pipeline; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I759a438a5f726f6d910ac3b43ed93759e06ab750; subject=IB/srp: Do not use SG_GAPS MR to avoid performance degradation; feature=ib_srp_bugs_backlog; upstream_status=NA; upstream_issue=; general=;

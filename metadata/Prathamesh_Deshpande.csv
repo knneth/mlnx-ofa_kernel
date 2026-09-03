@@ -1,0 +1,4 @@
+sep=;
+Change-Id=Ibefbb08e1630e35966cc6b8d6ee23d26bb6b3ec0; subject=IB/mlx5: Fix transport-domain rollback and initialize lb mutex earlier; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: e79389115b9d, tag: v7.2-rc1;
+Change-Id=Ibe1826d900164f41d06301d866df5ceac5852cc0; subject=RDMA/mlx5: Fix UMR XLT cleanup on ODP populate failure; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 1eae35b37923, tag: v7.2-rc1;
+Change-Id=I7d458267b27294b0dd8097f2d0db956878de6793; subject=RDMA/mlx5: Fix devx subscribe-event unwind NULL dereference; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 43f8f7946814, tag: v7.2-rc1;

@@ -10,7 +10,7 @@ void
 mlx5_rep_destroy_miss_meter(struct mlx5_core_dev *dev, struct mlx5e_rep_priv *rep_priv)
 {
 	struct rep_meter *meter = &rep_priv->rep_meter;
-	u64 bytes, packets;
+	u64 bytes = 0, packets = 0;
 
 	if (meter->drop_red_rule) {
 		mlx5_del_flow_rules(meter->drop_red_rule);

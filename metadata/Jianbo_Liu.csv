@@ -1,0 +1,14 @@
+sep=;
+Change-Id=Ie1884a4a5fe2e2fdb90dc44bc2a46fe08c227530; subject=net/mlx5e: Add sysfs for rate limiting per VF; feature=vf_group_rate_limit; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ie10556fce2d8952710dbdb6dea59c942e74a9caa; subject=net/mlx5: Enable FWD_NEXT_PRIO action for ingress and egress ACL; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Iee5f113690a7307ab8ae992314565f593fed6425; subject=net/mlx5, E-Switch, Prepare VF metering for ingress ACL; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I0ee361dacaeba04b584052fc889694c5313cfa07; subject=net/mlx5, E-Switch, Prepare VF metering for egress ACL; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ia6a6eadd0d3aa97f6bfad7f295c8bb5d4797e6a0; subject=net/mlx5, E-Switch, Add support for VF metering; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I541fb89c459005eb3c697eb4783d8bb3053cf863; subject=net/mlx5, E-Switch, Move ingress and egress acl tables to last prio; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If9fb7effed8a922561d0288cb265533454715c76; subject=net/mlx5e: Destroy meter tables when disable vf vports; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Iabf150d17b137cc7d6fc8d4cd02015c785afa49b; subject=net/mlx5e: Use 64bits unsigned int for vf meter rate and burst; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If1ef278a9b7695d54c4bdc34e07716cb70ddaa06; subject=net/mlx5e: Pass prio to mlx5_create_vport_flow_table; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Id627d3a8fe1c8e2ca8f71a797151f336df58a74e; subject=net/mlx5e: Use new metering API for vf metering; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I7f1d05ed02613f32ab1f4c7178aa2a878326ac66; subject=net/mlx5e: Use new metering API for miss metering; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I3bd33e1f0bce2c04c627340bf562026dfbc84477; subject=net/mlx5e: Create vport meter structs on demand; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I86f28a99797c258b7856f71d6c0f95eb2c9f1228; subject=net/mlx5e: Pass correct meter handle to modify func; feature=metering; upstream_status=NA; upstream_issue=; general=;

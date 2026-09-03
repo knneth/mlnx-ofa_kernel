@@ -52,79 +52,79 @@ DECLARE_PER_CPU(long, nvfs_n_ops);
 
 static inline long nvfs_count_ops(void)
 {
-       int i;
-       long sum = 0;
-       for_each_possible_cpu(i)
-               sum += per_cpu(nvfs_n_ops, i);
-       return sum;
+	int i;
+	long sum = 0;
+	for_each_possible_cpu(i)
+		sum += per_cpu(nvfs_n_ops, i);
+	return sum;
 }
 
 static inline bool nvfs_get_ops(void)
 {
-       if (nvfs_ops && !atomic_read(&nvfs_shutdown)) {
-               this_cpu_inc(nvfs_n_ops);
-               return true;
-       }
-       return false;
+	if (nvfs_ops && !atomic_read(&nvfs_shutdown)) {
+		this_cpu_inc(nvfs_n_ops);
+		return true;
+	}
+	return false;
 }
 
 static inline void nvfs_put_ops(void)
 {
-       this_cpu_dec(nvfs_n_ops);
+	this_cpu_dec(nvfs_n_ops);
 }
 
 
 struct nvfs_dma_rw_blk_iter_ops {
-        unsigned long long ft_bmap; // feature bitmap
+	unsigned long long ft_bmap; // feature bitmap
 
-        int (*nvfs_blk_rq_dma_map_iter_start) (struct request *req,
-                                               struct device *dma_dev,
-                                               struct dma_iova_state *state,
-                                               struct blk_dma_iter *iter,
-					       void **cookie);
+	int (*nvfs_blk_rq_dma_map_iter_start) (struct request *req,
+			struct device *dma_dev,
+			struct dma_iova_state *state,
+			struct blk_dma_iter *iter,
+			void **cookie);
 
-        int (*nvfs_blk_rq_dma_map_iter_next) (struct request *req,
-                                              struct device *dma_dev,
-                                              struct dma_iova_state *state,
-                                              struct blk_dma_iter *iter);
+	int (*nvfs_blk_rq_dma_map_iter_next) (struct request *req,
+			struct device *dma_dev,
+			struct dma_iova_state *state,
+			struct blk_dma_iter *iter);
 
-        int (*nvfs_dma_unmap_page) (struct device *device,
-				    void* cookie,
-				    dma_addr_t addr,
-				    size_t size,
-				    enum dma_data_direction dir);
+	int (*nvfs_dma_unmap_page) (struct device *device,
+			void* cookie,
+			dma_addr_t addr,
+			size_t size,
+			enum dma_data_direction dir);
 
-        bool (*nvfs_is_gpu_page) (struct page *page);
+	bool (*nvfs_is_gpu_page) (struct page *page);
 
-        unsigned int (*nvfs_gpu_index) (struct page *page);
+	unsigned int (*nvfs_gpu_index) (struct page *page);
 
-        unsigned int (*nvfs_device_priority) (struct device *dev, unsigned int gpu_index);
+	unsigned int (*nvfs_device_priority) (struct device *dev, unsigned int gpu_index);
 
 };
 
 struct nvfs_dma_rw_ops {
-       unsigned long long ft_bmap; // feature bitmap
+	unsigned long long ft_bmap; // feature bitmap
 
-       int (*nvfs_blk_rq_map_sg) (struct request_queue *q,
-                       struct request *req,
-                       struct scatterlist *sglist);
+	int (*nvfs_blk_rq_map_sg) (struct request_queue *q,
+			struct request *req,
+			struct scatterlist *sglist);
 
-       int (*nvfs_dma_map_sg_attrs) (struct device *device,
-                       struct scatterlist *sglist,
-                       int nents,
-                       enum dma_data_direction dma_dir,
-                       unsigned long attrs);
+	int (*nvfs_dma_map_sg_attrs) (struct device *device,
+			struct scatterlist *sglist,
+			int nents,
+			enum dma_data_direction dma_dir,
+			unsigned long attrs);
 
-       int (*nvfs_dma_unmap_sg)  (struct device *device,
-                       struct scatterlist *sglist,
-                       int nents,
-                       enum dma_data_direction dma_dir);
+	int (*nvfs_dma_unmap_sg)  (struct device *device,
+			struct scatterlist *sglist,
+			int nents,
+			enum dma_data_direction dma_dir);
 
-       bool (*nvfs_is_gpu_page) (struct page *page);
+	bool (*nvfs_is_gpu_page) (struct page *page);
 
-       unsigned int (*nvfs_gpu_index) (struct page *page);
+	unsigned int (*nvfs_gpu_index) (struct page *page);
 
-       unsigned int (*nvfs_device_priority) (struct device *dev, unsigned int gpu_index);
+	unsigned int (*nvfs_device_priority) (struct device *dev, unsigned int gpu_index);
 };
 
 // feature list for dma_ops, values indicate bit pos

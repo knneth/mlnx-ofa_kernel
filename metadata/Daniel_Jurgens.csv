@@ -1,0 +1,4 @@
+sep=;
+Change-Id=I0219230bcef6b4c087c08b0f4b0e379f53f49155; subject=net/mlx5: Update regex caps; feature=regex; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Iedd59d8101aebdfecca76d6f8986f4b5dce6e147; subject=net/mlx5: Explicit cast in check_add_overflow; feature=max_io_eqs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4382d06f1a524829a94d48e83141b38201356a0f; subject=net/mlx5: Set host PF HCA vport context to Follow; feature=embedded_ib_wa; upstream_status=NA; upstream_issue=; general=;

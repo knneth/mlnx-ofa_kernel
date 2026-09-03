@@ -21,6 +21,7 @@
 #include <linux/uio.h>
 #include "fuse_i.h"
 #include "fuse_dev_i.h"
+#include "fuse_trace.h"
 
 /* Used to help calculate the FUSE connection's max_pages limit for a request's
  * size. Parts of the struct fuse_req are sliced into scattergather lists in
@@ -729,7 +730,7 @@ static int virtio_fs_add_queues_sysfs(struct virtio_fs *fs)
 
 		sprintf(buff, "%d", i);
 		fsvq->kobj = kobject_create_and_add(buff, fs->mqs_kobj);
-		if (!fs->mqs_kobj) {
+		if (!fsvq->kobj) {
 			ret = -ENOMEM;
 			goto out_del;
 		}
@@ -993,6 +994,7 @@ static void virtio_fs_end_notify(struct virtio_fs_req *fs_req)
 	struct fuse_args *args = &fs_req->notify[0].args;
 	struct fuse_copy_state cs;
 	struct fuse_conn *fc;
+	struct fuse_dev *fud;
 	struct iov_iter iter;
 	struct virtio_fs *fs;
 	struct kvec iov[1];
@@ -1006,7 +1008,10 @@ static void virtio_fs_end_notify(struct virtio_fs_req *fs_req)
 	 * it means we end a notificaiton request after
 	 * disconnect, nothing to do.
 	 */
-	fc = fs_req->fsvq->fud->fc;
+	fud = fs_req->fsvq->fud;
+	if (!fud)
+		return;
+	fc = fud->fc;
 	if (!fc)
 		return;
 
@@ -1394,7 +1399,7 @@ static void virtio_fs_requests_done_work(struct work_struct *work)
 		if (fs_req->req.args->may_block) {
 			struct virtio_fs_req_work *w;
 
-			w = kzalloc(sizeof(*w), GFP_NOFS | __GFP_NOFAIL);
+			w = kzalloc_obj(*w, GFP_NOFS | __GFP_NOFAIL);
 			INIT_WORK(&w->done_work, virtio_fs_complete_req_work);
 			w->fsvq = fsvq;
 			w->req = &fs_req->req;
@@ -1507,8 +1512,8 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
 	int ret = 0;
 
 	vq_nvqs = 1 + fs->notify_enabled + fs->num_request_queues;
-	vqs = kmalloc_array(vq_nvqs, sizeof(vqs[VQ_HIPRIO]), GFP_KERNEL);
-	vqs_info = kcalloc(vq_nvqs, sizeof(*vqs_info), GFP_KERNEL);
+	vqs = kmalloc_objs(vqs[VQ_HIPRIO], vq_nvqs);
+	vqs_info = kzalloc_objs(*vqs_info, vq_nvqs);
 	if (!vqs || !vqs_info) {
 		ret = -ENOMEM;
 		goto out;
@@ -1533,7 +1538,6 @@ static int virtio_fs_setup_vqs(struct virtio_device *vdev,
 		info_idx++;
 	}
 
-	/* Leaving irq descriptor NULL will allow for dynamic remapping */
 	ret = virtio_find_vqs(vdev, vq_nvqs, vqs, vqs_info, NULL);
 	if (ret < 0)
 		goto out;
@@ -1649,7 +1653,6 @@ static long virtio_fs_direct_access(struct dax_device *dax_dev, pgoff_t pgoff,
 		*kaddr = fs->window_kaddr + offset;
 	if (pfn)
 		*pfn = PHYS_PFN(fs->window_phys_addr + offset);
-
 	return nr_pages > max_nr_pages ? max_nr_pages : nr_pages;
 }
 
@@ -1755,7 +1758,7 @@ static int virtio_fs_probe(struct virtio_device *vdev)
 	struct virtio_fs *fs;
 	int ret;
 
-	fs = kzalloc(sizeof(*fs), GFP_KERNEL);
+	fs = kzalloc_obj(*fs);
 	if (!fs)
 		return -ENOMEM;
 	kobject_init(&fs->kobj, &virtio_fs_ktype);
@@ -1948,7 +1951,7 @@ static void virtio_fs_send_forget(struct fuse_mount *fm, struct fuse_forget_link
 	u64 unique = virtio_fs_get_unique(fsvq);
 
 	/* Allocate a buffer for the request */
-	forget = kmalloc(sizeof(*forget), GFP_NOFS | __GFP_NOFAIL);
+	forget = kmalloc_obj(*forget, GFP_NOFS | __GFP_NOFAIL);
 	req = &forget->req;
 
 	req->ih = (struct fuse_in_header){
@@ -2093,8 +2096,8 @@ static int virtio_fs_enqueue_req(struct virtio_fs_vq *fsvq,
 	/* Does the sglist fit on the stack? */
 	total_sgs = sg_count_fuse_req(req);
 	if (total_sgs > ARRAY_SIZE(stack_sgs)) {
-		sgs = kmalloc_array(total_sgs, sizeof(sgs[0]), gfp);
-		sg = kmalloc_array(total_sgs, sizeof(sg[0]), gfp);
+		sgs = kmalloc_objs(sgs[0], total_sgs, gfp);
+		sg = kmalloc_objs(sg[0], total_sgs, gfp);
 		if (!sgs || !sg) {
 			ret = -ENOMEM;
 			goto out;
@@ -2196,6 +2199,7 @@ static void virtio_fs_req_send_async(struct virtio_fs_req *fs_req)
 
 	if (req->in.h.opcode != FUSE_NOTIFY_REPLY)
 		req->in.h.unique = virtio_fs_get_unique(fsvq);
+	trace_fuse_request_send(req);
 
 	pr_debug("%s: opcode %u unique %#llx nodeid %#llx in.len %u out.len %u queue_id %u\n",
 		 __func__, req->in.h.opcode, req->in.h.unique,
@@ -2429,6 +2433,8 @@ static void virtio_fs_conn_destroy(struct fuse_mount *fm)
 	fsvq->connected = false;
 	spin_unlock(&fsvq->lock);
 	virtio_fs_drain_all_queues(vfs);
+
+	fuse_conn_destroy(fm);
 
 	/* fuse_conn_destroy() must have sent destroy. Stop all queues
 	 * and drain one more time and free fuse devices. Freeing fuse
@@ -2694,6 +2700,9 @@ static int virtio_fs_get_tree(struct fs_context *fsc)
 	unsigned int virtqueue_size;
 	int err = -EIO;
 
+	if (!fsc->source)
+		return invalf(fsc, "No source specified");
+
 	/* This gets a reference on virtio_fs object. This ptr gets installed
 	 * in fc->priv. Once fuse_conn is going away, it calls fc->release()
 	 * to drop the reference to this object.
@@ -2709,11 +2718,11 @@ static int virtio_fs_get_tree(struct fs_context *fsc)
 		goto out_err;
 
 	err = -ENOMEM;
-	fc = kzalloc(sizeof(struct fuse_conn), GFP_KERNEL);
+	fc = kzalloc_obj(struct fuse_conn);
 	if (!fc)
 		goto out_err;
 
-	fm = kzalloc(sizeof(struct fuse_mount), GFP_KERNEL);
+	fm = kzalloc_obj(struct fuse_mount);
 	if (!fm)
 		goto out_err;
 
@@ -2780,7 +2789,7 @@ static int virtio_fs_init_fs_context(struct fs_context *fsc)
 	if (fsc->purpose == FS_CONTEXT_FOR_SUBMOUNT)
 		return fuse_init_fs_context_submount(fsc);
 
-	ctx = kzalloc(sizeof(struct fuse_fs_context), GFP_KERNEL);
+	ctx = kzalloc_obj(struct fuse_fs_context);
 	if (!ctx)
 		return -ENOMEM;
 	fsc->fs_private = ctx;
@@ -2829,17 +2838,13 @@ static int __init virtio_fs_init(void)
 
 	pr_info("virtio-fs: Loading NVIDIA-virtiofs +mq +lockless +nvq +flr +gds\n");
 
-	fuse_inode_cachep = kmem_cache_create("nvidiavfs_inode",
-                                      sizeof(struct fuse_inode), 0,
-                                      SLAB_HWCACHE_ALIGN|SLAB_ACCOUNT|SLAB_RECLAIM_ACCOUNT,
-                                      fuse_inode_init_once);
-
-	if (!fuse_inode_cachep)
-		return -ENOMEM;
+	ret = fuse_fs_init();
+	if (ret < 0)
+		return ret;
 
 	ret = virtio_fs_sysfs_init();
 	if (ret < 0)
-		goto cache_cleanup;
+		goto fuse_exit;
 
 	ret = register_virtio_driver(&virtio_fs_driver);
 	if (ret < 0)
@@ -2849,18 +2854,14 @@ static int __init virtio_fs_init(void)
 	if (ret < 0)
 		goto unregister_virtio_driver;
 
-	sanitize_global_limit(&max_user_bgreq);
-	sanitize_global_limit(&max_user_congthresh);
-
 	return 0;
 
 unregister_virtio_driver:
 	unregister_virtio_driver(&virtio_fs_driver);
 sysfs_exit:
 	virtio_fs_sysfs_exit();
-cache_cleanup:
-	kmem_cache_destroy(fuse_inode_cachep);
-
+fuse_exit:
+	fuse_fs_cleanup();
 	return ret;
 }
 module_init(virtio_fs_init);
@@ -2870,7 +2871,7 @@ static void __exit virtio_fs_exit(void)
 	unregister_filesystem(&virtio_fs_type);
 	unregister_virtio_driver(&virtio_fs_driver);
 	virtio_fs_sysfs_exit();
-	kmem_cache_destroy(fuse_inode_cachep);
+	fuse_fs_cleanup();
 }
 module_exit(virtio_fs_exit);
 

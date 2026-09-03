@@ -1,5 +1,5 @@
-mlnx-ofed-kernel (26.04.OFED.26.04.1.1.0.1-1) unstable; urgency=low
+mlnx-ofed-kernel (2607.0.100-1) stable; urgency=medium
 
-  * Initial release (Closes: #125306)
+  * mlnx-ofed-kernel build 2607.0.100-1
 
- -- Vladimir Sokolovsky <vlad@mellanox.com>  Mon, 31 Dec 2012 15:38:53 +0200
+ -- Networking Support <networking-support@nvidia.com>  Tue, 18 Aug 2026 13:42:47 +0000

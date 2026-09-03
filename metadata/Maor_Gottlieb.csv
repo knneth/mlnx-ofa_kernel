@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Id916bd9352e3814c903b394accced52ef84970d8; subject=IB/umem: Add debug prints in error flow; feature=umem_debug_prints; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I24f105123f9521fd8367c163f7178381fa687cff; subject=RDMA/ipoib: Remove dependency in ALL_MULTI CONFIG; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;

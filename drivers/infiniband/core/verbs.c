@@ -49,6 +49,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_cache.h>
 #include <rdma/ib_addr.h>
+#include <rdma/ib_umem.h>
 #include <rdma/rw.h>
 #include <rdma/lag.h>
 
@@ -74,14 +75,14 @@ static const char * const ib_events[] = {
 	[IB_EVENT_PKEY_CHANGE]		= "P_key change",
 	[IB_EVENT_SM_CHANGE]		= "SM change",
 	[IB_EVENT_SRQ_ERR]		= "SRQ error",
-	[IB_EVENT_SRQ_LIMIT_REACHED]	= "SRQ limit reached",
-	[IB_EVENT_QP_LAST_WQE_REACHED]	= "last WQE reached",
-	[IB_EVENT_CLIENT_REREGISTER]	= "client reregister",
-	[IB_EVENT_GID_CHANGE]		= "GID changed",
 	[IB_EXP_EVENT_XRQ_QP_ERR]	= "XRQ QP error",
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_PCI_ERR] = "XRQ NVMF backend ctrl PCI error",
 	[IB_EVENT_XRQ_NVMF_BACKEND_CTRL_TO_ERR] = "XRQ NVMF backend ctrl timeout error",
 	[IB_EVENT_XRQ_QP_LAST_NVME_CQE_REACHED] = "XRQ QP last NVMe CQE reached",
+	[IB_EVENT_SRQ_LIMIT_REACHED]	= "SRQ limit reached",
+	[IB_EVENT_QP_LAST_WQE_REACHED]	= "last WQE reached",
+	[IB_EVENT_CLIENT_REREGISTER]	= "client reregister",
+	[IB_EVENT_GID_CHANGE]		= "GID changed",
 	[IB_EVENT_DEVICE_SPEED_CHANGE]  = "device speed change"
 };
 
@@ -1191,7 +1192,7 @@ static struct ib_qp *__ib_open_qp(struct ib_qp *real_qp,
 	unsigned long flags;
 	int err;
 
-	qp = kzalloc(sizeof *qp, GFP_KERNEL);
+	qp = kzalloc_obj(*qp);
 	if (!qp)
 		return ERR_PTR(-ENOMEM);
 
@@ -1542,7 +1543,8 @@ static const struct {
 						 IB_QP_PKEY_INDEX),
 				 [IB_QPT_RC]  = (IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
-						 IB_QP_PKEY_INDEX),
+						 IB_QP_PKEY_INDEX		|
+						 IB_QP_RATE_LIMIT),
 				 [IB_QPT_XRC_INI] = (IB_QP_ALT_PATH		|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_PKEY_INDEX),
@@ -1590,7 +1592,8 @@ static const struct {
 						 IB_QP_ALT_PATH			|
 						 IB_QP_ACCESS_FLAGS		|
 						 IB_QP_MIN_RNR_TIMER		|
-						 IB_QP_PATH_MIG_STATE 		|
+						 IB_QP_PATH_MIG_STATE		|
+						 IB_QP_RATE_LIMIT		|
 						 IB_QP_OFFLOAD_TYPE),
 				 [IB_QPT_XRC_INI] = (IB_QP_CUR_STATE		|
 						 IB_QP_ALT_PATH			|
@@ -1625,7 +1628,8 @@ static const struct {
 						IB_QP_ACCESS_FLAGS		|
 						IB_QP_ALT_PATH			|
 						IB_QP_PATH_MIG_STATE		|
-						IB_QP_MIN_RNR_TIMER             |
+						IB_QP_MIN_RNR_TIMER		|
+						IB_QP_RATE_LIMIT		|
 						IB_QP_OFFLOAD_TYPE		|
 						IB_QP_RMPN_XRQN),
 				[IB_QPT_XRC_INI] = (IB_QP_CUR_STATE		|
@@ -2206,12 +2210,14 @@ struct ib_cq *__ib_create_cq(struct ib_device *device,
 	struct ib_cq *cq;
 	int ret;
 
+	if (WARN_ON_ONCE(!cq_attr->cqe))
+		return ERR_PTR(-EINVAL);
+
 	cq = rdma_zalloc_drv_obj(device, ib_cq);
 	if (!cq)
 		return ERR_PTR(-ENOMEM);
 
 	cq->device = device;
-	cq->uobject = NULL;
 	cq->comp_handler = comp_handler;
 	cq->event_handler = event_handler;
 	cq->cq_context = cq_context;
@@ -2226,7 +2232,6 @@ struct ib_cq *__ib_create_cq(struct ib_device *device,
 		kfree(cq);
 		return ERR_PTR(ret);
 	}
-
 	rdma_restrack_add(&cq->res);
 	return cq;
 }
@@ -2262,16 +2267,6 @@ int ib_destroy_cq_user(struct ib_cq *cq, struct ib_udata *udata)
 	return ret;
 }
 EXPORT_SYMBOL(ib_destroy_cq_user);
-
-int ib_resize_cq(struct ib_cq *cq, int cqe)
-{
-	if (cq->shared)
-		return -EOPNOTSUPP;
-
-	return cq->device->ops.resize_cq ?
-		cq->device->ops.resize_cq(cq, cqe, NULL) : -EOPNOTSUPP;
-}
-EXPORT_SYMBOL(ib_resize_cq);
 
 /* Memory regions */
 
@@ -2428,7 +2423,7 @@ struct ib_mr *ib_alloc_mr_integrity(struct ib_pd *pd,
 		goto out;
 	}
 
-	sig_attrs = kzalloc(sizeof(struct ib_sig_attrs), GFP_KERNEL);
+	sig_attrs = kzalloc_obj(struct ib_sig_attrs);
 	if (!sig_attrs) {
 		mr = ERR_PTR(-ENOMEM);
 		goto out;
@@ -3162,44 +3157,6 @@ int rdma_init_netdev(struct ib_device *device, u32 port_num,
 }
 EXPORT_SYMBOL(rdma_init_netdev);
 
-void __rdma_block_iter_start(struct ib_block_iter *biter,
-			     struct scatterlist *sglist, unsigned int nents,
-			     unsigned long pgsz)
-{
-	memset(biter, 0, sizeof(struct ib_block_iter));
-	biter->__sg = sglist;
-	biter->__sg_nents = nents;
-
-	/* Driver provides best block size to use */
-	biter->__pg_bit = __fls(pgsz);
-}
-EXPORT_SYMBOL(__rdma_block_iter_start);
-
-bool __rdma_block_iter_next(struct ib_block_iter *biter)
-{
-	dma_addr_t block_offset;
-	dma_addr_t delta;
-
-	if (!biter->__sg_nents || !biter->__sg)
-		return false;
-
-	biter->__dma_addr = sg_dma_address(biter->__sg) + biter->__sg_advance;
-	block_offset = biter->__dma_addr & (BIT_ULL(biter->__pg_bit) - 1);
-	delta = BIT_ULL(biter->__pg_bit) - block_offset;
-
-	while (biter->__sg_nents && biter->__sg &&
-	       sg_dma_len(biter->__sg) - biter->__sg_advance <= delta) {
-		delta -= sg_dma_len(biter->__sg) - biter->__sg_advance;
-		biter->__sg_advance = 0;
-		biter->__sg = sg_next(biter->__sg);
-		biter->__sg_nents--;
-	}
-	biter->__sg_advance += delta;
-
-	return true;
-}
-EXPORT_SYMBOL(__rdma_block_iter_next);
-
 /**
  * rdma_alloc_hw_stats_struct - Helper function to allocate dynamic struct
  *   for the drivers.
@@ -3213,7 +3170,7 @@ struct rdma_hw_stats *rdma_alloc_hw_stats_struct(
 {
 	struct rdma_hw_stats *stats;
 
-	stats = kzalloc(struct_size(stats, value, num_counters), GFP_KERNEL);
+	stats = kzalloc_flex(*stats, value, num_counters);
 	if (!stats)
 		return NULL;
 

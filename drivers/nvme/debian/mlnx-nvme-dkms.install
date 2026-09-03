@@ -1,0 +1,14 @@
+#!/usr/bin/dh-exec
+makefile			usr/src/${pname}-${dkms_version}/
+Makefile			usr/src/${pname}-${dkms_version}/
+common				usr/src/${pname}-${dkms_version}/
+host				usr/src/${pname}-${dkms_version}/
+target				usr/src/${pname}-${dkms_version}/
+lpfc				usr/src/${pname}-${dkms_version}/
+
+# Force DKMS to install our modules.
+# This is mostly needed for modules that do not have a version number
+# info, as DKMS will compare their srcversion field, which does not really
+# say which module is newer.
+debian/${pname}.force	usr/share/dkms/modules_to_force_install/
+

@@ -1,0 +1,5 @@
+sep=;
+Change-Id=I2fc6b3e0ab78d09103fa386671364f2a49ad5ad1; subject=net/mlx5: fix vport/port API to support sriov sysfs; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ibd4e33baca9d5432c9bb316e6a636bb854492d1f; subject=net/mlx5: add sriov sysfs support; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib1d844f15c64002069decf80de855fece27bdf6b; subject=net/mlx5: Get vport info directly from the vport struct in sriov sysfs; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ibddd76635b19ab4883fd03a5f56778041e766a44; subject=net/mlx5: Limit fw page allocation time; feature=mlx5_eeh_cmd_time_out; upstream_status=in_progress; upstream_issue=0123456789; general=;

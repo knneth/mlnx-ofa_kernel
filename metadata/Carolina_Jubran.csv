@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I5ecb36ed8deeef6b01d509430451eb60fd9a9957; subject=BACKPORTS: dpll: guard FFO ppt scaling for older kernels; feature=backports; upstream_status=ignore; upstream_issue=5201038; general=;

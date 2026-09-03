@@ -97,6 +97,29 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
 	return cpu_handle;
 }
 
+static void mlx5_dma_pool_destroy(struct mlx5_dma_pool *pool)
+{
+	mutex_destroy(&pool->lock);
+	kfree(pool);
+}
+
+static struct mlx5_dma_pool *mlx5_dma_pool_create(struct mlx5_core_dev *dev,
+						  int node, u8 block_shift)
+{
+	struct mlx5_dma_pool *pool;
+
+	pool = kzalloc_obj(*pool);
+	if (!pool)
+		return NULL;
+
+	INIT_LIST_HEAD(&pool->page_list);
+	mutex_init(&pool->lock);
+	pool->dev = dev;
+	pool->node = node;
+	pool->block_shift = block_shift;
+	return pool;
+}
+
 static struct mlx5_dma_pool_page *
 mlx5_dma_pool_page_alloc(struct mlx5_dma_pool *pool)
 {
@@ -135,45 +158,6 @@ static void mlx5_dma_pool_page_free(struct mlx5_core_dev *dev,
 			  page->dma);
 	bitmap_free(page->bitmap);
 	kfree(page);
-}
-
-static void mlx5_dma_pool_destroy(struct mlx5_dma_pool *pool)
-{
-	struct list_head *page_list = &pool->page_list;
-	struct mlx5_dma_pool_page *page, *tmp;
-
-	if (WARN(!list_empty(page_list),
-		 "mlx5 dma pool destroy with non-empty pool: block_shift=%u\n",
-		 pool->block_shift))
-		list_for_each_entry_safe(page, tmp, page_list, pool_link) {
-			list_del(&page->pool_link);
-			mlx5_dma_pool_page_free(pool->dev, page);
-		}
-
-	mutex_destroy(&pool->lock);
-	kfree(pool);
-}
-
-static struct mlx5_dma_pool *mlx5_dma_pool_create(struct mlx5_core_dev *dev,
-						  int node, u8 block_shift)
-{
-	struct mlx5_dma_pool *pool;
-
-	if (WARN_ONCE(block_shift > PAGE_SHIFT,
-		      "mlx5 dma pool invalid block_shift: %u (max %d)\n",
-		      block_shift, PAGE_SHIFT))
-		return NULL;
-
-	pool = kzalloc_obj(*pool);
-	if (!pool)
-		return NULL;
-
-	INIT_LIST_HEAD(&pool->page_list);
-	mutex_init(&pool->lock);
-	pool->dev = dev;
-	pool->node = node;
-	pool->block_shift = block_shift;
-	return pool;
 }
 
 static int mlx5_dma_pool_alloc_from_page(struct mlx5_dma_pool *pool,
@@ -225,17 +209,7 @@ static void mlx5_dma_pool_free(struct mlx5_dma_pool *pool,
 	int blocks_per_page = BIT(PAGE_SHIFT - pool->block_shift);
 	bool was_full;
 
-	if (WARN_ONCE(idx >= blocks_per_page,
-		      "mlx5 dma pool invalid idx: %lu (max %d)\n",
-		      idx, blocks_per_page - 1))
-		return;
-
 	mutex_lock(&pool->lock);
-	if (WARN_ONCE(test_bit(idx, page->bitmap),
-		      "mlx5 dma pool double free: idx=%lu block_shift=%u\n",
-		      idx, pool->block_shift))
-		goto unlock;
-
 	was_full = bitmap_empty(page->bitmap, blocks_per_page);
 	__set_bit(idx, page->bitmap);
 
@@ -248,8 +222,6 @@ static void mlx5_dma_pool_free(struct mlx5_dma_pool *pool,
 		if (was_full)
 			list_move(&page->pool_link, &pool->page_list);
 	}
-
-unlock:
 	mutex_unlock(&pool->lock);
 }
 
@@ -333,14 +305,7 @@ int mlx5_frag_buf_alloc_node(struct mlx5_core_dev *dev, int size,
 	struct mlx5_dma_pool *pool;
 	int pool_idx;
 
-	if (WARN_ONCE(size <= 0, "mlx5_frag_buf non-positive size: %d\n", size))
-		return -EINVAL;
-
 	node = node == NUMA_NO_NODE ? first_online_node : node;
-
-	if (WARN_ONCE(node < 0 || node >= nr_node_ids || !node_possible(node),
-		      "mlx5_frag_buf invalid node ID: %d\n", node))
-		return -EINVAL;
 
 	buf->size = size;
 	buf->npages = DIV_ROUND_UP(size, PAGE_SIZE);

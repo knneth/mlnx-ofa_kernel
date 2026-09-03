@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Ic54cbe9d444f1c0d3a2583c6937493921a0bb527; subject=net/mlx5: Do not restore destination-less TC rules; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=1234567890; general=upstream commit ID: 8d0a5af8b1ba, tag: v7.1-rc5;

@@ -14,7 +14,6 @@
 struct mlx5_devm_device {
 	struct mlxdevm device;
 	struct mlx5_core_dev *dev;
-	struct list_head list;
 	struct xarray devm_sfs;
 };
 
@@ -28,6 +27,8 @@ enum mlx5_mlxdevm_resource_id {
 
 struct mlx5_devm_device *mlx5_devm_device_get(struct mlx5_core_dev *dev);
 struct mlx5_core_dev *mlx5_devm_core_dev_get(struct mlxdevm *devm_dev);
+void mlx5_devm_free(struct mlx5_core_dev *dev);
+int mlx5_devm_alloc(struct mlx5_core_dev *dev);
 int mlx5_devm_register(struct mlx5_core_dev *dev);
 void mlx5_devm_unregister(struct mlx5_core_dev *dev);
 #if 0

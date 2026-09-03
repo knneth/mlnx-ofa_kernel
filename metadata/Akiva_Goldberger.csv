@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I218ee6a00dd26bf2097083b4f55341401ef4c0c5; subject=net/mlx5: Add reset_prepare and reset_done callbacks; feature=fw_reset_fixes; upstream_status=in_progress; upstream_issue=5004447; general=;

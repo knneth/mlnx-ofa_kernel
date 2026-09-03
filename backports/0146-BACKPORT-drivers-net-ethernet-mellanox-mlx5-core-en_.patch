@@ -1,55 +1,37 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 
 ---
- .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
- 1 file changed, 20 insertions(+), 4 deletions(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en_tc.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
-@@ -96,14 +96,26 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
- 	skb_reserve(skb, NET_IP_ALIGN);
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+@@ -198,6 +198,9 @@ int mlx5e_delete_flower(struct net_device *dev, struct mlx5e_priv *priv,
  
- 	/*  Reserve for ethernet and IP header  */
--	ethh = skb_push(skb, ETH_HLEN);
-+	ethh =
+ int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
+ 		       struct flow_cls_offload *f, unsigned long flags);
 +#ifdef HAVE_BASECODE_EXTRAS
-+		(struct ethhdr *)
++struct flow_offload_action;
 +#endif
-+		skb_push(skb, ETH_HLEN);
- 	skb_reset_mac_header(skb);
+ int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
+ 			       struct flow_offload_action *fl_act);
  
- 	skb_set_network_header(skb, skb->len);
--	iph = skb_put(skb, sizeof(struct iphdr));
-+	iph =
-+#ifdef HAVE_BASECODE_EXTRAS
-+		(struct iphdr *)
-+#endif
-+		skb_put(skb, sizeof(struct iphdr));
+@@ -301,6 +304,7 @@ void mlx5e_tc_set_ethertype(struct mlx5_core_dev *mdev,
+ 			    struct flow_match_basic *match, bool outer,
+ 			    void *headers_c, void *headers_v);
  
- 	skb_set_transport_header(skb, skb->len);
--	udph = skb_put(skb, sizeof(struct udphdr));
-+	udph =
-+#ifdef HAVE_BASECODE_EXTRAS
-+		(struct udphdr *)
-+#endif
-+		skb_put(skb, sizeof(struct udphdr));
++
+ int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
+ void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
  
- 	/* Fill ETH header */
- 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
-@@ -132,7 +144,11 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
- 	ip_send_check(iph);
+@@ -342,7 +346,6 @@ static inline void mlx5e_tc_ht_cleanup(struct rhashtable *tc_ht) {}
+ static inline int
+ mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
+ { return -EOPNOTSUPP; }
+-
+ #endif /* CONFIG_MLX5_CLS_ACT */
  
- 	/* Fill test header and data */
--	mlxh = skb_put(skb, sizeof(*mlxh));
-+	mlxh =
-+#ifdef HAVE_BASECODE_EXTRAS
-+		(struct mlx5ehdr *)
-+#endif
-+		skb_put(skb, sizeof(*mlxh));
- 	mlxh->version = 0;
- 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
- 
+ struct mlx5_flow_attr *mlx5_alloc_flow_attr(enum mlx5_flow_namespace_type type);

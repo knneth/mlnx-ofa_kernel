@@ -1,0 +1,81 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+
+---
+ .../mellanox/mlx5/core/en_accel/en_accel.h    | 37 ++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/en_accel.h
+@@ -100,6 +100,28 @@ static inline bool mlx5_geneve_tx_allowed(struct mlx5_core_dev *mdev)
+ 
+ #endif /* CONFIG_GENEVE */
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++/* Kernels without upstream commit b10b446ce7ad ("udp: gso: Use single MSS
++ * length in UDP header for GSO_PARTIAL") leave the aggregated super-packet
++ * length in the UDP header, so the driver must set the per-segment length
++ * before LSO. On newer kernels this writes the same value the stack already
++ * wrote.
++ */
++static inline void
++mlx5e_udp_gso_handle_tx_skb(struct sk_buff *skb)
++{
++	int payload_len = skb_shinfo(skb)->gso_size + sizeof(struct udphdr);
++	struct udphdr *udphdr;
++
++	if (skb->encapsulation)
++		udphdr = (struct udphdr *)skb_inner_transport_header(skb);
++	else
++		udphdr = udp_hdr(skb);
++
++	udphdr->len = htons(payload_len);
++}
++#endif
++
+ struct mlx5e_accel_tx_state {
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	struct mlx5e_accel_tx_tls_state tls;
+@@ -117,9 +139,18 @@ static inline bool mlx5e_accel_tx_begin(struct net_device *dev,
+ 					struct sk_buff *skb,
+ 					struct mlx5e_accel_tx_state *state)
+ {
++#ifdef HAVE_BASECODE_EXTRAS
++	if (skb_is_gso(skb) && skb_shinfo(skb)->gso_type & SKB_GSO_UDP_L4)
++		mlx5e_udp_gso_handle_tx_skb(skb);
++#endif
++
+ #ifdef CONFIG_MLX5_EN_TLS
+ 	/* May send WQEs. */
++#ifdef HAVE_TLS_IS_SKB_TX_DEVICE_OFFLOADED
+ 	if (tls_is_skb_tx_device_offloaded(skb))
++#else
++ 	if (mlx5e_ktls_skb_offloaded(skb))
++#endif
+ 		if (unlikely(!mlx5e_ktls_handle_tx_skb(dev, sq, skb,
+ 						       &state->tls)))
+ 			return false;
+@@ -174,7 +205,7 @@ static inline unsigned int mlx5e_accel_tx_ids_len(struct mlx5e_txqsq *sq,
+ static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
+ 				       struct sk_buff *skb,
+ 				       struct mlx5e_accel_tx_state *accel,
+-				       struct mlx5_wqe_eth_seg *eseg, u16 ihs)
++			               struct mlx5_wqe_eth_seg *eseg, u16 ihs)
+ {
+ #ifdef CONFIG_MLX5_EN_PSP
+ 	if (mlx5e_psp_is_offload_state(&accel->psp_st))
+@@ -183,7 +214,11 @@ static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
+ 
+ #ifdef CONFIG_MLX5_EN_IPSEC
+ 	if (xfrm_offload(skb))
++#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
+ 		mlx5e_ipsec_tx_build_eseg(priv, skb, eseg);
++#else
++		mlx5e_ipsec_tx_build_eseg(priv, skb, &accel->ipsec, eseg);
++#endif
+ #endif
+ 
+ #ifdef CONFIG_MLX5_MACSEC

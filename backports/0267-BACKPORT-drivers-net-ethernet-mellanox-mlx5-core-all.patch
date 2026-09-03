@@ -1,0 +1,151 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+
+---
+ .../net/ethernet/mellanox/mlx5/core/alloc.c   | 61 ++++++++++++++++---
+ 1 file changed, 51 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+@@ -87,11 +87,20 @@ static void *mlx5_dma_zalloc_coherent_node(struct mlx5_core_dev *dev,
+ 	int original_node;
+ 	void *cpu_handle;
+ 
++#ifdef HAVE_BASECODE_EXTRAS
++	/* WA for kernels that don't use numa_mem_id in alloc_pages_node */
++	if (node == NUMA_NO_NODE)
++		node = numa_mem_id();
++#endif
++
+ 	mutex_lock(&priv->alloc_mutex);
+ 	original_node = dev_to_node(device);
+ 	set_dev_node(device, node);
+-	cpu_handle = dma_alloc_coherent(device, size, dma_handle,
+-					GFP_KERNEL);
++#ifdef HAVE_DMA_ZALLOC_COHERENT
++	cpu_handle = dma_zalloc_coherent(device, size, dma_handle, GFP_KERNEL);
++#else
++	cpu_handle = dma_alloc_coherent(device, size, dma_handle, GFP_KERNEL);
++#endif
+ 	set_dev_node(device, original_node);
+ 	mutex_unlock(&priv->alloc_mutex);
+ 	return cpu_handle;
+@@ -108,7 +117,12 @@ static struct mlx5_dma_pool *mlx5_dma_pool_create(struct mlx5_core_dev *dev,
+ {
+ 	struct mlx5_dma_pool *pool;
+ 
+-	pool = kzalloc_obj(*pool);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	pool = kzalloc_obj(*pool, GFP_KERNEL);
++#else
++	pool = kzalloc(sizeof(*pool), GFP_KERNEL);
++#endif
+ 	if (!pool)
+ 		return NULL;
+ 
+@@ -126,7 +140,12 @@ mlx5_dma_pool_page_alloc(struct mlx5_dma_pool *pool)
+ 	int blocks_per_page = BIT(PAGE_SHIFT - pool->block_shift);
+ 	struct mlx5_dma_pool_page *page;
+ 
+-	page = kzalloc_obj(*page);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	page = kzalloc_obj(*page, GFP_KERNEL);
++#else
++	page = kzalloc(sizeof(*page), GFP_KERNEL);
++#endif
+ 	if (!page)
+ 		goto err_out;
+ 
+@@ -228,7 +247,9 @@ static void mlx5_dma_pool_free(struct mlx5_dma_pool *pool,
+ static void
+ mlx5_frag_buf_node_pools_destroy(struct mlx5_frag_buf_node_pools *node_pools)
+ {
+-	for (int i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++)
++	int i;
++
++	for (i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++)
+ 		if (node_pools->pools[i])
+ 			mlx5_dma_pool_destroy(node_pools->pools[i]);
+ 	kfree(node_pools);
+@@ -238,12 +259,18 @@ static struct mlx5_frag_buf_node_pools *
+ mlx5_frag_buf_node_pools_create(struct mlx5_core_dev *dev, int node)
+ {
+ 	struct mlx5_frag_buf_node_pools *node_pools;
++	int i;
+ 
+-	node_pools = kzalloc_obj(*node_pools);
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
++	node_pools = kzalloc_obj(*node_pools, GFP_KERNEL);
++#else
++	node_pools = kzalloc(sizeof(*node_pools), GFP_KERNEL);
++#endif
+ 	if (!node_pools)
+ 		return NULL;
+ 
+-	for (int i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++) {
++	for (i = 0; i < MLX5_FRAG_BUF_POOLS_NUM; i++) {
+ 		u8 block_shift = MLX5_FRAG_BUF_POOL_MIN_BLOCK_SHIFT + i;
+ 
+ 		node_pools->pools[i] = mlx5_dma_pool_create(dev, node,
+@@ -280,8 +307,15 @@ int mlx5_frag_buf_pools_init(struct mlx5_core_dev *dev)
+ 	struct mlx5_priv *priv = &dev->priv;
+ 	int node;
+ 
++#ifdef HAVE_KZALLOC_OBJ_AND_OBJS
++	/* Upstream commit 2932ba8d9c99 introduced kzalloc_obj/kzalloc_objs macros */
+ 	priv->frag_buf_node_pools = kzalloc_objs(*priv->frag_buf_node_pools,
+-						 nr_node_ids);
++						 nr_node_ids, GFP_KERNEL);
++#else
++	priv->frag_buf_node_pools = kcalloc(nr_node_ids,
++					    sizeof(*priv->frag_buf_node_pools),
++					    GFP_KERNEL);
++#endif
+ 	if (!priv->frag_buf_node_pools)
+ 		return -ENOMEM;
+ 
+@@ -304,6 +338,7 @@ int mlx5_frag_buf_alloc_node(struct mlx5_core_dev *dev, int size,
+ {
+ 	struct mlx5_dma_pool *pool;
+ 	int pool_idx;
++	int i;
+ 
+ 	node = node == NUMA_NO_NODE ? first_online_node : node;
+ 
+@@ -319,7 +354,7 @@ int mlx5_frag_buf_alloc_node(struct mlx5_core_dev *dev, int size,
+ 
+ 	pool_idx = buf->page_shift - MLX5_FRAG_BUF_POOL_MIN_BLOCK_SHIFT;
+ 	pool = dev->priv.frag_buf_node_pools[node]->pools[pool_idx];
+-	for (int i = 0; i < buf->npages; i++) {
++	for (i = 0; i < buf->npages; i++) {
+ 		struct mlx5_buf_list *frag = &buf->frags[i];
+ 		struct mlx5_dma_pool_page *page;
+ 		unsigned long idx;
+@@ -340,7 +375,9 @@ EXPORT_SYMBOL_GPL(mlx5_frag_buf_alloc_node);
+ 
+ void mlx5_frag_buf_free(struct mlx5_core_dev *dev, struct mlx5_frag_buf *buf)
+ {
+-	for (int i = 0; i < buf->npages; i++) {
++	int i;
++
++	for (i = 0; i < buf->npages; i++) {
+ 		struct mlx5_buf_list *frag = &buf->frags[i];
+ 		struct mlx5_dma_pool_page *page;
+ 		struct mlx5_dma_pool *pool;
+@@ -368,7 +405,11 @@ static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
+ 	if (!pgdir)
+ 		return NULL;
+ 
++#ifdef HAVE_BITMAP_ZALLOC_NODE
+ 	pgdir->bitmap = bitmap_zalloc_node(db_per_page, GFP_KERNEL, node);
++#else
++	pgdir->bitmap = bitmap_zalloc(db_per_page, GFP_KERNEL);
++#endif
+ 	if (!pgdir->bitmap) {
+ 		kfree(pgdir);
+ 		return NULL;

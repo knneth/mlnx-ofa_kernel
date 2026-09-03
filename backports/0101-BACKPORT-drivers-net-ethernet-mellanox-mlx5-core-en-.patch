@@ -1,22 +1,25 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c | 3 +++
- 1 file changed, 3 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c | 2 ++
+ 1 file changed, 2 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/sample.c
-@@ -1,6 +1,9 @@
- // SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB
- // Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mpls.c
+@@ -67,10 +67,12 @@ tc_act_can_offload_mpls_pop(struct mlx5e_tc_act_parse_state *parse_state,
+ 		return false;
+ 	}
  
-+#ifdef HAVE_BASECODE_EXTRAS
-+#include <linux/skbuff.h>
++#ifdef HAVE_NETIF_IS_BAREUDP
+ 	if (!netif_is_bareudp(filter_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls pop supported only on bareudp devices");
+ 		return false;
+ 	}
 +#endif
- #include <net/psample.h>
- #include "act.h"
- #include "en/tc_priv.h"
+ 
+ 	return true;
+ }

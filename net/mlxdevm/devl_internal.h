@@ -17,8 +17,9 @@
 
 #include "netlink_gen.h"
 #include <net/mlxdevm.h>
+#include <net/devlink.h>
 
-struct devlink_rel;
+struct mlxdevm_rel;
 
 #define MLXDEVM_REGISTERED XA_MARK_1
 
@@ -49,6 +50,8 @@ struct mlxdevm {
 	struct xarray snapshot_ids;
 	struct mlxdevm_dev_stats stats;
 	struct device *dev;
+	const char *dev_name_index;
+	const struct device_driver *dev_driver;
 	possible_net_t _net;
 	/* Serializes access to devlink instance specific objects such as
 	 * port, sb, dpipe, resource, params, region, traps and more.
@@ -61,12 +64,22 @@ struct mlxdevm {
 	struct mlxdevm_rel *rel;
 	struct xarray nested_rels;
 	struct devlink *devlink;
-	bool mlxdevm_flow;
 	char priv[] __aligned(NETDEV_ALIGN);
 };
 
 extern struct xarray mlxdevms;
 extern struct genl_family mlxdevm_nl_family;
+struct mlxdevm *__mlxdevm_alloc(const struct mlxdevm_ops *ops, size_t priv_size,
+				struct net *net, struct device *dev,
+				const struct device_driver *dev_driver);
+#define devm_warn(mlxdevm, format, args...)				\
+	do {								\
+		if ((mlxdevm)->dev)					\
+			dev_warn((mlxdevm)->dev, format, ##args);	\
+		else							\
+			pr_warn("mlxdevm (%s): " format,		\
+				mlxdevm_dev_name(mlxdevm), ##args);	\
+	} while (0)
 
 /* devlink instances are open to the access from the user space after
  * devlink_register() call. Such logical barrier allows us to have certain
@@ -92,6 +105,7 @@ extern struct genl_family mlxdevm_nl_family;
 	for (index = 0; (mlxdevm = mlxdevms_xa_find_get(net, &index)); index++)
 
 struct mlxdevm *mlxdevms_xa_find_get(struct net *net, unsigned long *indexp);
+struct mlxdevm *mlxdevms_xa_lookup_get(struct net *net, unsigned long index);
 
 static inline bool __devm_is_registered(struct mlxdevm *mlxdevm)
 {
@@ -106,7 +120,7 @@ static inline bool devm_is_registered(struct mlxdevm *mlxdevm)
 
 static inline void devm_dev_lock(struct mlxdevm *mlxdevm, bool dev_lock)
 {
-	if (dev_lock)
+	if (dev_lock && mlxdevm->dev)
 		device_lock(mlxdevm->dev);
 	devm_lock(mlxdevm);
 }
@@ -114,27 +128,42 @@ static inline void devm_dev_lock(struct mlxdevm *mlxdevm, bool dev_lock)
 static inline void devm_dev_unlock(struct mlxdevm *mlxdevm, bool dev_lock)
 {
 	devm_unlock(mlxdevm);
-	if (dev_lock)
+	if (dev_lock && mlxdevm->dev)
 		device_unlock(mlxdevm->dev);
 }
-
 typedef void mlxdevm_rel_notify_cb_t(struct mlxdevm *mlxdevm, u32 obj_index);
 typedef void mlxdevm_rel_cleanup_cb_t(struct mlxdevm *mlxdevm, u32 obj_index,
 				      u32 rel_index);
 
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-void devlink_rel_nested_in_clear(u32 rel_index);
-int devlink_rel_nested_in_add(u32 *rel_index, u32 devlink_index,
-			      u32 obj_index, devlink_rel_notify_cb_t *notify_cb,
-			      devlink_rel_cleanup_cb_t *cleanup_cb,
-			      struct devlink *devlink);
-#endif
+/* Returns the locked+referenced nested-in instance or NULL. */
+struct mlxdevm *__must_check
+mlxdevm_nested_in_get_lock(struct mlxdevm *mlxdevm);
+
+void mlxdevm_rel_nested_in_clear(u32 rel_index);
+int mlxdevm_rel_nested_in_add(u32 *rel_index, u32 mlxdevm_index,
+			      u32 obj_index, mlxdevm_rel_notify_cb_t *notify_cb,
+			      mlxdevm_rel_cleanup_cb_t *cleanup_cb,
+			      struct mlxdevm *mlxdevm);
 void mlxdevm_rel_nested_in_notify(struct mlxdevm *mlxdevm);
 int mlxdevm_rel_mlxdevm_handle_put(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 				   u32 rel_index, int attrtype,
 				   bool *msg_updated);
 
 /* Netlink */
+struct mlxdevm_nl_ctx {
+	struct mlxdevm *mlxdevm;
+	struct mlxdevm_port *mlxdevm_port;
+	struct mlxdevm *parent_mlxdevm;
+};
+
+static inline struct mlxdevm_nl_ctx *
+mlxdevm_nl_ctx(struct genl_info *info)
+{
+	BUILD_BUG_ON(sizeof(struct mlxdevm_nl_ctx) >
+		     sizeof_field(struct genl_info, ctx));
+	return (struct mlxdevm_nl_ctx *)info->ctx;
+}
+
 enum mlxdevm_multicast_groups {
 	MLXDEVM_MCGRP_CONFIG,
 };
@@ -152,6 +181,11 @@ struct mlxdevm_nl_dump_state {
 		struct {
 			u64 dump_ts;
 		};
+		/* MLXDEVM_CMD_RESOURCE_DUMP */
+		struct {
+			u32 index;
+			bool index_valid;
+		} port_ctx;
 	};
 };
 
@@ -163,6 +197,8 @@ typedef int mlxdevm_nl_dump_one_func_t(struct sk_buff *msg,
 struct mlxdevm *
 mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
 			    bool dev_lock);
+struct mlxdevm *
+mlxdevm_get_parent_from_attrs_lock(struct net *net, struct nlattr **attrs);
 
 int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
 		      mlxdevm_nl_dump_one_func_t *dump_one);
@@ -178,9 +214,11 @@ mlxdevm_dump_state(struct netlink_callback *cb)
 static inline int
 mlxdevm_nl_put_handle(struct sk_buff *msg, struct mlxdevm *mlxdevm)
 {
-	if (nla_put_string(msg, MLXDEVM_ATTR_BUS_NAME, mlxdevm->dev->bus->name))
+	if (nla_put_string(msg, MLXDEVM_ATTR_BUS_NAME, mlxdevm_bus_name(mlxdevm)))
 		return -EMSGSIZE;
-	if (nla_put_string(msg, MLXDEVM_ATTR_DEV_NAME, dev_name(mlxdevm->dev)))
+	if (nla_put_string(msg, MLXDEVM_ATTR_DEV_NAME, mlxdevm_dev_name(mlxdevm)))
+		return -EMSGSIZE;
+	if (nla_put_uint(msg, MLXDEVM_ATTR_INDEX, mlxdevm->index))
 		return -EMSGSIZE;
 	return 0;
 }
@@ -206,6 +244,8 @@ struct mlxdevm_obj_desc {
 	const char *dev_name;
 	unsigned int port_index;
 	bool port_index_valid;
+	unsigned int mlxdevm_index;
+	bool mlxdevm_index_valid;
 	long data[];
 };
 
@@ -213,8 +253,10 @@ static inline void mlxdevm_nl_obj_desc_init(struct mlxdevm_obj_desc *desc,
 					    struct mlxdevm *mlxdevm)
 {
 	memset(desc, 0, sizeof(*desc));
-	desc->bus_name = mlxdevm->dev->bus->name;
-	desc->dev_name = dev_name(mlxdevm->dev);
+	desc->bus_name = mlxdevm_bus_name(mlxdevm);
+	desc->dev_name = mlxdevm_dev_name(mlxdevm);
+	desc->mlxdevm_index = mlxdevm->index;
+	desc->mlxdevm_index_valid = true;
 }
 
 static inline void mlxdevm_nl_obj_desc_port_set(struct mlxdevm_obj_desc *desc,
@@ -245,8 +287,8 @@ static inline void mlxdevm_nl_notify_send(struct mlxdevm *mlxdevm,
 	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
 }
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 /* Notify */
 void devlink_notify_register(struct devlink *devlink);
 void devlink_notify_unregister(struct devlink *devlink);
@@ -282,11 +324,8 @@ struct mlxdevm_port *
 mlxdevm_port_get_from_info(struct mlxdevm *mlxdevm, struct genl_info *info);
 struct mlxdevm_port *mlxdevm_port_get_from_attrs(struct mlxdevm *mlxdevm,
 						 struct nlattr **attrs);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-
 /* Reload */
-bool devlink_reload_actions_valid(const struct devlink_ops *ops);
-#endif
+bool mlxdevm_reload_actions_valid(const struct mlxdevm_ops *ops);
 int mlxdevm_reload(struct mlxdevm *mlxdevm, struct net *dest_net,
 		   enum mlxdevm_reload_action action,
 		   enum mlxdevm_reload_limit limit,
@@ -307,8 +346,10 @@ int mlxdevm_resources_validate(struct mlxdevm *mlxdevm,
 			       struct genl_info *info);
 
 /* Rates */
-int mlxdevm_rate_nodes_check(struct mlxdevm *mlxdevm, u16 mode,
-			     struct netlink_ext_ack *extack);
+bool mlxdevm_rate_is_node(const struct mlxdevm_rate *mlxdevm_rate);
+int mlxdevm_rates_check(struct mlxdevm *mlxdevm,
+			bool (*rate_filter)(const struct mlxdevm_rate *),
+			struct netlink_ext_ack *extack);
 
 /* Linecards */
 unsigned int mlxdevm_linecard_index(struct mlxdevm_linecard *linecard);

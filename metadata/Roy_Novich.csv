@@ -1,0 +1,5 @@
+sep=;
+Change-Id=I2ae7cdbf275a9935b67c8e8befbd7ee686eb4ea9; subject=net/mlx5: cmdif, Free pending entry on cmd flush flow; feature=mlx5_core_bugs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ib8d1591d47d725f7be1bc79399f38531f726e4ac; subject=REBASE: Fix PPC compilation; feature=rebase; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I9e20bf37cbbdc03ce243c17d5bfa44b675b69d5b; subject=net/mlx5e: Protect Rx data path from uninitialized IPsec; feature=mlx5_en_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ifbe177fec7f8f23b967224c836bbf8ae32215a97; subject=net/mlx5: Expose OFED driver version to firmware; feature=mlx5_core_bugs; upstream_status=NA; upstream_issue=; general=;

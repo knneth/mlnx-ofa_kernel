@@ -1,26 +1,21 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tir.c | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tir.h | 2 ++
+ 1 file changed, 2 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
-@@ -124,7 +124,13 @@ void mlx5e_tir_builder_build_rss(struct mlx5e_tir_builder *builder,
- 		const size_t len = MLX5_FLD_SZ_BYTES(tirc, rx_hash_toeplitz_key);
- 		void *rss_key = MLX5_ADDR_OF(tirc, tirc, rx_hash_toeplitz_key);
- 
--		MLX5_SET(tirc, tirc, rx_hash_symmetric, rss_hash->symmetric);
-+		MLX5_SET(tirc, tirc, rx_hash_symmetric,
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
+@@ -9,7 +9,9 @@
+ struct mlx5e_rss_params_hash {
+ 	u8 hfunc;
+ 	u8 toeplitz_hash_key[40];
 +#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
-+			rss_hash->symmetric);
-+#else
-+			1);
+ 	bool symmetric;
 +#endif
-+
- 		memcpy(rss_key, rss_hash->toeplitz_hash_key, len);
- 	}
+ };
  
+ struct mlx5e_rss_params_traffic_type {

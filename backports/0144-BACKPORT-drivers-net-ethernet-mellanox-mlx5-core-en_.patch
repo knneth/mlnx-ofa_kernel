@@ -1,57 +1,55 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_fs.c | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ .../ethernet/mellanox/mlx5/core/en_selftest.c | 24 +++++++++++++++----
+ 1 file changed, 20 insertions(+), 4 deletions(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_fs.c
-@@ -484,9 +484,15 @@ static int mlx5e_vlan_rx_add_svid(struct mlx5e_flow_steering *fs,
- 	}
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_selftest.c
+@@ -96,14 +96,26 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
+ 	skb_reserve(skb, NET_IP_ALIGN);
  
- 	/* Need to fix some features.. */
-+#ifdef HAVE_NETDEVICE_NETDEV_LOCK
-+	/* Upstream commit 8f7b00307bf1: added lock (no lock before) */
- 	netdev_lock(netdev);
+ 	/*  Reserve for ethernet and IP header  */
+-	ethh = skb_push(skb, ETH_HLEN);
++	ethh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct ethhdr *)
 +#endif
- 	netdev_update_features(netdev);
-+#ifdef HAVE_NETDEVICE_NETDEV_LOCK
-+	/* Upstream commit 8f7b00307bf1: added unlock (no lock before) */
- 	netdev_unlock(netdev);
-+#endif
- 	return err;
- }
++		skb_push(skb, ETH_HLEN);
+ 	skb_reset_mac_header(skb);
  
-@@ -523,9 +529,15 @@ int mlx5e_fs_vlan_rx_kill_vid(struct mlx5e_flow_steering *fs,
- 	} else if (be16_to_cpu(proto) == ETH_P_8021AD) {
- 		clear_bit(vid, fs->vlan->active_svlans);
- 		mlx5e_fs_del_vlan_rule(fs, MLX5E_VLAN_RULE_TYPE_MATCH_STAG_VID, vid);
-+#ifdef HAVE_NETDEVICE_NETDEV_LOCK
-+		/* Upstream commit 8f7b00307bf1: added lock (no lock before) */
- 		netdev_lock(netdev);
+ 	skb_set_network_header(skb, skb->len);
+-	iph = skb_put(skb, sizeof(struct iphdr));
++	iph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct iphdr *)
 +#endif
- 		netdev_update_features(netdev);
-+#ifdef HAVE_NETDEVICE_NETDEV_LOCK
-+		/* Upstream commit 8f7b00307bf1: added unlock (no lock before) */
- 		netdev_unlock(netdev);
++		skb_put(skb, sizeof(struct iphdr));
+ 
+ 	skb_set_transport_header(skb, skb->len);
+-	udph = skb_put(skb, sizeof(struct udphdr));
++	udph =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct udphdr *)
 +#endif
- 	}
++		skb_put(skb, sizeof(struct udphdr));
  
- 	return 0;
-@@ -927,9 +939,13 @@ static void mlx5e_set_inner_ttc_params(struct mlx5e_flow_steering *fs,
+ 	/* Fill ETH header */
+ 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
+@@ -132,7 +144,11 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
+ 	ip_send_check(iph);
  
- static bool mlx5e_ipsec_rss_supported(struct mlx5_core_dev *mdev)
- {
-+#ifdef HAVE_RSS_CRYPTO_OFFLOAD_ENABLED
- 	return MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, ipsec_next_header) &&
- 	       MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, outer_l4_type_ext) &&
- 	       MLX5_CAP_NIC_RX_FT_FIELD_SUPPORT_2(mdev, inner_l4_type_ext);
-+#else
-+	return false;
+ 	/* Fill test header and data */
+-	mlxh = skb_put(skb, sizeof(*mlxh));
++	mlxh =
++#ifdef HAVE_BASECODE_EXTRAS
++		(struct mlx5ehdr *)
 +#endif
- }
++		skb_put(skb, sizeof(*mlxh));
+ 	mlxh->version = 0;
+ 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
  
- void mlx5e_set_ttc_params(struct mlx5e_flow_steering *fs,

@@ -1,0 +1,49 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/cq.c
+
+---
+ drivers/infiniband/hw/mlx5/cq.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/infiniband/hw/mlx5/cq.c b/drivers/infiniband/hw/mlx5/cq.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/hw/mlx5/cq.c
++++ b/drivers/infiniband/hw/mlx5/cq.c
+@@ -963,10 +963,10 @@ int mlx5_ib_create_user_cq(struct ib_cq *ibcq,
+ 	struct mlx5_ib_cq *cq = to_mcq(ibcq);
+ 	u32 out[MLX5_ST_SZ_DW(create_cq_out)];
+ 	int index;
+-	int inlen;
++	int inlen = 0;
+ 	u32 *cqb = NULL;
+ 	void *cqc;
+-	int cqe_size;
++	int cqe_size = 0;
+ 	int eqn;
+ 	int err;
+ 
+@@ -1248,9 +1248,15 @@ static int resize_user(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
+ 	if (ucmd.cqe_size && SIZE_MAX / ucmd.cqe_size <= entries - 1)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ 	umem = ib_umem_get_peer(&dev->ib_dev, ucmd.buf_addr,
+ 				(size_t)ucmd.cqe_size * entries,
+ 				IB_ACCESS_LOCAL_WRITE, 0);
++#else
++	umem = ib_umem_get_peer(udata, ucmd.buf_addr,
++				(size_t)ucmd.cqe_size * entries,
++				IB_ACCESS_LOCAL_WRITE, 0);
++#endif
+ 	if (IS_ERR(umem)) {
+ 		err = PTR_ERR(umem);
+ 		return err;
+@@ -1352,7 +1358,7 @@ int mlx5_ib_resize_cq(struct ib_cq *ibcq, unsigned int entries,
+ 	unsigned int page_offset_quantized = 0;
+ 	unsigned int page_shift;
+ 	int inlen;
+-	int cqe_size;
++	int cqe_size = 0;
+ 	unsigned long flags;
+ 
+ 	if (!MLX5_CAP_GEN(dev->mdev, cq_resize)) {

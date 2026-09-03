@@ -9,8 +9,6 @@ GCOV_PROFILE := $(CONFIG_MLX5_GCOV)
 subdir-ccflags-y += -I$(src)
 subdir-ccflags-y += -I$(CWD)/net/mlxdevm
 
-ccflags-y += -Wframe-larger-than=2048
-
 obj-$(CONFIG_MLX5_CORE) += mlx5_core.o
 
 #
@@ -21,10 +19,10 @@ mlx5_core-y :=	main.o cmd.o debugfs.o fw.o eq.o uar.o pagealloc.o \
 		transobj.o vport.o sriov.o fs_cmd.o fs_core.o pci_irq.o \
 		fs_counters.o fs_ft_pool.o rl.o lag/debugfs.o lag/lag.o dev.o events.o wq.o lib/gid.o \
 		lib/devcom.o lib/pci_vsc.o lib/dm.o lib/fs_ttc.o diag/fs_tracepoint.o \
-		diag/fw_tracer.o diag/crdump.o devlink.o diag/rsc_dump.o diag/reporter_vnic.o \
-		fw_reset.o qos.o lib/tout.o lib/aso.o wc.o fs_pool.o lib/nv_param.o mst_dump.o \
-		en_diag.o sriov_sysfs.o crdump.o diag/diag_cnt.o eswitch_devlink_compat.o ecpf.o \
-		auxiliary_sysfs_compat.o compat.o
+		diag/fw_tracer.o diag/crdump.o devlink.o sh_devlink.o diag/rsc_dump.o \
+		diag/reporter_vnic.o fw_reset.o qos.o lib/tout.o lib/aso.o wc.o fs_pool.o \
+		lib/nv_param.o mst_dump.o en_diag.o sriov_sysfs.o crdump.o diag/diag_cnt.o \
+		eswitch_devlink_compat.o ecpf.o auxiliary_sysfs_compat.o compat.o
 
 #
 # Netdev basic

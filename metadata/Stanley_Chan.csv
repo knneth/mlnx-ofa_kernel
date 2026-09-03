@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Ia7398e7a82564ba77d94517478663c34399ede60; subject=dkms: obsolete corresponding -modules packages on upgrade; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;

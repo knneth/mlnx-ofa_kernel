@@ -29,26 +29,27 @@ static inline bool nvme_nvfs_unmap_sgls(struct request *req)
 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
 	struct nvme_queue *nvmeq = req->mq_hctx->driver_data;
 	struct device *dma_dev = nvmeq->dev->dev;
-	dma_addr_t sqe_dma_addr = le64_to_cpu(iod->cmd.common.dptr.sgl.addr);
 	unsigned int sqe_dma_len = le32_to_cpu(iod->cmd.common.dptr.sgl.length);
 	struct nvme_sgl_desc *sg_list = iod->descriptors[0];
 	enum dma_data_direction dir = rq_dma_dir(req);
-        
-	if (iod->nr_descriptors) {
-                unsigned int nr_entries = sqe_dma_len / sizeof(*sg_list), i;
 
-                for (i = 0; i < nr_entries; i++) {
-			nvfs_ops->nvfs_dma_unmap_page(dma_dev, 
-					              iod->nvfs_cookie, 
-						      le64_to_cpu(sg_list[i].addr), 
-						      le32_to_cpu(sg_list[i].length), 
+	/*
+	 * nr_descriptors == 0 means dma_pool_alloc failed before any SGL
+	 * entries were recorded; the first iter mapping is handled by
+	 * nvme_nvfs_map_data() directly, so nothing to unmap here.
+	 */
+	if (iod->nr_descriptors) {
+		unsigned int nr_entries = sqe_dma_len / sizeof(*sg_list), i;
+
+		for (i = 0; i < nr_entries; i++) {
+			nvfs_ops->nvfs_dma_unmap_page(dma_dev,
+					              iod->nvfs_cookie,
+						      le64_to_cpu(sg_list[i].addr),
+						      le32_to_cpu(sg_list[i].length),
 						      dir);
 		}
-        } else
-		nvfs_ops->nvfs_dma_unmap_page(dma_dev, iod->nvfs_cookie, sqe_dma_addr, sqe_dma_len, dir);
-        
-	
-	
+	}
+
 	return true;
 }
 
@@ -66,18 +67,18 @@ static inline bool nvme_nvfs_unmap_prps(struct request *req)
 
 	/* Unmap all DMA vectors - pass page pointer from dma_vecs */
 	for (i = 0; i < iod->nr_dma_vecs; i++) {
-		nvfs_ops->nvfs_dma_unmap_page(dma_dev, 
-				              iod->nvfs_cookie, 
+		nvfs_ops->nvfs_dma_unmap_page(dma_dev,
+				              iod->nvfs_cookie,
 					      iod->dma_vecs[i].addr,
 					      iod->dma_vecs[i].len,
 				              dma_dir);
 	}
-	
+
 	/* Free the dma_vecs mempool allocation */
 	mempool_free(iod->dma_vecs, nvmeq->dev->dmavec_mempool);
 	iod->dma_vecs = NULL;
 	iod->nr_dma_vecs = 0;
-	
+
 	return true;
 }
 
@@ -122,7 +123,7 @@ static inline bool nvme_nvfs_unmap_data(struct request *req)
 		ret = nvme_nvfs_unmap_sgls(req);
 	else
 		ret = nvme_nvfs_unmap_prps(req);
-	
+
 	if (iod->nr_descriptors)
 		nvme_nvfs_free_descriptors(req);
 
@@ -130,7 +131,7 @@ static inline bool nvme_nvfs_unmap_data(struct request *req)
 	return ret;
 }
 
-static inline blk_status_t nvme_nvfs_map_data(struct request *req, 
+static inline blk_status_t nvme_nvfs_map_data(struct request *req,
 		bool *is_nvfs_io)
 {
 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
@@ -151,11 +152,11 @@ static inline blk_status_t nvme_nvfs_map_data(struct request *req,
 	/* Initialize total_len for this request */
 	iod->total_len = 0;
 
-	if (!nvfs_ops->nvfs_blk_rq_dma_map_iter_start(req, dma_dev, 
+	if (!nvfs_ops->nvfs_blk_rq_dma_map_iter_start(req, dma_dev,
 						       &iod->dma_state, &iter, &iod->nvfs_cookie)) {
 		nvfs_put_ops();
 		if (iter.status == BLK_STS_IOERR) {
-			/* GPU DMA error - do not fall through to CPU path */
+			/* GPU DMA error — do not fall through to CPU path */
 			*is_nvfs_io = true;
 			ret = iter.status;
 		}
@@ -171,11 +172,22 @@ static inline blk_status_t nvme_nvfs_map_data(struct request *req,
 	    (use_sgl == SGL_SUPPORTED &&
 	     (sgl_threshold && nvme_pci_avg_seg_size(req) >= sgl_threshold)))
 		ret = nvme_pci_setup_data_sgl(req, &iter);
-         else
+	else
 		ret = nvme_pci_setup_data_prp(req, &iter);
 
 	/* If setup failed, cleanup: unmap DMA, clear flag, release ops */
 	if (ret != BLK_STS_OK) {
+		/*
+		 * If setup failed before any mappings were tracked (dma_vecs is
+		 * NULL for PRP, or nr_descriptors is 0 for SGL), the first page
+		 * mapped by nvfs_blk_rq_dma_map_iter_start() won't be covered by
+		 * nvme_nvfs_unmap_data(). Unmap it directly using iter.
+		 */
+		bool early_fail = nvme_pci_cmd_use_sgl(&iod->cmd) ?
+			!iod->nr_descriptors : !iod->dma_vecs;
+		if (early_fail)
+			nvfs_ops->nvfs_dma_unmap_page(dma_dev, iod->nvfs_cookie,
+					iter.addr, iter.len, rq_dma_dir(req));
 		nvme_nvfs_unmap_data(req);
 	}
 

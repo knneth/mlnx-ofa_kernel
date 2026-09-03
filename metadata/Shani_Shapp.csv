@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I7acced865a0de68b8b72b9aafaa5c9466e80ab5c; subject=net/mlx5e: Disable NETIF_F_HW_TLS_RX when RXCSUM is disabled; feature=tls_rx; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4a142a7e2a4069a01f0bcca475b02c413e5f03ae; subject=net/mlx5e: Fix recover flow in DSCP state; feature=mlx5e_dscp2prio; upstream_status=NA; upstream_issue=; general=;

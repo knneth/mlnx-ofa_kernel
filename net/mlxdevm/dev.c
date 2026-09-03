@@ -222,7 +222,7 @@ static void mlxdevm_notify(struct mlxdevm *mlxdevm, enum mlxdevm_command cmd)
 
 int mlxdevm_nl_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct sk_buff *msg;
 	int err;
 
@@ -253,35 +253,35 @@ int mlxdevm_nl_get_dumpit(struct sk_buff *msg, struct netlink_callback *cb)
 {
 	return mlxdevm_nl_dumpit(msg, cb, mlxdevm_nl_get_dump_one);
 }
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-
-static void devlink_rel_notify_cb(struct devlink *devlink, u32 obj_index)
+static void mlxdevm_rel_notify_cb(struct mlxdevm *mlxdevm, u32 obj_index)
 {
-	devlink_notify(devlink, DEVLINK_CMD_NEW);
+	mlxdevm_notify(mlxdevm, MLXDEVM_CMD_NEW);
 }
 
-static void devlink_rel_cleanup_cb(struct devlink *devlink, u32 obj_index,
+static void mlxdevm_rel_cleanup_cb(struct mlxdevm *mlxdevm, u32 obj_index,
 				   u32 rel_index)
 {
-	xa_erase(&devlink->nested_rels, rel_index);
+	xa_erase(&mlxdevm->nested_rels, rel_index);
 }
 
-int devl_nested_devlink_set(struct devlink *devlink,
-			    struct devlink *nested_devlink)
+int devm_nested_mlxdevm_set(struct mlxdevm *mlxdevm,
+			    struct mlxdevm *nested_mlxdevm)
 {
 	u32 rel_index;
 	int err;
 
-	err = devlink_rel_nested_in_add(&rel_index, devlink->index, 0,
-					devlink_rel_notify_cb,
-					devlink_rel_cleanup_cb,
-					nested_devlink);
+	err = mlxdevm_rel_nested_in_add(&rel_index, mlxdevm->index, 0,
+					mlxdevm_rel_notify_cb,
+					mlxdevm_rel_cleanup_cb,
+					nested_mlxdevm);
 	if (err)
 		return err;
-	return xa_insert(&devlink->nested_rels, rel_index,
+	return xa_insert(&mlxdevm->nested_rels, rel_index,
 			 xa_mk_value(0), GFP_KERNEL);
 }
-EXPORT_SYMBOL_GPL(devl_nested_devlink_set);
+EXPORT_SYMBOL_GPL(devm_nested_mlxdevm_set);
+
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 void devlink_notify_register(struct devlink *devlink)
 {
@@ -440,7 +440,7 @@ static void mlxdevm_reload_reinit_sanity_check(struct mlxdevm *mlxdevm)
 	WARN_ON(!list_empty(&mlxdevm->trap_list));
 	WARN_ON(!list_empty(&mlxdevm->dpipe_table_list));
 	WARN_ON(!list_empty(&mlxdevm->sb_list));
-	WARN_ON(!list_empty(&mlxdevm->rate_list));
+	WARN_ON(mlxdevm_rates_check(mlxdevm, NULL, NULL));
 	WARN_ON(!list_empty(&mlxdevm->linecard_list));
 	WARN_ON(!xa_empty(&mlxdevm->ports));
 }
@@ -459,7 +459,8 @@ int mlxdevm_reload(struct mlxdevm *mlxdevm, struct net *dest_net,
 	 * (e.g., PCI reset) and to close possible races between these
 	 * operations and probe/remove.
 	 */
-	device_lock_assert(mlxdevm->dev);
+	if (mlxdevm->dev)
+		device_lock_assert(mlxdevm->dev);
 
 	memcpy(remote_reload_stats, mlxdevm->stats.remote_reload_stats,
 	       sizeof(remote_reload_stats));
@@ -524,7 +525,7 @@ free_msg:
 
 int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	enum mlxdevm_reload_action action;
 	enum mlxdevm_reload_limit limit;
 	struct net *dest_net = NULL;
@@ -583,12 +584,14 @@ int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 		    action != MLXDEVM_RELOAD_ACTION_DRIVER_REINIT) {
 			NL_SET_ERR_MSG_MOD(info->extack,
 					   "Changing namespace is only supported for reinit action");
-			return -EOPNOTSUPP;
+			err = -EOPNOTSUPP;
+			goto out;
 		}
 	}
 
 	err = mlxdevm_reload(mlxdevm, dest_net, action, limit, &actions_performed, info->extack);
 
+out:
 	if (dest_net)
 		put_net(dest_net);
 
@@ -601,37 +604,34 @@ int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info)
 	return mlxdevm_nl_reload_actions_performed_snd(mlxdevm, actions_performed,
 						       MLXDEVM_CMD_RELOAD, info);
 }
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-
-bool devlink_reload_actions_valid(const struct devlink_ops *ops)
+bool mlxdevm_reload_actions_valid(const struct mlxdevm_ops *ops)
 {
-	const struct devlink_reload_combination *comb;
+	const struct mlxdevm_reload_combination *comb;
 	int i;
 
-	if (!devlink_reload_supported(ops)) {
+	if (!mlxdevm_reload_supported(ops)) {
 		if (WARN_ON(ops->reload_actions))
 			return false;
 		return true;
 	}
 
 	if (WARN_ON(!ops->reload_actions ||
-		    ops->reload_actions & BIT(DEVLINK_RELOAD_ACTION_UNSPEC) ||
-		    ops->reload_actions >= BIT(__DEVLINK_RELOAD_ACTION_MAX)))
+		    ops->reload_actions & BIT(MLXDEVM_RELOAD_ACTION_UNSPEC) ||
+		    ops->reload_actions >= BIT(__MLXDEVM_RELOAD_ACTION_MAX)))
 		return false;
 
-	if (WARN_ON(ops->reload_limits & BIT(DEVLINK_RELOAD_LIMIT_UNSPEC) ||
-		    ops->reload_limits >= BIT(__DEVLINK_RELOAD_LIMIT_MAX)))
+	if (WARN_ON(ops->reload_limits & BIT(MLXDEVM_RELOAD_LIMIT_UNSPEC) ||
+		    ops->reload_limits >= BIT(__MLXDEVM_RELOAD_LIMIT_MAX)))
 		return false;
 
-	for (i = 0; i < ARRAY_SIZE(devlink_reload_invalid_combinations); i++)  {
-		comb = &devlink_reload_invalid_combinations[i];
+	for (i = 0; i < ARRAY_SIZE(mlxdevm_reload_invalid_combinations); i++)  {
+		comb = &mlxdevm_reload_invalid_combinations[i];
 		if (ops->reload_actions == BIT(comb->action) &&
 		    ops->reload_limits == BIT(comb->limit))
 			return false;
 	}
 	return true;
 }
-#endif
 
 static int mlxdevm_nl_eswitch_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 				   enum mlxdevm_command cmd, u32 portid,
@@ -690,7 +690,7 @@ nla_put_failure:
 
 int mlxdevm_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct sk_buff *msg;
 	int err;
 
@@ -711,7 +711,7 @@ int mlxdevm_nl_eswitch_get_doit(struct sk_buff *skb, struct genl_info *info)
 
 int mlxdevm_nl_eswitch_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	const struct mlxdevm_ops *ops = mlxdevm->ops;
 	enum mlxdevm_eswitch_encap_mode encap_mode;
 	u8 inline_mode;
@@ -721,10 +721,11 @@ int mlxdevm_nl_eswitch_set_doit(struct sk_buff *skb, struct genl_info *info)
 	if (info->attrs[MLXDEVM_ATTR_ESWITCH_MODE]) {
 		if (!ops->eswitch_mode_set)
 			return -EOPNOTSUPP;
-		mode = nla_get_u16(info->attrs[MLXDEVM_ATTR_ESWITCH_MODE]);
-		err = mlxdevm_rate_nodes_check(mlxdevm, mode, info->extack);
+		err = mlxdevm_rates_check(mlxdevm, mlxdevm_rate_is_node,
+					  info->extack);
 		if (err)
 			return err;
+		mode = nla_get_u16(info->attrs[MLXDEVM_ATTR_ESWITCH_MODE]);
 		err = ops->eswitch_mode_set(mlxdevm, mode, info->extack);
 		if (err)
 			return err;
@@ -863,7 +864,7 @@ int devlink_info_version_running_put_ext(struct devlink_info_req *req,
 EXPORT_SYMBOL_GPL(devlink_info_version_running_put_ext);
 #endif
 
-static int mlxdevm_nl_driver_info_get(struct device_driver *drv,
+static int mlxdevm_nl_driver_info_get(const struct device_driver *drv,
 				      struct mlxdevm_info_req *req)
 {
 	if (!drv)
@@ -881,7 +882,6 @@ mlxdevm_nl_info_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 		     enum mlxdevm_command cmd, u32 portid,
 		     u32 seq, int flags, struct netlink_ext_ack *extack)
 {
-	struct device *dev = mlxdevm_to_dev(mlxdevm);
 	struct mlxdevm_info_req req = {};
 	void *hdr;
 	int err;
@@ -901,7 +901,7 @@ mlxdevm_nl_info_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 			goto err_cancel_msg;
 	}
 
-	err = mlxdevm_nl_driver_info_get(dev->driver, &req);
+	err = mlxdevm_nl_driver_info_get(mlxdevm->dev_driver, &req);
 	if (err)
 		goto err_cancel_msg;
 
@@ -915,7 +915,7 @@ err_cancel_msg:
 
 int mlxdevm_nl_info_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct sk_buff *msg;
 	int err;
 
@@ -1145,7 +1145,7 @@ int mlxdevm_nl_flash_update_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *nla_overwrite_mask, *nla_file_name;
 	struct mlxdevm_flash_update_params params = {};
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	const char *file_name;
 	u32 supported_params;
 	int ret;
@@ -1314,7 +1314,7 @@ err_cancel_msg:
 
 int devlink_nl_selftests_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct sk_buff *msg;
 	int err;
 
@@ -1384,7 +1384,7 @@ static const struct nla_policy devlink_selftest_nl_policy[DEVLINK_ATTR_SELFTEST_
 int devlink_nl_selftests_run_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *tb[DEVLINK_ATTR_SELFTEST_ID_MAX + 1];
-	struct devlink *devlink = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct nlattr *attrs, *selftests;
 	struct sk_buff *msg;
 	void *hdr;

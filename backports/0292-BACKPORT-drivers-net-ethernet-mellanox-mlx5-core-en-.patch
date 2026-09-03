@@ -1,0 +1,93 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+
+---
+ .../net/ethernet/mellanox/mlx5/core/en/xdp.h  | 33 ++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.h
+@@ -45,6 +45,7 @@
+ 	(MLX5E_XDP_INLINE_WQE_MAX_DS_CNT * MLX5_SEND_WQE_DS - \
+ 	 sizeof(struct mlx5_wqe_inline_seg))
+ 
++#ifdef HAVE_XDP_SUPPORT
+ /* XDP packets can be transmitted in different ways. On completion, we need to
+  * distinguish between them to clean up things in a proper way.
+  */
+@@ -90,16 +91,29 @@ union mlx5e_xdp_info {
+ 	union {
+ 		struct mlx5e_rq *rq;
+ 		u8 num;
++#if defined(HAVE_PAGE_POOL_DEFRAG_PAGE) || defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
+ 		struct page *page;
++#else
++		struct mlx5e_alloc_unit au;
++#endif
+ 	} page;
++#ifdef HAVE_XSK_TX_METADATA_OPS
+ 	struct xsk_tx_metadata_compl xsk_meta;
++#endif
+ };
+ 
+ struct mlx5e_xsk_param;
+ int mlx5e_xdp_max_mtu(struct mlx5e_params *params,
+ 		      struct mlx5e_rq_opt_param *rqo);
+ bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
++#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
++		      struct mlx5e_alloc_unit *au,
++#endif
+ 		      struct bpf_prog *prog, struct mlx5e_xdp_buff *mlctx);
++#ifndef HAVE_XSK_BUFF_ALLOC
++bool mlx5e_xdp_handle_old(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
++		      struct bpf_prog *prog, struct xdp_buff *xdp);
++#endif
+ void mlx5e_xdp_mpwqe_complete(struct mlx5e_xdpsq *sq);
+ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq);
+ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq);
+@@ -111,6 +125,22 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
+ extern const struct xdp_metadata_ops mlx5e_xdp_metadata_ops;
+ extern const struct xsk_tx_metadata_ops mlx5e_xsk_tx_metadata_ops;
+ 
++#ifdef HAVE_XSK_TX_METADATA_REQUEST_4_PARAMS
++/* Upstream commits 19366db6dfccac9b0867a151678cd7b89fb8fd99
++ * ("xsk: pass TX metadata pointer by reference", 7.2+) and
++ * 849b1664dbda1cf6c63e0fd4f9dec23782b8c851
++ * ("xsk: validate metadata when processing requests", 7.2+).
++ * The TX metadata is passed by reference to the xmit callbacks.
++ */
++INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq,
++							  struct mlx5e_xmit_data *xdptxd,
++							  int check_result,
++							  struct xsk_tx_metadata **meta));
++INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq,
++						    struct mlx5e_xmit_data *xdptxd,
++						    int check_result,
++						    struct xsk_tx_metadata **meta));
++#else
+ INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq,
+ 							  struct mlx5e_xmit_data *xdptxd,
+ 							  int check_result,
+@@ -119,6 +149,7 @@ INDIRECT_CALLABLE_DECLARE(bool mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq,
+ 						    struct mlx5e_xmit_data *xdptxd,
+ 						    int check_result,
+ 						    struct xsk_tx_metadata *meta));
++#endif
+ INDIRECT_CALLABLE_DECLARE(int mlx5e_xmit_xdp_frame_check_mpwqe(struct mlx5e_xdpsq *sq));
+ INDIRECT_CALLABLE_DECLARE(int mlx5e_xmit_xdp_frame_check(struct mlx5e_xdpsq *sq));
+ 
+@@ -157,7 +188,6 @@ static inline void mlx5e_xmit_xdp_doorbell(struct mlx5e_xdpsq *sq)
+ 		sq->doorbell_cseg = NULL;
+ 	}
+ }
+-
+ /* Enable inline WQEs to shift some load from a congested HCA (HW) to
+  * a less congested cpu (SW).
+  */
+@@ -239,3 +269,4 @@ mlx5e_xdpi_fifo_pop(struct mlx5e_xdp_info_fifo *fifo)
+ 	return fifo->xi[(*fifo->cc)++ & fifo->mask];
+ }
+ #endif
++#endif

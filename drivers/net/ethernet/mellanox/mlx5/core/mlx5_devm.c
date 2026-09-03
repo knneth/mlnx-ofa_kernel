@@ -16,10 +16,6 @@
 #include "mlx5_irq.h"
 #include "devlink.h"
 
-static LIST_HEAD(dev_head);
-/* The mutex below protects the dev_head list */
-static DEFINE_MUTEX(mlx5_mlxdevm_mutex);
-
 /**
  * Functions to translate between mlxdevm function states and devlink fn states,
  * for use by shim layer
@@ -59,18 +55,7 @@ static enum mlxdevm_port_fn_state devlink_to_mlxdevm_state(enum devlink_port_fn_
 
 struct mlx5_devm_device *mlx5_devm_device_get(struct mlx5_core_dev *dev)
 {
-	struct mlx5_devm_device *mdevm;
-
-	/* find the mlxdevm device associated with this core dev */
-	mutex_lock(&mlx5_mlxdevm_mutex);
-	list_for_each_entry(mdevm, &dev_head, list) {
-		if (mdevm->dev == dev) {
-			mutex_unlock(&mlx5_mlxdevm_mutex);
-			return mdevm;
-		}
-	}
-	mutex_unlock(&mlx5_mlxdevm_mutex);
-	return NULL;
+	return dev->mlxdevm_res.mdevm_dev;
 }
 
 static enum devlink_port_flavour devm2devlink_flavour(enum mlxdevm_port_flavour devm_flv)
@@ -110,9 +95,6 @@ void mlx5_devm_sfs_clean(struct mlx5_core_dev *dev)
 	unsigned long index;
 	void *entry;
 
-	if (!mdevm)
-		return;
-
 	xa_for_each(&mdevm->devm_sfs, index, entry)
 		xa_erase(&mdevm->devm_sfs, index);
 }
@@ -124,8 +106,6 @@ bool mlx5_devm_is_devm_sf(struct mlx5_core_dev *dev, u32 sfnum)
 	void *entry;
 
 	mdevm = mlx5_devm_device_get(dev);
-	if (!mdevm)
-		return false;
 
 	xa_for_each(&mdevm->devm_sfs, index, entry) {
 		if (xa_to_value(entry) == sfnum) {
@@ -202,7 +182,7 @@ static int mlx5_devm_eswitch_encap_mode_get(struct mlxdevm *mlxdevm,
 static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 				 const struct mlxdevm_port_new_attrs *attrs,
 				 struct netlink_ext_ack *extack,
-				 unsigned int *new_port_index)
+				 struct mlxdevm_port **mlxdevm_port)
 {
 	struct devlink_port_new_attrs devl_attrs;
 	struct mlx5_devm_device *mdevm_dev;
@@ -218,9 +198,9 @@ static int mlx5_devm_sf_port_new(struct mlxdevm *devm_dev,
 	if (ret)
 		return ret;
 
-	*new_port_index = devport->index;
+	*mlxdevm_port = xa_load(&devm_dev->ports, devport->index);
         mdevm_dev = container_of(devm_dev, struct mlx5_devm_device, device);
-        return xa_insert(&mdevm_dev->devm_sfs, *new_port_index,
+        return xa_insert(&mdevm_dev->devm_sfs, devport->index,
                          xa_mk_value(attrs->sfnum), GFP_KERNEL);
 }
 
@@ -275,6 +255,8 @@ static int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 				     u8 *hw_addr, int *hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
+	if (!port->dl_port || !port->dl_port->devlink)
+		return -EOPNOTSUPP;
 	return mlx5_devlink_port_fn_hw_addr_get(port->dl_port, hw_addr,
 						hw_addr_len, extack);
 }
@@ -667,6 +649,7 @@ static const struct mlxdevm_ops mlx5_devm_ops = {
 	.rate_node_del = mlx5_devm_rate_node_del,
 	.info_get = mlx5_devm_info_get,
 	.flash_update = mlx5_devm_flash_update,
+	.supported_cross_device_rate_nodes = true,
 #if 0
 	.reload_actions = BIT(MLXDEVM_RELOAD_ACTION_DRIVER_REINIT) |
 			  BIT(MLXDEVM_RELOAD_ACTION_FW_ACTIVATE),
@@ -719,8 +702,6 @@ int mlx5_devm_affinity_get_param(struct mlx5_core_dev *dev, struct cpumask *mask
 	int err;
 	int i;
 
-	if (!mdevm)
-		return -ENODEV;
 	err = devm_param_driverinit_value_get(&mdevm->device,
 					      MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
 					      &val);
@@ -740,8 +721,6 @@ int mlx5_devm_affinity_get_weight(struct mlx5_core_dev *dev)
 	union mlxdevm_param_value val;
 	int err;
 
-	if (!mdevm)
-		return 0;
 	err = devm_param_driverinit_value_get(&mdevm->device,
 					      MLX5_DEVM_PARAM_ID_CPU_AFFINITY,
 					      &val);
@@ -764,14 +743,15 @@ static int mlx5_devm_enable_roce_validate(struct mlxdevm *mlxdevm, u32 id,
 }
 
 static int mlx5_devm_ct_max_offloaded_conns_get(struct mlxdevm *mlxdevm, u32 id,
-						struct mlxdevm_param_gset_ctx *ctx)
+						struct mlxdevm_param_gset_ctx *ctx,
+						struct netlink_ext_ack *extack)
 {
 	struct devlink_param_gset_ctx devlink_ctx;
 	struct devlink *devlink;
 	
 	devlink = mlxdevm_to_devlink(mlxdevm);
 
-	mlx5_devlink_ct_max_offloaded_conns_get(devlink, id, &devlink_ctx);
+	mlx5_devlink_ct_max_offloaded_conns_get(devlink, id, &devlink_ctx, extack);
 	ctx->val.vu32 = devlink_ctx.val.vu32; 
 	return 0;
 }
@@ -830,7 +810,7 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 	}
 
 	for (i = 0; i < val.vu16arr.array_len; i++) {
-		if (arr[i] > nr_cpu_ids || arr[i] >= num_present_cpus()) {
+		if (arr[i] >= nr_cpu_ids || arr[i] >= num_present_cpus()) {
 			NL_SET_ERR_MSG_MOD(extack, "Some CPUs aren't present");
 			return -ERANGE;
 		}
@@ -839,7 +819,6 @@ static int mlx5_devm_cpu_affinity_validate(struct mlxdevm *devm, u32 id,
 			return -EINVAL;
 		}
 	}
-			   ;
 	if (val.vu16arr.array_len > mlx5_irq_table_get_sfs_vec(mlx5_irq_table_get(dev))) {
 		NL_SET_ERR_MSG_MOD(extack, "SF doesn't have enught IRQs");
 		return -EINVAL;
@@ -1218,45 +1197,52 @@ void mlx5_devm_params_unregister(struct mlxdevm *mlxdevm)
 			       ARRAY_SIZE(mlx5_devm_params));
 }
 
+int mlx5_devm_alloc(struct mlx5_core_dev *dev)
+{
+	struct mlx5_devm_device *mdevm_dev;
+	struct mlxdevm *devm;
+
+	devm = mlxdevm_alloc(&mlx5_devm_ops,
+			     sizeof(*mdevm_dev) - sizeof(struct mlxdevm),
+			     dev->device);
+	if (!devm)
+		return -ENOMEM;
+
+	mdevm_dev = container_of(devm, struct mlx5_devm_device, device);
+	dev->mlxdevm_res.mdevm_dev = mdevm_dev;
+	mdevm_dev->dev = dev;
+	mdevm_dev->device.devlink = priv_to_devlink(dev);
+
+	return 0;
+}
+
 int mlx5_devm_register(struct mlx5_core_dev *dev)
 {
 	struct mlx5_devm_device *mdevm_dev;
-	int was_registered = 0;
-	int err;
+	int err = 0;
 
-	mdevm_dev = kzalloc(sizeof(*mdevm_dev), GFP_KERNEL);
-	if (!mdevm_dev)
-		return -ENOMEM;
+	mdevm_dev = mlx5_devm_device_get(dev);
 
-	mdevm_dev->dev = dev;
-	mdevm_dev->device.ops = &mlx5_devm_ops;
-	mdevm_dev->device.dev = dev->device;
-	mdevm_dev->device.devlink = priv_to_devlink(dev);
-	mdevm_dev->device.mlxdevm_flow = false;
-	mutex_lock(&mlx5_mlxdevm_mutex);
-	list_add(&mdevm_dev->list, &dev_head);
-	mutex_unlock(&mlx5_mlxdevm_mutex);
-	mutex_init(&mdevm_dev->device.lock);
+	/* While still unregistered (so the subsequent mlxdevm_register() notifies
+	 * the parent): for an SF, attach this instance as the peer of its
+	 * representor port; for a PF that has a shared instance, nest it under
+	 * the shared mlxdevm instance.
+	 */
+	if (dev->coredev_type == MLX5_COREDEV_SF)
+		err = mlx5_sf_peer_mlxdevm_set(dev, &mdevm_dev->device);
+	else if (dev->mlxdevm_res.shd_mlxdevm)
+		err = devm_nested_mlxdevm_set(dev->mlxdevm_res.shd_mlxdevm,
+					      &mdevm_dev->device);
+
+	if (err)
+		return err;
+
 	err = mlxdevm_register(&mdevm_dev->device);
 	if (err)
-		goto reg_err;
-	was_registered = 1;
-
-	if (err)
-		goto params_reg_err;
+		return err;
 
 	xa_init(&mdevm_dev->devm_sfs);
 	return 0;
-
-params_reg_err:
-	mlxdevm_unregister(&mdevm_dev->device);
-reg_err:
-	mutex_lock(&mlx5_mlxdevm_mutex);
-	list_del(&mdevm_dev->list);
-	mutex_unlock(&mlx5_mlxdevm_mutex);
-	if (was_registered)
-		mlxdevm_put(&mdevm_dev->device);
-	return err;
 }
 
 void mlx5_devm_unregister(struct mlx5_core_dev *dev)
@@ -1264,17 +1250,20 @@ void mlx5_devm_unregister(struct mlx5_core_dev *dev)
 	struct mlx5_devm_device *mdevm;
 
 	mdevm = mlx5_devm_device_get(dev);
-	if (!mdevm)
-		return;
 
 	xa_destroy(&mdevm->devm_sfs);
 
 	mlxdevm_unregister(&mdevm->device);
+}
 
-	mutex_lock(&mlx5_mlxdevm_mutex);
-	list_del(&mdevm->list);
-	mutex_unlock(&mlx5_mlxdevm_mutex);
-	mlxdevm_put(&mdevm->device);
+void mlx5_devm_free(struct mlx5_core_dev *dev)
+{
+	struct mlx5_devm_device *mdevm;
+
+	mdevm = mlx5_devm_device_get(dev);
+
+	dev->mlxdevm_res.mdevm_dev = NULL;
+	mlxdevm_free(&mdevm->device);
 }
 #if 0
 
@@ -1423,8 +1412,6 @@ int mlx5_devm_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 	int ret;
 
 	devm_dev = mlx5_devm_device_get(dev);
-	if (!devm_dev)
-		return -ENODEV;
 
 	devm_port = vport->devm_port;
 	if (!devm_port)
@@ -1438,6 +1425,7 @@ int mlx5_devm_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 		ops = NULL;
 
 	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
+	devm_port->dl_port = &vport->dl_port->dl_port;
 	ret = devm_port_register_with_ops(&devm_dev->device, devm_port, dl_port_index, ops);
 	if (ret)
 		goto port_err;
@@ -1445,8 +1433,6 @@ int mlx5_devm_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 	ret = devm_rate_leaf_create(devm_port, vport, NULL);
 	if (ret)
 		goto rate_err;
-
-	devm_port->dl_port = &vport->dl_port->dl_port;
 
 	return 0;
 
@@ -1465,7 +1451,6 @@ void mlx5_devm_port_unregister(struct mlx5_vport *vport)
 		return;
 	devm_port = vport->devm_port;
 
-	mlx5_esw_qos_vport_update_parent(vport, NULL, NULL);
 	devm_rate_leaf_destroy(devm_port);
 
 	devm_port_unregister(devm_port);
@@ -1476,7 +1461,5 @@ void mlx5_devm_rate_nodes_destroy(struct mlx5_core_dev *dev)
 	struct mlx5_devm_device *mdevm;
 
 	mdevm = mlx5_devm_device_get(dev);
-	if (!mdevm)
-		return;
 	devm_rate_nodes_destroy(&mdevm->device);
 }

@@ -1,0 +1,125 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+
+---
+ .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 45 ++++++++++++++++++-
+ 1 file changed, 44 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+@@ -45,6 +45,7 @@ static int mlx5i_open(struct net_device *netdev);
+ static int mlx5i_close(struct net_device *netdev);
+ static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu);
+ 
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
+ int mlx5i_hwtstamp_set(struct net_device *dev,
+ 		       struct kernel_hwtstamp_config *config,
+ 		       struct netlink_ext_ack *extack)
+@@ -61,6 +62,7 @@ int mlx5i_hwtstamp_get(struct net_device *dev,
+ 
+ 	return mlx5e_hwtstamp_get(epriv, config);
+ }
++#endif
+ 
+ static const struct net_device_ops mlx5i_netdev_ops = {
+ 	.ndo_open                = mlx5i_open,
+@@ -69,8 +71,16 @@ static const struct net_device_ops mlx5i_netdev_ops = {
+ 	.ndo_init                = mlx5i_dev_init,
+ 	.ndo_uninit              = mlx5i_dev_cleanup,
+ 	.ndo_change_mtu          = mlx5i_change_mtu,
++#ifdef HAVE_NDO_HWTSTAMP_GET_SET
+ 	.ndo_hwtstamp_get        = mlx5i_hwtstamp_get,
+ 	.ndo_hwtstamp_set        = mlx5i_hwtstamp_set,
++#else
++#ifdef HAVE_NDO_ETH_IOCTL
++	.ndo_eth_ioctl            = mlx5i_ioctl,
++#else
++	.ndo_do_ioctl		  = mlx5i_ioctl,
++#endif
++#endif	/* HAVE_NDO_HWTSTAMP_GET_SET */
+ };
+ 
+ /* IPoIB mlx5 netdev profile */
+@@ -104,7 +114,12 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
+ 	mlx5e_set_netdev_mtu_boundaries(priv);
+ 	netdev->mtu = netdev->max_mtu;
+ 
+-	mlx5e_build_nic_params(priv, NULL, netdev->mtu);
++	mlx5e_build_nic_params(priv,
++#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
++			       NULL,
++#endif
++			       netdev->mtu);
++
+ 	mlx5i_build_nic_params(mdev, &priv->channels.params);
+ 
+ 	mlx5e_timestamp_init(priv);
+@@ -121,8 +136,10 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
+ 
+ 	netdev->netdev_ops = &mlx5i_netdev_ops;
+ 	netdev->ethtool_ops = &mlx5i_ethtool_ops;
++#ifdef HAVE_NETDEV_LOCK_OPS
+ 	netdev->request_ops_lock = true;
+ 	netdev_lockdep_set_classes(netdev);
++#endif
+ 
+ 	return 0;
+ }
+@@ -397,7 +414,9 @@ static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
+ 	if (err) {
+ 		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
+ 			   err);
++#ifdef CONFIG_RFS_ACCEL
+ 		priv->netdev->hw_features &= ~NETIF_F_NTUPLE;
++#endif
+ 	}
+ 
+ 	err = mlx5e_create_ttc_table(priv->fs, priv->rx_res);
+@@ -564,13 +583,21 @@ int mlx5i_dev_init(struct net_device *dev)
+ {
+ 	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
+ 	struct mlx5i_priv    *ipriv  = priv->ppriv;
++#ifdef HAVE_DEV_ADDR_MOD
+ 	u8 addr_mod[3];
++#endif
+ 
+ 	/* Set dev address using underlay QP */
++#ifdef HAVE_DEV_ADDR_MOD
+ 	addr_mod[0] = (ipriv->qpn >> 16) & 0xff;
+ 	addr_mod[1] = (ipriv->qpn >>  8) & 0xff;
+ 	addr_mod[2] = (ipriv->qpn) & 0xff;
+ 	dev_addr_mod(dev, 1, addr_mod, sizeof(addr_mod));
++#else
++	dev->dev_addr[1] = (ipriv->qpn >> 16) & 0xff;
++	dev->dev_addr[2] = (ipriv->qpn >>  8) & 0xff;
++	dev->dev_addr[3] = (ipriv->qpn) & 0xff;
++#endif
+ 
+ 	/* Add QPN to net-device mapping to HT */
+ 	mlx5i_pkey_add_qpn(dev, ipriv->qpn);
+@@ -578,6 +605,22 @@ int mlx5i_dev_init(struct net_device *dev)
+ 	return 0;
+ }
+ 
++#ifndef HAVE_NDO_HWTSTAMP_GET_SET
++int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
++{
++	struct mlx5e_priv *priv = mlx5i_epriv(dev);
++
++	switch (cmd) {
++		case SIOCSHWTSTAMP:
++			return mlx5e_hwstamp_set(priv, ifr);
++		case SIOCGHWTSTAMP:
++			return mlx5e_hwstamp_get(priv, ifr);
++		default:
++			return -EOPNOTSUPP;
++	}
++}       
++#endif
++
+ void mlx5i_dev_cleanup(struct net_device *dev)
+ {
+ 	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);

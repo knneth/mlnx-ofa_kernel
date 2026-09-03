@@ -1,0 +1,5 @@
+sep=;
+Change-Id=Icf71c27fc428275b281580c1b8e867bae96e2204; subject=DKMS: RPM: virtiofs-dkms: register module for force install; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=I5281938db9048e7e79442d52eb7cb10b0f66dfb7; subject=mlnx-nvme: Gate nvme-apple build on apple-rtkit availability; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=Id06df798804382e85cb119147b65f4ea10fad3fc; subject=DKMS: RPM: Run dkms remove in %preun only if the old version exists on disk; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=Icbaa779ceb25bf05ffdc4ac39ff1be43711625e7; subject=debian: fix dkms>=3 detection for the initramfs trigger; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;

@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I2629b5dbaca61350ed7b5c585d2b2cc618cb75db; subject=net/mlx5e: macsec: fix use-after-free of metadata_dst on RX SC delete; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: de74d8fd1029, tag: v7.2-rc2;

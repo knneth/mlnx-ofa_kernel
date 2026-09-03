@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I6e93c2fc4d43a4273391819e7a98ff79bf5163d0; subject=net/mlx5_core: Increase performance of crdump utility for FW debug; feature=mlx5_crdump; upstream_status=in_progress; upstream_issue=0123456789; general=;

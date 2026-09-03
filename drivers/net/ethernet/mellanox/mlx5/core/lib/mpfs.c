@@ -103,7 +103,7 @@ int mlx5_mpfs_init(struct mlx5_core_dev *dev)
 	if (!MLX5_ESWITCH_MANAGER(dev) || l2table_size == 1)
 		return 0;
 
-	mpfs = kzalloc(sizeof(*mpfs), GFP_KERNEL);
+	mpfs = kzalloc_obj(*mpfs);
 	if (!mpfs)
 		return -ENOMEM;
 
@@ -226,7 +226,7 @@ int mlx5_mpfs_enable(struct mlx5_core_dev *dev)
 	struct mlx5_mpfs *mpfs = dev->priv.mpfs;
 	struct l2table_node *l2addr;
 	struct hlist_node *n;
-	int err = 0;
+	int err = 0, i;
 
 	if (!mpfs)
 		return -ENODEV;
@@ -237,7 +237,7 @@ int mlx5_mpfs_enable(struct mlx5_core_dev *dev)
 	mpfs->enabled = true;
 	mlx5_core_dbg(dev, "MPFS enabling mpfs\n");
 
-	mlx5_mpfs_foreach(l2addr, n, mpfs) {
+	mlx5_mpfs_foreach(l2addr, n, mpfs, i) {
 		u32 index;
 
 		err = alloc_l2table_index(mpfs, &index);
@@ -269,6 +269,7 @@ void mlx5_mpfs_disable(struct mlx5_core_dev *dev)
 	struct mlx5_mpfs *mpfs = dev->priv.mpfs;
 	struct l2table_node *l2addr;
 	struct hlist_node *n;
+	int i;
 
 	if (!mpfs)
 		return;
@@ -276,7 +277,7 @@ void mlx5_mpfs_disable(struct mlx5_core_dev *dev)
 	mutex_lock(&mpfs->lock);
 	if (!mpfs->enabled)
 		goto unlock;
-	mlx5_mpfs_foreach(l2addr, n, mpfs) {
+	mlx5_mpfs_foreach(l2addr, n, mpfs, i) {
 		if (l2addr->index < 0)
 			continue;
 		del_l2table_entry_cmd(dev, l2addr->index);

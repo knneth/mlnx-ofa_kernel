@@ -1,20 +1,38 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_priv.h
-@@ -6,6 +6,7 @@
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+@@ -7,7 +7,6 @@
+ #include <net/pkt_cls.h>
+ #include <linux/mlx5/fs.h>
+ #include <net/tc_act/tc_ct.h>
+-
+ #include "en.h"
  
- #include "en_tc.h"
- #include "en/tc/act/act.h"
-+#include <uapi/linux/tc_act/tc_pedit.h>
+ struct mlx5_flow_attr;
+@@ -15,6 +14,9 @@ struct mlx5e_tc_mod_hdr_acts;
+ struct mlx5_rep_uplink_priv;
+ struct mlx5e_tc_flow;
+ struct mlx5e_priv;
++#ifdef HAVE_BASECODE_EXTRAS
++struct mlx5e_post_act;
++#endif
  
- #define MLX5E_TC_FLOW_BASE (MLX5E_TC_FLAG_LAST_EXPORTED_BIT + 1)
+ struct mlx5_fs_chains;
+ struct mlx5_tc_ct_priv;
+@@ -143,6 +145,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_ru
  
+ #else /* CONFIG_MLX5_TC_CT */
+ 
++#include <net/flow_offload.h>
++
+ static inline struct mlx5_tc_ct_priv *
+ mlx5_tc_ct_init(struct mlx5e_priv *priv, struct mlx5_fs_chains *chains,
+ 		struct mod_hdr_tbl *mod_hdr,

@@ -1,0 +1,8 @@
+sep=;
+Change-Id=I1d6dca7220af4c4da428c8df7c05b52c893ed4e4; subject=net/mlx5e: Add support for drop-less RQ; feature=mlx5_dropless_rq; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I689764f9986fb87835159f83671baccf661c32df; subject=net/mlx5: Move diag_cnt init to mlx5_load flow; feature=mlx5_diag_cnt; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I1901b582e61a076417d327f8059eda25893024cb; subject=mlx5/core: Lower fast/force teardown error verbosity; feature=mlx5_core_bugs_in_review; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I405382eb7f5bbe0b7c1ac9f7e944ccc0f77d71e2; subject=Revert "RDMA/mlx5: Use a union inside mlx5_ib_mr"; feature=mlx5_ib_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I81c2bce8e92a05a6bb2e4c33d0ce534a467a01de; subject=IB/ipoib: Set device address using sysfs instead of ndo; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4d1abb84a039098a8e4f6d80c96cb0ac67703314; subject=IB/ipoib: Add inline/blue-flame support; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I01df6ba0ce30ebde87e7677ecdf477d9a69ecc91; subject=IB/ipoib: Fix operation state race between stop and light flush; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;

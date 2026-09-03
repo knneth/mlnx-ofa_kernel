@@ -635,9 +635,9 @@ void memtrack_alloc(enum memtrack_memtype_t memtype, unsigned long dev,
 	 * in the printout -- only the path head!
 	 */
 	if (strlen(filename) > MAX_FILENAME_LEN)
-		strncpy(new_mem_info_p->filename, filename + strlen(filename) - MAX_FILENAME_LEN, MAX_FILENAME_LEN);
+		memcpy(new_mem_info_p->filename, filename + strlen(filename) - MAX_FILENAME_LEN, MAX_FILENAME_LEN);
 	else
-		strncpy(new_mem_info_p->filename, filename, MAX_FILENAME_LEN);
+		memcpy(new_mem_info_p->filename, filename, strlen(filename) + 1);
 
 	new_mem_info_p->filename[MAX_FILENAME_LEN] = 0; /* NULL terminate anyway */
 
@@ -774,6 +774,9 @@ int is_non_trackable_alloc_func(const char *func_name)
 		/* kTLS resync dump */
 		"tx_sync_info_get",
 		"mlx5e_ktls_tx_handle_resync_dump_comp",
+#ifdef HAVE_CLEANUP_H
+		"mlx5_shd_init",
+#endif
 	};
 	size_t str_str_arr_size = sizeof(str_str_arr)/sizeof(char *);
 	size_t str_str_excep_size = sizeof(str_str_excep_arr)/sizeof(char *);
@@ -827,7 +830,7 @@ EXPORT_SYMBOL(is_non_trackable_free_func);
 int is_umem_put_page(const char *func_name)
 {
 	const char func_str[18]	= "__ib_umem_release";
-	const char func_str1[12] = "ib_umem_get";
+	const char func_str1[15] = "ib_umem_get_va";
 	const char func_str2[32] = "ib_umem_odp_map_dma_single_page";
 	const char func_str3[26] = "ib_umem_odp_map_dma_pages";
 
@@ -1043,15 +1046,10 @@ static ssize_t memtrack_read(struct file *filp,
 			     loff_t *offset)
 {
 	unsigned long cur, flags;
-	loff_t pos = *offset;
-	static char kbuf[20];
-	static int file_len;
-	int _read, to_ret, left;
+	char kbuf[20];
+	int len;
 	const char *fname;
 	enum memtrack_memtype_t memtype;
-
-	if (pos < 0)
-		return -EINVAL;
 
 	fname = filp->f_path.dentry->d_name.name;
 
@@ -1061,30 +1059,28 @@ static ssize_t memtrack_read(struct file *filp,
 		return -EINVAL;
 	}
 
-	if (pos == 0) {
-		memtrack_spin_lock(&tracked_objs_arr[memtype]->hash_lock, flags);
-		cur = tracked_objs_arr[memtype]->count;
-		memtrack_spin_unlock(&tracked_objs_arr[memtype]->hash_lock, flags);
-		_read = sprintf(kbuf, "%lu\n", cur);
-		if (_read < 0)
-			return _read;
-		else
-			file_len = _read;
-	}
+	memtrack_spin_lock(&tracked_objs_arr[memtype]->hash_lock, flags);
+	cur = tracked_objs_arr[memtype]->count;
+	memtrack_spin_unlock(&tracked_objs_arr[memtype]->hash_lock, flags);
 
-	left = file_len - pos;
-	to_ret = (left < size) ? left : size;
-	if (copy_to_user(buf, kbuf+pos, to_ret))
-		return -EFAULT;
-	else {
-		*offset = pos + to_ret;
-		return to_ret;
-	}
+	len = snprintf(kbuf, sizeof(kbuf), "%lu\n", cur);
+	if (len < 0)
+		return len;
+	if (len >= (int)sizeof(kbuf))
+		len = sizeof(kbuf) - 1;
+
+	return simple_read_from_buffer(buf, size, offset, kbuf, len);
 }
 
+#ifdef HAVE_PROC_OPS_STRUCT 
 static const struct proc_ops memtrack_proc_ops = {
 	.proc_read = memtrack_read,
 };
+#else
+static const struct file_operations memtrack_proc_fops = {
+        .read = memtrack_read,
+};
+#endif
 
 static const char *memtrack_proc_entry_name = "mt_memtrack";
 
@@ -1103,7 +1099,11 @@ static int create_procfs_tree(void)
 
 	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
 		if (bit_mask & track_mask) {
+#ifdef HAVE_PROC_OPS_STRUCT 
 			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_ops, NULL);
+#else
+			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_fops, NULL);
+#endif
 			if (!proc_ent) {
 				printk(KERN_INFO "Warning: Cannot create /proc/%s/%s\n",
 				       memtrack_proc_entry_name, rsc_names[i]);

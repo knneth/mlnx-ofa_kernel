@@ -283,7 +283,7 @@ nvmet_rdma_get_rsp(struct nvmet_rdma_queue *queue)
 	if (unlikely(!rsp)) {
 		int ret;
 
-		rsp = kzalloc(sizeof(*rsp), GFP_KERNEL);
+		rsp = kzalloc_obj(*rsp);
 		if (unlikely(!rsp))
 			return NULL;
 		ret = nvmet_rdma_alloc_rsp(queue->dev, rsp,
@@ -378,7 +378,7 @@ static int nvmet_rdma_alloc_cmd(struct nvmet_rdma_device *ndev,
 			struct nvmet_rdma_cmd *c, bool admin)
 {
 	/* NVMe command / RDMA RECV */
-	c->nvme_cmd = kmalloc(sizeof(*c->nvme_cmd), GFP_KERNEL);
+	c->nvme_cmd = kmalloc_obj(*c->nvme_cmd);
 	if (!c->nvme_cmd)
 		goto out;
 
@@ -428,7 +428,7 @@ nvmet_rdma_alloc_cmds(struct nvmet_rdma_device *ndev,
 	struct nvmet_rdma_cmd *cmds;
 	int ret = -EINVAL, i;
 
-	cmds = kcalloc(nr_cmds, sizeof(struct nvmet_rdma_cmd), GFP_KERNEL);
+	cmds = kvzalloc_objs(struct nvmet_rdma_cmd, nr_cmds);
 	if (!cmds)
 		goto out;
 
@@ -443,7 +443,7 @@ nvmet_rdma_alloc_cmds(struct nvmet_rdma_device *ndev,
 out_free:
 	while (--i >= 0)
 		nvmet_rdma_free_cmd(ndev, cmds + i, admin);
-	kfree(cmds);
+	kvfree(cmds);
 out:
 	return ERR_PTR(ret);
 }
@@ -455,14 +455,14 @@ static void nvmet_rdma_free_cmds(struct nvmet_rdma_device *ndev,
 
 	for (i = 0; i < nr_cmds; i++)
 		nvmet_rdma_free_cmd(ndev, cmds + i, admin);
-	kfree(cmds);
+	kvfree(cmds);
 }
 
 static int nvmet_rdma_alloc_rsp(struct nvmet_rdma_device *ndev,
 		struct nvmet_rdma_rsp *r, int tag)
 {
 	/* NVMe CQE / RDMA SEND */
-	r->req.cqe = kmalloc(sizeof(*r->req.cqe), GFP_KERNEL);
+	r->req.cqe = kmalloc_obj(*r->req.cqe);
 	if (!r->req.cqe)
 		goto out;
 
@@ -516,8 +516,7 @@ nvmet_rdma_alloc_rsps(struct nvmet_rdma_queue *queue)
 			NUMA_NO_NODE, false, true))
 		goto out;
 
-	queue->rsps = kcalloc(nr_rsps, sizeof(struct nvmet_rdma_rsp),
-			GFP_KERNEL);
+	queue->rsps = kvzalloc_objs(struct nvmet_rdma_rsp, nr_rsps);
 	if (!queue->rsps)
 		goto out_free_sbitmap;
 
@@ -534,7 +533,7 @@ nvmet_rdma_alloc_rsps(struct nvmet_rdma_queue *queue)
 out_free:
 	while (--i >= 0)
 		nvmet_rdma_free_rsp(ndev, &queue->rsps[i]);
-	kfree(queue->rsps);
+	kvfree(queue->rsps);
 out_free_sbitmap:
 	sbitmap_free(&queue->rsp_tags);
 out:
@@ -548,7 +547,7 @@ static void nvmet_rdma_free_rsps(struct nvmet_rdma_queue *queue)
 
 	for (i = 0; i < nr_rsps; i++)
 		nvmet_rdma_free_rsp(ndev, &queue->rsps[i]);
-	kfree(queue->rsps);
+	kvfree(queue->rsps);
 	sbitmap_free(&queue->rsp_tags);
 }
 
@@ -916,7 +915,8 @@ static u16 nvmet_rdma_map_sgl_inline(struct nvmet_rdma_rsp *rsp)
 		return NVME_SC_INVALID_FIELD | NVME_STATUS_DNR;
 	}
 
-	if (off + len > rsp->queue->dev->inline_data_size) {
+	if (off > rsp->queue->dev->inline_data_size ||
+	    len > rsp->queue->dev->inline_data_size - off) {
 		pr_err("invalid inline data offset!\n");
 		return NVME_SC_SGL_INVALID_OFFSET | NVME_STATUS_DNR;
 	}
@@ -1157,7 +1157,7 @@ nvmet_rdma_init_srq(struct nvmet_rdma_device *ndev)
 	struct ib_srq *srq;
 	int ret, i;
 
-	nsrq = kzalloc(sizeof(*nsrq), GFP_KERNEL);
+	nsrq = kzalloc_obj(*nsrq);
 	if (!nsrq)
 		return ERR_PTR(-ENOMEM);
 
@@ -1216,7 +1216,7 @@ static int nvmet_rdma_init_srqs(struct nvmet_rdma_device *ndev)
 	ndev->srq_count = min(ndev->device->num_comp_vectors,
 			      ndev->device->attrs.max_srq);
 
-	ndev->srqs = kcalloc(ndev->srq_count, sizeof(*ndev->srqs), GFP_KERNEL);
+	ndev->srqs = kzalloc_objs(*ndev->srqs, ndev->srq_count);
 	if (!ndev->srqs)
 		return -ENOMEM;
 
@@ -1269,7 +1269,7 @@ nvmet_rdma_find_get_device(struct rdma_cm_id *cm_id)
 			goto out_unlock;
 	}
 
-	ndev = kzalloc(sizeof(*ndev), GFP_KERNEL);
+	ndev = kzalloc_obj(*ndev);
 	if (!ndev)
 		goto out_err;
 
@@ -1535,6 +1535,7 @@ nvmet_rdma_parse_cm_connect_req(struct rdma_conn_param *conn,
 				struct nvmet_rdma_queue *queue)
 {
 	struct nvme_rdma_cm_req *req;
+	u16 max_qsize;
 
 	req = (struct nvme_rdma_cm_req *)conn->private_data;
 	if (!req || conn->private_data_len == 0)
@@ -1552,10 +1553,13 @@ nvmet_rdma_parse_cm_connect_req(struct rdma_conn_param *conn,
 	queue->recv_queue_size = le16_to_cpu(req->hsqsize) + 1;
 	queue->send_queue_size = le16_to_cpu(req->hrqsize);
 
-	if (!queue->host_qid && queue->recv_queue_size > NVME_AQ_DEPTH)
+	max_qsize = queue->host_qid ? NVME_RDMA_MAX_QUEUE_SIZE : NVME_AQ_DEPTH;
+
+	if (queue->recv_queue_size > max_qsize)
 		return NVME_RDMA_CM_INVALID_HSQSIZE;
 
-	/* XXX: Should we enforce some kind of max for IO queues? */
+	if (queue->send_queue_size > max_qsize)
+		return NVME_RDMA_CM_INVALID_HRQSIZE;
 
 	return 0;
 }
@@ -1584,7 +1588,7 @@ nvmet_rdma_alloc_queue(struct nvmet_rdma_device *ndev,
 	struct nvmet_rdma_queue *queue;
 	int ret;
 
-	queue = kzalloc(sizeof(*queue), GFP_KERNEL);
+	queue = kzalloc_obj(*queue);
 	if (!queue) {
 		ret = NVME_RDMA_CM_NO_RSC;
 		goto out_reject;
@@ -2083,7 +2087,7 @@ static int nvmet_rdma_add_port(struct nvmet_port *nport)
 	__kernel_sa_family_t af;
 	int ret;
 
-	port = kzalloc(sizeof(*port), GFP_KERNEL);
+	port = kzalloc_obj(*port);
 	if (!port)
 		return -ENOMEM;
 
@@ -2302,8 +2306,10 @@ static void nvmet_rdma_remove_one(struct ib_device *ib_device, void *client_data
 	}
 	mutex_unlock(&port_list_mutex);
 
-	if (found)
+	if (found) {
 		flush_workqueue(nvmet_wq);
+		flush_workqueue(nvmet_aen_wq);
+	}
 
 retry:
 	/*

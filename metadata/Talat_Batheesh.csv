@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Ic3a73152e4b972b0bc1a17f4e30810c76efd7d26; subject=mlx5/IB: set default value for gid_type; feature=mlx5_force_tc; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib2bc3c8f351a85e84aade1c5628ccedcee05c9ab; subject=Revert "Remove /usr/src/ofa_kernel/default alternative"; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;

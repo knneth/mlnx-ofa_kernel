@@ -1,0 +1,7 @@
+sep=;
+Change-Id=I323a1f7827385ab4749a9db6eb93eadd443226b0; subject=compat: enable SW steering sysfs; feature=asap_compat; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I56099d9bb7f22a2e0e6d5a3f21769fa3e7121e4c; subject=compat: Initialize devlink sysfs.; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I26c029aa9f9a6400314d57878b4d29d11835e0ab; subject=net/mlx5: mlxdevm, flush all devm nodes on eswitch destroy; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I5cf500c4a0a7e14eb90708db42765a198ceabe5b; subject=net/mlx5e: TC NIC mode, fix tc chains miss table (OFED only part); feature=rebase; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I1cbf3b6d8cf720554dc79e659102e868aea848eb; subject=net/mlx5: E-Switch, align metadata matching enablement to upstream; feature=asap_compat; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ibd0144053a2bfa108037b17120be01fa2d5221d8; subject=net/mlx5: E-Switch, block changing vport match mode while in switchdev mode; feature=asap_compat; upstream_status=NA; upstream_issue=; general=;

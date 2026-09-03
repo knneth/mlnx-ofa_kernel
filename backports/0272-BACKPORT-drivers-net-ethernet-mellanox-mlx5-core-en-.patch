@@ -1,0 +1,93 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+
+---
+ .../ethernet/mellanox/mlx5/core/en/tc/meter.c  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/meter.c
+@@ -4,9 +4,15 @@
+ #include <linux/iopoll.h>
+ #include <linux/math64.h>
+ #include "lib/aso.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc/post_act.h"
++#endif
+ #include "meter.h"
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ #include "en/tc_priv.h"
++#elif defined(CONFIG_MLX5_ESWITCH)
++#include "en_tc.h"
++#endif
+ 
+ #define MLX5_START_COLOR_SHIFT 28
+ #define MLX5_METER_MODE_SHIFT 24
+@@ -361,8 +367,10 @@ mlx5e_alloc_flow_meter(struct mlx5_core_dev *dev)
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(dev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -406,9 +414,11 @@ mlx5e_tc_meter_get(struct mlx5_core_dev *mdev, struct mlx5e_flow_meter_params *p
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	struct mlx5e_flow_meter_handle *meter;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
+ 		return ERR_PTR(-EOPNOTSUPP);
++#endif
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+ 	meter = __mlx5e_tc_meter_get(flow_meters, params->index);
+@@ -480,12 +490,16 @@ int
+ mlx5e_tc_meter_update(struct mlx5e_flow_meter_handle *meter,
+ 		      struct mlx5e_flow_meter_params *params)
+ {
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	struct mlx5_core_dev *mdev = meter->flow_meters->mdev;
++#endif
+ 	struct mlx5e_flow_meters *flow_meters;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -501,8 +515,10 @@ mlx5e_tc_meter_replace(struct mlx5_core_dev *mdev, struct mlx5e_flow_meter_param
+ 	struct mlx5e_flow_meter_handle *meter;
+ 	int err;
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	flow_meters = mlx5e_get_flow_meters(mdev);
+ 	if (!flow_meters)
++#endif
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
+ 	mutex_lock(&flow_meters->sync_lock);
+@@ -548,11 +564,13 @@ mlx5e_flow_meters_init(struct mlx5e_priv *priv,
+ 	      MLX5_HCA_CAP_GENERAL_OBJECT_TYPES_FLOW_METER_ASO))
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++#if IS_ENABLED(CONFIG_MLX5_CLS_ACT)
+ 	if (IS_ERR_OR_NULL(post_act)) {
+ 		netdev_dbg(priv->netdev,
+ 			   "flow meter offload is not supported, post action is missing\n");
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 	}
++#endif
+ 
+ 	flow_meters = kzalloc_obj(*flow_meters);
+ 	if (!flow_meters)

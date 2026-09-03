@@ -1,0 +1,21 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.h
+
+---
+ drivers/infiniband/core/rdma_core.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/infiniband/core/rdma_core.h b/drivers/infiniband/core/rdma_core.h
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/rdma_core.h
++++ b/drivers/infiniband/core/rdma_core.h
+@@ -159,7 +159,9 @@ extern const struct uapi_definition uverbs_def_obj_counters[];
+ extern const struct uapi_definition uverbs_def_obj_cq[];
+ extern const struct uapi_definition uverbs_def_obj_device[];
+ extern const struct uapi_definition uverbs_def_obj_dm[];
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ extern const struct uapi_definition uverbs_def_obj_dmabuf[];
++#endif
+ extern const struct uapi_definition uverbs_def_obj_dmah[];
+ extern const struct uapi_definition uverbs_def_obj_flow_action[];
+ extern const struct uapi_definition uverbs_def_obj_intf[];

@@ -1,0 +1,175 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/fc.c
+
+---
+ drivers/nvme/host/fc.c | 58 ++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 53 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/nvme/host/fc.c b/drivers/nvme/host/fc.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/nvme/host/fc.c
++++ b/drivers/nvme/host/fc.c
+@@ -2,6 +2,7 @@
+ /*
+  * Copyright (c) 2016 Avago Technologies.  All rights reserved.
+  */
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -12,7 +13,10 @@
+ #include <uapi/scsi/fc/fc_els.h>
+ #include <linux/delay.h>
+ #include <linux/overflow.h>
++#include <linux/sizes.h>
++#ifdef HAVE_FC_APPID_LEN
+ #include <linux/blk-cgroup.h>
++#endif
+ #include "nvme.h"
+ #include "fabrics.h"
+ #include <linux/nvme-fc-driver.h>
+@@ -1891,7 +1895,11 @@ char *nvme_fc_io_getuuid(struct nvmefc_fcp_req *req)
+ 
+ 	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !rq || !rq->bio)
+ 		return NULL;
++#ifdef HAVE_BLKCG_GET_FC_APPID
+ 	return blkcg_get_fc_appid(rq->bio);
++#else
++	return NULL;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvme_fc_io_getuuid);
+ 
+@@ -2112,7 +2120,13 @@ out_on_error:
+ 
+ static int
+ nvme_fc_init_request(struct blk_mq_tag_set *set, struct request *rq,
+-		unsigned int hctx_idx, unsigned int numa_node)
++		unsigned int hctx_idx,
++/* b040a1a4523d (7.2+): init_request numa_node changed from unsigned int to int */
++#ifdef HAVE_BLK_MQ_OPS_INIT_REQUEST_INT_NUMA_NODE
++		int numa_node)
++#else
++		unsigned int numa_node)
++#endif
+ {
+ 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(set->driver_data);
+ 	struct nvme_fcp_op_w_sgl *op = blk_mq_rq_to_pdu(rq);
+@@ -2417,7 +2431,13 @@ nvme_fc_free_ctrl(struct nvme_ctrl *nctrl)
+  * status. The done path will return the io request back to the block
+  * layer with an error status.
+  */
++#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_3_PARAMS
++static bool nvme_fc_terminate_exchange(struct request *req, void *data, bool reserved)
++#elif defined HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL_2_PARAMS
+ static bool nvme_fc_terminate_exchange(struct request *req, void *data)
++#else
++static void nvme_fc_terminate_exchange(struct request *req, void *data, bool reserved)
++#endif
+ {
+ 	struct nvme_ctrl *nctrl = data;
+ 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(nctrl);
+@@ -2425,7 +2445,9 @@ static bool nvme_fc_terminate_exchange(struct request *req, void *data)
+ 
+ 	op->nreq.flags |= NVME_REQ_CANCELLED;
+ 	__nvme_fc_abort_op(ctrl, op);
++#ifdef HAVE_BLK_MQ_BUSY_TAG_ITER_FN_BOOL
+ 	return true;
++#endif
+ }
+ 
+ /*
+@@ -2531,7 +2553,12 @@ nvme_fc_error_recovery(struct nvme_fc_ctrl *ctrl, char *errmsg)
+ 	nvme_reset_ctrl(&ctrl->ctrl);
+ }
+ 
+-static enum blk_eh_timer_return nvme_fc_timeout(struct request *rq)
++static enum blk_eh_timer_return
++#ifdef HAVE_BLK_MQ_OPS_TIMEOUT_1_PARAM
++nvme_fc_timeout(struct request *rq)
++#else
++nvme_fc_timeout(struct request *rq, bool reserved)
++#endif
+ {
+ 	struct nvme_fc_fcp_op *op = blk_mq_rq_to_pdu(rq);
+ 	struct nvme_fc_ctrl *ctrl = op->ctrl;
+@@ -2579,7 +2606,11 @@ nvme_fc_map_data(struct nvme_fc_ctrl *ctrl, struct request *rq,
+ 	if (ret)
+ 		return -ENOMEM;
+ 
++#ifdef HAVE_BLK_RQ_MAP_SG_2_PARAMS
+ 	op->nents = blk_rq_map_sg(rq, freq->sg_table.sgl);
++#else
++	op->nents = blk_rq_map_sg(rq->q, rq, freq->sg_table.sgl);
++#endif
+ 	WARN_ON(op->nents > blk_rq_nr_phys_segments(rq));
+ 	freq->sg_cnt = fc_dma_map_sg(ctrl->lport->dev, freq->sg_table.sgl,
+ 				op->nents, rq_dma_dir(rq));
+@@ -2827,7 +2858,11 @@ nvme_fc_complete_rq(struct request *rq)
+ 	nvme_fc_ctrl_put(ctrl);
+ }
+ 
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
++static int nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#else
+ static void nvme_fc_map_queues(struct blk_mq_tag_set *set)
++#endif
+ {
+ 	struct nvme_fc_ctrl *ctrl = to_fc_ctrl(set->driver_data);
+ 	int i;
+@@ -2847,6 +2882,9 @@ static void nvme_fc_map_queues(struct blk_mq_tag_set *set)
+ 		else
+ 			blk_mq_map_queues(map);
+ 	}
++#ifdef HAVE_BLK_MQ_OPS_MAP_QUEUES_RETURN_INT
++	return 0;
++#endif
+ }
+ 
+ static const struct blk_mq_ops nvme_fc_mq_ops = {
+@@ -2883,8 +2921,12 @@ nvme_fc_create_io_queues(struct nvme_fc_ctrl *ctrl)
+ 
+ 	ret = nvme_alloc_io_tag_set(&ctrl->ctrl, &ctrl->tag_set,
+ 			&nvme_fc_mq_ops, 1,
++#ifdef HAVE_STRUCT_SIZE_T
+ 			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+-				      ctrl->lport->ops->fcprqst_priv_sz));
++#else
++			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
++#endif
++				    ctrl->lport->ops->fcprqst_priv_sz));
+ 	if (ret)
+ 		return ret;
+ 
+@@ -3389,7 +3431,6 @@ nvme_fc_connect_ctrl_work(struct work_struct *work)
+ 			ctrl->cnum);
+ }
+ 
+-
+ static const struct blk_mq_ops nvme_fc_admin_mq_ops = {
+ 	.queue_rq	= nvme_fc_queue_rq,
+ 	.complete	= nvme_fc_complete_rq,
+@@ -3552,8 +3593,12 @@ nvme_fc_init_ctrl(struct device *dev, struct nvmf_ctrl_options *opts,
+ 
+ 	ret = nvme_alloc_admin_tag_set(&ctrl->ctrl, &ctrl->admin_tag_set,
+ 			&nvme_fc_admin_mq_ops,
++#ifdef HAVE_STRUCT_SIZE_T
+ 			struct_size_t(struct nvme_fcp_op_w_sgl, priv,
+-				      ctrl->lport->ops->fcprqst_priv_sz));
++#else
++			struct_size((struct nvme_fcp_op_w_sgl *)NULL, priv,
++#endif
++				    ctrl->lport->ops->fcprqst_priv_sz));
+ 	if (ret)
+ 		goto fail_ctrl;
+ 
+@@ -3881,6 +3926,9 @@ static const struct attribute_group *nvme_fc_attr_groups[] = {
+ static struct class fc_class = {
+ 	.name = "fc",
+ 	.dev_groups = nvme_fc_attr_groups,
++#ifndef HAVE_CLASS_CREATE_GET_1_PARAM
++	.owner = THIS_MODULE,
++#endif
+ };
+ 
+ static int __init nvme_fc_init_module(void)

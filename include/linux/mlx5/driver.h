@@ -550,11 +550,11 @@ struct mlx5_devcom_dev;
 struct mlx5_fw_reset;
 struct mlx5_eq_table;
 struct mlx5_irq_table;
-struct mlx5_vhca_state_notifier;
 struct mlx5_sf_dev_table;
 struct mlx5_sf_hw_table;
 struct mlx5_sf_table;
 struct mlx5_crypto_dek_priv;
+struct mlxdevm;
 
 struct mlx5_rate_limit {
 	u32			rate;
@@ -624,7 +624,7 @@ struct mlx5_debugfs_entries {
 };
 
 enum mlx5_func_type {
-	MLX5_PF,
+	MLX5_SELF,
 	MLX5_VF,
 	MLX5_SF,
 	MLX5_HOST_PF,
@@ -682,6 +682,7 @@ struct mlx5_priv {
 
 	struct mlx5_flow_steering *steering;
 	struct mlx5_mpfs        *mpfs;
+	struct blocking_notifier_head esw_n_head;
 	struct mlx5_eswitch     *eswitch;
 	struct mlx5_core_sriov	sriov;
 	struct mlx5_lag		*lag;
@@ -698,12 +699,19 @@ struct mlx5_priv {
 	struct mlx5_bfreg_data		bfregs;
 	struct mlx5_sq_bfreg bfreg;
 #ifdef CONFIG_MLX5_SF
-	struct mlx5_vhca_state_notifier *vhca_state_notifier;
+	struct mlx5_nb vhca_state_nb;
+	struct blocking_notifier_head vhca_state_n_head;
+	struct notifier_block sf_dev_nb;
 	struct mlx5_sf_dev_table *sf_dev_table;
 	struct mlx5_core_dev *parent_mdev;
 #endif
 #ifdef CONFIG_MLX5_SF_MANAGER
+	struct notifier_block sf_hw_table_vhca_nb;
 	struct mlx5_sf_hw_table *sf_hw_table;
+	struct notifier_block sf_table_esw_nb;
+	struct notifier_block sf_table_vhca_nb;
+	struct notifier_block sf_table_mdev_nb;
+	struct notifier_block sf_table_mlxdevm_mdev_nb;
 	struct mlx5_sf_table *sf_table;
 #endif
 	struct blocking_notifier_head lag_nh;
@@ -853,24 +861,12 @@ struct mlx5_st;
 
 enum {
 	MLX5_PROF_MASK_QP_SIZE		= (u64)1 << 0,
-	MLX5_PROF_MASK_MR_CACHE		= (u64)1 << 1,
-	MLX5_PROF_MASK_ODPV2		= (u64)1 << 2,
-};
-
-enum {
-	MKEY_CACHE_LAST_STD_ENTRY = 20,
-	MLX5_IMR_KSM_CACHE_ENTRY,
-	MAX_MKEY_CACHE_ENTRIES
 };
 
 struct mlx5_profile {
 	u64	mask;
 	u8	log_max_qp;
 	u8	num_cmd_caches;
-	struct {
-		int	size;
-		int	limit;
-	} mr_cache[MAX_MKEY_CACHE_ENTRIES];
 };
 
 struct mlx5_hca_cap {
@@ -912,6 +908,7 @@ struct mlx5_core_dev {
 	/* sync pci state */
 	struct mutex		pci_status_mutex;
 	enum mlx5_pci_status	pci_status;
+	bool			pci_reset_in_progress;
 	u8			rev_id;
 	char			board_id[MLX5_BOARD_ID_LEN];
 	struct mlx5_cmd		cmd;
@@ -925,7 +922,6 @@ struct mlx5_core_dev {
 	} caps;
 	struct mlx5_timeouts	*timeouts;
 	u64			sys_image_guid;
-	phys_addr_t		iseg_base;
 	struct mlx5_init_seg __iomem *iseg;
 	phys_addr_t             bar_addr;
 	enum mlx5_device_state	state;
@@ -960,12 +956,12 @@ struct mlx5_core_dev {
 	struct mlx5_diag_cnt    diag_cnt;
 	u32                      vsc_addr;
 	struct mlx5_hv_vhca	*hv_vhca;
-	struct mlx5_local_lb local_lb;
 	int max_cmpl_eq_count;
 	int cmpl_eq_depth;
 	int async_eq_depth;
 	u8 disable_en : 1;
 	u8 disable_fc : 1;
+	struct mlx5_local_lb local_lb;
 	struct mlx5_hwmon	*hwmon;
 	u64			num_block_tc;
 	u64			num_block_ipsec;
@@ -979,6 +975,11 @@ struct mlx5_core_dev {
 	enum mlx5_wc_state wc_state;
 	/* sync write combining state */
 	struct mutex wc_state_lock;
+	struct devlink *shd;
+	struct {
+		struct mlxdevm *shd_mlxdevm;
+		struct mlx5_devm_device *mdevm_dev;
+	} mlxdevm_res;
 };
 
 struct mlx5_db {
@@ -1006,8 +1007,8 @@ typedef void (*mlx5_cmd_cbk_t)(int status, void *context);
 
 enum {
 	MLX5_CMD_ENT_STATE_PENDING_COMP,
-	MLX5_CMD_ENT_STATE_RREF_CLEARED,
 	MLX5_CMD_ENT_STATE_TIMEDOUT,
+	MLX5_CMD_ENT_STATE_RREF_CLEARED,
 };
 
 struct mlx5_cmd_work_ent {
@@ -1352,6 +1353,7 @@ struct mlx5_core_dev *mlx5_lag_get_next_peer_mdev(struct mlx5_core_dev *dev, int
 
 u8 mlx5_lag_get_num_ports(struct mlx5_core_dev *dev);
 void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
+void mlx5_pcie_print_link_status(struct mlx5_core_dev *dev);
 struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev);
 void mlx5_put_uars_page(struct mlx5_core_dev *mdev, struct mlx5_uars_page *up);
 int mlx5_dm_sw_icm_alloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
@@ -1573,6 +1575,7 @@ static inline struct net *mlx5_core_net(struct mlx5_core_dev *dev)
 }
 
 #define MLX5_SW_IMAGE_GUID_MAX_BYTES 9
+
 
 /* MLX5 Diagnostics */
 

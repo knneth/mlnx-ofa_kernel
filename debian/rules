@@ -17,20 +17,24 @@
 
 -include /usr/share/dpkg/architecture.mk
 
-WITH_DKMS ?= 1
+ifeq (,$(findstring modules,${DEB_BUILD_PROFILES}))
+WITH_DKMS = 1
+else
+WITH_DKMS = 0
+endif
+
 WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 ifeq ($(WITH_DKMS),1)
 # 1 for dkms >= 3 . 0 for dkms 2 (or no DKMS support at all)
-DKMS3 = $(shell dpkg-query -W dh-dkms 2>/dev/null | grep  -c 'dkms\s3')
+DKMS3 = $(shell dpkg-query -W -f='$${source:Upstream-Version}' dh-dkms 2>/dev/null | awk -F. '$$1 > 2 {print 1}')
 else
 DKMS3 = 0
 endif
 
 
 pname:=mlnx-ofed-kernel
-psource:=$(pname)-source
 ifeq ($(WITH_DKMS),1)
 pdkms:=$(pname)-dkms
 else
@@ -41,6 +45,11 @@ putils:=$(pname)-utils
 pversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 prel := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-\(.\+\)/\2/p')
 dkms_version := $(pversion)-$(prel)
+
+# for dh_exec:
+export dkms_version
+export pname
+export pversion
 
 export INSTALL_MOD_DIR:=updates
 export INSTALL_MOD_PATH:=$(CURDIR)/debian/$(pdkms)
@@ -82,6 +91,15 @@ ifneq ($(WITH_DKMS),1)
 	make distclean || true
 	make -j$(NJOBS)
 endif
+	# Prepare /etc/infiniband/info
+	echo '#!/bin/sh'						>  debian/info
+	echo								>> debian/info
+	echo 'echo prefix=/usr'						>> debian/info
+	echo 'echo Kernel=`uname -r`'					>> debian/info
+	echo 'echo'							>> debian/info
+	echo 'echo Configure options: --default $$configure_options'	>> debian/info
+	echo 'echo'							>> debian/info
+	chmod 755 debian/info
 override_dh_auto_test:
 
 override_dh_auto_install:
@@ -94,23 +112,6 @@ endif
 endif
 
 
-ifeq ($(WITH_DKMS),1)
-	# For dkms
-	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(dkms_version)
-	cp -a source/compat*		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/include		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/drivers		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/fs			debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/net		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/backports		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version) || true
-	cp source/backports_applied	debian/$(pdkms)/usr/src/$(pname)-$(dkms_version) || true
-	cp -a source/ofed_scripts	debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp -a source/COPYING		debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/configure
-	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/makefile
-	cd debian/$(pdkms)/usr/src/$(pname)-$(dkms_version); ln -s ofed_scripts/Makefile
-	cd debian/$(pdkms)/usr/src; ln -snf $(pname)-$(dkms_version) ofa_kernel-$(pversion)
-endif
 	#
 	# Sources for building stuff over MLNX_OFED
 	#
@@ -118,8 +119,6 @@ endif
 	# new DKMS versions started to remove the whole build directory.
 	# however, some old versions of DKMS are buggy and ignores POST_BUILD
 ifeq ($(WITH_DKMS),1)
-	dh_installdirs -p$(pdkms)  usr/src/ofa_kernel/
-	# copy the ofa-kernel build headers using ofed_scripts/pre_build.sh in the DKMS MAKE step (called from ofed_scripts/pre_build.sh).
 else
 	dh_installdirs -p$(pdkms)  $(mod_dev_dir)
 	cp -a include/			debian/$(pdkms)$(mod_dev_dir)
@@ -136,24 +135,6 @@ ifeq ($(WITH_DKMS),1)
 	dh_installdirs -p$(pdkms)  usr/share/dkms/modules_to_force_install/
 	echo "$(pname)" > debian/$(pdkms)/usr/share/dkms/modules_to_force_install/$(pname).force
 endif
-
-	# For utils
-	dh_installdirs -p$(putils)  etc/infiniband
-	dh_installdirs -p$(putils)  etc/modprobe.d
-	dh_installdirs -p$(putils)  sbin
-	dh_installdirs -p$(putils)  bin
-	dh_installdirs -p$(putils)  usr/bin
-	dh_installdirs -p$(putils)  usr/sbin
-	dh_installdirs -p$(putils)  lib/udev
-	dh_installdirs -p$(putils)  lib/systemd/system
-	dh_installdirs -p$(putils)  lib/udev/rules.d
-	dh_installdirs -p$(putils)  etc/init.d
-	dh_installdirs -p$(putils)  etc/init
-	dh_installdirs -p$(putils)  etc/systemd/system
-	dh_installdirs -p$(putils)  usr/share/mlnx_ofed
-
-	cp source/ofed_scripts/openib.conf debian/$(putils)/etc/infiniband
-	cp source/ofed_scripts/mlx5.conf   debian/$(putils)/etc/infiniband
 ifneq ($(WITH_DKMS),1)
 	$(CURDIR)/ofed_scripts/install_helper $(CURDIR)/debian/$(putils)
 	# For macsec:
@@ -166,43 +147,21 @@ ifneq ($(WITH_DKMS),1)
 	echo "extra:Depends=$$var" >> debian/$(pdkms).substvars
 endif
 
-	install -m 0644 source/ofed_scripts/90-ib.rules   debian/$(putils)/lib/udev/rules.d
-	install -m 0644 source/ofed_scripts/83-mlnx-sf-name.rules   debian/$(putils)/lib/udev/rules.d
-	install -m 0644 ofed_scripts/openibd.service   debian/$(putils)/lib/systemd/system
-	install -m 0644 ofed_scripts/mlnx_interface_mgr\@.service  debian/$(putils)/etc/systemd/system
-
-	# Prepare /etc/infiniband/info
-	echo '#!/bin/bash'						> debian/$(putils)/etc/infiniband/info
-	echo								>> debian/$(putils)/etc/infiniband/info
-	echo 'echo prefix=/usr'						>> debian/$(putils)/etc/infiniband/info
-	echo 'echo Kernel=`uname -r`'					>> debian/$(putils)/etc/infiniband/info
-	echo 'echo'							>> debian/$(putils)/etc/infiniband/info
-	echo 'echo Configure options: --all'				>> debian/$(putils)/etc/infiniband/info
-	echo 'echo'							>> debian/$(putils)/etc/infiniband/info
-	chmod 755 debian/$(putils)/etc/infiniband/info
-
-	install -m 0755 source/ofed_scripts/sf-rep-netdev-rename	debian/$(putils)/lib/udev
-	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
-	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/openibd			debian/$(putils)/etc/init.d/openibd
-	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
-	install -m 0644 source/ofed_scripts/mlnx-bf.conf	debian/$(putils)/etc/modprobe.d
-	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d
-	install -m 0755 source/ofed_scripts/mlnx_interface_mgr_deb.sh	debian/$(putils)/bin/mlnx_interface_mgr.sh
-	install -m 0755 source/ofed_scripts/mlnx_conf_mgr.sh		debian/$(putils)/bin/
-	install -m 0755 source/ofed_scripts/setup_mr_cache.sh		debian/$(putils)/usr/sbin
-	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh		debian/$(putils)/usr/share/mlnx_ofed
-	install -m 0755 ofed_scripts/mlnx_drv_ctl			debian/$(putils)/usr/share/mlnx_ofed
-	install -m 0755 ofed_scripts/mod_load_funcs			debian/$(putils)/usr/share/mlnx_ofed
-
 override_dh_installinit:
+
+# Because of the generated file debian/info:
+override_dh_installinfo:
 
 
 ifneq ($(WITH_DKMS),1)
 override_dh_gencontrol:
 	dh_gencontrol -- -v$(pversion)-$(prel).kver.$(kernelver1)
 endif
+
+override_dh_install:
+	dh_install
+	mv debian/mlnx-ofed-kernel-utils/bin/mlnx_interface_mgr_deb.sh \
+	   debian/mlnx-ofed-kernel-utils/bin/mlnx_interface_mgr.sh
 
 override_dh_installdeb:
 	dh_installdeb

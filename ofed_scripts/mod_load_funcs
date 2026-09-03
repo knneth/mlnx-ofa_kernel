@@ -172,7 +172,7 @@ is_serial()
     if [ "$CONSOLETYPE" = 'serial' ]; then
         return 0
     fi
-    case `tty` in ttyS0)
+    case `tty` in */ttyS*)
         return 0
         ;;
     esac
@@ -252,38 +252,6 @@ echo_warning() {
   echo -n "]"
   echo -e "\r"
   return 1
-}
-
-# Deb only
-get_interface_conf_files()
-{
-    conf_files=/etc/network/interfaces
-    if (grep -w source /etc/network/interfaces 2>/dev/null | grep -qvE "^\s*#" 2>/dev/null); then
-        # get absolute file paths
-        for line in $(grep -w source /etc/network/interfaces 2>/dev/null | grep -vE "^\s*#" 2>/dev/null);
-        do
-            ff=$(echo "$line" | awk '{print $NF}')
-
-            # check if it's absolute path
-            if [ -f "$ff" ]; then
-                conf_files="$conf_files $ff"
-                continue
-            fi
-
-            # check if it's relative path
-            if [ -z "$(ls $ff 2>/dev/null)" ]; then
-                ff="/etc/network/$ff"
-            fi
-
-            # support wildcards
-            for file in $(ls -1 $ff 2>/dev/null)
-            do
-                if [ -f "$file" ]; then
-                    conf_files="$conf_files $file"
-                fi
-            done
-        done
-    fi
 }
 
 check_mlnx_ofed_module() {
@@ -410,29 +378,10 @@ set_modules_to_load() {
         POST_LOAD_MODULES="$POST_LOAD_MODULES rdma_ucm"
     fi
 
-    UNLOAD_MODULES="ib_mthca mlx5_fpga_tools mlx5_fwctl mlx5_dpll mlx5_ib mlx5_core mlx4_ib"
-    UNLOAD_MODULES="$UNLOAD_MODULES ib_ipath ipath_core ib_ehca iw_nes cxgb3i iw_cxgb3 cxgb3 iw_cxgb4 cxgb4i cxgb4"
-    UNLOAD_MODULES="$UNLOAD_MODULES ib_qib mana_ib rnbd_client rnbd_server"
-    UNLOAD_MODULES="$UNLOAD_MODULES eth_ipoib ib_ipoib mlx4_vnic ib_madeye ib_rds hns_roce"
-    UNLOAD_MODULES="$UNLOAD_MODULES rds_rdma rds_tcp rds ib_ucm kdapl ib_srp_target scsi_target ib_srp ib_iser ib_sdp"
-    UNLOAD_MODULES="$UNLOAD_MODULES rdma_ucm rdma_cm iw_cm ib_cm ib_local_sa findex"
-    UNLOAD_MODULES="$UNLOAD_MODULES auxiliary mlxdevm mlx5_vdpa mlx5_vfio_pci"
-    if check_mlnx_ofed_module fwctl >/dev/null; then
-        UNLOAD_MODULES="$UNLOAD_MODULES fwctl"
-    fi
-    UNLOAD_MODULES="$UNLOAD_MODULES ib_sa ib_uverbs ib_umad ib_mad ib_core ib_addr ib_netlink rdma_rxe mlxfw vfio_mdev"
-
     STATUS_MODULES="rdma_ucm ib_srp ib_sdp rdma_cm ib_ipoib mlx5_core mlx5_ib ib_uverbs ib_umad ib_cm ib_core mlxfw"
 
     if check_mlnx_ofed_module scsi_transport_srp >/dev/null; then
-        UNLOAD_MODULES="$UNLOAD_MODULES scsi_transport_srp"
         STATUS_MODULES="$STATUS_MODULES scsi_transport_srp"
-    fi
-    if check_mlnx_ofed_module cls_flower >/dev/null; then
-        UNLOAD_MODULES="$UNLOAD_MODULES cls_flower"
-    fi
-    if check_mlnx_ofed_module virtiofs >/dev/null; then
-        UNLOAD_MODULES="$UNLOAD_MODULES virtiofs"
     fi
 }
 
@@ -515,7 +464,7 @@ is_ref()
 {
     local refcnt
     refcnt=`cat /sys/module/"$1"/refcnt 2> /dev/null`
-    return $refcnt
+    [ "$refcnt" = 0 ] # Return value
 }
 
 get_sw_fw_info()
@@ -587,7 +536,7 @@ collect_debug_stanza() {
 # Create debug info
 get_debug_info()
 {
-    trap '' 2 9 15
+    trap '' 2 15
     if has_doca_sosreport; then
         collect_debug_stanza 'sos report'
     elif [ -x /usr/sbin/sysinfo-snapshot.py ]; then
@@ -657,7 +606,7 @@ ib_set_node_desc()
       fi
       # Wait while node's hostname is set
       NODE_DESC_TIME_BEFORE_UPDATE=${NODE_DESC_TIME_BEFORE_UPDATE:-10}
-      local declare -i UPDATE_TIMEOUT=${NODE_DESC_UPDATE_TIMEOUT:-120}
+      local -i UPDATE_TIMEOUT=${NODE_DESC_UPDATE_TIMEOUT:-120}
       sleep $NODE_DESC_TIME_BEFORE_UPDATE
       # Reread NODE_DESC value
       . $CONFIG
@@ -671,7 +620,7 @@ ib_set_node_desc()
       # Add node description to sysfs
       ibsysdir="/sys/class/infiniband"
       if [ -d ${ibsysdir} ]; then
-          declare -i hca_id=1
+          local -i hca_id=1
           for hca in ${ibsysdir}/*
           do
               if [ -e ${hca}/node_desc ]; then
@@ -944,6 +893,10 @@ load_mlx5() {
         echo_failure $"Loading Mellanox MLX5 HCA driver: "
         return 1
     fi
+
+    if [ "X`check_mlnx_ofed_module mlx5_fwctl || :`" = "Xyes" ]; then
+        load_module mlx5_fwctl
+    fi
     # enable FW tracing
     if [ "X${ENABLE_FW_TRACER}" == "Xyes" ]; then
         for d in mlx5_fw fw_tracer; do
@@ -1165,45 +1118,6 @@ start()
     return $RC
 }
 
-UNLOAD_REC_TIMEOUT=100
-unload_rec()
-{
-        local mod=$1
-        shift
-
-        if is_module $mod ; then
-                ${modprobe} -r $mod >/dev/null 2>&1
-                if [ $? -ne 0 ];then
-                        for dep in `/sbin/lsmod | awk "/^$mod /"'{print $4}' | tr , ' '`
-                        do
-                                # if $dep was not loaded by openibd, don't unload it; fail with error.
-                                # unless force option was given or OS is booting
-                                if ! `echo $UNLOAD_MODULES | grep -q $dep` && [ $FORCE -eq 0 ] && [ "X$RUNMODE" != "Xauto" ]; then
-                                        rm_mod $mod
-                                else
-                                        unload_rec $dep
-                                fi
-                        done
-                fi
-                if is_module $mod ; then
-                        if [ "X$RUNMODE" == "Xauto" ] && [ $UNLOAD_REC_TIMEOUT -gt 0 ]; then
-                                case "$mod" in
-                                        mlx*)
-                                        let UNLOAD_REC_TIMEOUT--
-                                        sleep 1
-                                        unload_rec $mod
-                                        ;;
-                                        *)
-                                        rm_mod $mod
-                                        ;;
-                                esac
-                        else
-                                rm_mod $mod
-                        fi
-                fi
-        fi
-}
-
 rm_mod()
 {
         local mod=$1
@@ -1222,45 +1136,118 @@ rm_mod()
         fi
 }
 
-unload()
-{
-    # Unload module $1
-    local mod=$1
-    local unload_log
+# A single awk function that
+# * checks that number of dependencies of module is same as the reference
+#   count
+# * If not: exits
+# * prints dependencies
+# And all of that in a single awk call
+get_module_deps() {
+    lsmod | awk "/^$1 /"'{
+        cnt=$3
+        commas_str=$4
+        gsub(/[^,]*/, "", commas_str)
+        commas_len=length(commas_str) + 1
+        if ((cnt !=0) && (cnt != commas_len)) exit 4
 
-    if is_module $mod; then
-        case $mod in
-            ib_ipath)
-                # infinipath depends on modprobe.conf remove rule
-                unload_rec $mod
-                sleep 2
-                ;;
-            ib_qib)
-                if [ -s ${_truescale} ]; then
-                    . ${_truescale} stop
-                fi
+        modules_str=$4
+        gsub(/,/, " ", modules_str)
+        print modules_str
+    }'
+}
 
-                if [ -d /ipathfs ]; then
-                    umount /ipathfs
-                    rmdir /ipathfs
-                fi
+# This function wraps a global list (modules_to_keep)
+# It is currently never gets reset, and assuming we have a single
+# recursive modules unloading. If unload_modules_rec is called
+# twice in the same script, this list is shared to both calls.
+is_mod_to_keep() {
+    local m
+    for m in "${modules_to_keep[@]}"; do
+        if [ "$m" = "$1" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
-                unload_rec $mod
-                sleep 2
-                ;;
-            ib_mthca | mlx4_ib | mlx5_ib | ib_ehca | iw_cxgb3 | iw_cxgb4 | iw_nes)
-                unload_rec $mod
-                sleep 2
-                ;;
-            *)
-                unload_rec $mod
-                if [ $? -ne 0 ] || is_module $mod; then
-                    # Try rmmod if modprobe failed: case that previous installation included more IB modules.
-                    unload_rec $mod
-                fi
-                ;;
-        esac
+unload_modules_rec() {
+    local m dep deps trace
+    m=$1
+
+    if ! is_module "$m" ; then
+        return
     fi
+    if is_mod_to_keep "$m"; then
+        return
+    fi
+    #trace="echo"
+    trace=":"
+
+    # Does not fail
+    if ${modprobe} -r "$m" >/dev/null 2>&1; then
+        return
+    fi
+    deps=`get_module_deps "$m"` || {
+        if ( [ "$m" = "nvme" -o "$m" = "nvme_core" ] ) && is_mlx_compat_same; then
+            if [ "$nvme_warning_printed" = 0 ]; then
+                echo_warning "NVME in use, but modules unchanged. Incomplete unload."
+                nvme_warning_printed=1
+            fi
+            modules_to_keep+=("$m")
+            $trace "unload_modules_rec: keeping module $m"
+            return
+        else
+            echo_failure "Error: $m: unload recursive failed: extra dependencies."
+            cleanup
+            exit 1
+        fi
+    }
+    $trace "unload_modules_rec: $m: => $deps"
+    for dep in $deps; do
+        unload_modules_rec "$dep"
+        if is_mod_to_keep "$dep"; then
+            $trace "unload_modules_rec: kept module $dep"
+            if ! is_mod_to_keep "$m"; then
+                modules_to_keep+=("$m")
+                $trace "unload_modules_rec: keeping module $m"
+            fi
+        fi
+    done
+    # Exits on error:
+    if ! is_module "$m" ; then
+        return
+    fi
+    if is_mod_to_keep "$m"; then
+        return
+    fi
+    $trace "unload_modules_rec: $m: unloading"
+    rm_mod "$m"
+}
+
+reset_unload_globals() {
+    nvme_warning_printed=0
+    modules_to_keep=()
+}
+
+unload_modules() {
+    local m
+    reset_unload_globals
+    for m in ib_core mlxfw mlx5_core mlx_compat memtrack; do
+        unload_modules_rec "$m"
+    done
+}
+
+# Is the version of mlx_compat that would be loaded different than one
+# currently loaded?
+#
+# If not, we can try to unload "everything except compat" and expect
+# drivers could be loaded later
+is_mlx_compat_same() {
+    local loaded_srcver curr_srcver
+    loaded_srcver=$(/bin/cat /sys/module/mlx_compat/srcversion 2>/dev/null)
+    curr_srcver=$(/sbin/modinfo -Fsrcversion mlx_compat 2>/dev/null)
+
+    [ "X$loaded_srcver" = "X$curr_srcver" ]
 }
 
 # Refuse to stop if not running automatically (on boot) and some conditions are met
@@ -1352,22 +1339,23 @@ check_if_ok_to_stop() {
         done
     fi
 
-    for mod in ib_isert nvme_rdma nvmet_rdma rpcrdma xprtrdma ib_srpt; do
+    for mod in ib_isert nvme_rdma nvmet_rdma nvme rpcrdma xprtrdma ib_srpt; do
         if is_module $mod; then
             if is_ref $mod; then
                 # A misleading name. If we got here: refcnt=0
                 continue
             fi
+            if [ "$mod" = nvme ]; then
+                if ! check_mlnx_ofed_module "$mod" >/dev/null; then
+                    continue
+                fi
+                if is_mlx_compat_same; then
+                    continue
+                fi
+            fi
             cannot_continue=1
             blocking_modules="${blocking_modules} $mod"
-            case "$mod" in
-            ib_isert) echo "Please close all isert sessions and unload 'ib_isert' module.";;
-            nvme_rdma) echo "Please close all nvme sessions and unload 'nvme_rdma' module.";;
-            nvmet_rdma) echo "Please close all nvmet sessions and unload 'nvmet_rdma' module.";;
-            rpcrdma | xprtrdma | ib_srpt)
-                echo "Please make sure module '$mod' is not in use and unload it."
-                ;;
-            esac
+            echo "Please make sure module '$mod' is not in use and unload it."
         fi
     done
 
@@ -1400,6 +1388,32 @@ stop_ib_bonds() {
             echo -$bond > /sys/class/net/bonding_masters
         fi
     done
+}
+
+MODPROBE_BLOCK_FILE="/run/modprobe.d/mlnx_ofed_stopping.conf"
+
+# Create a file that, which exists, prevents modprobe from loading
+# various modules.
+# Intended to block unintetional modprobes at the time of the stop
+# operation.
+mod_loading_block() {
+    mkdir -p `dirname "$MODPROBE_BLOCK_FILE"`
+    (
+        for mod in mlx_compat mlx5_core mlx5_ib mlx5_fwctl ib_ipoib; do
+            echo "install $mod /bin/true"
+        done
+    ) >"$MODPROBE_BLOCK_FILE"
+
+    # Remove this file on exit
+    # Note: make sure noone else uses an exit trap.
+    trap mod_loading_unblock 0
+}
+
+mod_loading_unblock() {
+    if [ ! -f "$MODPROBE_BLOCK_FILE" ]; then
+        return
+    fi
+    rm -f "$MODPROBE_BLOCK_FILE" &>/dev/null || :
 }
 
 unset_netdev_alias() {
@@ -1436,7 +1450,7 @@ stop_srp_daemon() {
     local srp_daemon_pids
 
     srp_daemon_pids=$(pgrep srp_daemon)
-    if [ "${srp_daemon_pids:-}" != "" ]; then
+    if [ "${srp_daemon_pids:-}" = "" ]; then
         return
     fi
 
@@ -1472,63 +1486,6 @@ stop_mlxfc() {
     fi
 }
 
-# Unload modules listed in UNLOAD_MODULES, potentially 
-# recursively (but recusion can only span modules listed there)
-unload_all_modules() {
-    for mod in  $UNLOAD_MODULES
-    do
-            unload $mod
-    done
-}
-
-unload_mlx_compat() {
-    # Try the old name of this module. This name is pre-4.0. We can probably
-    # drop this one:
-    if is_module compat && (grep -q mlnx /sys/module/compat/parameters/* 2>/dev/null); then
-            unload compat
-    fi
-
-    if is_module nvme_core && is_ref nvme_core; then
-        unload nvme_core
-        unload nvme_keyring
-        unload nvme_auth
-    fi
-
-    if ! is_module mlx_compat; then
-        return
-    fi
-
-    # This is a big hack. Any better alternative than to look for nvme 
-    # that late?
-    if [ ! -d /sys/module/mlx_compat/holders/nvme ]; then
-        unload mlx_compat
-        return
-    fi
-
-    if [ $(cat /sys/module/nvme/refcnt) -eq 0 ]; then
-        unload nvme
-        unload nvme_core
-        unload nvme_keyring
-        unload nvme_auth
-        unload mlx_compat
-    else
-        echo_warning $"mlx_compat is used by NVME. Leaving it loaded."
-        local loaded_srcver=$(/bin/cat /sys/module/mlx_compat/srcversion 2>/dev/null)
-        local curr_srcver=$(/sbin/modinfo mlx_compat 2>/dev/null | grep srcversion | awk '{print $NF}')
-        if [ "X$loaded_srcver" != "X$curr_srcver" ]; then
-            echo_warning $"Detected driver update. To load the new driver version reboot is required."
-        fi
-    fi
-}
-
-# Doesn't memtrack depend on mlx_compat? Or is it an issue of circular
-# dependency? Handle it in the unload functions?
-unload_memtrack() {
-    if is_module memtrack; then
-            unload memtrack
-    fi
-}
-
 # sysctl_perf_tuning was removed in MLNX_OFED 5.4. Remove?
 stop_sysctl_perf_tuning() {
     if  [ -x /sbin/sysctl_perf_tuning ] && [ "X${RUN_SYSCTL}" == "Xyes" ]; then
@@ -1546,16 +1503,16 @@ stop()
 {
     check_if_ok_to_stop
     stop_ib_bonds
+    mod_loading_block
     unset_netdev_alias
     stop_ipoib_ha
     stop_srp_daemon
     stop_qlgc_vnic
     stop_mlxfc
-    unload_all_modules
-    unload_mlx_compat
-    unload_memtrack
+    unload_modules
     stop_sysctl_perf_tuning
     stop_mlnx_affinity
+    mod_loading_unblock
 
     /bin/rm -rf /dev/infiniband # Why?
     echo_success $"Unloading HCA driver: "
@@ -1653,7 +1610,7 @@ trap_handler()
 }
 
 trap_errors() {
-    trap 'trap_handler' 2 9 15
+    trap 'trap_handler' 2 15
 }
 
 set_force() {
@@ -1692,6 +1649,7 @@ global_init() {
     read_config
     set_wd
     init_environment
+    reset_unload_globals
     set_start_time
     set_run_mode "$2"
     set_modprobe_ip

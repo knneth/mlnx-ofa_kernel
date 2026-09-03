@@ -68,7 +68,7 @@ int is_non_trackable_free_func(const char *func_name);
 
 /* WA - In this function handles confirm
    the the function name is
-   '__ib_umem_release' or 'ib_umem_get'
+   '__ib_umem_release' or 'ib_umem_get_va'
    In this case we won't track the
    memory there because the kernel
    was the one who allocated it.

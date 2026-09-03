@@ -207,6 +207,27 @@ is_scripts_change_only()
 	fi
 }
 
+# Returns 0 if the commit changes at least one C/H source file (i.e. metadata is
+# required), 1 otherwise. Commits that don't touch any C/H file are always
+# upstream_status=ignore, so we don't enforce metadata on them.
+touches_c_or_h_files()
+{
+	local cid=$1; shift
+
+	for ff in $(git log -1 --name-only --pretty=format: $cid 2>/dev/null)
+	do
+		if [ -z "$ff" ]; then
+			continue
+		fi
+		case $ff in
+			*.c | *.h)
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
 # Helper function to set tracking issue and upstream status
 # Returns 0 if valid, 1 if invalid
 set_revert_tracking() {
@@ -634,6 +655,14 @@ do
 		continue
 	fi
 	author=$(git log --format="%aN" $cid| head -1 | sed -e 's/ /_/g')
+
+	# Commits that don't touch any C/H source file don't require metadata
+	# (their upstream_status is always 'ignore'), so skip them entirely - no
+	# Change-Id is enforced and no metadata entry is created.
+	if ! touches_c_or_h_files $cid; then
+		echo "-I- $cid '$(get_subject $cid)' doesn't change any C/H file, skipping metadata."
+		continue
+	fi
 
 	changeID=
 	subject=

@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Ia3896dfaa932054dbc0fd3659d3a44a9d88984fc; subject=net/mlx5e: Report zero bandwidth for non-ETS traffic classes; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: ffb1873b2df1, tag: v7.2-rc5;
+Change-Id=I0b1c2a09661153e57969520aae8bbe7a443a1761; subject=net/mlx5e: Reject unsupported CB Shaper TSA in ETS validation; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 9173e1d3c7c7, tag: v7.2-rc5;

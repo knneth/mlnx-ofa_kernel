@@ -36,4 +36,8 @@ static __always_inline void __read_once_size(const volatile void *p, void *res, 
 }
 #endif
 
+#ifndef HAVE_IS_UNSIGNED_TYPE
+#define is_unsigned_type(type) (!is_signed_type(type))
+#endif
+
 #endif /* _COMPAT_LINUX_COMPILER_H */

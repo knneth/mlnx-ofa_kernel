@@ -82,14 +82,12 @@ static int get_ucap_from_devt(dev_t devt, u64 *idx_mask)
 
 static int get_devt_from_fd(unsigned int fd, dev_t *ret_dev)
 {
-	struct file *file;
+	CLASS(fd, f)(fd);
 
-	file = fget(fd);
-	if (!file)
+	if (fd_empty(f) || fd_file(f)->f_op != &ucaps_cdev_fops)
 		return -EBADF;
 
-	*ret_dev = file_inode(file)->i_rdev;
-	fput(file);
+	*ret_dev = file_inode(fd_file(f))->i_rdev;
 	return 0;
 }
 
@@ -160,7 +158,7 @@ int ib_create_ucap(enum rdma_user_cap type)
 		return 0;
 	}
 
-	ucap = kzalloc(sizeof(*ucap), GFP_KERNEL);
+	ucap = kzalloc_obj(*ucap);
 	if (!ucap) {
 		ret = -ENOMEM;
 		goto unlock;

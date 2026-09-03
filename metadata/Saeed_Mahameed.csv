@@ -1,0 +1,5 @@
+sep=;
+Change-Id=Icbacb72511c92da75028b4fb2e42b5c5a2ae30fc; subject=net/mlx5e: Fix NULL deref in mlx5e_fs_get_tc; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I1da2d4e48afb9e3f2ab3624abb125bef0247b69c; subject=net/mlx5e: Avoid hp_oob_cnt sysfs fs re-read; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I22f4383c4fcd6b49f9f8e1eed865c8175a63ea53; subject=net/mlx5e: Manage hairpin sysfs across profile attach; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I2f080c3f75a480cfdf9c81c2a9516e138e8d449b; subject=net/mlx5e: Pass priv to hairpin sysfs helpers; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;

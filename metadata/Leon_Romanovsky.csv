@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Ibb27d925fce440b45e1b2f7e3a1d4cccc743ed71; subject=RDMA/mlx5: Release the HW‑provided UAR index rather than the SW one; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: 449ae7927152, tag: v7.2-rc1;

@@ -402,7 +402,7 @@ int mlx5e_set_prio_hairpin_rate(struct mlx5e_priv *priv,
 				u16 prio, int rate);
 int mlx5e_hairpin_oob_cnt_enable(struct mlx5e_priv *priv, struct net_device *peer_dev);
 int mlx5e_hairpin_oob_cnt_disable(struct mlx5e_priv *priv);
-void mlx5e_hairpin_oob_cnt_get(struct mlx5e_priv *priv, u64 *cnt);
+void mlx5e_hairpin_oob_cnt_get(struct mlx5e_tc_table *tc, u64 *cnt);
 #else /* CONFIG_MLX5_CLS_ACT */
 static inline struct mlx5e_tc_table *mlx5e_tc_table_alloc(void) { return NULL; }
 static inline void mlx5e_tc_table_free(struct mlx5e_tc_table *tc) {}

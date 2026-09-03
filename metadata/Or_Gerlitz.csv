@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I15046e98514f80a2815670107977c5d7b30aaaa6; subject=RDMA/cma: Fix hardware address comparison length in netevent callback; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=1234567890; general=upstream commit ID: 18313833e2c6, tag: v7.2-rc4;

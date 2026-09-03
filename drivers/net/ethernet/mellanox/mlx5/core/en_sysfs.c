@@ -78,11 +78,15 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
 		return -EINVAL;
 
 	rtnl_lock();
-	netdev_set_num_tc(netdev, tc_num);
+	netdev_lock(netdev);
+	mutex_lock(&priv->state_lock);
 	mqprio.qopt.num_tc = tc_num;
-	mlx5e_setup_tc_mqprio(priv, &mqprio);
+	err = mlx5e_setup_tc_mqprio(priv, &mqprio);
+	mutex_unlock(&priv->state_lock);
+	netdev_unlock(netdev);
 	rtnl_unlock();
-	return count;
+
+	return err ? err : count;
 }
 
 static  ssize_t mlx5e_show_maxrate(struct device *device,
@@ -319,7 +323,7 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
 
 	rtnl_unlock();
 
-	return  len;
+	return len;
 }
 
 static ssize_t mlx5e_store_hfunc(struct device *device,
@@ -352,10 +356,13 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
 		if (ch_count > mlx5e_rqt_max_num_channels_allowed_for_xor8())
 			goto unlock;
 	}
-	mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
+	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
 					&ethtool_hfunc, NULL);
 	mutex_unlock(&priv->state_lock);
 	rtnl_unlock();
+
+	if (err)
+		return err;
 
 	return count;
 
@@ -1172,9 +1179,9 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 	int num_hp;
 	int err;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	err = sscanf(buf, "%d %15s", &num_hp, ifname);
 	if (err != 2)
@@ -1187,8 +1194,10 @@ static ssize_t prio_hp_num_store(struct device *device, struct device_attribute 
 	mutex_lock(&priv->state_lock);
 
 	peer_dev = __dev_get_by_name(dev_net(priv->netdev), ifname);
-	if (!peer_dev)
-		return -EINVAL;
+	if (!peer_dev) {
+		err = -EINVAL;
+		goto err_config;
+	}
 
 	if (num_hp && !tc->num_prio_hp) {
 		err = mlx5e_prio_hairpin_mode_enable(priv, num_hp, peer_dev);
@@ -1221,9 +1230,9 @@ static ssize_t prio_hp_num_show(struct device *device, struct device_attribute *
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%d\n", tc->num_prio_hp);
@@ -1242,9 +1251,9 @@ static ssize_t hp_oob_cnt_mode_store(struct device *device, struct device_attrib
 	char mode[5];
 	int err;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	err = sscanf(buf, "%s %15s", mode, ifname);
 	if (err != 2)
@@ -1257,8 +1266,10 @@ static ssize_t hp_oob_cnt_mode_store(struct device *device, struct device_attrib
 	mutex_lock(&priv->state_lock);
 
 	peer_dev = __dev_get_by_name(dev_net(priv->netdev), ifname);
-	if (!peer_dev)
-		return -EINVAL;
+	if (!peer_dev) {
+		err = -EINVAL;
+		goto err_config;
+	}
 
 	if (!strcmp(mode, "on") && !tc->hp_oob) {
 		err = mlx5e_hairpin_oob_cnt_enable(priv, peer_dev);
@@ -1291,9 +1302,9 @@ static ssize_t hp_oob_cnt_mode_show(struct device *device, struct device_attribu
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%s\n", tc->hp_oob ? "on" : "off");
@@ -1310,12 +1321,12 @@ static ssize_t hp_oob_cnt_show(struct device *device, struct device_attribute *a
 	ssize_t result;
 	u64 oob_cnt;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
-	mlx5e_hairpin_oob_cnt_get(priv, &oob_cnt);
+	mlx5e_hairpin_oob_cnt_get(tc, &oob_cnt);
 	result = sprintf(buf, "%llu\n", oob_cnt);
 	mutex_unlock(&priv->state_lock);
 
@@ -1335,9 +1346,9 @@ static ssize_t pp_burst_size_store(struct device *device, struct device_attribut
 	int burst_size;
 	int err;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	if (!MLX5_CAP_QOS(priv->mdev, packet_pacing_burst_bound)) {
 		netdev_warn(priv->netdev, "Packet pacing burst size config is not supported by the device\n");
@@ -1369,9 +1380,9 @@ static ssize_t pp_burst_size_show(struct device *device, struct device_attribute
 	struct mlx5e_tc_table *tc = mlx5e_fs_get_tc(priv->fs);
 	ssize_t result;
 
-	/* Some profiles don't support hp due to lack of tc support*/
-	 if (!tc)
-		 return -EOPNOTSUPP;
+	/* Some profiles don't support hp due to lack of tc support */
+	if (!tc)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&priv->state_lock);
 	result = sprintf(buf, "%d\n", tc->max_pp_burst_size);
@@ -1403,10 +1414,15 @@ static int hp_sysfs_init(struct mlx5e_priv *priv)
 	for (i = 0; i < ARRAY_SIZE(mlx5_class_attributes); i++) {
 		err = device_create_file(device, mlx5_class_attributes[i]);
 		if (err)
-			return err;
+			goto err_remove_files;
 	}
 
 	return 0;
+
+err_remove_files:
+	while (--i >= 0)
+		device_remove_file(device, mlx5_class_attributes[i]);
+	return err;
 }
 
 static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
@@ -1420,13 +1436,49 @@ static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 
 #else
 
-int hp_sysfs_init(struct mlx5e_priv *priv)
+static int hp_sysfs_init(struct mlx5e_priv *priv)
 { return 0; }
 
-void hp_sysfs_cleanup(struct mlx5e_priv *priv)
+static void hp_sysfs_cleanup(struct mlx5e_priv *priv)
 {}
 
 #endif /*CONFIG_MLX5_CLS_ACT*/
+
+int mlx5e_hp_sysfs_create(struct mlx5e_priv *priv)
+{
+	struct net_device *dev = priv->netdev;
+	int err;
+
+	if (mlx5_core_is_sf(priv->mdev))
+		return 0;
+
+	if (dev->reg_state != NETREG_REGISTERED)
+		return 0;
+
+	if (!mlx5e_fs_get_tc(priv->fs))
+		return 0;
+
+	if (test_bit(MLX5E_STATE_HP_SYSFS_CREATED, &priv->state))
+		return 0;
+
+	err = hp_sysfs_init(priv);
+	if (err)
+		return err;
+
+	set_bit(MLX5E_STATE_HP_SYSFS_CREATED, &priv->state);
+	return 0;
+}
+
+void mlx5e_hp_sysfs_remove(struct mlx5e_priv *priv)
+{
+	if (mlx5_core_is_sf(priv->mdev))
+		return;
+
+	if (!test_and_clear_bit(MLX5E_STATE_HP_SYSFS_CREATED, &priv->state))
+		return;
+
+	hp_sysfs_cleanup(priv);
+}
 
 int mlx5e_sysfs_create(struct net_device *dev)
 {
@@ -1459,9 +1511,9 @@ int mlx5e_sysfs_create(struct net_device *dev)
 	if (err)
 		goto remove_qos_group;
 
-	err = hp_sysfs_init(priv);
+	err = mlx5e_hp_sysfs_create(priv);
 	if (err)
-		goto remove_debug_group;
+		netdev_warn(dev, "%s: failed to create hairpin sysfs, %d\n", __func__, err);
 
 	mlx5_eswitch_compat_sysfs_init(dev);
 
@@ -1469,6 +1521,8 @@ int mlx5e_sysfs_create(struct net_device *dev)
 		return 0;
 
 	res->compat.ecn_root_kobj = kobject_create_and_add("ecn", &dev->dev.kobj);
+	if (!res->compat.ecn_root_kobj)
+		return 0;
 
 	for (i = 1; i < MLX5E_CONG_PROTOCOL_NUM; i++) {
 		res->compat.ecn_ctx[i].ecn_proto_kobj =
@@ -1479,8 +1533,6 @@ int mlx5e_sysfs_create(struct net_device *dev)
 
 	return 0;
 
-remove_debug_group:
-	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 remove_qos_group:
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 remove_settings_group:
@@ -1498,12 +1550,12 @@ void mlx5e_sysfs_remove(struct net_device *dev)
 	if (mlx5_core_is_sf(priv->mdev))
 		return;
 
+	mlx5e_hp_sysfs_remove(priv);
 	mlx5_eswitch_compat_sysfs_cleanup(dev);
 
 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
 	sysfs_remove_group(&dev->dev.kobj, &debug_group);
 	sysfs_remove_group(&dev->dev.kobj, &settings_group);
-	hp_sysfs_cleanup(priv);
 
 	if (mlx5_core_is_vf(priv->mdev))
 		return;

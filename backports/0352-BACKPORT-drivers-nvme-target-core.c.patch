@@ -1,0 +1,79 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/target/core.c
+
+---
+ drivers/nvme/target/core.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/nvme/target/core.c b/drivers/nvme/target/core.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/nvme/target/core.c
++++ b/drivers/nvme/target/core.c
+@@ -7,7 +7,9 @@
+ #undef pr_fmt
+ #endif
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#ifdef HAVE_LINUX_HEX_H
+ #include <linux/hex.h>
++#endif
+ #include <linux/module.h>
+ #include <linux/random.h>
+ #include <linux/rculist.h>
+@@ -689,7 +691,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns *ns)
+ 		nvmet_bdev_ns_revalidate(ns);
+ 	else
+ 		nvmet_file_ns_revalidate(ns);
+-
+ 	return oldsize != ns->size;
+ }
+ 
+@@ -751,7 +752,7 @@ int nvmet_ns_enable(struct nvmet_ns *ns)
+ 
+ 	list_for_each_entry(ctrl, &subsys->ctrls, subsys_entry)
+ 		nvmet_p2pmem_ns_add_p2p(ctrl, ns);
+-	
++
+ 	if (subsys->offloadble) {
+ 		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
+ 		if (!ns->pdev) {
+@@ -937,10 +938,20 @@ static void nvmet_update_sq_head(struct nvmet_req *req)
+ 	if (req->sq->size) {
+ 		u32 old_sqhd, new_sqhd;
+ 
++#ifdef HAVE_TRY_CMPXCHG
+ 		old_sqhd = READ_ONCE(req->sq->sqhd);
++#endif
+ 		do {
++#ifndef HAVE_TRY_CMPXCHG
++		old_sqhd = req->sq->sqhd;
++#endif
+ 			new_sqhd = (old_sqhd + 1) % req->sq->size;
++#ifndef HAVE_TRY_CMPXCHG
++		} while (cmpxchg(&req->sq->sqhd, old_sqhd, new_sqhd) !=
++						       old_sqhd);
++#else
+ 		} while (!try_cmpxchg(&req->sq->sqhd, &old_sqhd, new_sqhd));
++#endif
+ 	}
+ 	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
+ }
+@@ -1328,9 +1339,11 @@ static u16 nvmet_parse_io_cmd(struct nvmet_req *req)
+ 			ret = nvmet_bdev_parse_io_cmd(req);
+ 		break;
+ 	case NVME_CSI_ZNS:
++#ifdef HAVE_BIO_ADD_ZONE_APPEND_PAGE
+ 		if (IS_ENABLED(CONFIG_BLK_DEV_ZONED))
+ 			ret = nvmet_bdev_zns_parse_io_cmd(req);
+ 		else
++#endif
+ 			ret = NVME_SC_INVALID_IO_CMD_SET;
+ 		break;
+ 	default:
+@@ -1921,6 +1934,7 @@ init_pr_fail:
+ 	mutex_unlock(&subsys->lock);
+ 	nvmet_stop_keep_alive_timer(ctrl);
+ 	ida_free(&cntlid_ida, ctrl->cntlid);
++
+ out_free_cqs:
+ 	kfree(ctrl->cqs);
+ out_free_sqs:

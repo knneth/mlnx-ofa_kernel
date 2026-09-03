@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I135df2871523ed19fd62c84bca56d440368f5ea6; subject=net/mlx5e: Disbale SKPRIO<->UP mapping from sysfs; feature=mlx5_sysfs_ecn_mstdump; upstream_status=NA; upstream_issue=; general=;

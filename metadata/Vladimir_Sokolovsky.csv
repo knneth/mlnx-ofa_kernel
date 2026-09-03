@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I3deeb7fbb866f1698619dbaa9bc231b416fc12f5; subject=net/mlx5: Host PF/VF vport state sysfs control via ECPF; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I53a44cf57385748cf6c7d03adf2505b1e05f4ead; subject=ofed_scripts/82-net-setup-link.rules: Add phys_switch_id and phys_port_name checks for 0x101e rule; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;

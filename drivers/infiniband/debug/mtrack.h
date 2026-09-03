@@ -301,7 +301,7 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 		if (size_ptr != NULL) 						\
 			*size_ptr = __memtrack_size;				\
 	} 									\
-	if (IS_VALID_ADDR(__memtrack_addr)) {					\
+	if (IS_VALID_ADDR(__memtrack_addr) && !is_non_trackable_alloc_func(__func__)) {					\
 		memtrack_alloc(MEMTRACK_KMALLOC, 0UL, (unsigned long)(__memtrack_addr), __memtrack_size, 0UL, 0, __FILE__, __LINE__, GFP_KERNEL); \
 	}									\
 	__memtrack_addr;							\
@@ -451,7 +451,7 @@ static inline unsigned long mlx5_mtrack_get_zeroed_page(gfp_t gfp_mask)
 
 #define kstrndup(src, max, flgs) ({						\
 	void *__memtrack_addr = NULL;						\
-	size_t sz = strlen(src) + 1;						\
+	size_t sz = strnlen(src, max) + 1;					\
 										\
 	if (memtrack_inject_error(THIS_MODULE, __FILE__, "kstrndup", __func__, __LINE__)) \
 		MEMTRACK_ERROR_INJECTION_MESSAGE(THIS_MODULE, __FILE__, __LINE__, __func__, "kstrndup");\

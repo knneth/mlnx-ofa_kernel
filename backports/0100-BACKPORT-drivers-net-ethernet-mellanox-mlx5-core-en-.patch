@@ -1,0 +1,25 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/act/mirred.c
+@@ -121,10 +121,12 @@ tc_act_can_offload_mirred(struct mlx5e_tc_act_parse_state *parse_state,
+ 		return false;
+ 	}
+ 
++#ifdef HAVE_NETIF_IS_BAREUDP
+ 	if (parse_state->mpls_push && !netif_is_bareudp(out_dev)) {
+ 		NL_SET_ERR_MSG_MOD(extack, "mpls is supported only through a bareudp device");
+ 		return false;
+ 	}
++#endif
+ 
+ 	if (parse_state->eth_pop && !parse_state->mpls_push) {
+ 		NL_SET_ERR_MSG_MOD(extack, "vlan pop eth is supported only with mpls push");

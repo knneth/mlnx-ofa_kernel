@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Id4af3dd4b30501f1775a2727cc2601a177ac2651; subject=net/mlx5: E-Switch, fix zero num_dest in prio_tag egress vlan rule; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=0123456789; general=upstream commit ID: d12956d083eb, tag: v7.2-rc5;

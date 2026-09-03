@@ -1,0 +1,96 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/core.c
+
+---
+ net/mlxdevm/core.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/net/mlxdevm/core.c b/net/mlxdevm/core.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/mlxdevm/core.c
++++ b/net/mlxdevm/core.c
+@@ -311,10 +311,12 @@ EXPORT_SYMBOL_GPL(mlxdevm_net);
+ 
+ void devm_assert_locked(struct mlxdevm *mlxdevm)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink) {
+ 		devl_assert_locked(mlxdevm->devlink);
+ 		return;
+ 	}
++#endif
+ 	lockdep_assert_held(&mlxdevm->lock);
+ }
+ EXPORT_SYMBOL_GPL(devm_assert_locked);
+@@ -332,30 +334,34 @@ EXPORT_SYMBOL_GPL(devl_lock_is_held);
+ #endif
+ void devm_lock(struct mlxdevm *mlxdevm)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink) {
+ 		devl_lock(mlxdevm->devlink);
+ 		return;
+ 	}
++#endif
+ 	mutex_lock(&mlxdevm->lock);
+ }
+ EXPORT_SYMBOL_GPL(devm_lock);
+ 
+-#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ int devm_trylock(struct mlxdevm *mlxdevm)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink)
+ 		return devl_trylock(mlxdevm->devlink);
++#endif
+ 	return mutex_trylock(&mlxdevm->lock);
+ }
+ EXPORT_SYMBOL_GPL(devm_trylock);
+-#endif
+ 
+ void devm_unlock(struct mlxdevm *mlxdevm)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink) {
+ 		devl_unlock(mlxdevm->devlink);
+ 		return;
+ 	}
++#endif
+ 	mutex_unlock(&mlxdevm->lock);
+ }
+ EXPORT_SYMBOL_GPL(devm_unlock);
+@@ -456,8 +462,10 @@ int mlxdevm_register(struct mlxdevm *mlxdevm)
+ {
+ 	int err;
+ 
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink)
+ 		return devm_register(mlxdevm);
++#endif
+ 	devm_lock(mlxdevm);
+ 	err = devm_register(mlxdevm);
+ 	devm_unlock(mlxdevm);
+@@ -482,10 +490,12 @@ EXPORT_SYMBOL_GPL(devm_unregister);
+ 
+ void mlxdevm_unregister(struct mlxdevm *mlxdevm)
+ {
++#ifdef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ 	if (mlxdevm->devlink) {
+ 		devm_unregister(mlxdevm);
+ 		return;
+ 	}
++#endif
+ 	devm_lock(mlxdevm);
+ 	devm_unregister(mlxdevm);
+ 	devm_unlock(mlxdevm);
+@@ -538,6 +548,10 @@ struct mlxdevm *__mlxdevm_alloc(const struct mlxdevm_ops *ops, size_t priv_size,
+ 	INIT_LIST_HEAD(&mlxdevm->trap_group_list);
+ 	INIT_LIST_HEAD(&mlxdevm->trap_policer_list);
+ 	INIT_RCU_WORK(&mlxdevm->rwork, mlxdevm_release);
++#ifndef HAVE_DEVLINK_HAS_RATE_FUNCTIONS
++	INIT_LIST_HEAD(&mlxdevm->rate_node_list);
++	init_rwsem(&mlxdevm->rate_node_rwsem);
++#endif
+ 	lockdep_register_key(&mlxdevm->lock_key);
+ 	mutex_init(&mlxdevm->lock);
+ 	lockdep_set_class(&mlxdevm->lock, &mlxdevm->lock_key);

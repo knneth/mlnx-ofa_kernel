@@ -31,9 +31,6 @@
 #include "nvme.h"
 #include "fabrics.h"
 
-#ifdef CONFIG_NVFS
-#include "nvfs.h"
-#endif
 
 #define NVME_RDMA_CM_TIMEOUT_MS		3000		/* 3 second */
 
@@ -226,7 +223,7 @@ static struct nvme_rdma_qe *nvme_rdma_alloc_ring(struct ib_device *ibdev,
 	struct nvme_rdma_qe *ring;
 	int i;
 
-	ring = kcalloc(ib_queue_size, sizeof(struct nvme_rdma_qe), GFP_KERNEL);
+	ring = kzalloc_objs(struct nvme_rdma_qe, ib_queue_size);
 	if (!ring)
 		return NULL;
 
@@ -311,7 +308,7 @@ static int nvme_rdma_init_request(struct blk_mq_tag_set *set,
 	struct nvme_rdma_queue *queue = &ctrl->queues[queue_idx];
 
 	nvme_req(rq)->ctrl = &ctrl->ctrl;
-	req->sqe.data = kzalloc(sizeof(struct nvme_command), GFP_KERNEL);
+	req->sqe.data = kzalloc_obj(struct nvme_command);
 	if (!req->sqe.data)
 		return -ENOMEM;
 
@@ -386,7 +383,7 @@ nvme_rdma_find_get_device(struct rdma_cm_id *cm_id)
 			goto out_unlock;
 	}
 
-	ndev = kzalloc(sizeof(*ndev), GFP_KERNEL);
+	ndev = kzalloc_obj(*ndev);
 	if (!ndev)
 		goto out_err;
 
@@ -1244,9 +1241,6 @@ static int nvme_rdma_inv_rkey(struct nvme_rdma_queue *queue,
 	return ib_post_send(queue->qp, &wr, NULL);
 }
 
-#ifdef CONFIG_NVFS
-#include "nvfs-rdma.h"
-#endif
 static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
 {
 	struct nvme_rdma_request *req = blk_mq_rq_to_pdu(rq);
@@ -1257,11 +1251,6 @@ static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
 		sg_free_table_chained(&req->metadata_sgl->sg_table,
 				      NVME_INLINE_METADATA_SG_CNT);
 	}
-
-#ifdef CONFIG_NVFS
-	if (nvme_rdma_nvfs_unmap_data(ibdev, rq))
-		return;
-#endif
 
 	ib_dma_unmap_sg(ibdev, req->data_sgl.sg_table.sgl, req->data_sgl.nents,
 			rq_dma_dir(rq));
@@ -1519,17 +1508,6 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
 	if (ret)
 		return -ENOMEM;
 
-#ifdef CONFIG_NVFS
-        {
-        bool is_nvfs_io = false;
-        ret = nvme_rdma_nvfs_map_data(ibdev, rq, &is_nvfs_io, count);
-        if (is_nvfs_io) {
-	        if (ret)
-	               goto out_free_table;
-                return 0;
-	}
-        }
-#endif
 	req->data_sgl.nents = blk_rq_map_sg(rq, req->data_sgl.sg_table.sgl);
 
 	*count = ib_dma_map_sg(ibdev, req->data_sgl.sg_table.sgl,
@@ -2261,6 +2239,13 @@ out_fail:
 	nvme_rdma_reconnect_or_remove(ctrl, ret);
 }
 
+static bool nvme_rdma_supports_pci_p2pdma(struct nvme_ctrl *ctrl)
+{
+	struct nvme_rdma_ctrl *r_ctrl = to_rdma_ctrl(ctrl);
+
+	return ib_dma_pci_p2p_dma_supported(r_ctrl->device->dev);
+}
+
 static const struct nvme_ctrl_ops nvme_rdma_ctrl_ops = {
 	.name			= "rdma",
 	.module			= THIS_MODULE,
@@ -2274,6 +2259,8 @@ static const struct nvme_ctrl_ops nvme_rdma_ctrl_ops = {
 	.delete_ctrl		= nvme_rdma_delete_ctrl,
 	.get_address		= nvmf_get_address,
 	.stop_ctrl		= nvme_rdma_stop_ctrl,
+	.get_virt_boundary	= nvme_get_virt_boundary,
+	.supports_pci_p2pdma	= nvme_rdma_supports_pci_p2pdma,
 };
 
 /*
@@ -2311,7 +2298,7 @@ static struct nvme_rdma_ctrl *nvme_rdma_alloc_ctrl(struct device *dev,
 	struct nvme_rdma_ctrl *ctrl;
 	int ret;
 
-	ctrl = kzalloc(sizeof(*ctrl), GFP_KERNEL);
+	ctrl = kzalloc_obj(*ctrl);
 	if (!ctrl)
 		return ERR_PTR(-ENOMEM);
 	ctrl->ctrl.opts = opts;
@@ -2361,8 +2348,7 @@ static struct nvme_rdma_ctrl *nvme_rdma_alloc_ctrl(struct device *dev,
 	ctrl->ctrl.kato = opts->kato;
 
 	ret = -ENOMEM;
-	ctrl->queues = kcalloc(ctrl->ctrl.queue_count, sizeof(*ctrl->queues),
-				GFP_KERNEL);
+	ctrl->queues = kzalloc_objs(*ctrl->queues, ctrl->ctrl.queue_count);
 	if (!ctrl->queues)
 		goto out_free_ctrl;
 
@@ -2504,3 +2490,4 @@ module_exit(nvme_rdma_cleanup_module);
 
 MODULE_DESCRIPTION("NVMe host RDMA transport driver");
 MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("nvme-rdma");

@@ -1,0 +1,8 @@
+sep=;
+Change-Id=Ic1831de3c1851d16d531e52836aed07c45308cac; subject=net/mlx5: Add command to control virtual function's roce; feature=mlx5_vf_roce_cmd; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I97162679bd3e23257f7cf7230d1f79eec52f1814; subject=net/mlx5: sysfs for vf roce control interface; feature=mlx5_vf_roce_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ic083e1661e502be815d7af9babbf523328041a68; subject=net/mlx5e: sysfs for priority2buffer and buffer size; feature=mlx5e_rx_buffer_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If9328d2cc441096d597f56e0f0f03dda3f65b992; subject=net/mlx5e: display receive buffer's xoff/xon_threshold; feature=mlx5e_rx_buffer_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I3e8a074cc4dd3e2fad1d9c0501efd35bfb76333e; subject=net/mlx5e: Set number of tc to eight when trust state is dscp; feature=mlx5e_dscp2prio; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I1049ba739c4420eb3c5124e9708e04b89c6cb7de; subject=mlx5/core: debug/diag counter firmware command; feature=mlx5_diag_cnt; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I7f8075e19fbac39964d0ecc677cae7bd9b03af85; subject=net/mlx5: Expose VF rate limit to BF2; feature=vf_group_rate_limit; upstream_status=NA; upstream_issue=; general=;

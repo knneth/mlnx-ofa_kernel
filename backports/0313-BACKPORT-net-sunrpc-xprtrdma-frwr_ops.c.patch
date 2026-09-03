@@ -1,0 +1,220 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/frwr_ops.c
+
+---
+ net/sunrpc/xprtrdma/frwr_ops.c | 46 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+diff --git a/net/sunrpc/xprtrdma/frwr_ops.c b/net/sunrpc/xprtrdma/frwr_ops.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/sunrpc/xprtrdma/frwr_ops.c
++++ b/net/sunrpc/xprtrdma/frwr_ops.c
+@@ -43,7 +43,9 @@
+ #include <linux/sunrpc/svc_rdma.h>
+ 
+ #include "xprt_rdma.h"
++#ifdef HAVE_TRACE_RPCRDMA_H
+ #include <trace/events/rpcrdma.h>
++#endif
+ 
+ #ifdef CONFIG_NVFS
+ #define NVFS_FRWR
+@@ -51,6 +53,12 @@
+ #include "nvfs_rpc_rdma.h"
+ #endif
+ 
++#if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
++#ifndef RPCDBG_FACILITY
++#define RPCDBG_FACILITY    RPCDBG_TRANS
++#endif
++#endif
++
+ static void frwr_cid_init(struct rpcrdma_ep *ep,
+ 			  struct rpcrdma_mr *mr)
+ {
+@@ -63,7 +71,9 @@ static void frwr_cid_init(struct rpcrdma_ep *ep,
+ static void frwr_mr_unmap(struct rpcrdma_mr *mr)
+ {
+ 	if (mr->mr_device) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mr_unmap(mr);
++#endif
+ #ifdef CONFIG_NVFS
+ 		if (rpcrdma_nvfs_unmap_data(mr->mr_device->dma_device,
+ 					    mr->mr_sg, mr->mr_nents, mr->mr_dir))
+@@ -90,8 +100,10 @@ void frwr_mr_release(struct rpcrdma_mr *mr)
+ 	frwr_mr_unmap(mr);
+ 
+ 	rc = ib_dereg_mr(mr->mr_ibmr);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	if (rc)
+ 		trace_xprtrdma_frwr_dereg(mr, rc);
++#endif
+ 	kfree(mr->mr_sg);
+ 	kfree(mr);
+ }
+@@ -162,7 +174,9 @@ int frwr_mr_init(struct rpcrdma_xprt *r_xprt, struct rpcrdma_mr *mr)
+ 
+ out_mr_err:
+ 	kfree(sg);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_frwr_alloc(mr, PTR_ERR(frmr));
++#endif
+ 	return PTR_ERR(frmr);
+ }
+ 
+@@ -436,16 +450,22 @@ finish:
+ 	mr->mr_handle = ibmr->rkey;
+ 	mr->mr_length = ibmr->length;
+ 	mr->mr_offset = ibmr->iova;
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_mr_map(mr);
++#endif
+ 
+ 	return 0;
+ 
+ out_dmamap_err:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_frwr_sgerr(mr, i);
++#endif
+ 	return -EIO;
+ 
+ out_mapmr_err:
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_frwr_maperr(mr, n);
++#endif
+ 	return -EIO;
+ }
+ 
+@@ -458,11 +478,13 @@ out_mapmr_err:
+  */
+ static void frwr_wc_fastreg(struct ib_cq *cq, struct ib_wc *wc)
+ {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	struct ib_cqe *cqe = wc->wr_cqe;
+ 	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
+ 
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
+ 	trace_xprtrdma_wc_fastreg(wc, &mr->mr_cid);
++#endif
+ 
+ 	rpcrdma_flush_disconnect(cq->cq_context, wc);
+ }
+@@ -492,7 +514,9 @@ int frwr_send(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 	num_wrs = 1;
+ 	post_wr = send_wr;
+ 	list_for_each_entry(mr, &req->rl_registered, mr_list) {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mr_fastreg(mr);
++#endif
+ 
+ 		mr->mr_cqe.done = frwr_wc_fastreg;
+ 		mr->mr_regwr.wr.next = post_wr;
+@@ -513,10 +537,14 @@ int frwr_send(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 		ep->re_send_count -= num_wrs;
+ 	}
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_post_send(req);
++#endif
+ 	ret = ib_post_send(ep->re_id->qp, post_wr, NULL);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	if (ret)
+ 		trace_xprtrdma_post_send_err(r_xprt, req, ret);
++#endif
+ 	return ret;
+ }
+ 
+@@ -533,7 +561,9 @@ void frwr_reminv(struct rpcrdma_rep *rep, struct list_head *mrs)
+ 	list_for_each_entry(mr, mrs, mr_list)
+ 		if (mr->mr_handle == rep->rr_inv_rkey) {
+ 			list_del_init(&mr->mr_list);
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 			trace_xprtrdma_mr_reminv(mr);
++#endif
+ 			frwr_mr_put(mr);
+ 			break;	/* only one invalidated MR per RPC */
+ 		}
+@@ -557,7 +587,9 @@ static void frwr_wc_localinv(struct ib_cq *cq, struct ib_wc *wc)
+ 	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
+ 
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_wc_li(wc, &mr->mr_cid);
++#endif
+ 	frwr_mr_done(wc, mr);
+ 
+ 	rpcrdma_flush_disconnect(cq->cq_context, wc);
+@@ -576,7 +608,9 @@ static void frwr_wc_localinv_wake(struct ib_cq *cq, struct ib_wc *wc)
+ 	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
+ 
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_wc_li_wake(wc, &mr->mr_cid);
++#endif
+ 	frwr_mr_done(wc, mr);
+ 	complete(&mr->mr_linv_done);
+ 
+@@ -610,7 +644,9 @@ void frwr_unmap_sync(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 	prev = &first;
+ 	mr = rpcrdma_mr_pop(&req->rl_registered);
+ 	do {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mr_localinv(mr);
++#endif
+ 		r_xprt->rx_stats.local_inv_needed++;
+ 
+ 		last = &mr->mr_invwr;
+@@ -653,8 +689,10 @@ void frwr_unmap_sync(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 	if (!rc)
+ 		return;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	/* On error, the MRs get destroyed once the QP has drained. */
+ 	trace_xprtrdma_post_linv_err(req, rc);
++#endif
+ 
+ 	/* Force a connection loss to ensure complete recovery.
+ 	 */
+@@ -673,8 +711,10 @@ static void frwr_wc_localinv_done(struct ib_cq *cq, struct ib_wc *wc)
+ 	struct rpcrdma_mr *mr = container_of(cqe, struct rpcrdma_mr, mr_cqe);
+ 	struct rpcrdma_rep *rep;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	/* WARNING: Only wr_cqe and status are reliable at this point */
+ 	trace_xprtrdma_wc_li_done(wc, &mr->mr_cid);
++#endif
+ 
+ 	/* Ensure that @rep is generated before the MR is released */
+ 	rep = mr->mr_req->rl_reply;
+@@ -713,7 +753,9 @@ void frwr_unmap_async(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 	prev = &first;
+ 	mr = rpcrdma_mr_pop(&req->rl_registered);
+ 	do {
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 		trace_xprtrdma_mr_localinv(mr);
++#endif
+ 		r_xprt->rx_stats.local_inv_needed++;
+ 
+ 		last = &mr->mr_invwr;
+@@ -746,8 +788,10 @@ void frwr_unmap_async(struct rpcrdma_xprt *r_xprt, struct rpcrdma_req *req)
+ 	if (!rc)
+ 		return;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	/* On error, the MRs get destroyed once the QP has drained. */
+ 	trace_xprtrdma_post_linv_err(req, rc);
++#endif
+ 
+ 	/* The final LOCAL_INV WR in the chain is supposed to
+ 	 * do the wake. If it was never posted, the wake does
+@@ -816,7 +860,9 @@ int frwr_wp_create(struct rpcrdma_xprt *r_xprt)
+ 	mr->mr_length = ibmr->length;
+ 	mr->mr_offset = ibmr->iova;
+ 
++#ifdef HAVE_TRACE_RPCRDMA_H
+ 	trace_xprtrdma_mr_fastreg(mr);
++#endif
+ 
+ 	mr->mr_cqe.done = frwr_wc_fastreg;
+ 	mr->mr_regwr.wr.next = NULL;

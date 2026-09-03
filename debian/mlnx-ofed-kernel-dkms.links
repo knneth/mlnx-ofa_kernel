@@ -1,0 +1,5 @@
+#!/usr/bin/dh-exec
+usr/src/${pname}-${dkms_version}/ofed_scripts/configure	usr/src/${pname}-${dkms_version}/configure
+usr/src/${pname}-${dkms_version}/ofed_scripts/makefile	usr/src/${pname}-${dkms_version}/makefile
+usr/src/${pname}-${dkms_version}/ofed_scripts/Makefile	usr/src/${pname}-${dkms_version}/Makefile
+usr/src/${pname}-${dkms_version}			usr/src/ofa_kernel-${pversion}

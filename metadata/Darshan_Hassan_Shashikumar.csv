@@ -1,0 +1,3 @@
+sep=;
+Change-Id=If36f044a3c60e492f3a61fc80e8c0925fd4c0796; subject=net/mlx5: Update vport admin state; feature=mlx5_bf; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I9bc29ef9082d2dedf6b90b61191720d5d55ee523; subject=net/mlx5: Query the vport admin state from FW; feature=mlx5_bf; upstream_status=NA; upstream_issue=; general=;

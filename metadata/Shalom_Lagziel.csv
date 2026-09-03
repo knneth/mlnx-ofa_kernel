@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Icbfe8e62df23898c1a6c540214591faf04717877; subject=IB/ipoib: Initialize max inline size in mlx4 qp attribute; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I2efc341d36226df19566d52c368d239ba23c63c0; subject=IB/ipoib: ARP snooping for GID cache synchronize; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;

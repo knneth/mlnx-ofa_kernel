@@ -62,6 +62,8 @@
 %endif
 %global _kmp_rel %{_release1}%{?_kmp_build_num}%{?_dist}
 
+%global __requires_exclude ^/usr/bin/dh-exec$
+
 Summary: %{_name} Driver
 Name: %{_name}
 Version: %{_version}
@@ -243,6 +245,8 @@ mod_path=${mod_path/\/${ko_name}}
 done
 %endif
 
+mkdir -p %{buildroot}%{_datadir}/dkms/modules_to_force_install
+echo "%{name}" > %{buildroot}%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 %clean
 rm -rf %{buildroot}
@@ -267,14 +271,15 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ "${old_ver}" != "%{dkms_version}" ] || continue
 	rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
+dkms add --rpm_safe_upgrade %{name}/%{dkms_version} > /dev/null 2>&1 || :
 # DKMS exits 77 when BUILD_EXCLUSIVE_* skips the build; treat as success.
-/usr/sbin/dkms install %{name}/%{dkms_version} || __rc=$?
+dkms install %{name}/%{dkms_version} || __rc=$?
 [ "${__rc:-0}" -ne 77 ] || __rc=0
 exit "${__rc:-0}"
 
 %preun dkms
-/usr/sbin/dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null || :
+[ ! -d /var/lib/dkms/%{name}/%{dkms_version} ] || \
+	dkms remove --rpm_safe_upgrade %{name}/%{dkms_version} --all > /dev/null
 
 %if %{with building_kmods}
 %if "%{KMP}" != "1"
@@ -287,6 +292,8 @@ exit "${__rc:-0}"
 
 %files dkms
 %{_usrsrc}/%{name}-%{dkms_version}
+%dir %{_datadir}/dkms/modules_to_force_install
+%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 %changelog
 * Mon Jan 27 2025 Aurelien Aptel <aaptel@nvidia.com>

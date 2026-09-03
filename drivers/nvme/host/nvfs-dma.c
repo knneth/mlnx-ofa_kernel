@@ -28,12 +28,12 @@ DEFINE_PER_CPU(long, nvfs_n_ops);
 // protected via nvfs_module_mutex
 int REGISTER_FUNC(struct nvfs_dma_rw_blk_iter_ops *ops)
 {
-       if (NVIDIA_FS_COMPAT_FT(ops)) {
-             nvfs_ops = ops;
-             atomic_set(&nvfs_shutdown, 0);
-             return 0;
-       } else
-             return -EOPNOTSUPP;
+	if (NVIDIA_FS_COMPAT_FT(ops)) {
+		nvfs_ops = ops;
+		atomic_set(&nvfs_shutdown, 0);
+		return 0;
+	} else
+		return -EOPNOTSUPP;
 
 }
 EXPORT_SYMBOL_GPL(REGISTER_FUNC);
@@ -41,11 +41,11 @@ EXPORT_SYMBOL_GPL(REGISTER_FUNC);
 // protected via nvfs_module_mutex
 void UNREGISTER_FUNC(void)
 {
-        (void) atomic_cmpxchg(&nvfs_shutdown, 0, 1);
-        do {
-                msleep(NVFS_HOLD_TIME_MS);
-        } while(nvfs_count_ops());
-        nvfs_ops = NULL;
+	(void) atomic_cmpxchg(&nvfs_shutdown, 0, 1);
+	do {
+		msleep(NVFS_HOLD_TIME_MS);
+	} while(nvfs_count_ops());
+	nvfs_ops = NULL;
 }
 EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);
 #endif

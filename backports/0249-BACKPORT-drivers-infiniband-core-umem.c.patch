@@ -1,0 +1,502 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem.c
+
+Change-Id: I1e989444526c9a3f619202f0e83a204219e236e1
+---
+ drivers/infiniband/core/umem.c | 292 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 288 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -39,9 +39,14 @@
+ #include <linux/sched/mm.h>
+ #include <linux/export.h>
+ #include <linux/slab.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/scatterlist.h>
++#endif
+ #include <linux/pagemap.h>
+ #include <linux/count_zeros.h>
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ #include <rdma/ib_umem_odp.h>
++#endif
+ 
+ #include "uverbs.h"
+ 
+@@ -51,23 +56,57 @@
+ 
+ static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
+ {
++#ifdef HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED
+ 	bool make_dirty = umem->writable && dirty;
+ 	struct scatterlist *sg;
+ 	unsigned int i;
++#else
++	struct sg_page_iter sg_iter;
++	struct page *page;
++#endif
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	if (dirty)
+ 		ib_dma_unmap_sgtable_attrs(dev, &umem->sgt_append.sgt,
+ 					   DMA_BIDIRECTIONAL, umem->dma_attrs);
+-
++#else
++	if (umem->nmap > 0)
++		ib_dma_unmap_sg(dev, umem->sg_head.sgl, umem->sg_nents,
++				DMA_BIDIRECTIONAL);
++#endif
++
++#ifdef HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED
++#ifdef HAVE_SG_APPEND_TABLE
+ 	for_each_sgtable_sg(&umem->sgt_append.sgt, sg, i) {
++#else
++	for_each_sg(umem->sg_head.sgl, sg, umem->sg_nents, i) {
++#endif
+ 		unpin_user_page_range_dirty_lock(sg_page(sg),
+ 			DIV_ROUND_UP(sg->length, PAGE_SIZE), make_dirty);
+ 
+ 		if (i && !(i % RESCHED_LOOP_CNT_THRESHOLD))
+ 			cond_resched();
+ 	}
++#else
++	for_each_sg_page(umem->sg_head.sgl, &sg_iter, umem->sg_nents, 0) {
++		page = sg_page_iter_page(&sg_iter);
++#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++		unpin_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
++#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
++		put_user_pages_dirty_lock(&page, 1, umem->writable && dirty);
++#else
++		if (!PageDirty(page) && umem->writable && dirty)
++			set_page_dirty_lock(page);
++		put_page(page);
++#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
++	}
++#endif /*HAVE_UNPIN_USER_PAGE_RANGE_DIRTY_LOCK_EXPORTED*/
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	sg_free_append_table(&umem->sgt_append);
++#else
++	sg_free_table(&umem->sg_head);
++#endif /*HAVE_SG_APPEND_TABLE*/
+ }
+ 
+ /**
+@@ -101,6 +140,7 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ 
+ 	umem->iova = va = virt;
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (umem->is_odp) {
+ 		unsigned int page_size = BIT(to_ib_umem_odp(umem)->page_shift);
+ 
+@@ -109,12 +149,17 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ 			return 0;
+ 		return page_size;
+ 	}
++#endif
+ 
+ 	/* The best result is the smallest page size that results in the minimum
+ 	 * number of required pages. Compute the largest page size that could
+ 	 * work based on VA address bits that don't change.
+ 	 */
++#ifdef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+ 	if (check_add_overflow(umem->length - 1, virt, &last_va))
++#else
++	if (check_add_overflow((u64)umem->length - 1, virt, &last_va))
++#endif
+ 		return 0;
+ 	bits = bits_per(virt ^ last_va);
+ 	if (bits < BITS_PER_LONG)
+@@ -123,11 +168,16 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ 	/* offset into first SGL */
+ 	pgoff = umem->address & ~PAGE_MASK;
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	for_each_sgtable_dma_sg(&umem->sgt_append.sgt, sg, i) {
++#else
++	for_each_sg(umem->sg_head.sgl, sg, umem->nmap, i) {
++#endif
++
+ 		/* If the current entry is physically contiguous with the previous
+ 		 * one, no need to take its start addresses into consideration.
+ 		 */
+-		if (check_add_overflow(curr_base, curr_len, &end) ||
++		if (check_add_overflow(curr_base, (dma_addr_t)curr_len, &end) ||
+ 		    end != sg_dma_address(sg)) {
+ 
+ 			curr_base = sg_dma_address(sg);
+@@ -161,6 +211,64 @@ unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
+ }
+ EXPORT_SYMBOL(ib_umem_find_best_pgsz);
+ 
++#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
++static struct scatterlist *ib_umem_add_sg_table(struct scatterlist *sg,
++		struct page **page_list,
++		unsigned long npages,
++		unsigned int max_seg_sz,
++		int *nents)
++{
++	unsigned long first_pfn;
++	unsigned long i = 0;
++	bool update_cur_sg = false;
++	bool first = !sg_page(sg);
++
++	/* Check if new page_list is contiguous with end of previous page_list.
++	 *          * sg->length here is a multiple of PAGE_SIZE and sg->offset is 0.
++	 *                   */
++	if (!first && (page_to_pfn(sg_page(sg)) + (sg->length >> PAGE_SHIFT) ==
++				page_to_pfn(page_list[0])))
++		update_cur_sg = true;
++
++	while (i != npages) {
++		unsigned long len;
++		struct page *first_page = page_list[i];
++
++		first_pfn = page_to_pfn(first_page);
++
++		/* Compute the number of contiguous pages we have starting
++		 *                  * at i
++		 *                                   */
++		for (len = 0; i != npages &&
++				first_pfn + len == page_to_pfn(page_list[i]) &&
++				len < (max_seg_sz >> PAGE_SHIFT);
++				len++)
++			i++;
++
++		/* Squash N contiguous pages from page_list into current sge */
++		if (update_cur_sg) {
++			if ((max_seg_sz - sg->length) >= (len << PAGE_SHIFT)) {
++				sg_set_page(sg, sg_page(sg),
++						sg->length + (len << PAGE_SHIFT),
++						0);
++				update_cur_sg = false;
++				continue;
++			}
++			update_cur_sg = false;
++		}
++		/* Squash N contiguous pages into next sge or first sge */
++		if (!first)
++			sg = sg_next(sg);
++
++		(*nents)++;
++		sg_set_page(sg, first_page, len << PAGE_SHIFT, 0);
++		first = false;
++	}
++
++	return sg;
++}
++#endif
++
+ /**
+  * __ib_umem_get - Pin and DMA map userspace memory.
+  *
+@@ -181,8 +289,22 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 	unsigned long cur_base;
+ 	struct mm_struct *mm;
+ 	unsigned long npages;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	int pinned, ret;
++#else
++	int ret;
++	struct scatterlist *sg = NULL;
++#endif /*HAVE_SG_APPEND_TABLE*/
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 	unsigned int gup_flags = FOLL_LONGTERM;
++#else
++	unsigned int gup_flags = FOLL_WRITE;
++#endif
++#endif
++#if defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && (!defined(HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED) && !defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS))
++	unsigned long index;
++#endif
+ 
+ 	if (device->cc_dma_bounce)
+ 		return ERR_PTR(-EOPNOTSUPP);
+@@ -218,7 +340,12 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 	umem->iova = addr;
+ 	umem->writable   = ib_access_writable(access);
+ 	umem->owning_mm = mm = current->mm;
++#ifdef HAVE_DMA_ATTR_REQUIRE_COHERENT
++	/* Newer kernels (7.0-rc6+): UMEM hints DMA coherency */
+ 	umem->dma_attrs = DMA_ATTR_REQUIRE_COHERENT;
++#else
++	umem->dma_attrs = 0;
++#endif
+ 	if (access & IB_ACCESS_RELAXED_ORDERING)
+ 		umem->dma_attrs |= DMA_ATTR_WEAK_ORDERING;
+ 
+@@ -229,7 +356,6 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 		ret = -ENOMEM;
+ 		goto umem_kfree;
+ 	}
+-
+ 	npages = ib_umem_num_pages(umem);
+ 	if (npages == 0 || npages > UINT_MAX) {
+ 		ret = -EINVAL;
+@@ -240,6 +366,7 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 
+ 	new_pinned = atomic64_add_return(npages, &mm->pinned_vm);
+ 	if (new_pinned > lock_limit && !capable(CAP_IPC_LOCK)) {
++
+ 		atomic64_sub(npages, &mm->pinned_vm);
+ 		ret = -ENOMEM;
+ 		goto out;
+@@ -247,22 +374,46 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 
+ 	cur_base = addr & PAGE_MASK;
+ 
++#if !defined( HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
++	ret = sg_alloc_table(&umem->sg_head, npages, GFP_KERNEL);
++	if (ret)
++		goto vma;
++#endif
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 	if (umem->writable)
+ 		gup_flags |= FOLL_WRITE;
+-
++#else
++	if (!umem->writable)
++		gup_flags |= FOLL_FORCE;
++#endif /* HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS */
++#endif
++#if !defined(HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS) && !defined(HAVE_SG_APPEND_TABLE)
++	sg = umem->sg_head.sgl;
++#endif
++
++#ifdef HAVE_SG_APPEND_TABLE
+ 	while (npages) {
+ 		cond_resched();
+ 		pinned = pin_user_pages_fast(cur_base,
+ 					  min_t(unsigned long, npages,
+ 						PAGE_SIZE /
+ 						sizeof(struct page *)),
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 					  gup_flags, page_list);
++#else
++					  gup_flags | FOLL_LONGTERM, page_list);
++#endif
+ 		if (pinned < 0) {
+ 			ret = pinned;
+ 			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
+ 					min_t(unsigned long, npages,
+ 						PAGE_SIZE / sizeof(struct page *)),
++#ifdef HAVE_GUP_MUST_UNSHARE_GET_3_PARAMS
+ 					gup_flags);
++#else
++					gup_flags | FOLL_LONGTERM);
++#endif
+ 			goto umem_release;
+ 		}
+ 
+@@ -287,6 +438,99 @@ static struct ib_umem *__ib_umem_get(struct ib_device *device,
+ 	}
+ 	goto out;
+ 
++#else /*HAVE_SG_APPEND_TABLE*/
++	while (npages) {
++		cond_resched();
++#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++		ret = pin_user_pages_fast(cur_base,
++					  min_t(unsigned long, npages,
++						PAGE_SIZE /
++						sizeof(struct page *)),
++					  gup_flags | FOLL_LONGTERM, page_list);
++		if (ret < 0)
++			goto umem_release;
++#else
++		down_read(&mm->mmap_sem);
++		ret = get_user_pages(cur_base,
++				     min_t(unsigned long, npages,
++					   PAGE_SIZE / sizeof (struct page *)),
++				     gup_flags | FOLL_LONGTERM,
++				     page_list, NULL);
++
++		if (ret < 0) {
++#ifdef HAVE_GET_USER_PAGES_GUP_FLAGS
++			pr_debug("%s: failed to get user pages, nr_pages=%lu, flags=%u\n", __func__,
++					min_t(unsigned long, npages,
++						PAGE_SIZE / sizeof(struct page *)),
++					gup_flags);
++#else
++			pr_debug("%s: failed to get user pages, nr_pages=%lu\n", __func__,
++			       min_t(unsigned long, npages,
++				     PAGE_SIZE / sizeof(struct page *)));
++#endif
++#ifndef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++			up_read(&mm->mmap_sem);
++#endif
++			goto umem_release;
++		}
++#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
++
++		cur_base += ret * PAGE_SIZE;
++		npages -= ret;
++#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
++		sg = __sg_alloc_table_from_pages(
++				&umem->sg_head, page_list, ret, 0, ret << PAGE_SHIFT,
++#else
++		sg = ib_umem_add_sg_table(sg, page_list, ret,
++#endif
++       		dma_get_max_seg_size(device->dma_device),
++#ifdef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
++				sg, npages,
++				GFP_KERNEL);
++		umem->sg_nents = umem->sg_head.nents;
++		if (IS_ERR(sg)) {
++#ifdef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++			unpin_user_pages_dirty_lock(page_list, ret, 0);
++#elif defined(HAVE_PUT_USER_PAGES_DIRTY_LOCK_3_PARAMS)
++			put_user_pages_dirty_lock(page_list, ret, 0);
++#else
++			for (index = 0; index < ret; index++)
++				put_page(page_list[index]);
++#endif /*HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED*/
++			ret = PTR_ERR(sg);
++			goto umem_release;
++		}
++#else
++		&umem->sg_nents);
++#endif
++#ifndef HAVE_UNPIN_USER_PAGES_DIRTY_LOCK_EXPORTED
++		up_read(&mm->mmap_sem);
++#endif
++	}
++
++#ifndef HAVE_SG_ALLOC_TABLE_FROM_PAGES_GET_9_PARAMS
++	sg_mark_end(sg);
++#endif
++
++	umem->nmap = ib_dma_map_sg(
++					device,
++					umem->sg_head.sgl,
++ 				  	umem->sg_nents,
++					DMA_BIDIRECTIONAL
++				  );
++
++	if (!umem->nmap) {
++		pr_err("%s: failed to map scatterlist, npages=%lu\n", __func__,
++		       npages);
++		ret = -ENOMEM;
++		goto umem_release;
++	}
++
++	ret = 0;
++	goto out;
++
++#endif /*HAVE_SG_APPEND_TABLE*/
++
+ umem_release:
+ 	__ib_umem_release(device, umem, 0);
+ 
+@@ -344,11 +588,20 @@ struct ib_umem *ib_umem_get_desc(struct ib_device *device,
+ 	if (desc->flags & ~IB_UVERBS_BUFFER_DESC_FLAGS_KNOWN_MASK)
+ 		return ERR_PTR(-EINVAL);
+ 
++#ifdef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+ 	if (overflows_type(desc->addr, unsigned long) ||
+ 	    overflows_type(desc->length, size_t))
++#elif defined (CONFIG_64BIT)
++	if (overflows_type((unsigned long)desc->addr, unsigned long) ||
++	    overflows_type((size_t)desc->length, size_t))
++#else
++	if ((desc->addr > (u64)ULONG_MAX) ||
++	    desc->length > (u64)SIZE_MAX)
++#endif
+ 		return ERR_PTR(-EOVERFLOW);
+ 
+ 	switch (desc->type) {
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	case IB_UVERBS_BUFFER_TYPE_DMABUF:
+ 		umem_dmabuf = ib_umem_dmabuf_get_pinned(device, desc->addr,
+ 							desc->length, desc->fd,
+@@ -356,6 +609,7 @@ struct ib_umem *ib_umem_get_desc(struct ib_device *device,
+ 		if (IS_ERR(umem_dmabuf))
+ 			return ERR_CAST(umem_dmabuf);
+ 		return &umem_dmabuf->umem;
++#endif
+ 	case IB_UVERBS_BUFFER_TYPE_VA:
+ 		return __ib_umem_get_va(device, desc->addr, desc->length,
+ 					access);
+@@ -496,6 +750,7 @@ ib_umem_get_from_attrs_or_va(struct ib_device *device,
+ 	return ib_umem_get_desc_check(device, &desc, size, access);
+ }
+ 
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
+ 				 size_t size, int access,
+ 				 unsigned long peer_mem_flags)
+@@ -503,6 +758,25 @@ struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
+ 	return __ib_umem_get(device, addr, size, access,
+ 			     IB_PEER_MEM_ALLOW | peer_mem_flags);
+ }
++#else
++struct ib_umem *ib_umem_get_peer(struct ib_udata *udata, unsigned long addr,
++				 size_t size, int access,
++				 unsigned long peer_mem_flags)
++{
++	struct ib_ucontext *context;
++
++	if (!udata)
++		return ERR_PTR(-EIO);
++
++	context = container_of(udata, struct uverbs_attr_bundle,
++			       driver_udata)->context;
++	if (!context)
++		return ERR_PTR(-EIO);
++
++	return __ib_umem_get(context->device, addr, size, access,
++			     IB_PEER_MEM_ALLOW | peer_mem_flags);
++}
++#endif
+ EXPORT_SYMBOL(ib_umem_get_peer);
+ 
+ /**
+@@ -587,6 +861,7 @@ static int uverbs_create_cq_get_buffer_desc(const struct uverbs_attr_bundle *att
+ 		return 0;
+ 	}
+ 
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	if (uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_FD)) {
+ 		ret = uverbs_get_raw_fd(&desc->fd, attrs,
+ 					UVERBS_ATTR_CREATE_CQ_BUFFER_FD);
+@@ -607,6 +882,7 @@ static int uverbs_create_cq_get_buffer_desc(const struct uverbs_attr_bundle *att
+ 		desc->type = IB_UVERBS_BUFFER_TYPE_DMABUF;
+ 		return 0;
+ 	}
++#endif
+ 
+ 	if (uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_OFFSET) ||
+ 	    uverbs_attr_is_valid(attrs, UVERBS_ATTR_CREATE_CQ_BUFFER_LENGTH))
+@@ -677,10 +953,14 @@ void ib_umem_release(struct ib_umem *umem)
+ {
+ 	if (IS_ERR_OR_NULL(umem))
+ 		return;
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ 	if (umem->is_dmabuf)
+ 		return ib_umem_dmabuf_release(to_ib_umem_dmabuf(umem));
++#endif
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	if (umem->is_odp)
+ 		return ib_umem_odp_release(to_ib_umem_odp(umem));
++#endif
+ 
+ 	if (umem->is_peer)
+ 		return ib_peer_umem_release(umem);
+@@ -714,8 +994,12 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_SG_APPEND_TABLE
+ 	ret = sg_pcopy_to_buffer(umem->sgt_append.sgt.sgl,
+ 				 umem->sgt_append.sgt.orig_nents, dst, length,
++#else
++				 ret = sg_pcopy_to_buffer(umem->sg_head.sgl, umem->sg_nents, dst, length,
++#endif
+ 				 offset + ib_umem_offset(umem));
+ 
+ 	if (ret < 0)

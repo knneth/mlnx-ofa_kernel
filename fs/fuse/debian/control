@@ -2,16 +2,29 @@ Source: virtiofs
 Section: kernel
 Priority: optional
 Maintainer: Aurelien Aptel <aaptel@nvidia.com>
-Build-Depends: debhelper (>= 8.0.0), autotools-dev, bzip2, dh-dkms | dkms (<< 3.0),
-Standards-Version: 4.2.0
+Build-Depends: debhelper-compat (= 12),
+ dh-dkms <!modules> | dkms (<< 3.0) <!modules>,
+ dh-exec <!modules>,
+Standards-Version: 4.7.0
 Homepage: http://nvidia.com
 
 Package: virtiofs-dkms
 Section: kernel
 Architecture: all
+Build-Profiles: <!modules>
 Depends: dkms, make, mlnx-ofed-kernel-dkms, ${misc:Depends}
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers | linux-headers-generic
-Description: DKMS support fo virtiofs kernel modules
+Breaks: virtiofs-modules
+Replaces: virtiofs-modules
+Description: DKMS support for virtiofs kernel modules
  This package provides integration with the DKMS infrastructure for automatically building out of tree kernel modules.
  .
  This package contains the source to be built with dkms.
+
+Package: virtiofs-modules
+Section: kernel
+Architecture: any
+Build-Profiles: <modules>
+Depends: mlnx-ofed-kernel-modules, ${misc:Depends}
+Description: virtiofs kernel modules
+ This package provides the binary code for the virtiofs kernel modules.

@@ -42,6 +42,7 @@
 #include <linux/security.h>
 #include <linux/notifier.h>
 #include <linux/hashtable.h>
+#include <linux/cc_platform.h>
 #include <rdma/rdma_netlink.h>
 #include <rdma/ib_addr.h>
 #include <rdma/ib_cache.h>
@@ -362,34 +363,6 @@ static struct ib_device *__ib_device_get_by_name(const char *name)
 	return NULL;
 }
 
-/**
- * ib_device_get_by_name - Find an IB device by name
- * @name: The name to look for
- * @driver_id: The driver ID that must match (RDMA_DRIVER_UNKNOWN matches all)
- *
- * Find and hold an ib_device by its name. The caller must call
- * ib_device_put() on the returned pointer.
- */
-struct ib_device *ib_device_get_by_name(const char *name,
-					enum rdma_driver_id driver_id)
-{
-	struct ib_device *device;
-
-	down_read(&devices_rwsem);
-	device = __ib_device_get_by_name(name);
-	if (device && driver_id != RDMA_DRIVER_UNKNOWN &&
-	    device->ops.driver_id != driver_id)
-		device = NULL;
-
-	if (device) {
-		if (!ib_device_try_get(device))
-			device = NULL;
-	}
-	up_read(&devices_rwsem);
-	return device;
-}
-EXPORT_SYMBOL(ib_device_get_by_name);
-
 static int rename_compat_devs(struct ib_device *device)
 {
 	struct ib_core_device *cdev;
@@ -537,12 +510,13 @@ static int ib_device_uevent(const struct device *device,
 	return 0;
 }
 
-static const void *net_namespace(const struct device *d)
+static const struct ns_common *net_namespace(const struct device *d)
 {
 	const struct ib_core_device *coredev =
 			container_of(d, struct ib_core_device, dev);
+	struct net *net = read_pnet(&coredev->rdma_net);
 
-	return read_pnet(&coredev->rdma_net);
+	return net ? to_ns_common(net) : NULL;
 }
 
 static struct class ib_class = {
@@ -840,9 +814,8 @@ static int alloc_port_data(struct ib_device *device)
 	 * Therefore port_data is declared as a 1 based array with potential
 	 * empty slots at the beginning.
 	 */
-	pdata_rcu = kzalloc(struct_size(pdata_rcu, pdata,
-					size_add(rdma_end_port(device), 1)),
-			    GFP_KERNEL);
+	pdata_rcu = kzalloc_flex(*pdata_rcu, pdata,
+				 size_add(rdma_end_port(device), 1));
 	if (!pdata_rcu)
 		return -ENOMEM;
 	/*
@@ -987,7 +960,7 @@ static int add_one_compat_dev(struct ib_device *device,
 	if (ret)
 		goto done;
 
-	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
+	cdev = kzalloc_obj(*cdev);
 	if (!cdev) {
 		ret = -ENOMEM;
 		goto cdev_err;
@@ -1447,6 +1420,14 @@ int ib_register_device(struct ib_device *device, const char *name,
 	 */
 	WARN_ON(dma_device && !dma_device->dma_parms);
 	device->dma_device = dma_device;
+	/*
+	 * In a CoCo guest every device is currently assumed to be untrusted
+	 * (T=0) and therefore subject to DMA bouncing. Once trusted (T=1)
+	 * device detection is wired up, narrow this check to exclude such
+	 * devices.
+	 */
+	if (dma_device && cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
+		device->cc_dma_bounce = 1;
 
 	ret = setup_device(device);
 	if (ret)
@@ -2746,6 +2727,7 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 
 	dev_ops->uverbs_no_driver_id_binding |=
 		ops->uverbs_no_driver_id_binding;
+	dev_ops->uverbs_robust_udata |= ops->uverbs_robust_udata;
 
 	SET_DEVICE_OP(dev_ops, add_gid);
 	SET_DEVICE_OP(dev_ops, add_sub_dev);
@@ -2772,7 +2754,7 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 	SET_DEVICE_OP(dev_ops, create_ah);
 	SET_DEVICE_OP(dev_ops, create_counters);
 	SET_DEVICE_OP(dev_ops, create_cq);
-	SET_DEVICE_OP(dev_ops, create_cq_umem);
+	SET_DEVICE_OP(dev_ops, create_user_cq);
 	SET_DEVICE_OP(dev_ops, create_flow);
 	SET_DEVICE_OP(dev_ops, create_qp);
 	SET_DEVICE_OP(dev_ops, create_rwq_ind_table);
@@ -2821,7 +2803,6 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 	SET_DEVICE_OP(dev_ops, get_netdev);
 	SET_DEVICE_OP(dev_ops, get_numa_node);
 	SET_DEVICE_OP(dev_ops, get_port_immutable);
-	SET_DEVICE_OP(dev_ops, get_vector_affinity);
 	SET_DEVICE_OP(dev_ops, get_vf_config);
 	SET_DEVICE_OP(dev_ops, get_vf_guid);
 	SET_DEVICE_OP(dev_ops, get_vf_stats);
@@ -2872,7 +2853,7 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
 	SET_DEVICE_OP(dev_ops, reg_user_mr_dmabuf);
 	SET_DEVICE_OP(dev_ops, req_notify_cq);
 	SET_DEVICE_OP(dev_ops, rereg_user_mr);
-	SET_DEVICE_OP(dev_ops, resize_cq);
+	SET_DEVICE_OP(dev_ops, resize_user_cq);
 	SET_DEVICE_OP(dev_ops, set_vf_guid);
 	SET_DEVICE_OP(dev_ops, set_vf_link_state);
 	SET_DEVICE_OP(dev_ops, ufile_hw_cleanup);
@@ -2927,7 +2908,6 @@ int ib_add_sub_device(struct ib_device *parent,
 
 	return ret;
 }
-EXPORT_SYMBOL(ib_add_sub_device);
 
 int ib_del_sub_device_and_put(struct ib_device *sub)
 {
@@ -2948,7 +2928,6 @@ int ib_del_sub_device_and_put(struct ib_device *sub)
 
 	return 0;
 }
-EXPORT_SYMBOL(ib_del_sub_device_and_put);
 
 #ifdef CONFIG_INFINIBAND_VIRT_DMA
 int ib_dma_virt_map_sg(struct ib_device *dev, struct scatterlist *sg, int nents)
@@ -3075,7 +3054,7 @@ static int __init ib_core_init(void)
 {
 	int ret = -ENOMEM;
 
-	ib_wq = alloc_workqueue("infiniband", 0, 0);
+	ib_wq = alloc_workqueue("infiniband", WQ_PERCPU, 0);
 	if (!ib_wq)
 		return -ENOMEM;
 
@@ -3085,7 +3064,7 @@ static int __init ib_core_init(void)
 		goto err;
 
 	ib_comp_wq = alloc_workqueue("ib-comp-wq",
-			WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_SYSFS, 0);
+			WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_SYSFS | WQ_PERCPU, 0);
 	if (!ib_comp_wq)
 		goto err_unbound;
 

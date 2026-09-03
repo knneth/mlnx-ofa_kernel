@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Ic04470056c225a6ee25376492caad5b7730f99f3; subject=fuse: reduce attributes invalidated on directory change; feature=virtiofs; upstream_status=accepted; upstream_issue=; general=tag: v7.2-rc1;

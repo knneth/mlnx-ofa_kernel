@@ -1,0 +1,11 @@
+#!/usr/bin/dh-exec
+source/compat*			usr/src/${pname}-${dkms_version}
+source/include			usr/src/${pname}-${dkms_version}
+source/drivers			usr/src/${pname}-${dkms_version}
+source/fs			usr/src/${pname}-${dkms_version}
+source/net			usr/src/${pname}-${dkms_version}
+source/backports		usr/src/${pname}-${dkms_version}
+source/backports_applied	usr/src/${pname}-${dkms_version}
+source/ofed_scripts		usr/src/${pname}-${dkms_version}
+source/COPYING			usr/src/${pname}-${dkms_version}
+source/debian/changelog		usr/src/${pname}-${dkms_version}/debian

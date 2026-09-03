@@ -1,0 +1,2 @@
+sep=;
+Change-Id=If601624ea3eda8e2b0b2b983128bb25e389de9cf; subject=mlx5_core: Provide the correct VPort index when setting Port GUID; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;

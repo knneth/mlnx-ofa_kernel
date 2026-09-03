@@ -217,7 +217,7 @@ static int mlxdevm_dpipe_tables_fill(struct genl_info *info,
 				     struct list_head *dpipe_tables,
 				     const char *table_name)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_dpipe_table *table;
 	struct nlattr *tables_attr;
 	struct sk_buff *skb = NULL;
@@ -294,7 +294,7 @@ err_table_put:
 
 int mlxdevm_nl_dpipe_table_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	const char *table_name =  NULL;
 
 	if (info->attrs[MLXDEVM_ATTR_DPIPE_TABLE_NAME])
@@ -856,7 +856,7 @@ int devl_dpipe_table_register(struct devlink *devlink,
 				     devlink))
 		return -EEXIST;
 
-	table = kzalloc(sizeof(*table), GFP_KERNEL);
+	table = kzalloc_obj(*table);
 	if (!table)
 		return -ENOMEM;
 

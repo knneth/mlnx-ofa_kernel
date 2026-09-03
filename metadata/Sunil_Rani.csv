@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I36ab349ffd8c4c3537d02023e5d341ebe2f0e7a6; subject=net/mlx5: SF/VF, Port function trust set support; feature=trust_set_support; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Iaa00d4bea187b70dc3d9bec7e185dfb8f78b1ee9; subject=net/mlx5: Cache trust state during vport enable; feature=trust_set_support; upstream_status=in_progress; upstream_issue=0123456789; general=;

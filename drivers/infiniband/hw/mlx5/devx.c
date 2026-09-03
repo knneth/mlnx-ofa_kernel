@@ -1557,7 +1557,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_OBJ_CREATE)(
 	if (IS_ERR(cmd_out))
 		return PTR_ERR(cmd_out);
 
-	obj = kzalloc(sizeof(struct devx_obj), GFP_KERNEL);
+	obj = kzalloc_obj(*obj);
 	if (!obj)
 		return -ENOMEM;
 
@@ -1913,6 +1913,17 @@ sub_bytes:
 	return err;
 }
 
+static bool devx_key_in_sub_list(struct list_head *list, u32 key_level1)
+{
+	struct devx_event_subscription *s;
+
+	list_for_each_entry(s, list, event_list)
+		if (s->xa_key_level1 == key_level1)
+			return true;
+
+	return false;
+}
+
 static void
 subscribe_event_xa_dealloc(struct mlx5_devx_event_table *devx_event_table,
 			   u32 key_level1,
@@ -1950,7 +1961,7 @@ subscribe_event_xa_alloc(struct mlx5_devx_event_table *devx_event_table,
 
 	event = xa_load(&devx_event_table->event_xa, key_level1);
 	if (!event) {
-		event = kzalloc(sizeof(*event), GFP_KERNEL);
+		event = kzalloc_obj(*event);
 		if (!event)
 			return -ENOMEM;
 
@@ -1972,7 +1983,7 @@ subscribe_event_xa_alloc(struct mlx5_devx_event_table *devx_event_table,
 
 	obj_event = xa_load(&event->object_ids, key_level2);
 	if (!obj_event) {
-		obj_event = kzalloc(sizeof(*obj_event), GFP_KERNEL);
+		obj_event = kzalloc_obj(*obj_event);
 		if (!obj_event)
 			/* Level1 is valid for future use, no need to free */
 			return -ENOMEM;
@@ -2158,12 +2169,19 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_SUBSCRIBE_EVENT)(
 		if (err)
 			goto err;
 
-		event_sub = kzalloc(sizeof(*event_sub), GFP_KERNEL);
+		event_sub = kzalloc_obj(*event_sub);
 		if (!event_sub) {
+			if (!devx_key_in_sub_list(&sub_list, key_level1))
+				subscribe_event_xa_dealloc(devx_event_table,
+							   key_level1,
+							   obj,
+							   obj_id);
 			err = -ENOMEM;
 			goto err;
 		}
 
+		event_sub->ev_file = ev_file;
+		event_sub->xa_key_level1 = key_level1;
 		list_add_tail(&event_sub->event_list, &sub_list);
 		uverbs_uobject_get(&ev_file->uobj);
 		if (use_eventfd) {
@@ -2178,9 +2196,6 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_SUBSCRIBE_EVENT)(
 		}
 
 		event_sub->cookie = cookie;
-		event_sub->ev_file = ev_file;
-		/* May be needed upon cleanup the devx object/subscription */
-		event_sub->xa_key_level1 = key_level1;
 		event_sub->xa_key_level2 = obj_id;
 		INIT_LIST_HEAD(&event_sub->obj_list);
 	}
@@ -2225,10 +2240,11 @@ err:
 	list_for_each_entry_safe(event_sub, tmp_sub, &sub_list, event_list) {
 		list_del(&event_sub->event_list);
 
-		subscribe_event_xa_dealloc(devx_event_table,
-					   event_sub->xa_key_level1,
-					   obj,
-					   obj_id);
+		if (!devx_key_in_sub_list(&sub_list, event_sub->xa_key_level1))
+			subscribe_event_xa_dealloc(devx_event_table,
+						   event_sub->xa_key_level1,
+						   obj,
+						   obj_id);
 
 		if (event_sub->eventfd)
 			eventfd_ctx_put(event_sub->eventfd);
@@ -2399,7 +2415,7 @@ static int UVERBS_HANDLER(MLX5_IB_METHOD_DEVX_UMEM_REG)(
 	if (err)
 		return err;
 
-	obj = kzalloc(sizeof(struct devx_umem), GFP_KERNEL);
+	obj = kzalloc_obj(*obj);
 	if (!obj)
 		return -ENOMEM;
 
@@ -2698,7 +2714,7 @@ void mlx5_ib_ufile_hw_cleanup(struct ib_uverbs_file *ufile)
 	int head = 0;
 	int tail = 0;
 
-	async_cmd = kcalloc(MAX_ASYNC_CMDS, sizeof(*async_cmd), GFP_KERNEL);
+	async_cmd = kzalloc_objs(*async_cmd, MAX_ASYNC_CMDS);
 	if (!async_cmd)
 		return;
 

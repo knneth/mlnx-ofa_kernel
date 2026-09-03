@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I052858f3d0a670f8da215abc91dfc044a1944fcf; subject=compat: Add support for IPsec mode in devlink compat; feature=mlx5_ipsec_full; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I4b788f754974fbf44acefedb8fed766b8ffb23b2; subject=net/mlx5e: IPsec fix upstream compatiablity for mlx5e_vport_uplink_rep_load; feature=mlx5_ipsec; upstream_status=NA; upstream_issue=; general=;

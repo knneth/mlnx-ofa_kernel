@@ -45,6 +45,9 @@
 #include "qp.h"
 #include "wr.h"
 
+#define UVERBS_MODULE_NAME mlx5_ib
+#include <rdma/uverbs_named_ioctl.h>
+
 enum {
 	MLX5_IB_ACK_REQ_FREQ	= 8,
 };
@@ -561,7 +564,7 @@ static void mlx5_ib_qp_event(struct mlx5_core_qp *qp, int event_info)
 	if (!ibqp->event_handler)
 		goto out_no_handler;
 
-	qpe_work = kzalloc(sizeof(*qpe_work), GFP_ATOMIC);
+	qpe_work = kzalloc_obj(*qpe_work, GFP_ATOMIC);
 	if (!qpe_work)
 		goto out_no_handler;
 
@@ -597,16 +600,13 @@ static int set_rq_size(struct mlx5_ib_dev *dev, struct ib_qp_cap *cap,
 
 		if (ucmd) {
 			qp->rq.wqe_cnt = ucmd->rq_wqe_count;
-			if (ucmd->rq_wqe_shift > BITS_PER_BYTE * sizeof(ucmd->rq_wqe_shift))
-				return -EINVAL;
 			qp->rq.wqe_shift = ucmd->rq_wqe_shift;
-			if ((1 << qp->rq.wqe_shift) /
-				    sizeof(struct mlx5_wqe_data_seg) <
-			    wq_sig)
+			if (check_shl_overflow(1, qp->rq.wqe_shift, &wqe_size))
+				return -EINVAL;
+			if (wqe_size / sizeof(struct mlx5_wqe_data_seg) < wq_sig)
 				return -EINVAL;
 			qp->rq.max_gs =
-				(1 << qp->rq.wqe_shift) /
-					sizeof(struct mlx5_wqe_data_seg) -
+				wqe_size / sizeof(struct mlx5_wqe_data_seg) -
 				wq_sig;
 			qp->rq.max_post = qp->rq.wqe_cnt;
 		} else {
@@ -786,6 +786,8 @@ static int set_user_buf_size(struct mlx5_ib_dev *dev,
 			    struct ib_qp_init_attr *attr)
 {
 	int desc_sz = 1 << qp->sq.wqe_shift;
+	int rq_buf_size;
+	int sq_buf_size;
 
 	if (desc_sz > MLX5_CAP_GEN(dev->mdev, max_wqe_sz_sq)) {
 		mlx5_ib_warn(dev, "desc_sz %d, max_sq_desc_sz %d\n",
@@ -810,11 +812,36 @@ static int set_user_buf_size(struct mlx5_ib_dev *dev,
 
 	if (attr->qp_type == IB_QPT_RAW_PACKET ||
 	    qp->flags & IB_QP_CREATE_SOURCE_QPN) {
-		base->ubuffer.buf_size = qp->rq.wqe_cnt << qp->rq.wqe_shift;
-		qp->raw_packet_qp.sq.ubuffer.buf_size = qp->sq.wqe_cnt << 6;
+		if (check_shl_overflow(qp->rq.wqe_cnt, qp->rq.wqe_shift,
+				       &base->ubuffer.buf_size)) {
+			mlx5_ib_warn(dev, "rq buf size overflow: wqe_cnt %d wqe_shift %d\n",
+				     qp->rq.wqe_cnt, qp->rq.wqe_shift);
+			return -EINVAL;
+		}
+		if (check_shl_overflow(qp->sq.wqe_cnt, 6,
+				       &qp->raw_packet_qp.sq.ubuffer.buf_size)) {
+			mlx5_ib_warn(dev, "sq buf size overflow: wqe_cnt %d\n",
+				     qp->sq.wqe_cnt);
+			return -EINVAL;
+		}
 	} else {
-		base->ubuffer.buf_size = (qp->rq.wqe_cnt << qp->rq.wqe_shift) +
-					 (qp->sq.wqe_cnt << 6);
+		if (check_shl_overflow(qp->rq.wqe_cnt, qp->rq.wqe_shift,
+				       &rq_buf_size)) {
+			mlx5_ib_warn(dev, "rq buf size overflow: wqe_cnt %d wqe_shift %d\n",
+				     qp->rq.wqe_cnt, qp->rq.wqe_shift);
+			return -EINVAL;
+		}
+		if (check_shl_overflow(qp->sq.wqe_cnt, 6, &sq_buf_size)) {
+			mlx5_ib_warn(dev, "sq buf size overflow: wqe_cnt %d\n",
+				     qp->sq.wqe_cnt);
+			return -EINVAL;
+		}
+		if (check_add_overflow(rq_buf_size, sq_buf_size,
+				       &base->ubuffer.buf_size)) {
+			mlx5_ib_warn(dev, "qp buf size overflow: rq %d sq %d\n",
+				     rq_buf_size, sq_buf_size);
+			return -EINVAL;
+		}
 	}
 
 	return 0;
@@ -1065,7 +1092,7 @@ static int create_user_rq(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		ib_umem_num_pages(rwq->umem), page_size, rwq->rq_num_pas,
 		offset);
 
-	err = mlx5_ib_db_map_user(ucontext, ucmd->db_addr, &rwq->db);
+	err = mlx5_ib_db_map_user(ucontext, NULL, 0, ucmd->db_addr, &rwq->db);
 	if (err) {
 		mlx5_ib_dbg(dev, "map failed\n");
 		goto err_umem;
@@ -1085,8 +1112,17 @@ static int adjust_bfregn(struct mlx5_ib_dev *dev,
 				bfregn % MLX5_NON_FP_BFREGS_PER_UAR;
 }
 
+static u16 mlx5_qp_buf_attr(struct mlx5_ib_qp *qp)
+{
+	if (qp->type == IB_QPT_RAW_PACKET ||
+	    qp->flags & IB_QP_CREATE_SOURCE_QPN)
+		return UVERBS_ATTR_CREATE_QP_RQ_BUF_UMEM;
+	return UVERBS_ATTR_CREATE_QP_BUF_UMEM;
+}
+
 static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 			   struct mlx5_ib_qp *qp, struct ib_udata *udata,
+			   struct uverbs_attr_bundle *attrs,
 			   struct ib_qp_init_attr *attr, u32 **in,
 			   struct mlx5_ib_create_qp_resp *resp, int *inlen,
 			   struct mlx5_ib_qp_base *base,
@@ -1139,21 +1175,32 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 
 	qp->rq.offset = 0;
 	qp->sq.wqe_shift = ilog2(MLX5_SEND_WQE_BB);
-	qp->sq.offset = qp->rq.wqe_cnt << qp->rq.wqe_shift;
+	if (check_shl_overflow(qp->rq.wqe_cnt, qp->rq.wqe_shift,
+			       &qp->sq.offset)) {
+		mlx5_ib_warn(dev, "sq offset overflow: wqe_cnt %d wqe_shift %d\n",
+			     qp->rq.wqe_cnt, qp->rq.wqe_shift);
+		err = -EINVAL;
+		goto err_bfreg;
+	}
 
 	err = set_user_buf_size(dev, qp, ucmd, base, attr);
 	if (err)
 		goto err_bfreg;
 
-	if (ucmd->buf_addr && ubuffer->buf_size) {
+	ubuffer->umem = NULL;
+	if (ubuffer->buf_size) {
 		ubuffer->buf_addr = ucmd->buf_addr;
-		ubuffer->umem =
-			ib_umem_get_peer(&dev->ib_dev, ubuffer->buf_addr,
-					 ubuffer->buf_size, 0, 0);
+		ubuffer->umem = ib_umem_get_attr_or_va(&dev->ib_dev, attrs,
+						       mlx5_qp_buf_attr(qp),
+						       ubuffer->buf_addr,
+						       ubuffer->buf_size, 0);
 		if (IS_ERR(ubuffer->umem)) {
 			err = PTR_ERR(ubuffer->umem);
+			ubuffer->umem = NULL;
 			goto err_bfreg;
 		}
+	}
+	if (ubuffer->umem) {
 		page_size = mlx5_umem_find_best_quantized_pgoff(
 			ubuffer->umem, qpc, log_page_size,
 			MLX5_ADAPTER_PAGE_SHIFT, page_offset, 64,
@@ -1163,8 +1210,6 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 			goto err_umem;
 		}
 		ncont = ib_umem_num_dma_blocks(ubuffer->umem, page_size);
-	} else {
-		ubuffer->umem = NULL;
 	}
 
 	*inlen = MLX5_ST_SZ_BYTES(create_qp_in) +
@@ -1192,7 +1237,9 @@ static int _create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		resp->bfreg_index = MLX5_IB_INVALID_BFREG;
 	qp->bfregn = bfregn;
 
-	err = mlx5_ib_db_map_user(context, ucmd->db_addr, &qp->db);
+	err = mlx5_ib_db_map_user(context, attrs,
+				  MLX5_IB_ATTR_CREATE_QP_DBR_BUF_UMEM,
+				  ucmd->db_addr, &qp->db);
 	if (err) {
 		mlx5_ib_dbg(dev, "map failed\n");
 		goto err_free;
@@ -1336,8 +1383,7 @@ static int _create_kernel_qp(struct mlx5_ib_dev *dev,
 					sizeof(*qp->sq.wr_data), GFP_KERNEL);
 	qp->rq.wrid = kvmalloc_array(qp->rq.wqe_cnt,
 				     sizeof(*qp->rq.wrid), GFP_KERNEL);
-	qp->sq.w_list = kvmalloc_array(qp->sq.wqe_cnt,
-				       sizeof(*qp->sq.w_list), GFP_KERNEL);
+	qp->sq.w_list = kvmalloc_objs(*qp->sq.w_list, qp->sq.wqe_cnt);
 	qp->sq.wqe_head = kvmalloc_array(qp->sq.wqe_cnt,
 					 sizeof(*qp->sq.wqe_head), GFP_KERNEL);
 
@@ -1425,7 +1471,7 @@ static int get_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *cq,
 		}
 		return MLX5_TIMESTAMP_FORMAT_REAL_TIME;
 	}
-	if (cq->create_flags & IB_UVERBS_CQ_FLAGS_TIMESTAMP_COMPLETION) {
+	if (cq->private_flags & MLX5_IB_CQ_PR_TIMESTAMP_COMPLETION) {
 		if (!fr_sup) {
 			mlx5_ib_dbg(dev,
 				    "Free running TS format is not supported\n");
@@ -1485,6 +1531,7 @@ static int get_qp_ts_format(struct mlx5_ib_dev *dev, struct mlx5_ib_cq *send_cq,
 
 static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 				   struct ib_udata *udata,
+				   struct uverbs_attr_bundle *attrs,
 				   struct mlx5_ib_sq *sq, void *qpin,
 				   struct ib_pd *pd, struct mlx5_ib_cq *cq)
 {
@@ -1504,8 +1551,10 @@ static int create_raw_packet_qp_sq(struct mlx5_ib_dev *dev,
 	if (ts_format < 0)
 		return ts_format;
 
-	sq->ubuffer.umem = ib_umem_get_peer(&dev->ib_dev, ubuffer->buf_addr,
-				       ubuffer->buf_size, 0, 0);
+	sq->ubuffer.umem = ib_umem_get_attr_or_va(&dev->ib_dev, attrs,
+						  UVERBS_ATTR_CREATE_QP_SQ_BUF_UMEM,
+						  ubuffer->buf_addr,
+						  ubuffer->buf_size, 0);
 	if (IS_ERR(sq->ubuffer.umem))
 		return PTR_ERR(sq->ubuffer.umem);
 	page_size = mlx5_umem_find_best_quantized_pgoff(
@@ -1718,6 +1767,7 @@ static int create_raw_packet_qp_tir(struct mlx5_ib_dev *dev,
 static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 				u32 *in, size_t inlen, struct ib_pd *pd,
 				struct ib_udata *udata,
+				struct uverbs_attr_bundle *attrs,
 				struct mlx5_ib_create_qp_resp *resp,
 				struct ib_qp_init_attr *init_attr)
 {
@@ -1738,7 +1788,7 @@ static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 		if (err)
 			return err;
 
-		err = create_raw_packet_qp_sq(dev, udata, sq, in, pd,
+		err = create_raw_packet_qp_sq(dev, udata, attrs, sq, in, pd,
 					      to_mcq(init_attr->send_cq));
 		if (err)
 			goto err_destroy_tis;
@@ -1755,6 +1805,11 @@ static int create_raw_packet_qp(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *qp,
 	}
 
 	if (qp->rq.wqe_cnt) {
+		if (!rq->base.ubuffer.umem) {
+			err = -EINVAL;
+			goto err_destroy_sq;
+		}
+
 		rq->base.container_mibqp = qp;
 
 		if (qp->flags & IB_QP_CREATE_CVLAN_STRIPPING)
@@ -1851,6 +1906,7 @@ static void destroy_rss_raw_qp_tir(struct mlx5_ib_dev *dev, struct mlx5_ib_qp *q
 
 struct mlx5_create_qp_params {
 	struct ib_udata *udata;
+	struct uverbs_attr_bundle *attrs;
 	size_t inlen;
 	size_t outlen;
 	size_t ucmd_size;
@@ -2272,8 +2328,8 @@ static int create_dci(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	if (ts_format < 0)
 		return ts_format;
 
-	err = _create_user_qp(dev, pd, qp, udata, init_attr, &in, &params->resp,
-			      &inlen, base, ucmd);
+	err = _create_user_qp(dev, pd, qp, udata, params->attrs, init_attr,
+			      &in, &params->resp, &inlen, base, ucmd);
 	if (err)
 		return err;
 
@@ -2440,8 +2496,8 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 			return ts_format;
 	}
 
-	err = _create_user_qp(dev, pd, qp, udata, init_attr, &in, &params->resp,
-			      &inlen, base, ucmd);
+	err = _create_user_qp(dev, pd, qp, udata, params->attrs, init_attr,
+			      &in, &params->resp, &inlen, base, ucmd);
 	if (err)
 		return err;
 
@@ -2546,7 +2602,8 @@ static int create_user_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 		qp->raw_packet_qp.sq.ubuffer.buf_addr = ucmd->sq_buf_addr;
 		raw_packet_qp_copy_info(qp, &qp->raw_packet_qp);
 		err = create_raw_packet_qp(dev, qp, in, inlen, pd, udata,
-					   &params->resp, init_attr);
+					   params->attrs, &params->resp,
+					   init_attr);
 	} else
 		err = mlx5_qpc_create_qp(dev, &base->mqp, in, inlen, out);
 
@@ -3260,12 +3317,14 @@ static int create_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
 	int err;
 
 	if (params->is_rss_raw) {
+		rdma_restrack_no_track(&qp->ibqp.res);
 		err = create_rss_raw_qp_tir(dev, pd, qp, params);
 		goto out;
 	}
 
 	switch (qp->type) {
 	case MLX5_IB_QPT_DCT:
+		rdma_restrack_no_track(&qp->ibqp.res);
 		err = create_dct(dev, pd, qp, params);
 		break;
 	case MLX5_IB_QPT_DCI:
@@ -3429,6 +3488,7 @@ int mlx5_ib_create_qp(struct ib_qp *ibqp, struct ib_qp_init_attr *attr,
 		return err;
 
 	params.udata = udata;
+	params.attrs = udata ? rdma_udata_to_uverbs_attr_bundle(udata) : NULL;
 	params.uidx = MLX5_IB_DEFAULT_UIDX;
 	params.attr = attr;
 	params.is_rss_raw = !!attr->rwq_ind_tbl;
@@ -4555,6 +4615,11 @@ static int __mlx5_ib_modify_qp(struct ib_qp *ibqp,
 			goto out;
 	}
 
+	if (attr_mask & IB_QP_RATE_LIMIT && qp->type != IB_QPT_RAW_PACKET) {
+		err = -EOPNOTSUPP;
+		goto out;
+	}
+
 	if (qp->type == IB_QPT_RAW_PACKET ||
 	    qp->flags & IB_QP_CREATE_SOURCE_QPN) {
 		struct mlx5_modify_raw_qp_param raw_qp_param = {};
@@ -4953,20 +5018,12 @@ int mlx5_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		return -ENOSYS;
 
 	if (udata && udata->inlen) {
-		if (udata->inlen < offsetofend(typeof(ucmd), ece_options))
-			return -EINVAL;
+		err = ib_copy_validate_udata_in_cm(udata, ucmd, ece_options,
+						   MLX5_IB_MODIFY_QP_OOO_DP);
+		if (err)
+			return err;
 
-		if (udata->inlen > sizeof(ucmd) &&
-		    !ib_is_udata_cleared(udata, sizeof(ucmd),
-					 udata->inlen - sizeof(ucmd)))
-			return -EOPNOTSUPP;
-
-		if (ib_copy_from_udata(&ucmd, udata,
-				       min(udata->inlen, sizeof(ucmd))))
-			return -EFAULT;
-
-		if (ucmd.comp_mask & ~MLX5_IB_MODIFY_QP_OOO_DP ||
-		    memchr_inv(&ucmd.burst_info.reserved, 0,
+		if (memchr_inv(&ucmd.burst_info.reserved, 0,
 			       sizeof(ucmd.burst_info.reserved)))
 			return -EOPNOTSUPP;
 
@@ -5634,33 +5691,18 @@ static int prepare_user_rq(struct ib_pd *pd,
 			   struct mlx5_ib_rwq *rwq)
 {
 	struct mlx5_ib_dev *dev = to_mdev(pd->device);
-	struct mlx5_ib_create_wq ucmd = {};
+	struct mlx5_ib_create_wq ucmd;
 	int err;
-	size_t required_cmd_sz;
 
-	required_cmd_sz = offsetofend(struct mlx5_ib_create_wq,
-				      single_stride_log_num_of_bytes);
-	if (udata->inlen < required_cmd_sz) {
-		mlx5_ib_dbg(dev, "invalid inlen\n");
-		return -EINVAL;
-	}
-
-	if (udata->inlen > sizeof(ucmd) &&
-	    !ib_is_udata_cleared(udata, sizeof(ucmd),
-				 udata->inlen - sizeof(ucmd))) {
-		mlx5_ib_dbg(dev, "inlen is not supported\n");
-		return -EOPNOTSUPP;
-	}
-
-	if (ib_copy_from_udata(&ucmd, udata, min(sizeof(ucmd), udata->inlen))) {
+	err = ib_copy_validate_udata_in_cm(udata, ucmd,
+					   single_stride_log_num_of_bytes,
+					   MLX5_IB_CREATE_WQ_STRIDING_RQ);
+	if (err) {
 		mlx5_ib_dbg(dev, "copy failed\n");
-		return -EFAULT;
+		return err;
 	}
 
-	if (ucmd.comp_mask & (~MLX5_IB_CREATE_WQ_STRIDING_RQ)) {
-		mlx5_ib_dbg(dev, "invalid comp mask\n");
-		return -EOPNOTSUPP;
-	} else if (ucmd.comp_mask & MLX5_IB_CREATE_WQ_STRIDING_RQ) {
+	if (ucmd.comp_mask & MLX5_IB_CREATE_WQ_STRIDING_RQ) {
 		if (!MLX5_CAP_GEN(dev->mdev, striding_rq)) {
 			mlx5_ib_dbg(dev, "Striding RQ is not supported\n");
 			return -EOPNOTSUPP;
@@ -5734,7 +5776,7 @@ struct ib_wq *mlx5_ib_create_wq(struct ib_pd *pd,
 	dev = to_mdev(pd->device);
 	switch (init_attr->wq_type) {
 	case IB_WQT_RQ:
-		rwq = kzalloc(sizeof(*rwq), GFP_KERNEL);
+		rwq = kzalloc_obj(*rwq);
 		if (!rwq)
 			return ERR_PTR(-ENOMEM);
 		err = prepare_user_rq(pd, init_attr, udata, rwq);
@@ -5873,7 +5915,6 @@ int mlx5_ib_modify_wq(struct ib_wq *wq, struct ib_wq_attr *wq_attr,
 	struct mlx5_ib_dev *dev = to_mdev(wq->device);
 	struct mlx5_ib_rwq *rwq = to_mrwq(wq);
 	struct mlx5_ib_modify_wq ucmd = {};
-	size_t required_cmd_sz;
 	int curr_wq_state;
 	int wq_state;
 	int inlen;
@@ -5881,19 +5922,11 @@ int mlx5_ib_modify_wq(struct ib_wq *wq, struct ib_wq_attr *wq_attr,
 	void *rqc;
 	void *in;
 
-	required_cmd_sz = offsetofend(struct mlx5_ib_modify_wq, reserved);
-	if (udata->inlen < required_cmd_sz)
-		return -EINVAL;
+	err = ib_copy_validate_udata_in_cm(udata, ucmd, reserved, 0);
+	if (err)
+		return err;
 
-	if (udata->inlen > sizeof(ucmd) &&
-	    !ib_is_udata_cleared(udata, sizeof(ucmd),
-				 udata->inlen - sizeof(ucmd)))
-		return -EOPNOTSUPP;
-
-	if (ib_copy_from_udata(&ucmd, udata, min(sizeof(ucmd), udata->inlen)))
-		return -EFAULT;
-
-	if (ucmd.comp_mask || ucmd.reserved)
+	if (ucmd.reserved)
 		return -EOPNOTSUPP;
 
 	inlen = MLX5_ST_SZ_BYTES(modify_rq_in);
@@ -6136,3 +6169,15 @@ void mlx5_ib_qp_event_cleanup(void)
 {
 	destroy_workqueue(mlx5_ib_qp_event_wq);
 }
+
+ADD_UVERBS_ATTRIBUTES_SIMPLE(
+	mlx5_ib_qp_create,
+	UVERBS_OBJECT_QP,
+	UVERBS_METHOD_QP_CREATE,
+	UVERBS_ATTR_UMEM(MLX5_IB_ATTR_CREATE_QP_DBR_BUF_UMEM,
+			 UA_OPTIONAL));
+
+const struct uapi_definition mlx5_ib_create_qp_defs[] = {
+	UAPI_DEF_CHAIN_OBJ_TREE(UVERBS_OBJECT_QP, &mlx5_ib_qp_create),
+	{},
+};

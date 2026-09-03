@@ -1,90 +1,70 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
 
 ---
- .../mellanox/mlx5/core/en_accel/ipsec_rxtx.h  | 35 ++++++++++++++++---
- 1 file changed, 30 insertions(+), 5 deletions(-)
+ .../mellanox/mlx5/core/en_accel/macsec.c       | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ipsec_rxtx.h
-@@ -49,6 +49,9 @@ struct mlx5e_accel_tx_ipsec_state {
- 	struct xfrm_state *x;
- 	u32 tailen;
- 	u32 plen;
-+#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+	u8 inner_ipproto;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/macsec.c
+@@ -604,7 +604,11 @@ static int mlx5e_macsec_upd_txsa(struct macsec_context *ctx)
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
++#else
++	if (tx_sa->next_pn != ctx_tx_sa->next_pn_halves.lower) {
++#endif
+ 		netdev_err(netdev, "MACsec offload: update TX sa %d PN isn't supported\n",
+ 			   assoc_num);
+ 		err = -EINVAL;
+@@ -663,7 +667,11 @@ static int mlx5e_macsec_del_txsa(struct macsec_context *ctx)
+ 
+ 	mlx5e_macsec_cleanup_sa(macsec, tx_sa, true, ctx->secy->netdev, 0);
+ 	mlx5_destroy_encryption_key(macsec->mdev, tx_sa->enc_key_id);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(tx_sa);
++#else
++	kfree_rcu(tx_sa, rcu_head);
++#endif
+ 	macsec_device->tx_sa[assoc_num] = NULL;
+ 
+ out:
+@@ -840,7 +848,11 @@ static void macsec_del_rxsc_ctx(struct mlx5e_macsec *macsec, struct mlx5e_macsec
+ 	xa_erase(&macsec->sc_xarray, rx_sc->sc_xarray_element->fs_id);
+ 	dst_release(&rx_sc->md_dst->dst);
+ 	kfree(rx_sc->sc_xarray_element);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(rx_sc);
++#else
++	kfree_rcu(rx_sc, rcu_head);
++#endif
+ }
+ 
+ static int mlx5e_macsec_del_rxsc(struct macsec_context *ctx)
+@@ -1006,7 +1018,11 @@ static int mlx5e_macsec_upd_rxsa(struct macsec_context *ctx)
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_STRUCT_MACSEC_CONTEXT_UPDATE_PN
+ 	if (ctx->sa.update_pn) {
++#else
++	if (rx_sa->next_pn != ctx_rx_sa->next_pn_halves.lower) {
++#endif
+ 		netdev_err(ctx->netdev,
+ 			   "MACsec offload update RX sa %d PN isn't supported\n",
+ 			   assoc_num);
+@@ -1650,7 +1666,9 @@ static const struct macsec_ops macsec_offload_ops = {
+ 	.mdo_add_secy = mlx5e_macsec_add_secy,
+ 	.mdo_upd_secy = mlx5e_macsec_upd_secy,
+ 	.mdo_del_secy = mlx5e_macsec_del_secy,
++#ifdef HAVE_RX_USES_MD_DST_IN_MACSEC_OPS
+ 	.rx_uses_md_dst = true,
 +#endif
  };
  
- #ifdef CONFIG_MLX5_EN_IPSEC
-@@ -83,6 +86,9 @@ static inline bool mlx5e_ipsec_eseg_meta(struct mlx5_wqe_eth_seg *eseg)
- }
- 
- void mlx5e_ipsec_tx_build_eseg(struct mlx5e_priv *priv, struct sk_buff *skb,
-+#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+			       struct mlx5e_accel_tx_ipsec_state *ipsec_st,
-+#endif
- 			       struct mlx5_wqe_eth_seg *eseg);
- 
- static inline netdev_features_t
-@@ -90,6 +96,12 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
- {
- 	struct xfrm_offload *xo = xfrm_offload(skb);
- 	struct sec_path *sp = skb_sec_path(skb);
-+#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+	u8 inner_ipproto = xo->inner_ipproto;
-+#else
-+	u8 inner_ipproto = 0;
-+#endif
-+
- 
- 	if (sp && sp->len && xo) {
- 		struct xfrm_state *x = sp->xvec[0];
-@@ -98,9 +110,9 @@ mlx5e_ipsec_feature_check(struct sk_buff *skb, netdev_features_t features)
- 			goto out_disable;
- 
- 		/* Only support UDP or TCP L4 checksum */
--		if (xo->inner_ipproto &&
--		    xo->inner_ipproto != IPPROTO_UDP &&
--		    xo->inner_ipproto != IPPROTO_TCP)
-+		if (inner_ipproto &&
-+		    inner_ipproto != IPPROTO_UDP &&
-+		    inner_ipproto != IPPROTO_TCP)
- 			goto out_disable;
- 
- 		return features;
-@@ -114,16 +126,29 @@ out_disable:
- 
- static inline bool
- mlx5e_ipsec_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
-+#ifndef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+				  struct mlx5e_accel_tx_ipsec_state *ipsec_st,
-+#endif
- 				  struct mlx5_wqe_eth_seg *eseg)
- {
- 	struct mlx5_core_dev *mdev = sq->mdev;
--	u8 inner_ipproto;
-+#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+	struct xfrm_offload *xo;
-+	u32 inner_ipproto;
-+#else
-+	u8 inner_ipproto = ipsec_st->inner_ipproto;
-+#endif
- 
- 	if (!mlx5e_ipsec_eseg_meta(eseg))
- 		return false;
- 
-+#ifdef HAVE_XFRM_OFFLOAD_INNER_IPPROTO
-+	xo = xfrm_offload(skb);
-+	inner_ipproto = xo->inner_ipproto;
-+#else
-+	inner_ipproto = ipsec_st->inner_ipproto;
-+#endif
- 	eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
--	inner_ipproto = xfrm_offload(skb)->inner_ipproto;
- 	if (inner_ipproto) {
- 		eseg->cs_flags |= MLX5_ETH_WQE_L3_INNER_CSUM;
- 		if (inner_ipproto == IPPROTO_TCP || inner_ipproto == IPPROTO_UDP) {
+ bool mlx5e_macsec_handle_tx_skb(struct mlx5e_macsec *macsec, struct sk_buff *skb)

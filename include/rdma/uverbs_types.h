@@ -177,6 +177,12 @@ struct ib_uverbs_file {
 	struct mutex umap_lock;
 	struct list_head umaps;
 	struct page *disassociate_page;
+	/*
+	 * Protected by disassociation_lock. Set while
+	 * uverbs_user_mmap_disassociate() is cleaning up VMAs to prevent
+	 * rdma_umap_open() and ib_uverbs_mmap() from registering new ones.
+	 */
+	bool disassociating;
 
 	struct xarray		idr;
 

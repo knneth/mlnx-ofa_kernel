@@ -38,7 +38,6 @@
 #include <net/pkt_cls.h>
 #include <net/act_api.h>
 #include <net/devlink.h>
-#include <net/ipv6_stubs.h>
 
 #include "eswitch.h"
 #include "mlx5_esw_devm.h"
@@ -484,7 +483,7 @@ static int mlx5e_sqs2vport_add_peers_rules(struct mlx5_eswitch *esw, struct mlx5
 		struct mlx5e_rep_sq_peer *sq_peer;
 		int err;
 
-		sq_peer = kzalloc(sizeof(*sq_peer), GFP_KERNEL);
+		sq_peer = kzalloc_obj(*sq_peer);
 		if (!sq_peer)
 			return -ENOMEM;
 
@@ -529,7 +528,7 @@ static int mlx5e_sqs2vport_start(struct mlx5_eswitch *esw,
 		devcom_locked = true;
 
 	for (i = 0; i < sqns_num; i++) {
-		rep_sq = kzalloc(sizeof(*rep_sq), GFP_KERNEL);
+		rep_sq = kzalloc_obj(*rep_sq);
 		if (!rep_sq) {
 			err = -ENOMEM;
 			goto out_err;
@@ -636,8 +635,12 @@ mlx5e_remove_sqs_fwd_rules(struct mlx5e_priv *priv)
 	struct mlx5_eswitch *esw = priv->mdev->priv.eswitch;
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 	struct mlx5_eswitch_rep *rep = rpriv->rep;
+	bool devcom_locked = false;
 
+	devcom_locked = mlx5_devcom_for_each_peer_begin(esw->devcom);
 	mlx5e_sqs2vport_stop(esw, rep);
+	if (devcom_locked)
+		mlx5_devcom_for_each_peer_end(esw->devcom);
 }
 
 static int
@@ -667,8 +670,10 @@ mlx5e_rep_del_meta_tunnel_rule(struct mlx5e_priv *priv)
 {
 	struct mlx5e_rep_priv *rpriv = priv->ppriv;
 
-	if (rpriv->send_to_vport_meta_rule)
+	if (rpriv->send_to_vport_meta_rule) {
 		mlx5_eswitch_del_send_to_vport_meta_rule(rpriv->send_to_vport_meta_rule);
+		rpriv->send_to_vport_meta_rule = NULL;
+	}
 }
 
 void mlx5e_rep_activate_channels(struct mlx5e_priv *priv)
@@ -887,7 +892,7 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 	if (take_rtnl)
 		rtnl_lock();
 	/* update XDP supported features */
-	mlx5e_set_xdp_feature(netdev);
+	mlx5e_set_xdp_feature(priv);
 	if (take_rtnl)
 		rtnl_unlock();
 
@@ -900,8 +905,6 @@ static void mlx5e_build_rep_params(struct net_device *netdev)
 		params->vlan_strip_disable = true;
 
 	mlx5_query_min_inline(mdev, &params->tx_min_inline_mode);
-
-	MLX5E_SET_PFLAG(params, MLX5E_PFLAG_PER_CH_STATS, true);
 }
 
 static void mlx5e_build_rep_netdev(struct net_device *netdev,
@@ -1386,11 +1389,6 @@ static void mlx5e_uplink_rep_enable(struct mlx5e_priv *priv)
 	mlx5_lag_add_netdev(mdev, netdev);
 }
 
-static void mlx5e_uplink_rep_set_rx_mode(struct mlx5e_priv *priv)
-{
-	queue_work(priv->wq, &priv->set_rx_mode_work);
-}
-
 static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -1403,8 +1401,8 @@ static void mlx5e_uplink_rep_disable(struct mlx5e_priv *priv)
 	netdev_unlock(priv->netdev);
 	rtnl_unlock();
 
-	mlx5e_uplink_rep_set_rx_mode(priv);
-
+	/* clean-up uplink's mpfs mac table */
+	queue_work(priv->wq, &priv->set_rx_mode_work);
 	mlx5e_rep_bridge_cleanup(priv);
 	mlx5e_dcbnl_delete_app(priv);
 	mlx5_notifier_unregister(mdev, &priv->events_nb);
@@ -1550,19 +1548,19 @@ mlx5e_vport_uplink_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *
 	netdev = mlx5_uplink_netdev_get(dev);
 	if (!netdev)
 		return 0;
-	/* Keeping priv for mlx5e_ipsec_build_netdev*/
-	priv = netdev_priv(netdev);
 
+	priv = netdev_priv(netdev);
 	/* must not use netdev_priv(netdev), it might not be initialized yet */
 	rpriv->netdev = netdev;
 	err = mlx5e_netdev_change_profile(netdev, dev,
-		        		  &mlx5e_uplink_rep_profile, rpriv);
-	if (err)   
-		return err;
+					  &mlx5e_uplink_rep_profile, rpriv);
+	if (err)
+		goto put_netdev;
 
 	mlx5_smartnic_sysfs_init(rpriv->netdev);
 	mlx5_rep_sysfs_init(rpriv);
 	mlx5e_ipsec_build_netdev(priv);
+put_netdev:
 	mlx5_uplink_netdev_put(dev, netdev);
 	return err;
 }
@@ -1675,7 +1673,7 @@ mlx5e_vport_rep_load(struct mlx5_core_dev *dev, struct mlx5_eswitch_rep *rep)
 	struct mlx5e_rep_priv *rpriv;
 	int err;
 
-	rpriv = kvzalloc(sizeof(*rpriv), GFP_KERNEL);
+	rpriv = kvzalloc_obj(*rpriv);
 	if (!rpriv)
 		return -ENOMEM;
 
@@ -1792,7 +1790,7 @@ static int mlx5e_vport_rep_event_pair(struct mlx5_eswitch *esw,
 			sq_peer->peer = peer_esw;
 			continue;
 		}
-		sq_peer = kzalloc(sizeof(*sq_peer), GFP_KERNEL);
+		sq_peer = kzalloc_obj(*sq_peer);
 		if (!sq_peer) {
 			err = -ENOMEM;
 			goto err_sq_alloc;

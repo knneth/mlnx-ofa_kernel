@@ -1,60 +1,20 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
 
 ---
- .../mellanox/mlx5/core/esw/diag/qos_tracepoint.h | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/diag/qos_tracepoint.h
-@@ -18,7 +18,11 @@ TRACE_EVENT(mlx5_esw_vport_qos_destroy,
- 			     __field(unsigned short, vport_id)
- 			     __field(unsigned int,   sched_elem_ix)
- 			     ),
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 	    TP_fast_assign(__assign_str(devname);
-+#else
-+ 	    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
-+#endif
- 		    __entry->vport_id = vport->vport;
- 		    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
- 	    ),
-@@ -38,7 +42,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_vport_qos_template,
- 				     __field(unsigned int, max_rate)
- 				     __field(void *, parent)
- 				     ),
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 		    TP_fast_assign(__assign_str(devname);
-+#else
-+		    TP_fast_assign(__assign_str(devname, dev_name(vport->dev->device));
-+#endif
- 			    __entry->vport_id = vport->vport;
- 			    __entry->sched_elem_ix = mlx5_esw_qos_vport_get_sched_elem_ix(vport);
- 			    __entry->bw_share = bw_share;
-@@ -72,7 +80,11 @@ DECLARE_EVENT_CLASS(mlx5_esw_node_qos_template,
- 				     __field(const void *, node)
- 				     __field(unsigned int, tsar_ix)
- 				     ),
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 		    TP_fast_assign(__assign_str(devname);
-+#else
-+		    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
-+#endif
- 			    __entry->node = node;
- 			    __entry->tsar_ix = tsar_ix;
- 		    ),
-@@ -106,7 +118,11 @@ TRACE_EVENT(mlx5_esw_node_qos_config,
- 			     __field(unsigned int, bw_share)
- 			     __field(unsigned int, max_rate)
- 			     ),
-+#ifdef HAVE_ASSIGN_STR_1_PARAM
- 	    TP_fast_assign(__assign_str(devname);
-+#else
-+	    TP_fast_assign(__assign_str(devname, dev_name(dev->device));
-+#endif
- 		    __entry->node = node;
- 		    __entry->tsar_ix = tsar_ix;
- 		    __entry->bw_share = bw_share;
+--- a/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/ipsec.c
+@@ -44,7 +44,7 @@ int mlx5_esw_ipsec_vf_offload_get(struct mlx5_core_dev *dev, struct mlx5_vport *
+ {
+ 	int query_sz = MLX5_ST_SZ_BYTES(query_hca_cap_out);
+ 	void *hca_cap, *query_cap;
+-	bool ipsec_enabled;
++	bool ipsec_enabled = false;
+ 	int err;
+ 
+ 	/* Querying IPsec caps only makes sense when generic ipsec_offload

@@ -1,20 +1,24 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT:
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 4 ++++
+ 1 file changed, 4 insertions(+)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/post_meter.h
-@@ -4,6 +4,7 @@
- #ifndef __MLX5_EN_POST_METER_H__
- #define __MLX5_EN_POST_METER_H__
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+@@ -242,7 +242,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_int_port_priv *priv,
+ 		mlx5_del_flow_rules(int_port->rx_rule);
+ 	mapping_remove(ctx, int_port->mapping);
+ 	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
++#ifdef HAVE_KFREE_RCU_MIGHTSLEEP
+ 	kfree_rcu_mightsleep(int_port);
++#else
++	kfree_rcu(int_port, rcu_head);
++#endif
+ 	priv->num_ports--;
+ }
  
-+
- #define packet_color_to_reg { \
- 	.mfield = MLX5_ACTION_IN_FIELD_METADATA_REG_C_5, \
- 	.moffset = 0, \

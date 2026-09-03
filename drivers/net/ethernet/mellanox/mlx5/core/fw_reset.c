@@ -75,7 +75,8 @@ static int mlx5_fw_reset_enable_remote_dev_reset_set(struct devlink *devlink, u3
 }
 
 static int mlx5_fw_reset_enable_remote_dev_reset_get(struct devlink *devlink, u32 id,
-						     struct devlink_param_gset_ctx *ctx)
+						     struct devlink_param_gset_ctx *ctx,
+						     struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_fw_reset *fw_reset;
@@ -130,6 +131,16 @@ static int mlx5_reg_mfrl_query(struct mlx5_core_dev *dev, u8 *reset_level,
 int mlx5_fw_reset_query(struct mlx5_core_dev *dev, u8 *reset_level, u8 *reset_type)
 {
 	return mlx5_reg_mfrl_query(dev, reset_level, reset_type, NULL, NULL, NULL);
+}
+
+bool mlx5_fw_reset_in_progress(struct mlx5_core_dev *dev)
+{
+	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
+
+	if (!fw_reset)
+		return false;
+
+	return test_bit(MLX5_FW_RESET_FLAGS_RESET_IN_PROGRESS, &fw_reset->reset_flags);
 }
 
 static int mlx5_fw_reset_get_request_info(struct mlx5_core_dev *dev,
@@ -433,8 +444,18 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 				      u8 reset_method)
 {
 	struct pci_dev *bridge = dev->pdev->bus->self;
+	bool is_ecpf = mlx5_core_is_ecpf(dev);
 	u16 dev_id;
 	int err;
+
+	if (is_ecpf && mlx5_external_controller_sf_exist(dev)) {
+		mlx5_core_warn(dev, "External Controller SFs should be removed "
+				    "before reset\n");
+		return false;
+	}
+
+	if (is_ecpf)
+		return true;
 
 	if (!bridge) {
 		mlx5_core_warn(dev, "PCI bus bridge is not accessible\n");
@@ -446,13 +467,7 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 		return false;
 	}
 
-	if (mlx5_core_is_ecpf(dev) && mlx5_external_controller_sf_exist(dev)) {
-		mlx5_core_warn(dev, "External Controller SFs should be removed "
-				    "before reset\n");
-		return false;
-	}
-
-	if (!mlx5_core_is_ecpf(dev) && !mlx5_sf_table_empty(dev)) {
+	if (!mlx5_sf_table_empty(dev)) {
 		mlx5_core_warn(dev, "SFs should be removed before reset\n");
 		return false;
 	}
@@ -471,16 +486,6 @@ static bool mlx5_is_reset_now_capable(struct mlx5_core_dev *dev,
 	return (!mlx5_check_dev_ids(dev, dev_id));
 }
 
-bool mlx5_fw_reset_in_progress(struct mlx5_core_dev *dev)
-{
-	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
-
-	if (!fw_reset)
-		return false;
-
-	return test_bit(MLX5_FW_RESET_FLAGS_RESET_IN_PROGRESS, &fw_reset->reset_flags);
-}
-
 static void mlx5_sync_reset_request_event(struct work_struct *work)
 {
 	struct mlx5_fw_reset *fw_reset = container_of(work, struct mlx5_fw_reset,
@@ -494,11 +499,9 @@ static void mlx5_sync_reset_request_event(struct work_struct *work)
 	err = mlx5_fw_reset_get_request_info(dev, &fw_reset->reset_method,
 					     &sync_flow);
 	if (err) {
-		mlx5_core_warn(dev, "Failed reading MFRL, err %d\n", err);
 		nack_request = true;
-	} else if (!mlx5_is_reset_now_capable(dev, fw_reset->reset_method) ||
-		   test_bit(MLX5_FW_RESET_FLAGS_NACK_RESET_REQUEST,
-			    &fw_reset->reset_flags)) {
+		mlx5_core_warn(dev, "Failed reading MFRL, err %d\n", err);
+	} else if (test_bit(MLX5_FW_RESET_FLAGS_NACK_RESET_REQUEST, &fw_reset->reset_flags)) {
 		nack_request = true;
 	} else {
 		if (sync_flow == MLX5_MFRL_REG_SYNCED_DRIVER_FLOW &&
@@ -510,7 +513,6 @@ static void mlx5_sync_reset_request_event(struct work_struct *work)
 	/* For external resets, try to acquire devl_lock. Skip if devlink reset is
 	 * pending (lock already held)
 	 */
-
 	if (nack_request ||
 	    (!test_bit(MLX5_FW_RESET_FLAGS_PENDING_COMP,
 		       &fw_reset->reset_flags) &&
@@ -519,6 +521,13 @@ static void mlx5_sync_reset_request_event(struct work_struct *work)
 		mlx5_core_warn(dev, "PCI Sync FW Update Reset Nack %s",
 			       err ? "Failed" : "Sent");
 		return;
+	}
+
+	if (dev->pci_reset_in_progress) {
+		err = mlx5_fw_reset_set_reset_sync_nack(dev);
+		mlx5_core_warn(dev, "PCI reset in progress, Sync FW Update Reset Nack %s",
+			       err ? "Failed" : "Sent");
+		goto unlock;
 	}
 
 	if (!mlx5_core_is_ecpf(dev) && mlx5_sync_reset_set_reset_requested(dev))
@@ -927,7 +936,8 @@ static int mlx5_devm_fw_reset_enable_remote_dev_reset_set(struct mlxdevm *mlxdev
 }
 
 static int mlx5_devm_fw_reset_enable_remote_dev_reset_get(struct mlxdevm *mlxdevm, u32 id,
-							  struct mlxdevm_param_gset_ctx *ctx)
+							  struct mlxdevm_param_gset_ctx *ctx,
+							  struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = mlx5_devm_core_dev_get(mlxdevm);
 	struct mlx5_fw_reset *fw_reset;
@@ -953,7 +963,7 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 	if (!MLX5_CAP_MCAM_REG(dev, mfrl))
 		return 0;
 
-	fw_reset = kzalloc(sizeof(*fw_reset), GFP_KERNEL);
+	fw_reset = kzalloc_obj(*fw_reset);
 	if (!fw_reset)
 		return -ENOMEM;
 	fw_reset->wq = create_singlethread_workqueue("mlx5_fw_reset_events");

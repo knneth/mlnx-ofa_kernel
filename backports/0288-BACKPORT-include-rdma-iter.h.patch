@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/iter.h
+
+---
+ include/rdma/iter.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/include/rdma/iter.h b/include/rdma/iter.h
+index xxxxxxx..xxxxxxx 100644
+--- a/include/rdma/iter.h
++++ b/include/rdma/iter.h
+@@ -59,8 +59,12 @@ static inline void __rdma_umem_block_iter_start(struct ib_block_iter *biter,
+ 						struct ib_umem *umem,
+ 						unsigned long pgsz)
+ {
++#ifdef HAVE_SG_APPEND_TABLE
+ 	__rdma_block_iter_start(biter, umem->sgt_append.sgt.sgl,
+ 				umem->sgt_append.sgt.nents, pgsz);
++#else
++	__rdma_block_iter_start(biter, umem->sg_head.sgl, umem->nmap, pgsz);
++#endif
+ 	biter->__sg_advance = ib_umem_offset(umem) & ~(pgsz - 1);
+ 	biter->__sg_numblocks = ib_umem_num_dma_blocks(umem, pgsz);
+ }

@@ -5,6 +5,7 @@ all:
 
 .DELETE_ON_ERROR:
 
+sbindir = $(prefix)/sbin
 include ./configure.mk.kernel
 
 export COMPAT_AUTOCONF=$(CWD)/include/linux/compat_autoconf.h
@@ -124,10 +125,9 @@ kernel: autoversion
 		CONFIG_INFINIBAND=$(CONFIG_INFINIBAND) \
 		CONFIG_INFINIBAND_CORE_DUMMY=$(CONFIG_INFINIBAND_CORE_DUMMY) \
 		CONFIG_INFINIBAND_IPOIB=$(CONFIG_INFINIBAND_IPOIB) \
-		CONFIG_IPOIB_VERSION=$(CONFIG_IPOIB_VERSION) \
 		CONFIG_INFINIBAND_IPOIB_CM=$(CONFIG_INFINIBAND_IPOIB_CM) \
 		CONFIG_IPOIB_ALL_MULTI=$(CONFIG_IPOIB_ALL_MULTI) \
-                CONFIG_INFINIBAND_MLNX_BX=$(CONFIG_INFINIBAND_MLNX_BX) \
+        CONFIG_INFINIBAND_MLNX_BX=$(CONFIG_INFINIBAND_MLNX_BX) \
 		CONFIG_INFINIBAND_SRP=$(CONFIG_INFINIBAND_SRP) \
 		CONFIG_INFINIBAND_SRP_DUMMY=$(CONFIG_INFINIBAND_SRP_DUMMY) \
 		CONFIG_RDMA_RXE=$(CONFIG_RDMA_RXE) \
@@ -258,7 +258,7 @@ install_scripts:
 	ofed_scripts/install_helper $(INSTALL_MOD_PATH)
 
 	install -d $(INSTALL_MOD_PATH)/sbin
-	install -d $(INSTALL_MOD_PATH)/$(prefix)/sbin
+	install -d $(INSTALL_MOD_PATH)/$(sbindir)
 	install -m 0755 ofed_scripts/mlnx_bf_assign_ct_cores.sh $(INSTALL_MOD_PATH)$(data_dir)
 	install -m 0755 ofed_scripts/mlnx_drv_ctl $(INSTALL_MOD_PATH)$(data_dir)
 	install -m 0755 ofed_scripts/mod_load_funcs $(INSTALL_MOD_PATH)$(data_dir)
@@ -273,8 +273,7 @@ ifeq ("$(wildcard $(INSTALL_MOD_PATH)/etc/modprobe.d/mlnx-bf.conf)","")
 endif
 
 ifneq ($(filter m,$(CONFIG_MLX5_CORE)),)
-	install -d $(INSTALL_MOD_PATH)/$(prefix)/bin
-	install -m 0755 ofed_scripts/ibdev2netdev $(INSTALL_MOD_PATH)/$(prefix)/sbin
+	install -m 0755 ofed_scripts/ibdev2netdev $(INSTALL_MOD_PATH)/$(sbindir)
 endif
 
 ifeq ($(CONFIG_INFINIBAND_IPOIB),m)
@@ -291,7 +290,7 @@ endif
 	install -m 0644 ofed_scripts/90-ib.rules $(INSTALL_MOD_PATH)/lib/udev/rules.d
 
 	install -d $(INSTALL_MOD_PATH)/usr/sbin
-	install -m 0755 ofed_scripts/setup_mr_cache.sh $(INSTALL_MOD_PATH)/usr/sbin
+	install -m 0755 ofed_scripts/setup_mr_cache.sh $(INSTALL_MOD_PATH)$(sbindir)
 	install -d $(INSTALL_MOD_PATH)/etc/
 
 

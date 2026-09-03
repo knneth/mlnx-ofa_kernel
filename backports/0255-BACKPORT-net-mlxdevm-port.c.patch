@@ -1,0 +1,116 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
+
+---
+ net/mlxdevm/port.c | 44 +++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 39 insertions(+), 5 deletions(-)
+
+diff --git a/net/mlxdevm/port.c b/net/mlxdevm/port.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/mlxdevm/port.c
++++ b/net/mlxdevm/port.c
+@@ -610,15 +610,18 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
+ 				enum mlxdevm_command cmd)
+ {
+ 	struct mlxdevm *mlxdevm = mlxdevm_port->mlxdevm;
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	struct mlxdevm_obj_desc desc;
+ 	struct sk_buff *msg;
+ 	int err;
++#endif
+ 
+ 	WARN_ON(cmd != MLXDEVM_CMD_PORT_NEW && cmd != MLXDEVM_CMD_PORT_DEL);
+ 
+ 	if (!__devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+ 		return;
+@@ -632,9 +635,10 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
+ 	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
+ 	mlxdevm_nl_obj_desc_port_set(&desc, mlxdevm_port);
+ 	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
++#endif
+ }
+-#ifdef HAVE_BLOCKED_DEVLINK_CODE
+ 
++#ifdef HAVE_BLOCKED_DEVLINK_CODE
+ static void devlink_ports_notify(struct devlink *devlink,
+ 				 enum devlink_command cmd)
+ {
+@@ -658,10 +662,21 @@ void devlink_ports_notify_unregister(struct devlink *devlink)
+ 
+ int mlxdevm_nl_port_get_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
++	struct mlxdevm_port *mlxdevm_port;
+ 	struct sk_buff *msg;
+ 	int err;
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
++#else
++	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
++
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
++
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+ 		return -ENOMEM;
+@@ -941,9 +956,20 @@ static int mlxdevm_port_function_set(struct mlxdevm_port *port,
+ 
+ int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
++	struct mlxdevm_port *mlxdevm_port;
+ 	int err;
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
++#else
++	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
++
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
++
+ 	if (info->attrs[MLXDEVM_ATTR_PORT_TYPE]) {
+ 		enum mlxdevm_port_type port_type;
+ 
+@@ -1013,7 +1039,7 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
+ 	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
+ 	struct netlink_ext_ack *extack = info->extack;
+ 	struct mlxdevm_port_new_attrs new_attrs = {};
+-	struct mlxdevm_port *mlxdevm_port;
++	struct mlxdevm_port *mlxdevm_port = NULL;
+ 	struct sk_buff *msg;
+ 	int err;
+ 
+@@ -1074,10 +1100,18 @@ err_out_port_del:
+ 
+ int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info)
+ {
+-	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
+ 	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
+ 	struct netlink_ext_ack *extack = info->extack;
++	struct mlxdevm_port *mlxdevm_port;
+ 
++#ifdef HAVE_STRUCT_GENL_SPLIT_OPS
++	mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
++#else
++	mlxdevm_port = mlxdevm_port_get_from_info(mlxdevm, info);
++	if (IS_ERR(mlxdevm_port)) {
++		return PTR_ERR(mlxdevm_port);
++	}
++#endif
+ 	if (!mlxdevm_port->ops->port_del)
+ 		return -EOPNOTSUPP;
+ 

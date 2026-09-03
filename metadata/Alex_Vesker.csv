@@ -1,0 +1,6 @@
+sep=;
+Change-Id=Ibc51e9150487066caf588d9b92f26dfa8f426267; subject=net/mlx5_core: Get protected crspace domain size dynamically; feature=mlx5_crdump; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I537e6f3009a05d92e09641d6b589b501f12c78a2; subject=IB/ipoib: Change the default minimum number of completion to return; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I8b5078a58e3a3cd38571509cf756a71c83950a03; subject=IB/ipoib: Workaround for ib_notify_cq silently fail race; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ia041b922831f8b2c7b36da5b4c71e749340b4aad; subject=net/mlx5: Log firmware syndrome on STC modify failure.; feature=hws; upstream_status=in_progress; upstream_issue=1234567890; general=;
+Change-Id=I5ac8a932133a4945675464096f76b08a8b117347; subject=net/mlx5: Handle NULL vport destination action in flow steering.; feature=hws; upstream_status=in_progress; upstream_issue=1234567890; general=;

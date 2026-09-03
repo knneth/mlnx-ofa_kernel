@@ -1,0 +1,24 @@
+source/ofed_scripts/openib.conf etc/infiniband
+source/ofed_scripts/mlx5.conf   etc/infiniband
+
+source/ofed_scripts/90-ib.rules			lib/udev/rules.d
+source/ofed_scripts/83-mlnx-sf-name.rules	lib/udev/rules.d
+ofed_scripts/openibd.service			lib/systemd/system
+ofed_scripts/mlnx_interface_mgr\@.service	etc/systemd/system
+debian/info					etc/infiniband
+
+source/ofed_scripts/sf-rep-netdev-rename	lib/udev
+source/ofed_scripts/auxdev-sf-netdev-rename	lib/udev
+source/ofed_scripts/net-interfaces		usr/sbin
+source/ofed_scripts/ibdev2netdev		usr/sbin
+source/ofed_scripts/openibd			etc/init.d
+source/ofed_scripts/mlnx.conf			etc/modprobe.d
+source/ofed_scripts/mlnx-bf.conf		etc/modprobe.d
+source/ofed_scripts/ib_ipoib.conf		etc/modprobe.d
+# To be renamed later:
+source/ofed_scripts/mlnx_interface_mgr_deb.sh	bin/
+source/ofed_scripts/mlnx_conf_mgr.sh		bin/
+source/ofed_scripts/setup_mr_cache.sh		usr/sbin
+ofed_scripts/mlnx_bf_assign_ct_cores.sh		usr/share/mlnx_ofed
+ofed_scripts/mlnx_drv_ctl			usr/share/mlnx_ofed
+ofed_scripts/mod_load_funcs			usr/share/mlnx_ofed

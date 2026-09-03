@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Iab6168618698ebeba9090d7e1f25e3a63a5f2edc; subject=net/mlx5: E-Switch, Do not enable vports again; feature=mlx5_sfs; upstream_status=in_progress; upstream_issue=0123456789; general=;

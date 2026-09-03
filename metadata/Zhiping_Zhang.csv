@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Ic238b6061f86fef0ad4a171c04f44a6666ad6ef2; subject=net/mlx5: free mlx5_st_idx_data on final dealloc; feature=rebase_upstream_fixes; upstream_status=accepted; upstream_issue=1234567890; general=upstream commit ID: df6134b527a8, tag: v7.2-rc4;

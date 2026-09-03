@@ -2,17 +2,17 @@ Source: mlnx-ofed-kernel
 Section: net
 Priority: optional
 Maintainer: Vladimir Sokolovsky <vlad@mellanox.com>
-Build-Depends: debhelper (>= 8.0.0),
+Build-Depends: debhelper-compat (= 12),
  autotools-dev,
  automake,
- bzip2,
- dh-dkms | dkms (<< 3.0),
-Standards-Version: 4.2.0
+ dh-dkms <!modules> | dkms (<< 3.0) <!modules>,
+ dh-exec <!modules>,
+Standards-Version: 4.7.0
 Homepage: http://www.mellanox.com/page/products_dyn?product_family=26&mtag=linux_sw_drivers
 
 Package: mlnx-ofed-kernel-utils
 Architecture: any
-Depends: ${misc:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof,
+Depends: ${misc:Depends}, ${perl:Depends}, coreutils, pciutils, grep, procps, module-init-tools | kmod, lsof,
  mlnx-tools (>= 5.2.0),
 Conflicts: mlnx-en-utils
 Description: Userspace tools to restart and tune mlnx-ofed kernel modules
@@ -20,11 +20,13 @@ Description: Userspace tools to restart and tune mlnx-ofed kernel modules
 Package: mlnx-ofed-kernel-dkms
 Section: kernel
 Architecture: all
-Depends: dkms, ${misc:Depends}, mlnx-ofed-kernel-utils, libc6-dev, gcc,
+Build-Profiles: <!modules>
+Depends: dkms, ${misc:Depends}, ${perl:Depends}, mlnx-ofed-kernel-utils, libc6-dev, gcc,
 Recommends: linux-headers-arm64 | linux-headers-powerpc | linux-headers-ppc64 | linux-headers-ppc64le | linux-headers-amd64 | linux-headers-generic | linux-headers
 Provides: mlnx-rdma-rxe-dkms, fwctl-dkms
 Conflicts: mlnx-rdma-rxe-dkms, fwctl-dkms
-Replaces: mlnx-rdma-rxe-dkms, fwctl-dkms
+Breaks: mlnx-ofed-kernel-modules
+Replaces: mlnx-rdma-rxe-dkms, fwctl-dkms, mlnx-ofed-kernel-modules
 Description: DKMS support for mlnx-ofed kernel modules
  This package provides integration with the DKMS infrastructure for
  automatically building out of tree kernel modules.
@@ -32,3 +34,14 @@ Description: DKMS support for mlnx-ofed kernel modules
  This package provides the source code for the mlnx-ofed kernel modules.
  .
  This package contains the source to be built with dkms.
+
+Package: mlnx-ofed-kernel-modules
+Section: kernel
+Architecture: any
+Build-Profiles: <modules>
+Depends: ${misc:Depends}, ${extra:Depends}, mlnx-ofed-kernel-utils
+Provides: mlnx-rdma-rxe-modules, fwctl-modules
+Conflicts: mlnx-rdma-rxe-modules, fwctl-modules
+Replaces: mlnx-rdma-rxe-modules, fwctl-modules
+Description: mlnx-ofed kernel modules
+ This package provides the binary and source code for the mlnx-ofed kernel modules.

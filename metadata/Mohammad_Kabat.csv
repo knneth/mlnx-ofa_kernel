@@ -1,0 +1,6 @@
+sep=;
+Change-Id=I6a28e949f0c6ace8fb371a036ebdcae4b2c4b935; subject=net/mlx5: Resiliency, avoid 2 completions on a polling command; feature=mlx5_en_bugs_in_review; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I7b7bf0e7ff0baf53c4d896ce8b309da92ec63fe7; subject=net/mlx5: Add aliases for auxiliary bus module; feature=auxiliary_bus; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I9105a9f2af011e073186822a91f4396e968fcf0c; subject=debian: Install openibd to etc/init.d, not etc/init.d/openibd; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=Ib1b450e3fe0f12018f51452af2530f6e89d1c8d7; subject=configure: Update DRIVER_VERSION in mlx5_core.h from debian/changelog; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;
+Change-Id=Iacd1ff02e9c80404a42b8e109c6869e00b8f4c8b; subject=Revert "configure: Update DRIVER_VERSION in mlx5_core.h from debian/changelog"; feature=ofed_scripts; upstream_status=ignore; upstream_issue=; general=;

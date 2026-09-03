@@ -47,18 +47,24 @@ int mlx5e_diag_fill_device_name(struct mlx5e_priv *priv, void *buff)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
 	size_t pci_name_sz = strlen(pci_name(mdev->pdev));
+	char *dst = buff;
+	size_t copied;
 
-	memset(buff, 0, MLX5_DEV_NAME_SZ);
-	strncpy(buff, pci_name(mdev->pdev), MLX5_DEV_NAME_SZ);
+	memset(dst, 0, MLX5_DEV_NAME_SZ);
+	memcpy(dst, pci_name(mdev->pdev),
+	       min(pci_name_sz, (size_t)(MLX5_DEV_NAME_SZ - 1)));
+	dst[MLX5_DEV_NAME_SZ - 1] = '\0';
 	if (pci_name_sz >= MLX5_DEV_NAME_SZ - 2)
 		goto out;
 
 	/* there is at least 2 bytes left */
-	buff += pci_name_sz;
-	strncpy(buff, ":", 1);
-	buff += 1;
+	dst += pci_name_sz;
+	*dst++ = ':';
 
-	strncpy(buff, priv->netdev->name, MLX5_DEV_NAME_SZ - pci_name_sz - 1);
+	copied = min(strlen(priv->netdev->name),
+		     (size_t)(MLX5_DEV_NAME_SZ - pci_name_sz - 2));
+	memcpy(dst, priv->netdev->name, copied);
+	dst[copied] = '\0';
 out:
 	return MLX5_DEV_NAME_SZ;
 }

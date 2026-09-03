@@ -1,0 +1,23 @@
+From: Michael Guralnik <michaelgur@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/frmr_pools.c
+
+---
+ drivers/infiniband/core/frmr_pools.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/infiniband/core/frmr_pools.c b/drivers/infiniband/core/frmr_pools.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/frmr_pools.c
++++ b/drivers/infiniband/core/frmr_pools.c
+@@ -143,7 +143,11 @@ static bool age_pinned_pool(struct ib_device *device, struct ib_frmr_pool *pool)
+ 		return false;
+ 	}
+ 
++#ifdef HAVE_UMIN
+ 	to_destroy = min(total - pool->pinned_handles, pool->inactive_queue.ci);
++#else
++	to_destroy = min_t(u32, total - pool->pinned_handles, pool->inactive_queue.ci);
++#endif
+ 
+ 	handles = kcalloc(to_destroy, sizeof(*handles), GFP_ATOMIC);
+ 	if (!handles) {

@@ -224,8 +224,9 @@ size_t devlink_nl_port_handle_size(struct devlink_port *devlink_port)
 {
 	struct devlink *devlink = devlink_port->devlink;
 
-	return nla_total_size(strlen(devlink->dev->bus->name) + 1) /* DEVLINK_ATTR_BUS_NAME */
-	     + nla_total_size(strlen(dev_name(devlink->dev)) + 1) /* DEVLINK_ATTR_DEV_NAME */
+	return nla_total_size(strlen(devlink_bus_name(devlink)) + 1) /* DEVLINK_ATTR_BUS_NAME */
+	     + nla_total_size(strlen(devlink_dev_name(devlink)) + 1) /* DEVLINK_ATTR_DEV_NAME */
+	     + nla_total_size(8) /* DEVLINK_ATTR_INDEX */
 	     + nla_total_size(4); /* DEVLINK_ATTR_PORT_INDEX */
 }
 #endif
@@ -657,7 +658,7 @@ void devlink_ports_notify_unregister(struct devlink *devlink)
 
 int mlxdevm_nl_port_get_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
+	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
 	struct sk_buff *msg;
 	int err;
 
@@ -940,7 +941,7 @@ static int mlxdevm_port_function_set(struct mlxdevm_port *port,
 
 int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
+	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
 	int err;
 
 	if (info->attrs[MLXDEVM_ATTR_PORT_TYPE]) {
@@ -1009,11 +1010,10 @@ int devlink_nl_port_unsplit_doit(struct sk_buff *skb, struct genl_info *info)
 
 int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
 {
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct netlink_ext_ack *extack = info->extack;
 	struct mlxdevm_port_new_attrs new_attrs = {};
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
 	struct mlxdevm_port *mlxdevm_port;
-	unsigned int new_index;
 	struct sk_buff *msg;
 	int err;
 
@@ -1047,7 +1047,7 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	err = mlxdevm->ops->port_new(mlxdevm, &new_attrs,
-				     extack, &new_index);
+				     extack, &mlxdevm_port);
 	if (err)
 		return err;
 
@@ -1056,9 +1056,6 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
 		err = -ENOMEM;
 		goto err_out_port_del;
 	}
-
-	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
-
 	err = mlxdevm_nl_port_fill(msg, mlxdevm_port, MLXDEVM_CMD_PORT_NEW,
 				   info->snd_portid, info->snd_seq, 0, NULL);
 	if (WARN_ON_ONCE(err))
@@ -1077,9 +1074,9 @@ err_out_port_del:
 
 int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm_port *mlxdevm_port = info->user_ptr[1];
+	struct mlxdevm *mlxdevm_port = mlxdevm_nl_ctx(info)->mlxdevm_port;
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct netlink_ext_ack *extack = info->extack;
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
 
 	if (!mlxdevm_port->ops->port_del)
 		return -EOPNOTSUPP;
@@ -1092,7 +1089,7 @@ static void mlxdevm_port_type_warn(struct work_struct *work)
 	struct mlxdevm_port *port = container_of(to_delayed_work(work),
 						 struct mlxdevm_port,
 						 type_warn_dw);
-	dev_warn(port->mlxdevm->dev, "Type was not set for mlxdevm port.");
+	devm_warn(port->mlxdevm, "Type was not set for mlxdevm port.");
 }
 
 static bool mlxdevm_port_type_should_warn(struct mlxdevm_port *mlxdevm_port)
@@ -1141,6 +1138,7 @@ void mlxdevm_port_init(struct mlxdevm *mlxdevm,
 		return;
 	mlxdevm_port->mlxdevm = mlxdevm;
 	INIT_LIST_HEAD(&mlxdevm_port->region_list);
+	INIT_LIST_HEAD(&mlxdevm_port->resource_list);
 	mlxdevm_port->initialized = true;
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_init);
@@ -1159,6 +1157,7 @@ EXPORT_SYMBOL_GPL(mlxdevm_port_init);
 void devlink_port_fini(struct devlink_port *devlink_port)
 {
 	WARN_ON(!list_empty(&devlink_port->region_list));
+	WARN_ON(!list_empty(&devlink_port->resource_list));
 }
 EXPORT_SYMBOL_GPL(devlink_port_fini);
 #endif
@@ -1247,7 +1246,7 @@ EXPORT_SYMBOL_GPL(mlxdevm_port_register_with_ops);
  */
 void devm_port_unregister(struct mlxdevm_port *mlxdevm_port)
 {
-	lockdep_assert_held(&mlxdevm_port->mlxdevm->lock);
+	devm_assert_locked(mlxdevm_port->mlxdevm);
 	WARN_ON(mlxdevm_port->type != MLXDEVM_PORT_TYPE_NOTSET);
 
 	mlxdevm_port_type_warn_cancel(mlxdevm_port);
@@ -1552,51 +1551,51 @@ void mlxdevm_port_attrs_pci_sf_set(struct mlxdevm_port *mlxdevm_port, u32 contro
 	attrs->pci_sf.external = external;
 }
 EXPORT_SYMBOL_GPL(mlxdevm_port_attrs_pci_sf_set);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-
-static void devlink_port_rel_notify_cb(struct devlink *devlink, u32 port_index)
+static void mlxdevm_port_rel_notify_cb(struct mlxdevm *mlxdevm, u32 port_index)
 {
-	struct devlink_port *devlink_port;
+	struct mlxdevm_port *mlxdevm_port;
 
-	devlink_port = devlink_port_get_by_index(devlink, port_index);
-	if (!devlink_port)
+	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, port_index);
+	if (!mlxdevm_port)
 		return;
-	devlink_port_notify(devlink_port, DEVLINK_CMD_PORT_NEW);
+	mlxdevm_port_notify(mlxdevm_port, MLXDEVM_CMD_PORT_NEW);
 }
 
-static void devlink_port_rel_cleanup_cb(struct devlink *devlink, u32 port_index,
+static void mlxdevm_port_rel_cleanup_cb(struct mlxdevm *mlxdevm, u32 port_index,
 					u32 rel_index)
 {
-	struct devlink_port *devlink_port;
+	struct mlxdevm_port *mlxdevm_port;
 
-	devlink_port = devlink_port_get_by_index(devlink, port_index);
-	if (devlink_port && devlink_port->rel_index == rel_index)
-		devlink_port->rel_index = 0;
+	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, port_index);
+	if (mlxdevm_port && mlxdevm_port->rel_index == rel_index)
+		mlxdevm_port->rel_index = 0;
 }
 
 /**
- * devl_port_fn_devlink_set - Attach peer devlink
+ * devm_port_fn_mlxdevm_set - Attach peer mlxdevm
  *			      instance to port function.
- * @devlink_port: devlink port
- * @fn_devlink: devlink instance to attach
+ * @mlxdevm_port: mlxdevm port
+ * @fn_mlxdevm: mlxdevm instance to attach
  */
-int devl_port_fn_devlink_set(struct devlink_port *devlink_port,
-			     struct devlink *fn_devlink)
+int devm_port_fn_mlxdevm_set(struct mlxdevm_port *mlxdevm_port,
+			     struct mlxdevm *fn_mlxdevm)
 {
-	ASSERT_DEVLINK_PORT_REGISTERED(devlink_port);
+	ASSERT_MLXDEVM_PORT_REGISTERED(mlxdevm_port);
 
-	if (WARN_ON(devlink_port->attrs.flavour != DEVLINK_PORT_FLAVOUR_PCI_SF ||
-		    devlink_port->attrs.pci_sf.external))
+	if (WARN_ON(mlxdevm_port->attrs.flavour != MLXDEVM_PORT_FLAVOUR_PCI_SF ||
+		    mlxdevm_port->attrs.pci_sf.external))
 		return -EINVAL;
 
-	return devlink_rel_nested_in_add(&devlink_port->rel_index,
-					 devlink_port->devlink->index,
-					 devlink_port->index,
-					 devlink_port_rel_notify_cb,
-					 devlink_port_rel_cleanup_cb,
-					 fn_devlink);
+	return mlxdevm_rel_nested_in_add(&mlxdevm_port->rel_index,
+					 mlxdevm_port->mlxdevm->index,
+					 mlxdevm_port->index,
+					 mlxdevm_port_rel_notify_cb,
+					 mlxdevm_port_rel_cleanup_cb,
+					 fn_mlxdevm);
 }
-EXPORT_SYMBOL_GPL(devl_port_fn_devlink_set);
+EXPORT_SYMBOL_GPL(devm_port_fn_mlxdevm_set);
+
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /**
  *	devlink_port_linecard_set - Link port with a linecard

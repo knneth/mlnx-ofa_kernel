@@ -1,0 +1,772 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/file.c
+
+Change-Id: Ie4200cec449b18bc111659b6d1f369e2b8dad3ec
+---
+ fs/fuse/file.c | 547 +++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 525 insertions(+), 22 deletions(-)
+
+diff --git a/fs/fuse/file.c b/fs/fuse/file.c
+index xxxxxxx..xxxxxxx 100644
+--- a/fs/fuse/file.c
++++ b/fs/fuse/file.c
+@@ -22,6 +22,9 @@
+ #include <linux/splice.h>
+ #include <linux/task_io_accounting_ops.h>
+ #include <linux/iomap.h>
++#ifndef HAVE_FOLIO_COPY_EXPORTED
++#include <linux/migrate.h>
++#endif
+ 
+ static int fuse_send_open(struct fuse_mount *fm, u64 nodeid,
+ 			  unsigned int open_flags, int opcode,
+@@ -595,14 +598,38 @@ void fuse_read_args_fill(struct fuse_io_args *ia, struct file *file, loff_t pos,
+ 	args->out_args[0].size = count;
+ }
+ 
++#ifndef HAVE_UNPIN_FOLIO
++static void unpin_folio(struct folio *folio)
++{
++	int refs = 1;
++
++	if (is_zero_folio(folio))
++		return;
++	node_stat_mod_folio(folio, NR_FOLL_PIN_RELEASED, refs);
++	if (folio_test_large(folio))
++		atomic_sub(refs, &folio->_pincount);
++	else
++		refs *= GUP_PIN_COUNTING_BIAS;
++
++        folio_put_refs(folio, refs);
++}
++#endif
++
+ static void fuse_release_user_pages(struct fuse_args_pages *ap, ssize_t nres,
+ 				    bool should_dirty)
+ {
+ 	unsigned int i;
+ 
+ 	for (i = 0; i < ap->num_folios; i++) {
+-		if (should_dirty)
++		if (should_dirty) {
++#ifdef HAVE_FOLIO_MARK_DIRTY_LOCK
+ 			folio_mark_dirty_lock(ap->folios[i]);
++#else
++			folio_lock(ap->folios[i]);
++			folio_mark_dirty(ap->folios[i]);
++			folio_unlock(ap->folios[i]);
++#endif
++		}
+ 		if (ap->args.is_pinned)
+ 			unpin_folio(ap->folios[i]);
+ 	}
+@@ -844,6 +871,7 @@ static int fuse_do_readfolio(struct file *file, struct folio *folio,
+ 	return 0;
+ }
+ 
++#ifdef HAVE_IOMAP_WRITE_OPS
+ static int fuse_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
+ 			    unsigned int flags, struct iomap *iomap,
+ 			    struct iomap *srcmap)
+@@ -858,6 +886,18 @@ static const struct iomap_ops fuse_iomap_ops = {
+ 	.iomap_begin	= fuse_iomap_begin,
+ };
+ 
++static int fuse_iomap_read_folio_range(const struct iomap_iter *iter,
++				       struct folio *folio, loff_t pos,
++				       size_t len)
++{
++	struct file *file = iter->private;
++	size_t off = offset_in_folio(folio, pos);
++
++	return fuse_do_readfolio(file, folio, off, len);
++}
++#endif /* HAVE_IOMAP_WRITE_OPS */
++
++#ifdef HAVE_IOMAP_READ_FOLIO_CTX
+ struct fuse_fill_read_data {
+ 	struct file *file;
+ 
+@@ -945,7 +985,11 @@ static int fuse_iomap_read_folio_range_async(const struct iomap_iter *iter,
+ 	return ret;
+ }
+ 
++#ifdef HAVE_SUBMIT_READ_2_PARAMS
+ static void fuse_iomap_read_submit(const struct iomap_iter *iter, struct iomap_read_folio_ctx *ctx)
++#else
++static void fuse_iomap_read_submit(struct iomap_read_folio_ctx *ctx)
++#endif
+ {
+ 	struct fuse_fill_read_data *data = ctx->read_ctx;
+ 
+@@ -977,21 +1021,15 @@ static int fuse_read_folio(struct file *file, struct folio *folio)
+ 		return -EIO;
+ 	}
+ 
++#ifdef HAVE_IOMAP_READ_FOLIO_3_PARAMS
+ 	iomap_read_folio(&fuse_iomap_ops, &ctx, NULL);
++#else
++	iomap_read_folio(&fuse_iomap_ops, &ctx);
++#endif
+ 	fuse_invalidate_atime(inode);
+ 	return 0;
+ }
+ 
+-static int fuse_iomap_read_folio_range(const struct iomap_iter *iter,
+-				       struct folio *folio, loff_t pos,
+-				       size_t len)
+-{
+-	struct file *file = iter->private;
+-	size_t off = offset_in_folio(folio, pos);
+-
+-	return fuse_do_readfolio(file, folio, off, len);
+-}
+-
+ static void fuse_readpages_end(struct fuse_mount *fm, struct fuse_args *args,
+ 			       int err)
+ {
+@@ -1079,9 +1117,164 @@ static void fuse_readahead(struct readahead_control *rac)
+ 	if (fuse_is_bad(inode))
+ 		return;
+ 
++#ifdef HAVE_IOMAP_READ_FOLIO_3_PARAMS
+ 	iomap_readahead(&fuse_iomap_ops, &ctx, NULL);
++#else
++	iomap_readahead(&fuse_iomap_ops, &ctx);
++#endif
++}
++#else /* !HAVE_IOMAP_READ_FOLIO_CTX */
++static int fuse_read_folio(struct file *file, struct folio *folio)
++{
++	struct inode *inode = folio->mapping->host;
++	int err;
++
++	err = -EIO;
++	if (fuse_is_bad(inode))
++		goto out;
++
++	err = fuse_do_readfolio(file, folio, 0, folio_size(folio));
++	if (!err)
++		folio_mark_uptodate(folio);
++	fuse_invalidate_atime(inode);
++ out:
++	folio_unlock(folio);
++	return err;
++}
++
++static void fuse_readpages_end(struct fuse_mount *fm, struct fuse_args *args,
++			       int err)
++{
++	int i;
++	struct fuse_io_args *ia = container_of(args, typeof(*ia), ap.args);
++	struct fuse_args_pages *ap = &ia->ap;
++	size_t count = ia->read.in.size;
++	size_t num_read = args->out_args[0].size;
++	struct address_space *mapping = NULL;
++
++	for (i = 0; mapping == NULL && i < ap->num_folios; i++)
++		mapping = ap->folios[i]->mapping;
++
++	if (mapping) {
++		struct inode *inode = mapping->host;
++
++		/*
++		 * Short read means EOF. If file size is larger, truncate it
++		 */
++		if (!err && num_read < count)
++			fuse_short_read(inode, ia->read.attr_ver, num_read, ap);
++
++		fuse_invalidate_atime(inode);
++	}
++
++	for (i = 0; i < ap->num_folios; i++) {
++		struct folio *folio = ap->folios[i];
++
++		if (!err)
++			folio_mark_uptodate(folio);
++		folio_unlock(folio);
++		folio_put(folio);
++	}
++	if (ia->ff)
++		fuse_file_put(ia->ff, false);
++
++	fuse_io_free(ia);
++}
++
++static void fuse_send_readpages(struct fuse_io_args *ia, struct file *file,
++				unsigned int count)
++{
++	struct fuse_file *ff = file->private_data;
++	struct fuse_mount *fm = ff->fm;
++	struct fuse_args_pages *ap = &ia->ap;
++	loff_t pos = folio_pos(ap->folios[0]);
++	ssize_t res;
++	int err;
++
++	ap->args.out_pages = true;
++	ap->args.page_zeroing = true;
++	ap->args.page_replace = true;
++
++	/* Don't overflow end offset */
++	if (pos + (count - 1) == LLONG_MAX) {
++		count--;
++		ap->descs[ap->num_folios - 1].length--;
++	}
++	WARN_ON((loff_t) (pos + count) < 0);
++
++	fuse_read_args_fill(ia, file, pos, count, FUSE_READ);
++	ia->read.attr_ver = fuse_get_attr_version(fm->fc);
++	if (fm->fc->async_read) {
++		ia->ff = fuse_file_get(ff);
++		ap->args.end = fuse_readpages_end;
++		err = fuse_simple_background(fm, &ap->args, GFP_KERNEL);
++		if (!err)
++			return;
++	} else {
++		res = fuse_simple_request(fm, &ap->args);
++		err = res < 0 ? res : 0;
++	}
++	fuse_readpages_end(fm, &ap->args, err);
+ }
+ 
++static void fuse_readahead(struct readahead_control *rac)
++{
++	struct inode *inode = rac->mapping->host;
++	struct fuse_conn *fc = get_fuse_conn(inode);
++	unsigned int max_pages, nr_pages;
++	struct folio *folio = NULL;
++
++	if (fuse_is_bad(inode))
++		return;
++
++	max_pages = min_t(unsigned int, fc->max_pages,
++			fc->max_read / PAGE_SIZE);
++
++	nr_pages = readahead_count(rac);
++
++	while (nr_pages) {
++		struct fuse_io_args *ia;
++		struct fuse_args_pages *ap;
++		unsigned cur_pages = min(max_pages, nr_pages);
++		unsigned int pages = 0;
++
++		if (fc->num_background >= fc->congestion_threshold &&
++		    rac->ra->async_size >= readahead_count(rac))
++			break;
++
++		ia = fuse_io_alloc(NULL, cur_pages);
++		if (!ia)
++			break;
++		ap = &ia->ap;
++
++		while (pages < cur_pages) {
++			unsigned int folio_pages;
++
++			if (!folio)
++				folio = __readahead_folio(rac);
++
++			folio_pages = folio_nr_pages(folio);
++			if (folio_pages > cur_pages - pages) {
++				WARN_ON(!pages);
++				break;
++			}
++
++			ap->folios[ap->num_folios] = folio;
++			ap->descs[ap->num_folios].length = folio_size(folio);
++			ap->num_folios++;
++			pages += folio_pages;
++			folio = NULL;
++		}
++		fuse_send_readpages(ia, rac->file, pages << PAGE_SHIFT);
++		nr_pages -= pages;
++	}
++	if (folio) {
++		folio_unlock(folio);
++		folio_put(folio);
++	}
++}
++#endif /* HAVE_IOMAP_READ_FOLIO_CTX */
++
+ static ssize_t fuse_cache_read_iter(struct kiocb *iocb, struct iov_iter *to)
+ {
+ 	struct inode *inode = iocb->ki_filp->f_mapping->host;
+@@ -1245,7 +1438,11 @@ static ssize_t fuse_fill_write_pages(struct fuse_io_args *ia,
+ 	unsigned int num;
+ 	int err = 0;
+ 
++#ifdef HAVE_UMIN
+ 	num = min(iov_iter_count(ii), fc->max_write);
++#else
++	num = min_t(size_t, iov_iter_count(ii), fc->max_write);
++#endif
+ 
+ 	ap->args.in_pages = true;
+ 
+@@ -1268,7 +1465,11 @@ static ssize_t fuse_fill_write_pages(struct fuse_io_args *ia,
+ 			flush_dcache_folio(folio);
+ 
+ 		folio_offset = ((index - folio->index) << PAGE_SHIFT) + offset;
++#ifdef HAVE_UMIN
+ 		bytes = min(folio_size(folio) - folio_offset, num);
++#else
++		bytes = min_t(unsigned int, folio_size(folio) - folio_offset, num);
++#endif
+ 
+ 		tmp = copy_folio_from_iter_atomic(folio, folio_offset, bytes, ii);
+ 		flush_dcache_folio(folio);
+@@ -1462,9 +1663,11 @@ static void fuse_dio_unlock(struct kiocb *iocb, bool exclusive)
+ 	}
+ }
+ 
++#ifdef HAVE_IOMAP_WRITE_OPS
+ static const struct iomap_write_ops fuse_iomap_write_ops = {
+ 	.read_folio_range = fuse_iomap_read_folio_range,
+ };
++#endif
+ 
+ static ssize_t fuse_cache_write_iter(struct kiocb *iocb, struct iov_iter *from)
+ {
+@@ -1507,17 +1710,24 @@ static ssize_t fuse_cache_write_iter(struct kiocb *iocb, struct iov_iter *from)
+ 			goto out;
+ 		written = direct_write_fallback(iocb, from, written,
+ 				fuse_perform_write(iocb, from));
+-	} else if (writeback) {
+-		/*
+-		 * Use iomap so that we can do granular uptodate reads
+-		 * and granular dirty tracking for large folios.
+-		 */
+-		written = iomap_file_buffered_write(iocb, from,
+-						    &fuse_iomap_ops,
+-						    &fuse_iomap_write_ops,
+-						    file);
+ 	} else {
++#ifdef HAVE_IOMAP_WRITE_OPS
++		if (writeback) {
++			/*
++			 * Use iomap so that we can do granular uptodate reads
++			 * and granular dirty tracking for large folios.
++			 */
++			written = iomap_file_buffered_write(iocb, from,
++							    &fuse_iomap_ops,
++							    &fuse_iomap_write_ops,
++							    file);
++		} else {
++			written = fuse_perform_write(iocb, from);
++		}
++#else
++		/* On older kernels the iomap writeback path is unavailable. */
+ 		written = fuse_perform_write(iocb, from);
++#endif
+ 	}
+ out:
+ 	inode_unlock(inode);
+@@ -1542,9 +1752,11 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
+ 			       size_t *nbytesp, int write,
+ 			       unsigned int max_pages,
+ 			       bool use_pages_for_kvec_io,
+-			       bool use_p2p_dma)
++			       bool use_p2p_dma __maybe_unused)
+ {
++#ifdef HAVE_ITER_ALLOW_P2PDMA
+ 	iov_iter_extraction_t iov_extract_flags = use_p2p_dma ? ITER_ALLOW_P2PDMA : 0;
++#endif
+ 	bool flush_or_invalidate = false;
+ 	unsigned int nr_pages = 0;
+ 	size_t nbytes = 0;  /* # bytes already packed in req */
+@@ -1596,7 +1808,11 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
+ 		ret = iov_iter_extract_pages(ii, &pages,
+ 					     *nbytesp - nbytes,
+ 					     max_pages - nr_pages,
++#ifdef HAVE_ITER_ALLOW_P2PDMA
+ 					     iov_extract_flags,
++#else
++					     0,
++#endif
+ 					     &start);
+ 		if (ret < 0)
+ 			break;
+@@ -1609,7 +1825,11 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
+ 			struct folio *folio = page_folio(pages[i]);
+ 			unsigned int offset = start +
+ 				(folio_page_idx(folio, pages[i]) << PAGE_SHIFT);
++#ifdef HAVE_UMIN
+ 			unsigned int len = umin(ret, PAGE_SIZE - start);
++#else
++			unsigned int len = min_t(unsigned int, ret, PAGE_SIZE - start);
++#endif
+ 
+ 			ap->descs[ap->num_folios].offset = offset;
+ 			ap->descs[ap->num_folios].length = len;
+@@ -1896,14 +2116,20 @@ static void fuse_writepage_finish(struct fuse_writepage_args *wpa)
+ 	struct fuse_inode *fi = get_fuse_inode(inode);
+ 	int i;
+ 
+-	for (i = 0; i < ap->num_folios; i++)
++	for (i = 0; i < ap->num_folios; i++) {
+ 		/*
+ 		 * Benchmarks showed that ending writeback within the
+ 		 * scope of the fi->lock alleviates xarray lock
+ 		 * contention and noticeably improves performance.
+ 		 */
++#ifdef HAVE_IOMAP_WRITE_OPS
+ 		iomap_finish_folio_write(inode, ap->folios[i],
+ 					 ap->descs[i].length);
++#else
++		dec_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
++		folio_end_writeback(ap->folios[i]);
++#endif
++	}
+ 
+ 	wake_up(&fi->page_waitq);
+ }
+@@ -2075,6 +2301,7 @@ static void fuse_writepage_add_to_bucket(struct fuse_conn *fc,
+ 	rcu_read_unlock();
+ }
+ 
++#ifdef HAVE_IOMAP_WRITE_OPS
+ static void fuse_writepage_args_page_fill(struct fuse_writepage_args *wpa, struct folio *folio,
+ 					  uint32_t folio_index, loff_t offset, unsigned len)
+ {
+@@ -2189,7 +2416,9 @@ static bool fuse_folios_need_send(struct fuse_conn *fc, loff_t pos,
+ 
+ 	return false;
+ }
++#endif /* HAVE_IOMAP_WRITE_OPS */
+ 
++#ifdef HAVE_IOMAP_WRITE_OPS
+ static ssize_t fuse_iomap_writeback_range(struct iomap_writepage_ctx *wpc,
+ 					  struct folio *folio, u64 pos,
+ 					  unsigned len, u64 end_pos)
+@@ -2316,6 +2545,249 @@ static int fuse_launder_folio(struct folio *folio)
+ 	}
+ 	return err;
+ }
++#else /* !HAVE_IOMAP_WRITE_OPS */
++static void fuse_writepage_args_page_fill_old(struct fuse_writepage_args *wpa,
++					      struct folio *folio,
++					      uint32_t folio_index)
++{
++	struct inode *inode = folio->mapping->host;
++	struct fuse_args_pages *ap = &wpa->ia.ap;
++
++	ap->folios[folio_index] = folio;
++	ap->descs[folio_index].offset = 0;
++	ap->descs[folio_index].length = folio_size(folio);
++
++	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
++}
++
++struct fuse_writepages_fill_data {
++	struct fuse_writepage_args *wpa;
++	struct fuse_file *ff;
++	struct inode *inode;
++	unsigned int max_folios;
++	unsigned int nr_pages;
++	unsigned int nr_bytes;
++};
++
++static bool fuse_pages_realloc_old(struct fuse_writepages_fill_data *data)
++{
++	struct fuse_args_pages *ap = &data->wpa->ia.ap;
++	struct fuse_conn *fc = get_fuse_conn(data->inode);
++	struct folio **folios;
++	struct fuse_folio_desc *descs;
++	unsigned int nfolios = min_t(unsigned int,
++				     max_t(unsigned int, data->max_folios * 2,
++					   FUSE_DEFAULT_MAX_PAGES_PER_REQ),
++				    fc->max_pages);
++	WARN_ON(nfolios <= data->max_folios);
++
++	folios = fuse_folios_alloc(nfolios, GFP_NOFS, &descs);
++	if (!folios)
++		return false;
++
++	memcpy(folios, ap->folios, sizeof(struct folio *) * ap->num_folios);
++	memcpy(descs, ap->descs, sizeof(struct fuse_folio_desc) * ap->num_folios);
++	kfree(ap->folios);
++	ap->folios = folios;
++	ap->descs = descs;
++	data->max_folios = nfolios;
++
++	return true;
++}
++
++static void fuse_writepages_send_old(struct fuse_writepages_fill_data *data)
++{
++	struct fuse_writepage_args *wpa = data->wpa;
++	struct inode *inode = data->inode;
++	struct fuse_inode *fi = get_fuse_inode(inode);
++
++	spin_lock(&fi->lock);
++	list_add_tail(&wpa->queue_entry, &fi->queued_writes);
++	fuse_flush_writepages(inode);
++	spin_unlock(&fi->lock);
++}
++
++static bool fuse_writepage_need_send(struct fuse_conn *fc, struct folio *folio,
++				     struct fuse_args_pages *ap,
++				     struct fuse_writepages_fill_data *data)
++{
++	WARN_ON(!ap->num_folios);
++
++	/* Reached max pages */
++	if (data->nr_pages + folio_nr_pages(folio) > fc->max_pages)
++		return true;
++
++	/* Reached max write bytes */
++	if ((data->nr_pages * PAGE_SIZE) + folio_size(folio) > fc->max_write)
++		return true;
++
++	/* Discontinuity */
++	if (folio_next_index(ap->folios[ap->num_folios - 1]) != folio->index)
++		return true;
++
++	/* Need to grow the pages array?  If so, did the expansion fail? */
++	if (ap->num_folios == data->max_folios && !fuse_pages_realloc_old(data))
++		return true;
++
++	return false;
++}
++
++static struct fuse_writepage_args *
++fuse_writepage_args_setup_old(struct folio *folio, struct fuse_file *ff)
++{
++	struct inode *inode = folio->mapping->host;
++	struct fuse_conn *fc = get_fuse_conn(inode);
++	struct fuse_writepage_args *wpa;
++	struct fuse_args_pages *ap;
++
++	wpa = fuse_writepage_args_alloc();
++	if (!wpa)
++		return NULL;
++
++	fuse_writepage_add_to_bucket(fc, wpa);
++	fuse_write_args_fill(&wpa->ia, ff, folio_pos(folio), 0);
++	wpa->ia.write.in.write_flags |= FUSE_WRITE_CACHE;
++	wpa->inode = inode;
++	wpa->ia.ff = ff;
++
++	ap = &wpa->ia.ap;
++	ap->args.in_pages = true;
++	ap->args.end = fuse_writepage_end;
++
++	return wpa;
++}
++
++static int fuse_writepages_fill(struct folio *folio,
++				struct writeback_control *wbc, void *_data)
++{
++	struct fuse_writepages_fill_data *data = _data;
++	struct fuse_writepage_args *wpa = data->wpa;
++	struct fuse_args_pages *ap = wpa ? &wpa->ia.ap : NULL;
++	struct inode *inode = data->inode;
++	struct fuse_inode *fi = get_fuse_inode(inode);
++	struct fuse_conn *fc = get_fuse_conn(inode);
++	int err;
++
++	if (!data->ff) {
++		err = -EIO;
++		data->ff = fuse_write_file_get(fi);
++		if (!data->ff)
++			goto out_unlock;
++	}
++
++	if (wpa && fuse_writepage_need_send(fc, folio, ap, data)) {
++		fuse_writepages_send_old(data);
++		data->wpa = NULL;
++		data->nr_pages = 0;
++	}
++
++	if (data->wpa == NULL) {
++		err = -ENOMEM;
++		wpa = fuse_writepage_args_setup_old(folio, data->ff);
++		if (!wpa)
++			goto out_unlock;
++		fuse_file_get(wpa->ia.ff);
++		data->max_folios = 1;
++		ap = &wpa->ia.ap;
++	}
++	folio_start_writeback(folio);
++
++	fuse_writepage_args_page_fill_old(wpa, folio, ap->num_folios);
++	data->nr_pages += folio_nr_pages(folio);
++
++	err = 0;
++	ap->num_folios++;
++	if (!data->wpa)
++		data->wpa = wpa;
++out_unlock:
++	folio_unlock(folio);
++
++	return err;
++}
++
++static int fuse_writepages(struct address_space *mapping,
++			   struct writeback_control *wbc)
++{
++	struct inode *inode = mapping->host;
++	struct fuse_conn *fc = get_fuse_conn(inode);
++	struct fuse_writepages_fill_data data;
++	int err;
++
++	err = -EIO;
++	if (fuse_is_bad(inode))
++		goto out;
++
++	if (wbc->sync_mode == WB_SYNC_NONE &&
++	    fc->num_background >= fc->congestion_threshold)
++		return 0;
++
++	data.inode = inode;
++	data.wpa = NULL;
++	data.ff = NULL;
++	data.nr_pages = 0;
++
++	err = write_cache_pages(mapping, wbc, fuse_writepages_fill, &data);
++	if (data.wpa) {
++		WARN_ON(!data.wpa->ia.ap.num_folios);
++		fuse_writepages_send_old(&data);
++	}
++	if (data.ff)
++		fuse_file_put(data.ff, false);
++
++out:
++	return err;
++}
++
++static int fuse_writepage_locked(struct folio *folio)
++{
++	struct address_space *mapping = folio->mapping;
++	struct inode *inode = mapping->host;
++	struct fuse_inode *fi = get_fuse_inode(inode);
++	struct fuse_writepage_args *wpa;
++	struct fuse_args_pages *ap;
++	struct fuse_file *ff;
++	int error = -EIO;
++
++	ff = fuse_write_file_get(fi);
++	if (!ff)
++		goto err;
++
++	wpa = fuse_writepage_args_setup_old(folio, ff);
++	error = -ENOMEM;
++	if (!wpa)
++		goto err_writepage_args;
++
++	ap = &wpa->ia.ap;
++	ap->num_folios = 1;
++
++	folio_start_writeback(folio);
++	fuse_writepage_args_page_fill_old(wpa, folio, 0);
++
++	spin_lock(&fi->lock);
++	list_add_tail(&wpa->queue_entry, &fi->queued_writes);
++	fuse_flush_writepages(inode);
++	spin_unlock(&fi->lock);
++
++	return 0;
++
++err_writepage_args:
++	fuse_file_put(ff, false);
++err:
++	mapping_set_error(folio->mapping, error);
++	return error;
++}
++
++static int fuse_launder_folio(struct folio *folio)
++{
++	int err = 0;
++	if (folio_clear_dirty_for_io(folio)) {
++		err = fuse_writepage_locked(folio);
++		if (!err)
++			folio_wait_writeback(folio);
++	}
++	return err;
++}
++#endif /* HAVE_IOMAP_WRITE_OPS */
+ 
+ /*
+  * Write back dirty data/metadata now (there may not be any suitable
+@@ -2449,14 +2921,22 @@ static int convert_fuse_file_lock(struct fuse_conn *fc,
+ 		 * translate it into the caller's pid namespace.
+ 		 */
+ 		rcu_read_lock();
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 		fl->c.flc_pid = pid_nr_ns(find_pid_ns(ffl->pid, fc->pid_ns), &init_pid_ns);
++#else
++		fl->fl_pid = pid_nr_ns(find_pid_ns(ffl->pid, fc->pid_ns), &init_pid_ns);
++#endif
+ 		rcu_read_unlock();
+ 		break;
+ 
+ 	default:
+ 		return -EIO;
+ 	}
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	fl->c.flc_type = ffl->type;
++#else
++	fl->fl_type = ffl->type;
++#endif
+ 	return 0;
+ }
+ 
+@@ -2470,10 +2950,18 @@ static void fuse_lk_fill(struct fuse_args *args, struct file *file,
+ 
+ 	memset(inarg, 0, sizeof(*inarg));
+ 	inarg->fh = ff->fh;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	inarg->owner = fuse_lock_owner_id(fc, fl->c.flc_owner);
++#else
++	inarg->owner = fuse_lock_owner_id(fc, fl->fl_owner);
++#endif
+ 	inarg->lk.start = fl->fl_start;
+ 	inarg->lk.end = fl->fl_end;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	inarg->lk.type = fl->c.flc_type;
++#else
++	inarg->lk.type = fl->fl_type;
++#endif
+ 	inarg->lk.pid = pid;
+ 	if (flock)
+ 		inarg->lk_flags |= FUSE_LK_FLOCK;
+@@ -2510,8 +2998,13 @@ static int fuse_setlk(struct file *file, struct file_lock *fl, int flock)
+ 	struct fuse_mount *fm = get_fuse_mount(inode);
+ 	FUSE_ARGS(args);
+ 	struct fuse_lk_in inarg;
++#ifdef HAVE_FILE_LOCK_CORE_C
+ 	int opcode = (fl->c.flc_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
+ 	struct pid *pid = fl->c.flc_type != F_UNLCK ? task_tgid(current) : NULL;
++#else
++	int opcode = (fl->fl_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
++	struct pid *pid = fl->fl_type != F_UNLCK ? task_tgid(current) : NULL;
++#endif
+ 	pid_t pid_nr = pid_nr_ns(pid, fm->fc->pid_ns);
+ 	int err;
+ 
+@@ -3154,8 +3647,13 @@ static ssize_t fuse_copy_file_range(struct file *src_file, loff_t src_off,
+ 				     len, flags);
+ 
+ 	if (ret == -EOPNOTSUPP || ret == -EXDEV)
++#ifdef HAVE_SPLICE_COPY_FILE_RANGE
+ 		ret = splice_copy_file_range(src_file, src_off, dst_file,
+ 					     dst_off, len);
++#else
++		ret = generic_copy_file_range(src_file, src_off, dst_file,
++					      dst_off, len, flags);
++#endif
+ 	return ret;
+ }
+ 
+@@ -3203,7 +3701,12 @@ void fuse_init_file_inode(struct inode *inode, unsigned int flags)
+ 	inode->i_fop = &fuse_file_operations;
+ 	inode->i_data.a_ops = &fuse_file_aops;
+ 	if (fc->writeback_cache) {
++#ifdef HAVE_MAPPING_SET_WRITEBACK_MAY_DEADLOCK_ON_RECLAIM
+ 		mapping_set_writeback_may_deadlock_on_reclaim(&inode->i_data);
++#endif
++#ifdef HAVE_MAPPING_SET_NO_DATA_INTEGRITY
++		mapping_set_no_data_integrity(&inode->i_data);
++#endif
+ 	}
+ 
+ 	INIT_LIST_HEAD(&fi->write_files);

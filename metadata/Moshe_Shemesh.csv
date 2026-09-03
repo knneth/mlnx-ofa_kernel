@@ -1,0 +1,6 @@
+sep=;
+Change-Id=I8b28b0c3aa3451688e18e88830a497479454e3b9; subject=net/mlx5: Allow recovery after failed recovery; feature=mlx5_core_bugs; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ib5d953b7b8f678c2c9269d5c3ac4b49e3a7d4723; subject=net/mlx5: Avoid cmd_ent UAF in case of timeout in error state; feature=mlx5_core_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib4f15cf97c82ea3c16e11260c4a298730de537a9; subject=net/mlx5: Fix sending multicast traffic back to uplink; feature=mlx5_core_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Id55401f188632af8182ceca3ded14228ba9b4874; subject=net/mlx5: fw reset, fix save and lock order; feature=fw_reset_fixes; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=If33cbc8024242c0d7da219a0cc29322ba0595818; subject=net/mlx5: fw reset, check if reset now capable only on driver flow; feature=sync_reset_with_hot_plug; upstream_status=in_progress; upstream_issue=0123456789; general=;

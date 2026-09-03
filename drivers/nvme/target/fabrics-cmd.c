@@ -195,8 +195,7 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 		return NVME_SC_CMD_SEQ_ERROR | NVME_STATUS_DNR;
 	}
 
-	/* for fabrics, this value applies to only the I/O Submission Queues */
-	if (qid && sqsize > mqes) {
+	if (sqsize > mqes) {
 		pr_warn("sqsize %u is larger than MQES supported %u cntlid %d\n",
 				sqsize, mqes, ctrl->cntlid);
 		req->error_loc = offsetof(struct nvmf_connect_command, sqsize);
@@ -283,7 +282,7 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 	if (!nvmet_check_transfer_len(req, sizeof(struct nvmf_connect_data)))
 		return;
 
-	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	d = kmalloc_obj(*d);
 	if (!d) {
 		args.status = NVME_SC_INTERNAL;
 		goto complete;
@@ -347,7 +346,7 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 	if (!nvmet_check_transfer_len(req, sizeof(struct nvmf_connect_data)))
 		return;
 
-	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	d = kmalloc_obj(*d);
 	if (!d) {
 		status = NVME_SC_INTERNAL;
 		goto complete;

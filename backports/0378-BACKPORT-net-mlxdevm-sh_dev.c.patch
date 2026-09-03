@@ -1,0 +1,22 @@
+From: Stav Aviram <saviram@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/sh_dev.c
+
+Change-Id: I535f2a30f4368eb2582fab61ac2cc543e3ce1b5d
+---
+ net/mlxdevm/sh_dev.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/mlxdevm/sh_dev.c b/net/mlxdevm/sh_dev.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/mlxdevm/sh_dev.c
++++ b/net/mlxdevm/sh_dev.c
+@@ -55,7 +55,9 @@ static struct mlxdevm_shd *mlxdevm_shd_create(const char *id,
+ 	/* Twin with the caller's shared devlink instance, set before register so
+ 	 * the shared lock is already in effect (devm_lock dispatches to it).
+ 	 */
++#ifdef HAVE_DEVL_PORT_REGISTER
+ 	mlxdevm->devlink = shd_devlink;
++#endif
+ 
+ 	devm_lock(mlxdevm);
+ 	devm_register(mlxdevm);

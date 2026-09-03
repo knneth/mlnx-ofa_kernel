@@ -1,0 +1,2 @@
+sep=;
+Change-Id=Icf00fe01051f4c2fbb5780769ca006bc48efe64f; subject=net/mlx5: Make eswitch mode change synchronous; feature=asap_compat; upstream_status=NA; upstream_issue=; general=;

@@ -1,0 +1,3 @@
+sep=;
+Change-Id=Iae33f8a881c86a9fbe593f005225ef25afb5f453; subject=IB/ipoib: Add genetlink path record notifications; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I0626d0c0ea245aa0ed2745961c977955dfc8831d; subject=RDMA/mlx5: Allow relaxed ordering read in VFs and VMs with old capability; feature=enable_ro_read_in_vf_old_cap; upstream_status=NA; upstream_issue=; general=;

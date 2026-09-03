@@ -1,0 +1,49 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/hw/mlx5/data_direct.c
+
+---
+ drivers/infiniband/hw/mlx5/data_direct.c | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/infiniband/hw/mlx5/data_direct.c b/drivers/infiniband/hw/mlx5/data_direct.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/hw/mlx5/data_direct.c
++++ b/drivers/infiniband/hw/mlx5/data_direct.c
+@@ -28,16 +28,36 @@ static const struct pci_device_id mlx5_data_direct_pci_table[] = {
+ static int mlx5_data_direct_vpd_get_vuid(struct mlx5_data_direct_dev *dev)
+ {
+ 	struct pci_dev *pdev = dev->pdev;
+-	unsigned int vpd_size, kw_len;
++	unsigned int kw_len;
++#ifdef HAVE_PCI_VPD_ALLOC
++	unsigned int vpd_size;
++#else
++	ssize_t vpd_size;
++#endif
+ 	u8 *vpd_data;
+ 	int start;
+ 	int ret;
+ 
++#ifdef HAVE_PCI_VPD_ALLOC
+ 	vpd_data = pci_vpd_alloc(pdev, &vpd_size);
+ 	if (IS_ERR(vpd_data)) {
+ 		pci_err(pdev, "Unable to read VPD, err=%pe\n", vpd_data);
+ 		return PTR_ERR(vpd_data);
+ 	}
++#else
++	vpd_data = kmalloc(MLX5_VPD_LEN, GFP_KERNEL);
++	if (!vpd_data)
++		return -ENOMEM;
++#endif
++
++#ifndef HAVE_PCI_VPD_ALLOC
++	vpd_size = pci_read_vpd(pdev, 0, MLX5_VPD_LEN, vpd_data);
++	if (vpd_size <= 0) {
++		pci_err(pdev, "Unable to read VPD\n");
++		ret = -ENOMEM;
++		goto end;
++	}
++#endif
+ 
+ 	start = pci_vpd_find_ro_info_keyword(vpd_data, vpd_size, "VU", &kw_len);
+ 	if (start < 0) {

@@ -1,0 +1,74 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: net/mlxdevm/param.c
+
+---
+ net/mlxdevm/param.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/net/mlxdevm/param.c b/net/mlxdevm/param.c
+index xxxxxxx..xxxxxxx 100644
+--- a/net/mlxdevm/param.c
++++ b/net/mlxdevm/param.c
+@@ -418,8 +418,10 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
+ 				 struct mlxdevm_param_item *param_item,
+ 				 enum mlxdevm_command cmd)
+ {
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	struct sk_buff *msg;
+ 	int err;
++#endif
+ 
+ 	WARN_ON(cmd != MLXDEVM_CMD_PARAM_NEW && cmd != MLXDEVM_CMD_PARAM_DEL &&
+ 		cmd != MLXDEVM_CMD_PORT_PARAM_NEW &&
+@@ -432,6 +434,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
+ 	if (!devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_NOTIFICATIONS_FILTERING
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+ 		return;
+@@ -443,6 +446,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
+ 	}
+ 
+ 	mlxdevm_nl_notify_send(mlxdevm, msg);
++#endif
+ }
+ #ifdef HAVE_BLOCKED_DEVLINK_CODE
+ 
+@@ -504,7 +508,11 @@ static int
+ mlxdevm_param_type_get_from_info(struct genl_info *info,
+ 				 enum mlxdevm_param_type *param_type)
+ {
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_TYPE))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_TYPE])
++#endif
+ 		return -EINVAL;
+ 
+ 	*param_type = nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE]);
+@@ -576,7 +584,11 @@ mlxdevm_param_get_from_info(struct xarray *params, struct genl_info *info)
+ {
+ 	char *param_name;
+ 
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_NAME))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_NAME])
++#endif
+ 		return NULL;
+ 
+ 	param_name = nla_data(info->attrs[MLXDEVM_ATTR_PARAM_NAME]);
+@@ -648,7 +660,11 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
+ 		}
+ 	}
+ 
++#ifdef HAVE_GENL_REQ_ATTR_CHECK
+ 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_VALUE_CMODE))
++#else
++	if(!info->attrs[MLXDEVM_ATTR_PARAM_VALUE_CMODE])
++#endif
+ 		return -EINVAL;
+ 	cmode = nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_VALUE_CMODE]);
+ 	if (!mlxdevm_param_cmode_is_supported(param, cmode))

@@ -1,0 +1,3 @@
+sep=;
+Change-Id=I9a7a2a4451d55fc34d51657b0f8d698f78f3cec9; subject=net/mlx5e: Add support for XDP TX HW checksum offload; feature=tx_xdp_hw_checksum; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I406f556e05dc76130c7f8d02394fb470355aca45; subject=net/mlx5: Reset ACL before counter create; feature=sriov_sysfs; upstream_status=in_progress; upstream_issue=0123456789; general=;

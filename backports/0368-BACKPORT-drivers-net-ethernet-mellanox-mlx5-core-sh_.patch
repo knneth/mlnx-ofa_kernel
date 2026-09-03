@@ -1,0 +1,117 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sh_devlink.c
+
+Change-Id: I97a3df8bc6e37c1a24f54980f3aa49489526bbfd
+---
+ .../ethernet/mellanox/mlx5/core/sh_devlink.c  | 46 +++++++++++++++++--
+ 1 file changed, 42 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sh_devlink.c b/drivers/net/ethernet/mellanox/mlx5/core/sh_devlink.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sh_devlink.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sh_devlink.c
+@@ -15,38 +15,69 @@ static const struct mlxdevm_ops mlx5_devm_shd_ops = {
+ 
+ int mlx5_shd_init(struct mlx5_core_dev *dev)
+ {
++#ifdef HAVE_CLEANUP_H
+ 	u8 *vpd_data __free(kfree) = NULL;
++#else
++	u8 *vpd_data = NULL;
++#endif
+ 	struct pci_dev *pdev = dev->pdev;
+-	unsigned int vpd_size, kw_len;
++#ifdef HAVE_PCI_VPD_ALLOC
++	unsigned int vpd_size;
++#else
++	ssize_t vpd_size;
++#endif
++	unsigned int kw_len;
+ 	struct mlxdevm *shd_mlxdevm;
++#ifdef HAVE_DEVLINK_SHD_GET
+ 	struct devlink *devlink;
++#endif
+ 	char *sn, *end;
+ 	int start;
+-	int err;
+ 
+ 	if (!mlx5_core_is_pf(dev))
+ 		return 0;
+ 
++#ifdef HAVE_PCI_VPD_ALLOC
+ 	vpd_data = pci_vpd_alloc(pdev, &vpd_size);
+ 	if (IS_ERR(vpd_data)) {
+-		err = PTR_ERR(vpd_data);
++		int err = PTR_ERR(vpd_data);
+ 		return err == -ENODEV ? 0 : err;
+ 	}
++#else
++	vpd_data = kmalloc(MLX5_VPD_LEN, GFP_KERNEL);
++	if (!vpd_data)
++		return -ENOMEM;
++
++	vpd_size = pci_read_vpd(pdev, 0, MLX5_VPD_LEN, vpd_data);
++	if (vpd_size <= 0) {
++		pci_err(pdev, "Unable to read VPD\n");
++		kfree(vpd_data);
++		return -ENOMEM;
++	}
++#endif
+ 	start = pci_vpd_find_ro_info_keyword(vpd_data, vpd_size, "V3", &kw_len);
+ 	if (start < 0) {
+ 		/* Fall-back to SN for older devices. */
+ 		start = pci_vpd_find_ro_info_keyword(vpd_data, vpd_size,
+ 						     PCI_VPD_RO_KEYWORD_SERIALNO, &kw_len);
+-		if (start < 0)
++		if (start < 0) {
++#ifndef HAVE_CLEANUP_H
++			kfree(vpd_data);
++#endif
+ 			return 0; /* No usable serial number found, ignore. */
++		}
+ 	}
+ 	sn = kstrndup(vpd_data + start, kw_len, GFP_KERNEL);
++#ifndef HAVE_CLEANUP_H
++	kfree(vpd_data);
++#endif
+ 	if (!sn)
+ 		return -ENOMEM;
+ 	/* Firmware may return spaces at the end of the string, strip it. */
+ 	end = strchrnul(sn, ' ');
+ 	*end = '\0';
+ 
++#ifdef HAVE_DEVLINK_SHD_GET
+ 	/* Get or create shared devlink instance */
+ 	devlink = devlink_shd_get(sn, &mlx5_shd_ops, 0, pdev->dev.driver);
+ 	if (!devlink) {
+@@ -54,6 +85,9 @@ int mlx5_shd_init(struct mlx5_core_dev *dev)
+ 		return -ENOMEM;
+ 	}
+ 	dev->shd = devlink;
++#else
++	dev->shd = NULL;
++#endif
+ 
+ 	/* Get or create the shared mlxdevm instance, twinned to the shared
+ 	 * devlink instance (dev->shd).
+@@ -62,8 +96,10 @@ int mlx5_shd_init(struct mlx5_core_dev *dev)
+ 				      pdev->dev.driver, dev->shd);
+ 	kfree(sn);
+ 	if (!shd_mlxdevm) {
++#ifdef HAVE_DEVLINK_SHD_GET
+ 		devlink_shd_put(dev->shd);
+ 		dev->shd = NULL;
++#endif
+ 		return -ENOMEM;
+ 	}
+ 	dev->mlxdevm_res.shd_mlxdevm = shd_mlxdevm;
+@@ -81,6 +117,8 @@ void mlx5_shd_uninit(struct mlx5_core_dev *dev)
+ 	if (!dev->shd)
+ 		return;
+ 
++#ifdef HAVE_DEVLINK_SHD_GET
+ 	devlink_shd_put(dev->shd);
+ 	dev->shd = NULL;
++#endif
+ }

@@ -1,0 +1,5 @@
+sep=;
+Change-Id=I7aede92e256467f08e2cd0553b8b3661a35b036b; subject=IB/mlx5: In dual-port mode, initialize port 2 for tc_sysfs and ttl_sysfs; feature=mlx5_set_ttl; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I7b4df8627e6f47a7d6116a0deead0161c2d06b91; subject=IB/core: Fix doorbell loss on AMD platforms with SME; feature=amd_sme; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I5fef005da519eb61391618bca451354a3a865801; subject=net/mlx5_core: combine all MLX5_DEVM_PARAM_ID... macros into a single file; feature=mlxdevm; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If9de10316ec095e8bd2c6d7e1f6b5850cfc78d9b; subject=mlx5/core: Fix return value in debug/diag read functions; feature=mlx5_diag_cnt; upstream_status=NA; upstream_issue=; general=;

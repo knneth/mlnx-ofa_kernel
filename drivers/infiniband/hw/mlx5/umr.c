@@ -2,6 +2,7 @@
 /* Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. */
 
 #include <rdma/ib_umem_odp.h>
+#include <rdma/iter.h>
 #include "mlx5_ib.h"
 #include "umr.h"
 #include "wr.h"
@@ -146,7 +147,7 @@ int mlx5r_umr_resource_init(struct mlx5_ib_dev *dev)
 	 * UMR qp is set once, never changed until device unload.
 	 * Avoid taking the mutex if initialization is already done.
 	 */
-	if (dev->umrc.qp)
+	if (smp_load_acquire(&dev->umrc.qp))
 		return 0;
 
 	mutex_lock(&dev->umrc.init_lock);
@@ -184,7 +185,7 @@ int mlx5r_umr_resource_init(struct mlx5_ib_dev *dev)
 	sema_init(&dev->umrc.sem, MAX_UMR_WR);
 	mutex_init(&dev->umrc.lock);
 	dev->umrc.state = MLX5_UMR_STATE_ACTIVE;
-	dev->umrc.qp = qp;
+	smp_store_release(&dev->umrc.qp, qp);
 
 	mutex_unlock(&dev->umrc.init_lock);
 	return 0;
@@ -915,7 +916,7 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
 		 */
 		err = mlx5_odp_populate_xlt(xlt, idx, npages, mr, flags);
 		if (err)
-			return err;
+			break;
 		dma_sync_single_for_device(ddev, sg.addr, sg.length,
 					   DMA_TO_DEVICE);
 		sg.length = ALIGN(size_to_map, MLX5_UMR_FLEX_ALIGNMENT);
@@ -937,8 +938,7 @@ int mlx5r_umr_update_xlt(struct mlx5_ib_mr *mr, u64 idx, int npages,
  * pinned and the HW can switch from 4K to huge-page alignment).
  */
 int mlx5r_umr_update_mr_page_shift(struct mlx5_ib_mr *mr,
-				   unsigned int page_shift,
-				   bool dd)
+				   unsigned int page_shift)
 {
 	struct mlx5_ib_dev *dev = mr_to_mdev(mr);
 	struct mlx5r_umr_wqe wqe = {};
@@ -953,16 +953,8 @@ int mlx5r_umr_update_mr_page_shift(struct mlx5_ib_mr *mr,
 	/* Fill mkey segment with the new page size, keep the rest unchanged */
 	MLX5_SET(mkc, &wqe.mkey_seg, log_page_size, page_shift);
 
-	if (dd)
-		MLX5_SET(mkc, &wqe.mkey_seg, pd, dev->ddr.pdn);
-	else
-		MLX5_SET(mkc, &wqe.mkey_seg, pd, to_mpd(mr->ibmr.pd)->pdn);
-
 	MLX5_SET64(mkc, &wqe.mkey_seg, start_addr, mr->ibmr.iova);
 	MLX5_SET64(mkc, &wqe.mkey_seg, len, mr->ibmr.length);
-	MLX5_SET(mkc, &wqe.mkey_seg, qpn, 0xffffff);
-	MLX5_SET(mkc, &wqe.mkey_seg, mkey_7_0,
-		 mlx5_mkey_variant(mr->mmkey.key));
 
 	err = mlx5r_umr_post_send_wait(dev, mr->mmkey.key, &wqe, false);
 	if (!err)
@@ -1049,7 +1041,7 @@ static int _mlx5r_umr_zap_mkey(struct mlx5_ib_mr *mr,
 	 * non-present.
 	 */
 	if (*nblocks) {
-		err = mlx5r_umr_update_mr_page_shift(mr, max_page_shift, dd);
+		err = mlx5r_umr_update_mr_page_shift(mr, max_page_shift);
 		if (err) {
 			mr->page_shift = old_page_shift;
 			return err;
@@ -1114,8 +1106,7 @@ int mlx5r_umr_dmabuf_update_pgsz(struct mlx5_ib_mr *mr, u32 xlt_flags,
 			goto err;
 	}
 
-	err = mlx5r_umr_update_mr_page_shift(mr, mr->page_shift,
-					     mr->data_direct);
+	err = mlx5r_umr_update_mr_page_shift(mr, mr->page_shift);
 	if (err)
 		goto err;
 	err = _mlx5r_dmabuf_umr_update_pas(mr, xlt_flags, 0, zapped_blocks,

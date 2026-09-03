@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/net/mlxdevm.h
+
+---
+ include/net/mlxdevm.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/include/net/mlxdevm.h b/include/net/mlxdevm.h
+index xxxxxxx..xxxxxxx 100644
+--- a/include/net/mlxdevm.h
++++ b/include/net/mlxdevm.h
+@@ -744,6 +744,9 @@ struct mlxdevm_flash_update_params {
+ 	const struct firmware *fw;
+ 	const char *component;
+ 	u32 overwrite_mask;
++#ifndef HAVE_FLASH_UPDATE_GET_3_PARAMS
++	const char* file_name;
++#endif
+ };
+ 
+ #define MLXDEVM_SUPPORT_FLASH_UPDATE_OVERWRITE_MASK	BIT(0)
+@@ -1659,9 +1662,7 @@ const char *devlink_dev_driver_name(const struct devlink *devlink);
+ 
+ /* Devlink instance explicit locking */
+ void devm_lock(struct mlxdevm *mlxdevm);
+-#ifndef HAVE_DEVL_TRAP_GROUPS_REGISTER
+ int devm_trylock(struct mlxdevm *mlxdevm);
+-#endif
+ void devm_unlock(struct mlxdevm *mlxdevm);
+ void devm_assert_locked(struct mlxdevm *mlxdevm);
+ #ifdef HAVE_BLOCKED_DEVLINK_CODE

@@ -2,6 +2,7 @@
 /* Do not edit directly, auto-generated from: */
 /*	Documentation/netlink/specs/devlink.yaml */
 /* YNL-GEN kernel header */
+/* To regenerate run: tools/net/ynl/ynl-regen.sh */
 
 #ifndef _LINUX_MLXDEVM_GEN_H
 #define _LINUX_MLXDEVM_GEN_H
@@ -10,9 +11,10 @@
 #include <net/genetlink.h>
 
 #include <uapi/linux/mlxdevm.h>
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
 
 /* Common nested types */
+extern const struct nla_policy mlxdevm_dl_parent_dev_nl_policy[MLXDEVM_ATTR_INDEX + 1];
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
 extern const struct nla_policy devlink_dl_port_function_nl_policy[DEVLINK_PORT_FN_ATTR_CAPS + 1];
 #endif
 extern const struct nla_policy mlxdevm_dl_rate_tc_bws_nl_policy[MLXDEVM_RATE_TC_ATTR_BW + 1];
@@ -27,13 +29,14 @@ int mlxdevm_nl_pre_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 			struct genl_info *info);
 int mlxdevm_nl_pre_doit_port(const struct genl_split_ops *ops,
 			     struct sk_buff *skb, struct genl_info *info);
-int mlxdevm_nl_pre_doit_dev_lock(const struct genl_split_ops *ops,
-				 struct sk_buff *skb, struct genl_info *info);
-#ifdef HAVE_BLOCKED_DEVLINK_CODE
-int devlink_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
+int mlxdevm_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
 				      struct sk_buff *skb,
 				      struct genl_info *info);
-#endif
+int mlxdevm_nl_pre_doit_dev_lock(const struct genl_split_ops *ops,
+				 struct sk_buff *skb, struct genl_info *info);
+int mlxdevm_nl_pre_doit_parent_dev_optional(const struct genl_split_ops *ops,
+					    struct sk_buff *skb,
+					    struct genl_info *info);
 
 void
 mlxdevm_nl_post_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
@@ -41,6 +44,10 @@ mlxdevm_nl_post_doit(const struct genl_split_ops *ops, struct sk_buff *skb,
 void
 mlxdevm_nl_post_doit_dev_lock(const struct genl_split_ops *ops,
 			      struct sk_buff *skb, struct genl_info *info);
+void
+mlxdevm_nl_post_doit_parent_dev_optional(const struct genl_split_ops *ops,
+		                         struct sk_buff *skb,
+		                         struct genl_info *info);
 
 int mlxdevm_nl_get_doit(struct sk_buff *skb, struct genl_info *info);
 int mlxdevm_nl_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb);
@@ -51,7 +58,7 @@ int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info);
 int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info);
 int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info);
 #ifdef HAVE_BLOCKED_DEVLINK_CODE
-int devlink_nl_port_split_doit(struct sk_buff *skb,/u struct genl_info *info);
+int devlink_nl_port_split_doit(struct sk_buff *skb, struct genl_info *info);
 int devlink_nl_port_unsplit_doit(struct sk_buff *skb, struct genl_info *info);
 int devlink_nl_sb_get_doit(struct sk_buff *skb, struct genl_info *info);
 int devlink_nl_sb_get_dumpit(struct sk_buff *skb, struct netlink_callback *cb);
@@ -90,6 +97,10 @@ int devlink_nl_dpipe_table_counters_set_doit(struct sk_buff *skb,
 int devlink_nl_resource_set_doit(struct sk_buff *skb, struct genl_info *info);
 #endif
 int mlxdevm_nl_resource_dump_doit(struct sk_buff *skb, struct genl_info *info);
+#ifdef HAVE_BLOCKED_DEVLINK_CODE
+int devlink_nl_resource_dump_dumpit(struct sk_buff *skb,
+				    struct netlink_callback *cb);
+#endif
 int mlxdevm_nl_reload_doit(struct sk_buff *skb, struct genl_info *info);
 int mlxdevm_nl_param_get_doit(struct sk_buff *skb, struct genl_info *info);
 int mlxdevm_nl_param_get_dumpit(struct sk_buff *skb,
@@ -164,5 +175,5 @@ int devlink_nl_selftests_run_doit(struct sk_buff *skb, struct genl_info *info);
 int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
 				      struct genl_info *info);
 
-#endif /* _LINUX_DEVLINK_GEN_H */
 #endif
+#endif /* _LINUX_DEVLINK_GEN_H */

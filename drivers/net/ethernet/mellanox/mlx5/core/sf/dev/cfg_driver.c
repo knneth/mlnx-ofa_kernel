@@ -26,7 +26,8 @@ static struct mlx5_sf_dev *mlxdevm_to_sf_dev(struct mlxdevm *devm)
 }
 
 static int mlx5_devm_cmpl_eq_depth_get(struct mlxdevm *devm, u32 id,
-				       struct mlxdevm_param_gset_ctx *ctx)
+				       struct mlxdevm_param_gset_ctx *ctx,
+				       struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -45,7 +46,8 @@ static int mlx5_devm_cmpl_eq_depth_set(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_async_eq_depth_get(struct mlxdevm *devm, u32 id,
-					struct mlxdevm_param_gset_ctx *ctx)
+					struct mlxdevm_param_gset_ctx *ctx,
+					struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -71,7 +73,8 @@ static int mlx5_devm_eq_depth_validate(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_disable_fc_get(struct mlxdevm *devm, u32 id,
-				    struct mlxdevm_param_gset_ctx *ctx)
+				    struct mlxdevm_param_gset_ctx *ctx,
+				    struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -90,7 +93,8 @@ static int mlx5_devm_disable_fc_set(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_disable_netdev_get(struct mlxdevm *devm, u32 id,
-					struct mlxdevm_param_gset_ctx *ctx)
+					struct mlxdevm_param_gset_ctx *ctx,
+					struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -109,7 +113,8 @@ static int mlx5_devm_disable_netdev_set(struct mlxdevm *devm, u32 id,
 }
 
 static int mlx5_devm_max_cmpl_eqs_get(struct mlxdevm *devm, u32 id,
-				      struct mlxdevm_param_gset_ctx *ctx)
+				      struct mlxdevm_param_gset_ctx *ctx,
+				      struct netlink_ext_ack *extack)
 {
 	struct mlx5_sf_dev *sf_dev = mlxdevm_to_sf_dev(devm);
 
@@ -170,15 +175,14 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 	struct mlxdevm *devm;
 	int err;
 
-	sf_cfg_dev = kzalloc(sizeof(*sf_cfg_dev), GFP_KERNEL);
-	if (!sf_cfg_dev)
+	devm = mlxdevm_alloc(&mlx5_devm_cfg_ops,
+			     sizeof(struct mlx5_sf_cfg_devm) - sizeof(struct mlxdevm),
+			     &adev->dev);
+	if (!devm)
 		return -ENOMEM;
 
-	devm = &sf_cfg_dev->device;
-	devm->dev = &sf_dev->adev.dev;
-	devm->ops = &mlx5_devm_cfg_ops;
+	sf_cfg_dev = container_of(devm, struct mlx5_sf_cfg_devm, device);
 	sf_cfg_dev->sf_dev = sf_dev;
-	mutex_init(&devm->lock);
 
 	err = mlxdevm_register(devm);
 	if (err)
@@ -195,8 +199,7 @@ static int mlx5_sf_cfg_dev_probe(struct auxiliary_device *adev,
 params_reg_err:
 	mlxdevm_unregister(devm);
 err:
-	mutex_destroy(&devm->lock);
-	kfree(sf_cfg_dev);
+	mlxdevm_free(devm);
 	return err;
 }
 
@@ -211,8 +214,7 @@ static void mlx5_sf_cfg_dev_remove(struct auxiliary_device *adev)
 	mlxdevm_params_unregister(devm, mlx5_sf_cfg_devm_params,
 				  ARRAY_SIZE(mlx5_sf_cfg_devm_params));
 	mlxdevm_unregister(devm);
-	mutex_destroy(&devm->lock);
-	kfree(sf_cfg_dev);
+	mlxdevm_free(devm);
 }
 
 static const struct auxiliary_device_id mlx5_sf_dev_id_table[] = {

@@ -55,7 +55,7 @@ static int mlx5_query_mtrc_caps(struct mlx5_fw_tracer *tracer)
 
 	if (!MLX5_GET(mtrc_cap, out, trace_to_memory)) {
 		mlx5_core_dbg(dev, "FWTracer: Device does not support logging traces to memory\n");
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	}
 
 	tracer->trc_ver = MLX5_GET(mtrc_cap, out, trc_ver);
@@ -64,6 +64,12 @@ static int mlx5_query_mtrc_caps(struct mlx5_fw_tracer *tracer)
 	tracer->str_db.num_string_trace =
 			MLX5_GET(mtrc_cap, out, num_string_trace);
 	tracer->str_db.num_string_db = MLX5_GET(mtrc_cap, out, num_string_db);
+	if (tracer->str_db.num_string_db > STRINGS_DB_SECTIONS_NUM) {
+		mlx5_core_warn(dev,
+			       "FWTracer: Firmware reports num_string_db (%u) > (%u), clamping\n",
+			       tracer->str_db.num_string_db, STRINGS_DB_SECTIONS_NUM);
+		tracer->str_db.num_string_db = STRINGS_DB_SECTIONS_NUM;
+	}
 	tracer->owner = !!MLX5_GET(mtrc_cap, out, trace_owner);
 	tracer->str_db.loaded = false;
 
@@ -412,7 +418,7 @@ static struct tracer_string_format *mlx5_tracer_message_insert(struct mlx5_fw_tr
 		&tracer->hash[mlx5_tracer_message_hash(tracer_event->string_event.tmsn)];
 	struct tracer_string_format *cur_string;
 
-	cur_string = kzalloc(sizeof(*cur_string), GFP_KERNEL);
+	cur_string = kzalloc_obj(*cur_string);
 	if (!cur_string)
 		return NULL;
 
@@ -1023,15 +1029,13 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 		return NULL;
 	}
 
-	tracer = kvzalloc(sizeof(*tracer), GFP_KERNEL);
+	tracer = kvzalloc_obj(*tracer);
 	if (!tracer)
-		return ERR_PTR(-ENOMEM);
+		return NULL;
 
 	tracer->work_queue = create_singlethread_workqueue("mlx5_fw_tracer");
-	if (!tracer->work_queue) {
-		err = -ENOMEM;
+	if (!tracer->work_queue)
 		goto free_tracer;
-	}
 
 	tracer->dev = dev;
 
@@ -1073,7 +1077,7 @@ destroy_workqueue:
 	destroy_workqueue(tracer->work_queue);
 free_tracer:
 	kvfree(tracer);
-	return ERR_PTR(err);
+	return NULL;
 }
 
 static int fw_tracer_event(struct notifier_block *nb, unsigned long action, void *data);
@@ -1084,7 +1088,7 @@ int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer)
 	struct mlx5_core_dev *dev;
 	int err;
 
-	if (IS_ERR_OR_NULL(tracer))
+	if (!tracer)
 		return 0;
 
 	if (!tracer->str_db.loaded)
@@ -1134,7 +1138,7 @@ err_cancel_work:
 /* Stop tracer + Cleanup HW resources */
 void mlx5_fw_tracer_cleanup(struct mlx5_fw_tracer *tracer)
 {
-	if (IS_ERR_OR_NULL(tracer))
+	if (!tracer)
 		return;
 
 	mutex_lock(&tracer->state_lock);
@@ -1163,7 +1167,7 @@ unlock:
 /* Free software resources (Buffers, etc ..) */
 void mlx5_fw_tracer_destroy(struct mlx5_fw_tracer *tracer)
 {
-	if (IS_ERR_OR_NULL(tracer))
+	if (!tracer)
 		return;
 
 	mlx5_core_dbg(tracer->dev, "FWTracer: Destroy\n");
@@ -1215,7 +1219,7 @@ int mlx5_fw_tracer_reload(struct mlx5_fw_tracer *tracer)
 	struct mlx5_core_dev *dev;
 	int err;
 
-	if (IS_ERR_OR_NULL(tracer))
+	if (!tracer)
 		return 0;
 
 	dev = tracer->dev;

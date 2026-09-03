@@ -1,0 +1,9 @@
+sep=;
+Change-Id=I490e5d1568d42e9ea1ed0b6edb6c267da35a4316; subject=net/mlx5_core: Export some pci functions and variables; feature=mlx5_crdump; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I7e09d00d70a6274b44c7966555755fbc742a5add; subject=net/mlx5_core: Introduce crdump utility for FW debug; feature=mlx5_crdump; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib6b834134ce8839595f1813945fb03a8a5d02a8b; subject=mlx5: DR, Avoid calling CQ completion if doesn't exist; feature=sw_steering; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Id6a161b9ee2e5656e6350f03d7bbe8acc24ee603; subject=net/mlx5e: Use the correct checksum field for IPoIB; feature=ipoib_bugs_in_review; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=Ia44e88efbf1c1032dc2e36fc29e2e7077d17e6d3; subject=IB/IPoIB: Detach the neigh gc time from the system gc time; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I80a022065d6a414e21b5c97a232a336179d84071; subject=IB/ipoib: fix bug in handling resv/send ring; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I95a6798090e49419f29c9791181cc1ccbe63bd9a; subject=IB/ipoib: Fix possible race between start_xmit to path_rec_completion; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I6c139e028d8bbbbafa619ccf91bb4349267ee5c9; subject=IB/ipoib: Fix a deadlock in mcast_join_task function; feature=ipoib_ulp; upstream_status=NA; upstream_issue=; general=;

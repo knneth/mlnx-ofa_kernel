@@ -294,7 +294,7 @@ int mlx5_devlink_trap_init(struct devlink *devlink, const struct devlink_trap *t
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 	struct mlx5_devlink_trap *dl_trap;
 
-	dl_trap = kzalloc(sizeof(*dl_trap), GFP_KERNEL);
+	dl_trap = kzalloc_obj(*dl_trap);
 	if (!dl_trap)
 		return -ENOMEM;
 
@@ -385,6 +385,7 @@ static const struct devlink_ops mlx5_devlink_ops = {
 	.rate_node_del = mlx5_esw_devlink_rate_node_del,
 	.rate_leaf_parent_set = mlx5_esw_devlink_rate_leaf_parent_set,
 	.rate_node_parent_set = mlx5_esw_devlink_rate_node_parent_set,
+	.supported_cross_device_rate_nodes = true,
 #endif
 #ifdef CONFIG_MLX5_SF_MANAGER
 	.port_new = mlx5_devlink_sf_port_new,
@@ -589,7 +590,8 @@ int mlx5_devlink_ct_max_offloaded_conns_set(struct devlink *devlink, u32 id,
 }
 
 int mlx5_devlink_ct_max_offloaded_conns_get(struct devlink *devlink, u32 id,
-						   struct devlink_param_gset_ctx *ctx)
+						struct devlink_param_gset_ctx *ctx,
+						struct netlink_ext_ack *extack)
 {
 	struct mlx5_core_dev *dev = devlink_priv(devlink);
 

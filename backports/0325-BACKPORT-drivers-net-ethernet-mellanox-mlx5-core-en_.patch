@@ -1,57 +1,258 @@
 From: Valentine Fatiev <valentinef@nvidia.com>
-Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 
-Change-Id: I5ea602fc11854607817f74469599badfd6e703cd
 ---
- drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 10 +++++++++-
- 1 file changed, 9 insertions(+), 1 deletion(-)
+ .../ethernet/mellanox/mlx5/core/en_sysfs.c    | 130 ++++++++++++++++--
+ 1 file changed, 122 insertions(+), 8 deletions(-)
 
-diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
 index xxxxxxx..xxxxxxx 100644
---- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-+++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
-@@ -142,6 +142,7 @@ err_close_tises:
- 	return err;
- }
- 
-+#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS
- static unsigned int
- mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
- {
-@@ -153,6 +154,7 @@ mlx5e_get_devlink_param_num_doorbells(struct mlx5_core_dev *dev)
- 	err = devl_param_driverinit_value_get(devlink, param_id, &val);
- 	return err ? MLX5_DEFAULT_NUM_DOORBELLS : val.vu32;
- }
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_sysfs.c
+@@ -33,6 +33,9 @@
+ #include <linux/device.h>
+ #include <linux/netdevice.h>
+ #include <linux/units.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/dcbnl.h>
 +#endif
- 
- int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
+ #include "en.h"
+ #include "en_tc.h"
+ #include "eswitch.h"
+@@ -64,8 +67,10 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
+ 				  const char *buf, size_t count)
  {
-@@ -178,8 +180,13 @@ int mlx5e_create_mdev_resources(struct mlx5_core_dev *mdev, bool create_tises)
- 		goto err_dealloc_transport_domain;
- 	}
+ 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
+ 	struct net_device *netdev = priv->netdev;
+-	struct tc_mqprio_qopt_offload mqprio = { 0 };
++#endif
++	struct tc_mqprio_qopt_offload mqprio = {{ 0 }};
+ 	int tc_num;
+ 	int err = 0;
  
-+#ifdef HAVE_DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS
- 	num_doorbells = min(mlx5e_get_devlink_param_num_doorbells(mdev),
- 			    mlx5e_get_max_num_channels(mdev));
+@@ -78,12 +83,16 @@ static ssize_t mlx5e_store_tc_num(struct device *device,
+ 		return -EINVAL;
+ 
+ 	rtnl_lock();
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
+ 	netdev_lock(netdev);
++#endif
+ 	mutex_lock(&priv->state_lock);
+ 	mqprio.qopt.num_tc = tc_num;
+ 	err = mlx5e_setup_tc_mqprio(priv, &mqprio);
+ 	mutex_unlock(&priv->state_lock);
++#ifdef HAVE_NETDEVICE_NETDEV_LOCK
+ 	netdev_unlock(netdev);
++#endif
+ 	rtnl_unlock();
+ 
+ 	return err ? err : count;
+@@ -309,11 +318,21 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+ 	u8 hfunc;
++#ifndef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
++	int err;
++#endif
+ 	int len = 0;
+ 
+ 	rtnl_lock();
+ 	mutex_lock(&priv->state_lock);
+-	mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc, NULL);
++#ifndef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
++	err =
++#endif
++		mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, &hfunc
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++				,NULL
++#endif
++			);
+ 	mutex_unlock(&priv->state_lock);
+ 
+ 	len += sprintf(buf + len, "Operational hfunc: %s\n",
+@@ -323,7 +342,11 @@ static ssize_t mlx5e_show_hfunc(struct device *device,
+ 
+ 	rtnl_unlock();
+ 
++#ifdef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
+ 	return len;
 +#else
-+	num_doorbells = min((unsigned int)MLX5_DEFAULT_NUM_DOORBELLS,
-+			    mlx5e_get_max_num_channels(mdev));
++	return err ? err : len;
 +#endif
- 	res->bfregs = kcalloc(num_doorbells, sizeof(*res->bfregs), GFP_KERNEL);
- 	if (!res->bfregs) {
- 		err = -ENOMEM;
-@@ -234,12 +241,13 @@ err_dealloc_pd:
- void mlx5e_destroy_mdev_resources(struct mlx5_core_dev *mdev)
- {
- 	struct mlx5e_hw_objs *res = &mdev->mlx5e_res.hw_objs;
-+	unsigned int i;
+ }
  
- 	mlx5_crypto_dek_cleanup(mdev->mlx5e_res.dek_priv);
- 	mdev->mlx5e_res.dek_priv = NULL;
- 	if (res->tisn_valid)
- 		mlx5e_destroy_tises(mdev, res->tisn);
--	for (unsigned int i = 0; i < res->num_bfregs; i++)
-+	for (i = 0; i < res->num_bfregs; i++)
- 		mlx5_free_bfreg(mdev, res->bfregs + i);
- 	kfree(res->bfregs);
- 	mlx5_core_destroy_mkey(mdev, res->mkey);
+ static ssize_t mlx5e_store_hfunc(struct device *device,
+@@ -357,7 +380,11 @@ static ssize_t mlx5e_store_hfunc(struct device *device,
+ 			goto unlock;
+ 	}
+ 	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL,
+-					&ethtool_hfunc, NULL);
++					&ethtool_hfunc
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++					,NULL
++#endif
++					);
+ 	mutex_unlock(&priv->state_lock);
+ 	rtnl_unlock();
+ 
+@@ -383,11 +410,21 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
+ {
+ 	struct mlx5e_priv *priv = netdev_priv(to_net_dev(device));
+ 	int len = 0;
+-	bool symmetric;
++	bool symmetric = false;
++#ifndef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
++	int err;
++#endif
+ 
+ 	rtnl_lock();
+ 	mutex_lock(&priv->state_lock);
+-	mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
++#ifndef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
++	err =
++#endif
++	mlx5e_rx_res_rss_get_rxfh(priv->rx_res, 0, NULL, NULL, NULL
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++			,&symmetric
++#endif
++			);
+ 	mutex_unlock(&priv->state_lock);
+ 	rtnl_unlock();
+ 
+@@ -395,7 +432,11 @@ static ssize_t mlx5e_show_xfrm(struct device *device,
+ 		       symmetric == true ?  "symmetric-or-xor" : "none");
+ 	len += sprintf(buf + len, "Supported xfrm: symmetric-or-xor none\n");
+ 
++#ifdef HAVE_CORE_TRACKS_CUSTOM_RSS_CONTEXTS
+ 	return len;
++#else
++	return err ? err : len;
++#endif
+ }
+ 
+ static ssize_t mlx5e_store_xfrm(struct device *device,
+@@ -422,7 +463,11 @@ static ssize_t mlx5e_store_xfrm(struct device *device,
+ 
+ 	rtnl_lock();
+ 	mutex_lock(&priv->state_lock);
+-	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL, NULL, &symmetric);
++	err = mlx5e_rx_res_rss_set_rxfh(priv->rx_res, 0, NULL, NULL, NULL
++#ifdef HAVE_RXH_XFRM_SYM_OR_XOR
++					, &symmetric
++#endif
++					);
+ 	mutex_unlock(&priv->state_lock);
+ 	rtnl_unlock();
+ 	return err ? err : count;
+@@ -946,11 +991,9 @@ static ssize_t mlx5e_store_force_local_lb(struct device *device,
+ 	struct mlx5_core_dev *mdev = priv->mdev;
+ 	bool disable;
+ 	int err;
+-
+ 	err = kstrtobool(buf, &disable);
+ 	if (err)
+ 		return -EINVAL;
+-
+ 	if (mdev->local_lb.user_force_disable != disable) {
+ 		mdev->local_lb.user_force_disable = disable;
+ 		mlx5_nic_vport_update_local_lb(mdev,
+@@ -964,6 +1007,64 @@ static DEVICE_ATTR(force_local_lb_disable, S_IRUGO | S_IWUSR,
+ 		   mlx5e_show_force_local_lb,
+ 		   mlx5e_store_force_local_lb);
+ 
++#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
++static ssize_t mlx5e_show_log_rx_page_cache_mult_limit(struct device *device,
++						       struct device_attribute *attr,
++						       char *buf)
++{
++	struct net_device *dev = to_net_dev(device);
++	struct mlx5e_priv *priv = netdev_priv(dev);
++	int len;
++
++	mutex_lock(&priv->state_lock);
++	len = sprintf(buf, "log rx page cache mult limit is %u\n",
++		      priv->channels.params.log_rx_page_cache_mult);
++	mutex_unlock(&priv->state_lock);
++
++	return len;
++}
++
++static ssize_t mlx5e_store_log_rx_page_cache_mult_limit(struct device *device,
++							struct device_attribute *attr,
++							const char *buf,
++							size_t count)
++{
++	struct net_device *dev = to_net_dev(device);
++	struct mlx5e_priv *priv = netdev_priv(dev);
++	int err, udata;
++
++	err = kstrtoint(buf, 0, &udata);
++	if (err)
++		return -EINVAL;
++
++	if (udata > MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT || udata < 0) {
++		netdev_err(priv->netdev, "log rx page cache mult limit cannot exceed above %d or below 0\n",
++			   MLX5E_PAGE_CACHE_LOG_MAX_RQ_MULT);
++		return -EINVAL;
++	}
++
++	mutex_lock(&priv->state_lock);
++	priv->channels.params.log_rx_page_cache_mult = (u8)udata;
++	mutex_unlock(&priv->state_lock);
++
++	return count;
++}
++
++static DEVICE_ATTR(log_mult_limit, S_IRUGO | S_IWUSR,
++		   mlx5e_show_log_rx_page_cache_mult_limit,
++		   mlx5e_store_log_rx_page_cache_mult_limit);
++
++static struct attribute *mlx5e_log_rx_page_cache_attrs[] = {
++	&dev_attr_log_mult_limit.attr,
++	NULL,
++};
++
++static struct attribute_group rx_page_cache_group = {
++	.name = "rx_page_cache",
++	.attrs = mlx5e_log_rx_page_cache_attrs,
++};
++#endif /*HAVE_PAGE_POOL_DEFRAG_PAGE*/
++
+ static struct attribute *mlx5e_settings_attrs[] = {
+ 	&dev_attr_hfunc.attr,
+ 	&dev_attr_xfrm.attr,
+@@ -1511,6 +1612,12 @@ int mlx5e_sysfs_create(struct net_device *dev)
+ 	if (err)
+ 		goto remove_qos_group;
+ 
++#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
++	err = sysfs_create_group(&dev->dev.kobj, &rx_page_cache_group);
++	if (err)
++		goto remove_debug_group;
++#endif
++
+ 	err = mlx5e_hp_sysfs_create(priv);
+ 	if (err)
+ 		netdev_warn(dev, "%s: failed to create hairpin sysfs, %d\n", __func__, err);
+@@ -1533,6 +1640,10 @@ int mlx5e_sysfs_create(struct net_device *dev)
+ 
+ 	return 0;
+ 
++#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
++remove_debug_group:
++	sysfs_remove_group(&dev->dev.kobj, &debug_group);
++#endif
+ remove_qos_group:
+ 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
+ remove_settings_group:
+@@ -1552,6 +1663,9 @@ void mlx5e_sysfs_remove(struct net_device *dev)
+ 
+ 	mlx5e_hp_sysfs_remove(priv);
+ 	mlx5_eswitch_compat_sysfs_cleanup(dev);
++#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
++	sysfs_remove_group(&dev->dev.kobj, &rx_page_cache_group);
++#endif
+ 
+ 	sysfs_remove_group(&dev->dev.kobj, &qos_group);
+ 	sysfs_remove_group(&dev->dev.kobj, &debug_group);

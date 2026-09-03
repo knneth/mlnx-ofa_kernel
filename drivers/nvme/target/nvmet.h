@@ -298,7 +298,6 @@ struct nvmet_ctrl {
 	__le32			*changed_ns_list;
 	u32			nr_changed_ns;
 
-	char			subsysnqn[NVMF_NQN_FIELD_LEN];
 	char			hostnqn[NVMF_NQN_FIELD_LEN];
 
 	unsigned int		sqe_inline_size;
@@ -583,6 +582,7 @@ extern struct kmem_cache *nvmet_bvec_cache;
 extern struct workqueue_struct *buffered_io_wq;
 extern struct workqueue_struct *zbd_wq;
 extern struct workqueue_struct *nvmet_wq;
+extern struct workqueue_struct *nvmet_aen_wq;
 
 static inline void nvmet_set_result(struct nvmet_req *req, u32 result)
 {
@@ -631,6 +631,8 @@ void nvmet_stop_keep_alive_timer(struct nvmet_ctrl *ctrl);
 u16 nvmet_parse_connect_cmd(struct nvmet_req *req);
 u32 nvmet_connect_cmd_data_len(struct nvmet_req *req);
 void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
+void nvmet_bdev_set_nvm_limits(struct block_device *bdev,
+			       struct nvme_id_ns_nvm *id);
 u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
 u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
 u16 nvmet_bdev_zns_parse_io_cmd(struct nvmet_req *req);
@@ -853,14 +855,12 @@ static inline bool nvmet_is_pci_ctrl(struct nvmet_ctrl *ctrl)
 /* Limit MDTS according to port config or transport capability */
 static inline u8 nvmet_ctrl_mdts(struct nvmet_req *req)
 {
-       struct nvmet_ctrl *ctrl = req->sq->ctrl;
-       u8 mdts = req->port->mdts;
+	struct nvmet_ctrl *ctrl = req->sq->ctrl;
+	u8 mdts = req->port->mdts;
 
-       if (req->port->offload)
-	       return min_not_zero(ctrl->ops->peer_to_peer_mdts(req->port), mdts);
-       if (ctrl->ops->get_mdts)
-	       return min_not_zero(ctrl->ops->get_mdts(ctrl), mdts);
-       return mdts;
+	if (!ctrl->ops->get_mdts)
+		return mdts;
+	return min_not_zero(ctrl->ops->get_mdts(ctrl), mdts);
 }
 
 #ifdef CONFIG_NVME_TARGET_PASSTHRU
@@ -1000,7 +1000,7 @@ void nvmet_execute_auth_receive(struct nvmet_req *req);
 int nvmet_auth_set_key(struct nvmet_host *host, const char *secret,
 		       bool set_ctrl);
 int nvmet_auth_set_host_hash(struct nvmet_host *host, const char *hash);
-u8 nvmet_setup_auth(struct nvmet_ctrl *ctrl, struct nvmet_sq *sq);
+u8 nvmet_setup_auth(struct nvmet_ctrl *ctrl, struct nvmet_sq *sq, bool reset);
 void nvmet_auth_sq_init(struct nvmet_sq *sq);
 void nvmet_destroy_auth(struct nvmet_ctrl *ctrl);
 void nvmet_auth_sq_free(struct nvmet_sq *sq);
@@ -1017,11 +1017,11 @@ static inline bool nvmet_has_auth(struct nvmet_ctrl *ctrl, struct nvmet_sq *sq)
 int nvmet_auth_ctrl_exponential(struct nvmet_req *req,
 				u8 *buf, int buf_size);
 int nvmet_auth_ctrl_sesskey(struct nvmet_req *req,
-			    u8 *buf, int buf_size);
+			    const u8 *pkey, int pkey_size);
 void nvmet_auth_insert_psk(struct nvmet_sq *sq);
 #else
 static inline u8 nvmet_setup_auth(struct nvmet_ctrl *ctrl,
-				  struct nvmet_sq *sq)
+				  struct nvmet_sq *sq, bool reset)
 {
 	return 0;
 }

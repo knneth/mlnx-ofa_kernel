@@ -1,0 +1,31 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+
+---
+ .../mellanox/mlx5/core/steering/hws/action_ste_pool.c        | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+@@ -139,7 +139,7 @@ hws_action_ste_table_alloc(struct mlx5hws_action_ste_pool_element *parent_elem)
+ 			     parent_elem->log_sz +
+ 				     MLX5HWS_ACTION_STE_TABLE_STEP_LOG_SZ :
+ 				   MLX5HWS_ACTION_STE_TABLE_INIT_LOG_SZ,
+-		     MLX5HWS_ACTION_STE_TABLE_MAX_LOG_SZ);
++		    (size_t)MLX5HWS_ACTION_STE_TABLE_MAX_LOG_SZ);
+ 
+ 	action_tbl = kzalloc_obj(*action_tbl);
+ 	if (!action_tbl)
+@@ -319,8 +319,7 @@ static void hws_action_ste_pool_cleanup(struct work_struct *work)
+ 	hws_action_ste_table_cleanup_list(&cleanup);
+ 
+ 	schedule_delayed_work(&ctx->action_ste_cleanup,
+-			      secs_to_jiffies(
+-				  MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS));
++			      secs_to_jiffies(MLX5HWS_ACTION_STE_POOL_CLEANUP_SECONDS));
+ }
+ 
+ int mlx5hws_action_ste_pool_init(struct mlx5hws_context *ctx)

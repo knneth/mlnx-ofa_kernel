@@ -1,0 +1,38 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/wc.c
+
+Change-Id: Ib55e7c0b300d60062574c601ca212017b4a410c5
+---
+ drivers/net/ethernet/mellanox/mlx5/core/wc.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/wc.c b/drivers/net/ethernet/mellanox/mlx5/core/wc.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/wc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/wc.c
+@@ -266,7 +266,14 @@ static void mlx5_iowrite64_copy(struct mlx5_wc_sq *sq, __be32 mmio_wqe[16],
+ {
+ #if IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && IS_ENABLED(CONFIG_ARM64)
+ 	if (cpu_has_neon()) {
+-		scoped_ksimd() {
++#ifdef HAVE_SCOPED_KSIMD
++		/* Newer kernels (7.1-rc4+): scoped guard auto-ends ksimd */
++		scoped_ksimd()
++#else
++		/* Older kernels: explicit kernel_neon_begin/end (matches 26_04) */
++		kernel_neon_begin();
++#endif
++		{
+ 			asm volatile(
+ 				".arch_extension simd\n\t"
+ 				"ld1 {v0.16b, v1.16b, v2.16b, v3.16b}, [%0]\n\t"
+@@ -275,6 +282,9 @@ static void mlx5_iowrite64_copy(struct mlx5_wc_sq *sq, __be32 mmio_wqe[16],
+ 				: "r"(mmio_wqe), "r"(sq->bfreg.map + offset)
+ 				: "memory", "v0", "v1", "v2", "v3");
+ 		}
++#ifndef HAVE_SCOPED_KSIMD
++		kernel_neon_end();
++#endif
+ 		return;
+ 	}
+ #endif

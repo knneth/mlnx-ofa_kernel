@@ -1,0 +1,318 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/infiniband/core/device.c
+
+Change-Id: I9aaafd110647dac1d5692e900dac3efae0e81bb0
+---
+ drivers/infiniband/core/device.c | 96 ++++++++++++++++++++++++++++----
+ 1 file changed, 86 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/infiniband/core/device.c b/drivers/infiniband/core/device.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/infiniband/core/device.c
++++ b/drivers/infiniband/core/device.c
+@@ -42,11 +42,16 @@
+ #include <linux/security.h>
+ #include <linux/notifier.h>
+ #include <linux/hashtable.h>
++#ifdef HAVE_CC_PLATFORM_H
+ #include <linux/cc_platform.h>
++#endif
+ #include <rdma/rdma_netlink.h>
+ #include <rdma/ib_addr.h>
+ #include <rdma/ib_cache.h>
+ #include <rdma/rdma_counter.h>
++#ifdef HAVE_BASECODE_EXTRAS
++#include <linux/sizes.h>
++#endif
+ 
+ #include "core_priv.h"
+ #include "restrack.h"
+@@ -59,7 +64,9 @@ struct workqueue_struct *ib_comp_wq;
+ struct workqueue_struct *ib_comp_unbound_wq;
+ struct workqueue_struct *ib_wq;
+ EXPORT_SYMBOL_GPL(ib_wq);
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ static struct workqueue_struct *ib_unreg_wq;
++#endif
+ 
+ /*
+  * Each of the three rwsem locks (devices, clients, client_data) protects the
+@@ -213,13 +220,19 @@ static DEFINE_SPINLOCK(ndev_hash_lock);
+ static DECLARE_HASHTABLE(ndev_hash, 5);
+ 
+ static void free_netdevs(struct ib_device *ib_dev);
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ static void ib_unregister_work(struct work_struct *work);
++#endif
+ static void __ib_unregister_device(struct ib_device *device);
+ static int ib_security_change(struct notifier_block *nb, unsigned long event,
+ 			      void *lsm_data);
+ static void ib_policy_change_task(struct work_struct *work);
+ static DECLARE_WORK(ib_policy_change_work, ib_policy_change_task);
+ 
++static struct notifier_block ibdev_lsm_nb = {
++	.notifier_call = ib_security_change,
++};
++
+ static void __ibdev_printk(const char *level, const struct ib_device *ibdev,
+ 			   struct va_format *vaf)
+ {
+@@ -263,10 +276,6 @@ define_ibdev_printk_level(ibdev_warn, KERN_WARNING);
+ define_ibdev_printk_level(ibdev_notice, KERN_NOTICE);
+ define_ibdev_printk_level(ibdev_info, KERN_INFO);
+ 
+-static struct notifier_block ibdev_lsm_nb = {
+-	.notifier_call = ib_security_change,
+-};
+-
+ static int rdma_dev_change_netns(struct ib_device *device, struct net *cur_net,
+ 				 struct net *net);
+ 
+@@ -407,6 +416,7 @@ int ib_device_rename(struct ib_device *ibdev, const char *name)
+ 	}
+ 
+ 	strscpy(ibdev->name, name, IB_DEVICE_NAME_MAX);
++
+ 	ret = rename_compat_devs(ibdev);
+ 
+ 	downgrade_write(&devices_rwsem);
+@@ -439,9 +449,9 @@ static int alloc_name(struct ib_device *ibdev, const char *name)
+ {
+ 	struct ib_device *device;
+ 	unsigned long index;
++	int i;
+ 	struct ida inuse;
+ 	int rc;
+-	int i;
+ 
+ 	lockdep_assert_held_write(&devices_rwsem);
+ 	ida_init(&inuse);
+@@ -497,8 +507,14 @@ static void ib_device_release(struct device *device)
+ 	kfree_rcu(dev, rcu_head);
+ }
+ 
++#if defined(HAVE_NET_NAMESPACE_RETURNS_NS_COMMON) || defined(HAVE_NET_NAMESPACE_GET_CONST_DEVICE)
++/* Newer kernels (7.0+/6.x+): dev_uevent takes const struct device or return const device*/
+ static int ib_device_uevent(const struct device *device,
+-			    struct kobj_uevent_env *env)
++#else
++/* Older kernels: dev_uevent takes non-const struct device * */
++static int ib_device_uevent(struct device *device,
++#endif
++				struct kobj_uevent_env *env)
+ {
+ 	if (add_uevent_var(env, "NAME=%s", dev_name(device)))
+ 		return -ENOMEM;
+@@ -510,13 +526,27 @@ static int ib_device_uevent(const struct device *device,
+ 	return 0;
+ }
+ 
++#ifdef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
++/* Newer kernels (7.0+): class.namespace returns const struct ns_common * */
+ static const struct ns_common *net_namespace(const struct device *d)
++#elif defined(HAVE_NET_NAMESPACE_GET_CONST_DEVICE)
++/* Older kernels (6.x): const struct device * param, const void * return */
++static const void *net_namespace(const struct device *d)
++#else
++/* Oldest kernels: non-const struct device * param */
++static const void *net_namespace(struct device *d)
++#endif
+ {
+ 	const struct ib_core_device *coredev =
+ 			container_of(d, struct ib_core_device, dev);
++	
++#ifdef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
+ 	struct net *net = read_pnet(&coredev->rdma_net);
+ 
+ 	return net ? to_ns_common(net) : NULL;
++#else
++	return read_pnet(&coredev->rdma_net);
++#endif
+ }
+ 
+ static struct class ib_class = {
+@@ -608,7 +638,9 @@ struct ib_device *_ib_alloc_device(size_t size, struct net *net)
+ 	xa_init_flags(&device->compat_devs, XA_FLAGS_ALLOC);
+ 	mutex_init(&device->compat_devs_mutex);
+ 	init_completion(&device->unreg_completion);
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	INIT_WORK(&device->unregistration_work, ib_unregister_work);
++#endif
+ 
+ 	spin_lock_init(&device->cq_pools_lock);
+ 	for (i = 0; i < ARRAY_SIZE(device->cq_pools); i++)
+@@ -1426,8 +1458,10 @@ int ib_register_device(struct ib_device *device, const char *name,
+ 	 * device detection is wired up, narrow this check to exclude such
+ 	 * devices.
+ 	 */
++#ifdef HAVE_CC_PLATFORM_H
+ 	if (dma_device && cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
+ 		device->cc_dma_bounce = 1;
++#endif
+ 
+ 	ret = setup_device(device);
+ 	if (ret)
+@@ -1641,6 +1675,7 @@ void ib_unregister_driver(enum rdma_driver_id driver_id)
+ }
+ EXPORT_SYMBOL(ib_unregister_driver);
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ static void ib_unregister_work(struct work_struct *work)
+ {
+ 	struct ib_device *ib_dev =
+@@ -1649,6 +1684,7 @@ static void ib_unregister_work(struct work_struct *work)
+ 	__ib_unregister_device(ib_dev);
+ 	put_device(&ib_dev->dev);
+ }
++#endif
+ 
+ /**
+  * ib_unregister_device_queued - Unregister a device using a work queue
+@@ -1661,6 +1697,7 @@ static void ib_unregister_work(struct work_struct *work)
+  * Drivers using this API must use ib_unregister_driver before module unload
+  * to ensure that all scheduled unregistrations have completed.
+  */
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ void ib_unregister_device_queued(struct ib_device *ib_dev)
+ {
+ 	WARN_ON(!refcount_read(&ib_dev->refcount));
+@@ -1670,6 +1707,7 @@ void ib_unregister_device_queued(struct ib_device *ib_dev)
+ 		put_device(&ib_dev->dev);
+ }
+ EXPORT_SYMBOL(ib_unregister_device_queued);
++#endif
+ 
+ /*
+  * The caller must pass in a device that has the kref held and the refcount
+@@ -2230,12 +2268,20 @@ int ib_device_set_netdev(struct ib_device *ib_dev, struct net_device *ndev,
+ 		return 0;
+ 	}
+ 
++#ifndef HAVE_NETDEV_PUT_AND_HOLD
++	dev_hold(ndev);
++#endif /* HAVE_NETDEV_PUT_AND_HOLD */
+ 	rcu_assign_pointer(pdata->netdev, ndev);
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 	netdev_put(old_ndev, &pdata->netdev_tracker);
+ 	netdev_hold(ndev, &pdata->netdev_tracker, GFP_ATOMIC);
++#endif
+ 	spin_unlock_irqrestore(&pdata->netdev_lock, flags);
+ 
+ 	add_ndev_hash(pdata);
++#ifndef HAVE_NETDEV_PUT_AND_HOLD
++	dev_put(old_ndev);
++#endif /* HAVE_NETDEV_PUT_AND_HOLD */
+ 
+ 	/* Make sure that the device is registered before we send events */
+ 	if (xa_load(&devices, ib_dev->index) != ib_dev)
+@@ -2275,7 +2321,11 @@ static void free_netdevs(struct ib_device *ib_dev)
+ 			 * comparisons after the put
+ 			 */
+ 			rcu_assign_pointer(pdata->netdev, NULL);
++#ifdef HAVE_NETDEV_PUT_AND_HOLD
+ 			netdev_put(ndev, &pdata->netdev_tracker);
++#else
++			dev_put(ndev);
++#endif
+ 		}
+ 		spin_unlock_irqrestore(&pdata->netdev_lock, flags);
+ 	}
+@@ -2356,7 +2406,7 @@ struct ib_device *ib_device_get_by_netdev(struct net_device *ndev,
+ 	struct ib_port_data *cur;
+ 
+ 	rcu_read_lock();
+-	hash_for_each_possible_rcu (ndev_hash, cur, ndev_hash_link,
++	hash_for_each_possible_rcu(ndev_hash, cur, ndev_hash_link,
+ 				    (uintptr_t)ndev) {
+ 		if (rcu_access_pointer(cur->netdev) == ndev &&
+ 		    (driver_id == RDMA_DRIVER_UNKNOWN ||
+@@ -2806,6 +2856,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
+ 	SET_DEVICE_OP(dev_ops, get_vf_config);
+ 	SET_DEVICE_OP(dev_ops, get_vf_guid);
+ 	SET_DEVICE_OP(dev_ops, get_vf_stats);
++#ifndef HAVE_MMU_INTERVAL_NOTIFIER
++	SET_DEVICE_OP(dev_ops, invalidate_range);
++#endif
+ 	SET_DEVICE_OP(dev_ops, iw_accept);
+ 	SET_DEVICE_OP(dev_ops, iw_add_ref);
+ 	SET_DEVICE_OP(dev_ops, iw_connect);
+@@ -2817,7 +2870,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
+ 	SET_DEVICE_OP(dev_ops, map_mr_sg);
+ 	SET_DEVICE_OP(dev_ops, map_mr_sg_pi);
+ 	SET_DEVICE_OP(dev_ops, mmap);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	SET_DEVICE_OP(dev_ops, mmap_get_pfns);
++#endif
+ 	SET_DEVICE_OP(dev_ops, mmap_free);
+ 	SET_DEVICE_OP(dev_ops, modify_ah);
+ 	SET_DEVICE_OP(dev_ops, modify_cq);
+@@ -2828,7 +2883,9 @@ void ib_set_device_ops(struct ib_device *dev, const struct ib_device_ops *ops)
+ 	SET_DEVICE_OP(dev_ops, modify_srq);
+ 	SET_DEVICE_OP(dev_ops, modify_wq);
+ 	SET_DEVICE_OP(dev_ops, peek_cq);
++#ifdef HAVE_MMIO_REGION_EXPORTED_THROUGH_DMA_BUF
+ 	SET_DEVICE_OP(dev_ops, pgoff_to_mmap_entry);
++#endif
+ 	SET_DEVICE_OP(dev_ops, pre_destroy_cq);
+ 	SET_DEVICE_OP(dev_ops, poll_cq);
+ 	SET_DEVICE_OP(dev_ops, port_groups);
+@@ -3058,20 +3115,35 @@ static int __init ib_core_init(void)
+ 	if (!ib_wq)
+ 		return -ENOMEM;
+ 
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	ib_unreg_wq = alloc_workqueue("ib-unreg-wq", WQ_UNBOUND,
+ 				      WQ_UNBOUND_MAX_ACTIVE);
+ 	if (!ib_unreg_wq)
+ 		goto err;
++#endif
+ 
+ 	ib_comp_wq = alloc_workqueue("ib-comp-wq",
+-			WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_SYSFS | WQ_PERCPU, 0);
++#ifdef HAVE_BASECODE_EXTRAS
++			0 |
++#endif
++			WQ_HIGHPRI
++			| WQ_MEM_RECLAIM
++			| WQ_SYSFS
++			| WQ_PERCPU
++			, 0);
+ 	if (!ib_comp_wq)
+ 		goto err_unbound;
+ 
+ 	ib_comp_unbound_wq =
+ 		alloc_workqueue("ib-comp-unb-wq",
+-				WQ_UNBOUND | WQ_HIGHPRI | WQ_MEM_RECLAIM |
+-				WQ_SYSFS, WQ_UNBOUND_MAX_ACTIVE);
++#ifdef HAVE_BASECODE_EXTRAS
++			0 |
++#endif
++			WQ_UNBOUND
++			| WQ_HIGHPRI
++			| WQ_MEM_RECLAIM
++			| WQ_SYSFS
++			, WQ_UNBOUND_MAX_ACTIVE);
+ 	if (!ib_comp_unbound_wq)
+ 		goto err_comp;
+ 
+@@ -3144,8 +3216,10 @@ err_comp_unbound:
+ err_comp:
+ 	destroy_workqueue(ib_comp_wq);
+ err_unbound:
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	destroy_workqueue(ib_unreg_wq);
+ err:
++#endif
+ 	destroy_workqueue(ib_wq);
+ 	return ret;
+ }
+@@ -3167,7 +3241,9 @@ static void __exit ib_core_cleanup(void)
+ 	destroy_workqueue(ib_comp_wq);
+ 	/* Make sure that any pending umem accounting work is done. */
+ 	destroy_workqueue(ib_wq);
++#ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
+ 	destroy_workqueue(ib_unreg_wq);
++#endif
+ 	WARN_ON(!xa_empty(&clients));
+ 	WARN_ON(!xa_empty(&devices));
+ }

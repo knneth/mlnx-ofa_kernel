@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I7cd978204ce77b2204c371b9b1498a474ce5f5ad; subject=net/mlx5: Disable SF vhca parallel when sf cfg is not enabled; feature=vhca_handler; upstream_status=NA; upstream_issue=; general=;

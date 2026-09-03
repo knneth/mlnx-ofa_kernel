@@ -1,0 +1,3 @@
+sep=;
+Change-Id=If4865a64025f2b6d4f620f0ea51a5f8dd5904697; subject=nvmet: fix nvmf-rdma offload counter; feature=nvmf_offload; upstream_status=in_progress; upstream_issue=0123456789; general=;
+Change-Id=I601887cbcaffee6cbe061ede8197ecec5b1484d1; subject=gds: Use EXPORT_SYMBOL_GPL instead of EXPORT_SYMBOL; feature=gds; upstream_status=NA; upstream_issue=; general=;

@@ -1,0 +1,58 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: fs/fuse/acl.c
+
+---
+ fs/fuse/acl.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/fs/fuse/acl.c b/fs/fuse/acl.c
+index xxxxxxx..xxxxxxx 100644
+--- a/fs/fuse/acl.c
++++ b/fs/fuse/acl.c
+@@ -122,6 +122,8 @@ int fuse_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
+ 		 * them to be refreshed the next time they are used,
+ 		 * and it also updates i_ctime.
+ 		 */
++#ifdef HAVE_POSIX_ACL_TO_XATTR_RETURNS_VOID_PTR
++/* Newer kernels (7.0+): posix_acl_to_xattr allocates the buffer itself */
+ 		size_t size;
+ 		void *value;
+ 
+@@ -133,6 +135,23 @@ int fuse_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
+ 			kfree(value);
+ 			return -E2BIG;
+ 		}
++#else
++		size_t size = posix_acl_xattr_size(acl->a_count);
++		void *value;
++
++		if (size > PAGE_SIZE)
++			return -E2BIG;
++
++		value = kmalloc(size, GFP_KERNEL);
++		if (!value)
++			return -ENOMEM;
++
++		ret = posix_acl_to_xattr(fc->user_ns, acl, value, size);
++		if (ret < 0) {
++			kfree(value);
++			return ret;
++		}
++#endif
+ 
+ 		/*
+ 		 * Fuse daemons without FUSE_POSIX_ACL never changed the passed
+@@ -140,8 +159,13 @@ int fuse_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
+ 		 * be stripped.
+ 		 */
+ 		if (fc->posix_acl &&
++#ifdef HAVE_IN_GROUP_OR_CAPABLE
+ 		    !in_group_or_capable(idmap, inode,
+ 					 i_gid_into_vfsgid(idmap, inode)))
++#else
++			!vfsgid_in_group_p(i_gid_into_vfsgid(&nop_mnt_idmap, inode)) &&
++			!capable_wrt_inode_uidgid(&nop_mnt_idmap, inode, CAP_FSETID))
++#endif
+ 			extra_flags |= FUSE_SETXATTR_ACL_KILL_SGID;
+ 
+ 		ret = fuse_setxattr(inode, name, value, size, 0, extra_flags);

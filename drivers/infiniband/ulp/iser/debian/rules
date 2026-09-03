@@ -15,13 +15,16 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-WITH_DKMS ?= 1
+ifeq (,$(findstring modules,${DEB_BUILD_PROFILES}))
+WITH_DKMS = 1
+else
+WITH_DKMS = 0
+endif
 WITH_MOD_SIGN ?= 0
 MLXNUMC = $(shell grep ^processor /proc/cpuinfo | wc -l)
 NJOBS ?= $(shell if [ $(MLXNUMC) -lt 16 ]; then echo $(MLXNUMC); else echo 16; fi)
 
 pname:=iser
-psource:=$(pname)-source
 ifeq ($(WITH_DKMS),1)
 pdkms:=$(pname)-dkms
 else
@@ -59,6 +62,8 @@ ifneq ($(WITH_DKMS),1)
 	@echo Building for $(KVER)
 	make clean || true
 	make -j$(NJOBS) KVER=$(KVER) K_BUILD=$(K_BUILD)
+else
+	echo "$(pname)" > debian/$(pname).force
 endif
 
 override_dh_auto_test:
@@ -74,25 +79,12 @@ endif
 
 	# For dkms
 ifeq ($(WITH_DKMS),1)
-	dh_installdirs -p$(pdkms)  usr/src/$(pname)-$(dkms_version)
-	cp Kconfig debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp Makefile debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp *.c debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	cp *.h debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)/
+override_dh_install:
+	pname=$(pname) dkms_version=$(dkms_version) dh_install
 	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(dkms_version)"/' \
 		-e 's/mlnx-ofa_kernel/mlnx-ofed-kernel/' \
 		<dkms.conf >debian/dkms.conf
-
-	# Force DKMS to install our modules.
-	# This is mostly needed for modules that do not have a version number info, as DKMS
-	# will compare their srcversion field, which does not really say which module is newer.
-	dh_installdirs -p$(pdkms)  usr/share/dkms/modules_to_force_install/
-	echo "$(pname)" > debian/$(pdkms)/usr/share/dkms/modules_to_force_install/$(pname).force
 endif
-
-override_dh_installinit:
-
 
 ifneq ($(WITH_DKMS),1)
 override_dh_gencontrol:

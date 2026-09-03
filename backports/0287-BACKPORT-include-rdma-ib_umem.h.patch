@@ -1,0 +1,83 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: include/rdma/ib_umem.h
+
+---
+ include/rdma/ib_umem.h | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/include/rdma/ib_umem.h b/include/rdma/ib_umem.h
+index xxxxxxx..xxxxxxx 100644
+--- a/include/rdma/ib_umem.h
++++ b/include/rdma/ib_umem.h
+@@ -7,9 +7,12 @@
+ #ifndef IB_UMEM_H
+ #define IB_UMEM_H
+ 
++#include "../../compat/config.h"
++
+ #include <linux/scatterlist.h>
+ 
+ struct ib_device;
++struct ib_udata;
+ struct dma_buf_attach_ops;
+ 
+ struct ib_umem {
+@@ -24,7 +27,13 @@ struct ib_umem {
+ 	u32 is_dmabuf : 1;
+ 	/* Placing at the end of the bitfield list is ABI preserving on LE */
+ 	u32 is_peer : 1;
++#ifdef HAVE_SG_APPEND_TABLE
+ 	struct sg_append_table sgt_append;
++#else
++	struct sg_table sg_head;
++	int             nmap;
++	unsigned int    sg_nents;
++#endif
+ };
+ 
+ struct ib_umem_dmabuf {
+@@ -60,7 +69,11 @@ static inline int ib_umem_offset(struct ib_umem *umem)
+ 
+ static inline dma_addr_t ib_umem_start_dma_addr(struct ib_umem *umem)
+ {
++#ifdef HAVE_SG_APPEND_TABLE
+ 	return sg_dma_address(umem->sgt_append.sgt.sgl) + ib_umem_offset(umem);
++#else
++	return (sg_dma_address(umem->sg_head.sgl) + ib_umem_offset(umem));
++#endif
+ }
+ 
+ static inline unsigned long ib_umem_dma_offset(struct ib_umem *umem,
+@@ -182,10 +195,20 @@ ib_umem_dmabuf_get_pinned_with_dma_device(struct ib_device *device,
+ int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf);
+ void ib_umem_dmabuf_unmap_pages(struct ib_umem_dmabuf *umem_dmabuf);
+ void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf);
++#ifdef HAVE_DMA_BUF_DYNAMIC_ATTACH_GET_4_PARAMS
+ void ib_umem_dmabuf_revoke_lock(struct ib_umem_dmabuf *umem_dmabuf);
+ void ib_umem_dmabuf_revoke_unlock(struct ib_umem_dmabuf *umem_dmabuf);
+ void ib_umem_dmabuf_revoke(struct ib_umem_dmabuf *umem_dmabuf);
++#else
++static inline void ib_umem_dmabuf_revoke_lock(struct ib_umem_dmabuf *umem_dmabuf) {}
++static inline void ib_umem_dmabuf_revoke_unlock(struct ib_umem_dmabuf *umem_dmabuf) {}
++static inline void ib_umem_dmabuf_revoke(struct ib_umem_dmabuf *umem_dmabuf) {}
++#endif
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ struct ib_umem *ib_umem_get_peer(struct ib_device *device, unsigned long addr,
++#else
++struct ib_umem *ib_umem_get_peer(struct ib_udata *udata, unsigned long addr,
++#endif
+ 				 size_t size, int access,
+ 				 unsigned long peer_mem_flags);
+ void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
+@@ -304,7 +327,11 @@ static inline void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf) {
+ static inline void ib_umem_dmabuf_revoke_lock(struct ib_umem_dmabuf *umem_dmabuf) {}
+ static inline void ib_umem_dmabuf_revoke_unlock(struct ib_umem_dmabuf *umem_dmabuf) {}
+ static inline void ib_umem_dmabuf_revoke(struct ib_umem_dmabuf *umem_dmabuf) {}
++#ifdef HAVE_MMU_INTERVAL_NOTIFIER
+ static inline struct ib_umem *ib_umem_get_peer(struct ib_device *device,
++#else
++static inline struct ib_umem *ib_umem_get_peer(struct ib_udata *udata,
++#endif
+ 					       unsigned long addr, size_t size,
+ 					       int access,
+ 					       unsigned long peer_mem_flags)

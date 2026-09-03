@@ -1,0 +1,8 @@
+sep=;
+Change-Id=I021361a8d858480ee77ae30486c30880bc052777; subject=Revert "net/mlx5e: Default to Striding RQ when not conflicting with CQE compression"; feature=mlx5_en_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I800f4f05f55cdd2d37086314e5fa8c3ec0a93eb3; subject=net/mlx5e: Remove index and group id from EQ dump; feature=mlx5_devlink_sysfs_interface; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib545c37524d689ba25e6caaa72b317b209079041; subject=net/mlx5e: Fix panic when querying tisn vis debugFS; feature=debugfs_prints; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Iada3b9f9e74dd43f78fbe2fe76b2cdd44086732f; subject=net/mlx5e: Align sysFs with ethtool setting of hfuc; feature=debugfs_prints; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I5a931214df0393704f7467f16c5aceef5f9f9e71; subject=net/mlx5: Align behavior with sriov_numvfs sysfs; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I7402a94591d7d050fcea41e2f97cd5e2de3be5b7; subject=mlx5e: Fix sysFs overflow; feature=max_ratelimit_255G; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I49e5acd153eab5490be4fc1635e7d956ead84f0c; subject=BACKPORTS: Fix mlx5e_get_rxnfc backports; feature=backports; upstream_status=ignore; upstream_issue=; general=;

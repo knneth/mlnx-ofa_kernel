@@ -33,6 +33,9 @@
 WDIR=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd | sed -e 's/devtools//')
 ORIG_ARGS=$@
 path=
+check_commits=
+list_no_metadata=
+check_range=
 
 FEATURES_DB="metadata/features_metadata_db.csv"
 STATUS_DB="NA \
@@ -54,7 +57,23 @@ Usage:
 	${0##*/} [options]
 
 Options:
-	-p, --path <PATH>          Path to the metadata file to test
+	-p, --path <PATH>           Path to the metadata file to test
+
+	-c, --check-commits [RANGE] Report commits that change C/H source files but
+	                            have no metadata entry. Commits that don't touch
+	                            any C/H file are not required to have metadata and
+	                            are skipped.
+	                            RANGE is optional: if omitted, the whole tree
+	                            (all commits reachable from HEAD) is scanned; if
+	                            given, it is any git revision range, e.g. 'BASE..'
+	                            or 'origin/mlnx_ofed_26_07..HEAD'.
+
+	-l, --list-no-metadata [RANGE]
+	                            List ALL commits that have no metadata entry,
+	                            whether or not they change C/H files. Each commit
+	                            is tagged whether metadata is required (changes
+	                            C/H) or not. RANGE is optional (whole tree if
+	                            omitted). Informational - always exits 0.
 EOF
 }
 
@@ -64,6 +83,23 @@ do
 		-p | --path)
 		path="$2"
 		shift
+		;;
+		-c | --check-commits)
+		check_commits=1
+		# RANGE is optional: consume the next argument as the range only if it
+		# is present and is not another option. If omitted, scan the whole tree.
+		if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+			check_range="$2"
+			shift
+		fi
+		;;
+		-l | --list-no-metadata)
+		list_no_metadata=1
+		# RANGE is optional, same handling as --check-commits.
+		if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+			check_range="$2"
+			shift
+		fi
 		;;
 		-h | *help | *usage)
 		echo "This script will verify the content of a metadata file."
@@ -225,10 +261,117 @@ validate_revert_and_reverted_metadata()
 	return 0
 }
 
+# Returns 0 if the commit changes at least one C/H source file, 1 otherwise.
+# Commits that don't touch any C/H file are not required to have metadata.
+commit_touches_c_or_h()
+{
+	local cid=$1; shift
+
+	for ff in $(git log -1 --name-only --pretty=format: $cid 2>/dev/null)
+	do
+		[ -z "$ff" ] && continue
+		case $ff in
+			*.c | *.h)
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
+# Returns 0 if the commit has a metadata entry in metadata/*.csv, 1 otherwise.
+commit_has_metadata()
+{
+	local cid=$1; shift
+	local changeID=$(git log -1 --format=%B $cid | grep -iE '^Change-Id:' | head -1 | sed -r -e 's/.*:\s*//')
+
+	if [ -n "$changeID" ] && grep -q -- "Change-Id=$changeID;" $WDIR/metadata/*.csv 2>/dev/null; then
+		return 0
+	fi
+	# Fall back to commit-Id, used for merged commits without a Change-Id.
+	if grep -q -- "commit-Id=$cid" $WDIR/metadata/*.csv 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
 ##################################################################
 #
 # main
 #
+
+# --check-commits mode: list commits that require metadata (touch C/H files)
+# but don't have a metadata entry yet. Scan the whole tree by default, or the
+# given range if one was provided.
+if [ -n "$check_commits" ]; then
+	if [ -z "$check_range" ]; then
+		echo "Checking metadata for the whole tree (all commits reachable from HEAD)..."
+	else
+		echo "Checking metadata for commits in range '$check_range'..."
+	fi
+	echo "(commits that don't change any C/H file don't require metadata and are skipped)"
+	echo ----------------------------------------------------
+
+	missing=
+	missing_num=0
+	skipped_num=0
+	for cid in $(git log --no-merges --format="%h" $check_range 2>/dev/null)
+	do
+		[ -z "$cid" ] && continue
+		if ! commit_touches_c_or_h $cid; then
+			echo "-I- SKIP $cid '$(get_subject $cid)' (no C/H change, metadata not required)"
+			skipped_num=$(( skipped_num + 1 ))
+			continue
+		fi
+		if ! commit_has_metadata $cid; then
+			echo "-E- $cid '$(get_subject $cid)' changes C/H files but has no metadata entry!"
+			missing="$missing $cid"
+			missing_num=$(( missing_num + 1 ))
+		fi
+	done
+
+	echo ----------------------------------------------------
+	echo "Skipped $skipped_num commit(s) that don't change any C/H file (metadata not required)."
+	if [ -z "$missing" ]; then
+		echo "All commits that change C/H files have metadata. All passed."
+		exit 0
+	fi
+	echo "Found $missing_num commit(s) that change C/H files but are missing metadata."
+	exit 1
+fi
+
+# --list-no-metadata mode: list ALL commits that have no metadata entry,
+# whether or not they change C/H files. Informational only - always exits 0.
+if [ -n "$list_no_metadata" ]; then
+	if [ -z "$check_range" ]; then
+		echo "Listing commits with no metadata entry in the whole tree..."
+	else
+		echo "Listing commits with no metadata entry in range '$check_range'..."
+	fi
+	echo ----------------------------------------------------
+
+	none_num=0
+	required_num=0
+	for cid in $(git log --no-merges --format="%h" $check_range 2>/dev/null)
+	do
+		[ -z "$cid" ] && continue
+		if commit_has_metadata $cid; then
+			continue
+		fi
+		none_num=$(( none_num + 1 ))
+		if commit_touches_c_or_h $cid; then
+			echo "-E- $cid '$(get_subject $cid)' (changes C/H - REQUIRES metadata)"
+			required_num=$(( required_num + 1 ))
+		else
+			echo "-I- $cid '$(get_subject $cid)' (no C/H change - metadata not required)"
+		fi
+	done
+
+	echo ----------------------------------------------------
+	echo "$none_num commit(s) have no metadata entry ($required_num of them change C/H files and require it)."
+	exit 0
+fi
+
 if [ ! -e "$path" ]; then
 	echo "-E- File doesn't exist '$path' !" >&2
 	echo

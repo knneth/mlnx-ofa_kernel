@@ -1,0 +1,626 @@
+From: Aurelien Aptel <aaptel@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/common/auth.c
+
+Change-Id: Ia800a0829d3b2283b114b743c9b8ced3a2795a92
+---
+ drivers/nvme/common/auth.c | 400 ++++++++++++++++++++++++++++++++++---
+ 1 file changed, 370 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/nvme/common/auth.c b/drivers/nvme/common/auth.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/nvme/common/auth.c
++++ b/drivers/nvme/common/auth.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2020 Hannes Reinecke, SUSE Linux
+  */
+ 
++#ifdef HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP
+ #include <linux/module.h>
+ #include <linux/crc32.h>
+ #include <linux/base64.h>
+@@ -13,6 +14,12 @@
+ #include <crypto/sha2.h>
+ #include <linux/nvme.h>
+ #include <linux/nvme-auth.h>
++#ifndef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++#include <crypto/hash.h>
++#ifdef HAVE_HKDF_EXPAND
++#include <crypto/hkdf.h>
++#endif
++#endif
+ 
+ static u32 nvme_dhchap_seqnum;
+ static DEFINE_MUTEX(nvme_dhchap_mutex);
+@@ -162,7 +169,11 @@ struct nvme_dhchap_key *nvme_auth_extract_key(const char *secret, u8 key_hash)
+ 	if (!key)
+ 		return ERR_PTR(-ENOMEM);
+ 
+-	key_len = base64_decode(secret, allocated_len, key->key, true, BASE64_STD);
++	key_len = base64_decode(secret, allocated_len, key->key
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++			, true, BASE64_STD
++#endif
++			);
+ 	if (key_len < 0) {
+ 		pr_debug("base64 key decoding error %d\n",
+ 			 key_len);
+@@ -221,6 +232,7 @@ void nvme_auth_free_key(struct nvme_dhchap_key *key)
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_free_key);
+ 
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ /*
+  * Start computing an HMAC value, given the algorithm ID and raw key.
+  *
+@@ -285,7 +297,9 @@ void nvme_auth_hmac_final(struct nvme_auth_hmac_ctx *hmac, u8 *out)
+ 	WARN_ON_ONCE(1);
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_hmac_final);
++#endif /* HAVE_HMAC_SHA256_INIT_USINGRAWKEY */
+ 
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ static int nvme_auth_hmac(u8 hmac_id, const u8 *key, size_t key_len,
+ 			  const u8 *data, size_t data_len, u8 *out)
+ {
+@@ -316,11 +330,23 @@ static int nvme_auth_hash(u8 hmac_id, const u8 *data, size_t data_len, u8 *out)
+ 	pr_warn("%s: invalid hash algorithm %d\n", __func__, hmac_id);
+ 	return -EINVAL;
+ }
++#endif /* HAVE_HMAC_SHA256_INIT_USINGRAWKEY */
++
++#ifndef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++static const char *nvme_auth_digest_name(u8 hmac_id)
++{
++	switch (hmac_id) {
++	case NVME_AUTH_HASH_SHA256: return "sha256";
++	case NVME_AUTH_HASH_SHA384: return "sha384";
++	case NVME_AUTH_HASH_SHA512: return "sha512";
++	}
++	return NULL;
++}
++#endif
+ 
+ struct nvme_dhchap_key *nvme_auth_transform_key(
+ 		const struct nvme_dhchap_key *key, const char *nqn)
+ {
+-	struct nvme_auth_hmac_ctx hmac;
+ 	struct nvme_dhchap_key *transformed_key;
+ 	int ret, key_len;
+ 
+@@ -335,6 +361,9 @@ struct nvme_dhchap_key *nvme_auth_transform_key(
+ 			return ERR_PTR(-ENOMEM);
+ 		return transformed_key;
+ 	}
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++	struct nvme_auth_hmac_ctx hmac;
++
+ 	ret = nvme_auth_hmac_init(&hmac, key->hash, key->key, key->len);
+ 	if (ret)
+ 		return ERR_PTR(ret);
+@@ -347,6 +376,48 @@ struct nvme_dhchap_key *nvme_auth_transform_key(
+ 	nvme_auth_hmac_update(&hmac, nqn, strlen(nqn));
+ 	nvme_auth_hmac_update(&hmac, "NVMe-over-Fabrics", 17);
+ 	nvme_auth_hmac_final(&hmac, transformed_key->key);
++#else
++	const char *hmac_name = nvme_auth_hmac_name(key->hash);
++	struct crypto_shash *key_tfm;
++	SHASH_DESC_ON_STACK(shash, key_tfm);
++
++	if (!hmac_name) {
++		pr_warn("Invalid key hash id %d\n", key->hash);
++		return ERR_PTR(-EINVAL);
++	}
++	key_tfm = crypto_alloc_shash(hmac_name, 0, 0);
++	if (IS_ERR(key_tfm))
++		return ERR_CAST(key_tfm);
++	key_len = crypto_shash_digestsize(key_tfm);
++	transformed_key = nvme_auth_alloc_key(key_len, key->hash);
++	if (!transformed_key) {
++		crypto_free_shash(key_tfm);
++		return ERR_PTR(-ENOMEM);
++	}
++	shash->tfm = key_tfm;
++	ret = crypto_shash_setkey(key_tfm, key->key, key->len);
++	if (ret < 0)
++		goto out_free_transformed_key;
++	ret = crypto_shash_init(shash);
++	if (ret < 0)
++		goto out_free_transformed_key;
++	ret = crypto_shash_update(shash, nqn, strlen(nqn));
++	if (ret < 0)
++		goto out_free_transformed_key;
++	ret = crypto_shash_update(shash, "NVMe-over-Fabrics", 17);
++	if (ret < 0)
++		goto out_free_transformed_key;
++	ret = crypto_shash_final(shash, transformed_key->key);
++	if (ret < 0)
++		goto out_free_transformed_key;
++	crypto_free_shash(key_tfm);
++	return transformed_key;
++
++out_free_transformed_key:
++	nvme_auth_free_key(transformed_key);
++	crypto_free_shash(key_tfm);
++	return ERR_PTR(ret);
++#endif
+ 	return transformed_key;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_transform_key);
+@@ -373,7 +444,53 @@ EXPORT_SYMBOL_GPL(nvme_auth_transform_key);
+ int nvme_auth_augmented_challenge(u8 hmac_id, const u8 *skey, size_t skey_len,
+ 				  const u8 *challenge, u8 *aug, size_t hlen)
+ {
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ 	return nvme_auth_hmac(hmac_id, skey, skey_len, challenge, hlen, aug);
++#else
++	struct crypto_shash *tfm;
++	u8 *hashed_key;
++	const char *hmac_name;
++	int ret;
++
++	hashed_key = kmalloc(hlen, GFP_KERNEL);
++	if (!hashed_key)
++		return -ENOMEM;
++	const char *digest_name = nvme_auth_digest_name(hmac_id);
++	struct crypto_shash *digest_tfm;
++
++	if (!digest_name) {
++		ret = -EINVAL;
++		goto out_free_key;
++	}
++	digest_tfm = crypto_alloc_shash(digest_name, 0, 0);
++	if (IS_ERR(digest_tfm)) {
++		ret = PTR_ERR(digest_tfm);
++		goto out_free_key;
++	}
++	ret = crypto_shash_tfm_digest(digest_tfm, skey, skey_len, hashed_key);
++	crypto_free_shash(digest_tfm);
++	if (ret < 0)
++		goto out_free_key;
++	hmac_name = nvme_auth_hmac_name(hmac_id);
++	if (!hmac_name) {
++		ret = -EINVAL;
++		goto out_free_key;
++	}
++	tfm = crypto_alloc_shash(hmac_name, 0, 0);
++	if (IS_ERR(tfm)) {
++		ret = PTR_ERR(tfm);
++		goto out_free_key;
++	}
++	ret = crypto_shash_setkey(tfm, hashed_key, hlen);
++	if (ret)
++		goto out_free_hash;
++	ret = crypto_shash_tfm_digest(tfm, challenge, hlen, aug);
++out_free_hash:
++	crypto_free_shash(tfm);
++out_free_key:
++	kfree_sensitive(hashed_key);
++	return ret;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_augmented_challenge);
+ 
+@@ -414,6 +531,35 @@ int nvme_auth_gen_pubkey(struct crypto_kpp *dh_tfm,
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_gen_pubkey);
+ 
++#ifndef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++int nvme_auth_gen_shared_secret(struct crypto_kpp *dh_tfm,
++				const u8 *public_key, size_t public_key_len,
++				u8 *sess_key, size_t sess_key_len)
++{
++	struct kpp_request *req;
++	struct crypto_wait wait;
++	struct scatterlist src, dst;
++	int ret;
++
++	req = kpp_request_alloc(dh_tfm, GFP_KERNEL);
++	if (!req)
++		return -ENOMEM;
++
++	crypto_init_wait(&wait);
++	sg_init_one(&src, public_key, public_key_len);
++	kpp_request_set_input(req, &src, public_key_len);
++	sg_init_one(&dst, sess_key, sess_key_len);
++	kpp_request_set_output(req, &dst, sess_key_len);
++	kpp_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
++				 crypto_req_done, &wait);
++
++	ret = crypto_wait_req(crypto_kpp_compute_shared_secret(req), &wait);
++	kpp_request_free(req);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(nvme_auth_gen_shared_secret);
++#endif /* !HAVE_HMAC_SHA256_INIT_USINGRAWKEY */
++
+ /**
+  * nvme_auth_gen_session_key() - Generate an ephemeral session key
+  * @dh_tfm: Diffie-Hellman transform with local private key already set
+@@ -429,6 +575,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_gen_pubkey);
+  *
+  * Return: 0 on success, negative errno on failure.
+  */
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ int nvme_auth_gen_session_key(struct crypto_kpp *dh_tfm,
+ 		const u8 *public_key, size_t public_key_len,
+ 		u8 *sess_key, size_t sess_key_len, u8 hash_id)
+@@ -484,6 +631,7 @@ out_free_secret:
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_gen_session_key);
++#endif /* HAVE_HMAC_SHA256_INIT_USINGRAWKEY */
+ 
+ int nvme_auth_parse_key(const char *secret, struct nvme_dhchap_key **ret_key)
+ {
+@@ -533,18 +681,26 @@ EXPORT_SYMBOL_GPL(nvme_auth_parse_key);
+  * Returns 0 on success with a valid generated PSK pointer in @ret_psk and
+  * the length of @ret_psk in @ret_len, or a negative error number otherwise.
+  */
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ int nvme_auth_generate_psk(u8 hmac_id, const u8 *skey, size_t skey_len,
+ 			   const u8 *c1, const u8 *c2, size_t hash_len,
+ 			   u8 **ret_psk, size_t *ret_len)
++#else
++int nvme_auth_generate_psk(u8 hmac_id, u8 *skey, size_t skey_len,
++			   u8 *c1, u8 *c2, size_t hash_len,
++			   u8 **ret_psk, size_t *ret_len)
++#endif
+ {
+ 	size_t psk_len = nvme_auth_hmac_hash_len(hmac_id);
+-	struct nvme_auth_hmac_ctx hmac;
+ 	u8 *psk;
+ 	int ret;
+ 
+ 	if (!c1 || !c2)
+ 		return -EINVAL;
+ 
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++	struct nvme_auth_hmac_ctx hmac;
++
+ 	ret = nvme_auth_hmac_init(&hmac, hmac_id, skey, skey_len);
+ 	if (ret)
+ 		return ret;
+@@ -556,9 +712,47 @@ int nvme_auth_generate_psk(u8 hmac_id, const u8 *skey, size_t skey_len,
+ 	nvme_auth_hmac_update(&hmac, c1, hash_len);
+ 	nvme_auth_hmac_update(&hmac, c2, hash_len);
+ 	nvme_auth_hmac_final(&hmac, psk);
++	memzero_explicit(&hmac, sizeof(hmac));
+ 	*ret_psk = psk;
+ 	*ret_len = psk_len;
+ 	return 0;
++#else
++	const char *hmac_name = nvme_auth_hmac_name(hmac_id);
++	struct crypto_shash *tfm;
++	SHASH_DESC_ON_STACK(shash, tfm);
++
++	if (!hmac_name) {
++		pr_warn("%s: invalid hash algorithm %d\n",
++			__func__, hmac_id);
++		return -EINVAL;
++	}
++	tfm = crypto_alloc_shash(hmac_name, 0, 0);
++	if (IS_ERR(tfm))
++		return PTR_ERR(tfm);
++	psk = kzalloc(psk_len, GFP_KERNEL);
++	if (!psk) {
++		crypto_free_shash(tfm);
++		return -ENOMEM;
++	}
++	shash->tfm = tfm;
++	ret = crypto_shash_setkey(tfm, skey, skey_len);
++	if (!ret)
++		ret = crypto_shash_init(shash);
++	if (!ret)
++		ret = crypto_shash_update(shash, c1, hash_len);
++	if (!ret)
++		ret = crypto_shash_update(shash, c2, hash_len);
++	if (!ret)
++		ret = crypto_shash_final(shash, psk);
++	if (!ret) {
++		*ret_psk = psk;
++		*ret_len = psk_len;
++	} else {
++		kfree_sensitive(psk);
++	}
++	crypto_free_shash(tfm);
++	return ret;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_generate_psk);
+ 
+@@ -597,11 +791,16 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_psk);
+  * Returns 0 on success with a valid digest pointer in @ret_digest, or a
+  * negative error number on failure.
+  */
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ int nvme_auth_generate_digest(u8 hmac_id, const u8 *psk, size_t psk_len,
+ 			      const char *subsysnqn, const char *hostnqn,
+ 			      char **ret_digest)
++#else
++int nvme_auth_generate_digest(u8 hmac_id, u8 *psk, size_t psk_len,
++			      char *subsysnqn, char *hostnqn,
++			      u8 **ret_digest)
++#endif
+ {
+-	struct nvme_auth_hmac_ctx hmac;
+ 	u8 digest[NVME_AUTH_MAX_DIGEST_SIZE];
+ 	size_t hash_len = nvme_auth_hmac_hash_len(hmac_id);
+ 	char *enc;
+@@ -636,6 +835,9 @@ int nvme_auth_generate_digest(u8 hmac_id, const u8 *psk, size_t psk_len,
+ 		goto out;
+ 	}
+ 
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++	struct nvme_auth_hmac_ctx hmac;
++
+ 	ret = nvme_auth_hmac_init(&hmac, hmac_id, psk, psk_len);
+ 	if (ret)
+ 		goto out;
+@@ -644,13 +846,56 @@ int nvme_auth_generate_digest(u8 hmac_id, const u8 *psk, size_t psk_len,
+ 	nvme_auth_hmac_update(&hmac, subsysnqn, strlen(subsysnqn));
+ 	nvme_auth_hmac_update(&hmac, " NVMe-over-Fabrics", 18);
+ 	nvme_auth_hmac_final(&hmac, digest);
++	memzero_explicit(&hmac, sizeof(hmac));
++#else
++	const char *hmac_name = nvme_auth_hmac_name(hmac_id);
++	struct crypto_shash *tfm;
++	SHASH_DESC_ON_STACK(shash, tfm);
++
++	if (!hmac_name) {
++		pr_warn("%s: invalid hash algorithm %d\n",
++			__func__, hmac_id);
++		ret = -EINVAL;
++		goto out;
++	}
++	tfm = crypto_alloc_shash(hmac_name, 0, 0);
++	if (IS_ERR(tfm)) {
++		ret = PTR_ERR(tfm);
++		goto out;
++	}
++	shash->tfm = tfm;
++	ret = crypto_shash_setkey(tfm, psk, psk_len);
++	if (!ret)
++		ret = crypto_shash_init(shash);
++	if (!ret)
++		ret = crypto_shash_update(shash, hostnqn, strlen(hostnqn));
++	if (!ret)
++		ret = crypto_shash_update(shash, " ", 1);
++	if (!ret)
++		ret = crypto_shash_update(shash, subsysnqn, strlen(subsysnqn));
++	if (!ret)
++		ret = crypto_shash_update(shash, " NVMe-over-Fabrics", 18);
++	if (!ret)
++		ret = crypto_shash_final(shash, digest);
++	crypto_free_shash(tfm);
++	if (ret)
++		goto out;
++#endif
+ 
+-	ret = base64_encode(digest, hash_len, enc, true, BASE64_STD);
++	ret = base64_encode(digest, hash_len, enc
++#ifdef HAVE_BASE64_ENCODE_5_PARAMS
++			, true, BASE64_STD
++#endif
++			);
+ 	if (ret < enc_len) {
+ 		ret = -ENOKEY;
+ 		goto out;
+ 	}
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ 	*ret_digest = enc;
++#else
++	*ret_digest = (u8 *)enc;
++#endif
+ 	ret = 0;
+ 
+ out:
+@@ -661,6 +906,41 @@ out:
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_generate_digest);
+ 
++#if !defined(HAVE_HMAC_SHA256_INIT_USINGRAWKEY) && defined(HAVE_HKDF_EXPAND)
++static int hkdf_expand_label(struct crypto_shash *hmac_tfm,
++		const u8 *label, unsigned int labellen,
++		const u8 *context, unsigned int contextlen,
++		u8 *okm, unsigned int okmlen)
++{
++	const char *tls13_prefix = "tls13 ";
++	unsigned int prefixlen = strlen(tls13_prefix);
++	unsigned int infolen;
++	u8 *info;
++	int err;
++
++	if (WARN_ON(labellen > (255 - prefixlen)))
++		return -EINVAL;
++	if (WARN_ON(contextlen > 255))
++		return -EINVAL;
++
++	infolen = 2 + (1 + prefixlen + labellen) + (1 + contextlen);
++	info = kzalloc(infolen, GFP_KERNEL);
++	if (!info)
++		return -ENOMEM;
++
++	put_unaligned_be16(okmlen, info);
++	info[2] = prefixlen + labellen;
++	memcpy(info + 3, tls13_prefix, prefixlen);
++	memcpy(info + 3 + prefixlen, label, labellen);
++	info[3 + prefixlen + labellen] = contextlen;
++	memcpy(info + 4 + prefixlen + labellen, context, contextlen);
++
++	err = hkdf_expand(hmac_tfm, info, infolen, okm, okmlen);
++	kfree_sensitive(info);
++	return err;
++}
++#endif /* !HAVE_HMAC_SHA256_INIT_USINGRAWKEY && HAVE_HKDF_EXPAND */
++
+ /**
+  * nvme_auth_derive_tls_psk - Derive TLS PSK
+  * @hmac_id: Hash function identifier
+@@ -688,16 +968,15 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_digest);
+  * Returns 0 on success with a valid psk pointer in @ret_psk or a negative
+  * error number otherwise.
+  */
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
+ int nvme_auth_derive_tls_psk(int hmac_id, const u8 *psk, size_t psk_len,
+ 			     const char *psk_digest, u8 **ret_psk)
++#else
++int nvme_auth_derive_tls_psk(int hmac_id, u8 *psk, size_t psk_len,
++			     u8 *psk_digest, u8 **ret_psk)
++#endif
+ {
+-	static const u8 default_salt[NVME_AUTH_MAX_DIGEST_SIZE];
+-	static const char label[] = "tls13 nvme-tls-psk";
+-	const size_t label_len = sizeof(label) - 1;
+-	u8 prk[NVME_AUTH_MAX_DIGEST_SIZE];
+-	size_t hash_len, ctx_len;
+-	u8 *hmac_data = NULL, *tls_key;
+-	size_t i;
++	size_t hash_len;
+ 	int ret;
+ 
+ 	hash_len = nvme_auth_hmac_hash_len(hmac_id);
+@@ -717,16 +996,20 @@ int nvme_auth_derive_tls_psk(int hmac_id, const u8 *psk, size_t psk_len,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef HAVE_HMAC_SHA256_INIT_USINGRAWKEY
++	static const u8 default_salt[NVME_AUTH_MAX_DIGEST_SIZE];
++	static const char label[] = "tls13 nvme-tls-psk";
++	const size_t label_len = sizeof(label) - 1;
++	u8 prk[NVME_AUTH_MAX_DIGEST_SIZE];
++	size_t ctx_len;
++	u8 *hmac_data = NULL, *tls_key;
++	size_t i;
++
+ 	/* HKDF-Extract */
+ 	ret = nvme_auth_hmac(hmac_id, default_salt, hash_len, psk, psk_len,
+ 			     prk);
+ 	if (ret)
+-		goto out;
+-
+-	/*
+-	 * HKDF-Expand-Label (RFC 8446 section 7.1), with output length equal to
+-	 * the hash length (so only a single HMAC operation is needed)
+-	 */
++		goto out_new;
+ 
+ 	hmac_data = kmalloc(/* output length */ 2 +
+ 			    /* label */ 1 + label_len +
+@@ -735,48 +1018,105 @@ int nvme_auth_derive_tls_psk(int hmac_id, const u8 *psk, size_t psk_len,
+ 			    GFP_KERNEL);
+ 	if (!hmac_data) {
+ 		ret = -ENOMEM;
+-		goto out;
++		goto out_new;
+ 	}
+-	/* output length */
+ 	i = 0;
+ 	hmac_data[i++] = hash_len >> 8;
+ 	hmac_data[i++] = hash_len;
+-
+-	/* label */
+ 	static_assert(label_len <= 255);
+ 	hmac_data[i] = label_len;
+ 	memcpy(&hmac_data[i + 1], label, label_len);
+ 	i += 1 + label_len;
+-
+-	/* context */
+ 	ctx_len = sprintf(&hmac_data[i + 1], "%02d %s", hmac_id, psk_digest);
+ 	if (ctx_len > 255) {
+ 		ret = -EINVAL;
+-		goto out;
++		goto out_new;
+ 	}
+ 	hmac_data[i] = ctx_len;
+ 	i += 1 + ctx_len;
+-
+-	/* counter (this overwrites the NUL terminator written by sprintf) */
+ 	hmac_data[i++] = 1;
+ 
+ 	tls_key = kzalloc(psk_len, GFP_KERNEL);
+ 	if (!tls_key) {
+ 		ret = -ENOMEM;
+-		goto out;
++		goto out_new;
+ 	}
+ 	ret = nvme_auth_hmac(hmac_id, prk, hash_len, hmac_data, i, tls_key);
+ 	if (ret) {
+ 		kfree_sensitive(tls_key);
+-		goto out;
++		goto out_new;
+ 	}
+ 	*ret_psk = tls_key;
+-out:
++out_new:
+ 	kfree_sensitive(hmac_data);
+ 	memzero_explicit(prk, sizeof(prk));
++#elif defined(HAVE_HKDF_EXPAND)
++	static const u8 default_salt[NVME_AUTH_MAX_DIGEST_SIZE];
++	static const char nvme_label[] = "nvme-tls-psk";
++	const char *hmac_name = nvme_auth_hmac_name(hmac_id);
++	struct crypto_shash *hmac_tfm;
++	size_t prk_len;
++	const char *ctx;
++	u8 *prk;
++	u8 *tls_key;
++
++	hmac_tfm = crypto_alloc_shash(hmac_name, 0, 0);
++	if (IS_ERR(hmac_tfm))
++		return PTR_ERR(hmac_tfm);
++
++	prk_len = crypto_shash_digestsize(hmac_tfm);
++	prk = kzalloc(prk_len, GFP_KERNEL);
++	if (!prk) {
++		ret = -ENOMEM;
++		goto out_old_shash;
++	}
++	if (WARN_ON(prk_len > NVME_AUTH_MAX_DIGEST_SIZE)) {
++		ret = -EINVAL;
++		goto out_old_prk;
++	}
++	ret = hkdf_extract(hmac_tfm, psk, psk_len,
++			   default_salt, prk_len, prk);
++	if (ret)
++		goto out_old_prk;
++
++	ret = crypto_shash_setkey(hmac_tfm, prk, prk_len);
++	if (ret)
++		goto out_old_prk;
++
++	ctx = kasprintf(GFP_KERNEL, "%02d %s", hmac_id,
++			(const char *)psk_digest);
++	if (!ctx) {
++		ret = -ENOMEM;
++		goto out_old_prk;
++	}
++
++	tls_key = kzalloc(psk_len, GFP_KERNEL);
++	if (!tls_key) {
++		ret = -ENOMEM;
++		goto out_old_ctx;
++	}
++	ret = hkdf_expand_label(hmac_tfm,
++				nvme_label, strlen(nvme_label),
++				ctx, strlen(ctx),
++				tls_key, psk_len);
++	if (ret) {
++		kfree_sensitive(tls_key);
++		goto out_old_ctx;
++	}
++	*ret_psk = tls_key;
++out_old_ctx:
++	kfree(ctx);
++out_old_prk:
++	kfree_sensitive(prk);
++out_old_shash:
++	crypto_free_shash(hmac_tfm);
++#else
++	return -EOPNOTSUPP;
++#endif
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(nvme_auth_derive_tls_psk);
+ 
++#endif /* HAVE_NVME_AUTH_TRANSFORM_KEY_DHCHAP */
+ MODULE_DESCRIPTION("NVMe Authentication framework");
+ MODULE_LICENSE("GPL v2");

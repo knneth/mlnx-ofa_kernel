@@ -112,6 +112,11 @@ static const struct mlxdevm_param mlxdevm_param_generic[] = {
 		.name = MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_NAME,
 		.type = MLXDEVM_PARAM_GENERIC_NUM_DOORBELLS_TYPE,
 	},
+	{
+		.id = MLXDEVM_PARAM_GENERIC_ID_MAX_MAC_PER_VF,
+		.name = MLXDEVM_PARAM_GENERIC_MAX_MAC_PER_VF_NAME,
+		.type = MLXDEVM_PARAM_GENERIC_MAX_MAC_PER_VF_TYPE,
+	},
 };
 
 static int mlxdevm_param_generic_verify(const struct mlxdevm_param *param)
@@ -169,11 +174,12 @@ mlxdevm_param_cmode_is_supported(const struct mlxdevm_param *param,
 
 static int mlxdevm_param_get(struct mlxdevm *mlxdevm,
 			     const struct mlxdevm_param *param,
-			     struct mlxdevm_param_gset_ctx *ctx)
+			     struct mlxdevm_param_gset_ctx *ctx,
+			     struct netlink_ext_ack *extack)
 {
 	if (!param->get)
 		return -EOPNOTSUPP;
-	return param->get(mlxdevm, param->id, ctx);
+	return param->get(mlxdevm, param->id, ctx, extack);
 }
 
 static int mlxdevm_param_set(struct mlxdevm *mlxdevm,
@@ -186,59 +192,110 @@ static int mlxdevm_param_set(struct mlxdevm *mlxdevm,
 	return param->set(mlxdevm, param->id, ctx, extack);
 }
 
-static int
-mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
-				enum mlxdevm_param_type type,
-				enum mlxdevm_param_cmode cmode,
-				union mlxdevm_param_value val)
+static int mlxdevm_param_get_default(struct mlxdevm *mlxdevm,
+				     const struct mlxdevm_param *param,
+				     struct mlxdevm_param_gset_ctx *ctx,
+				     struct netlink_ext_ack *extack)
 {
-	struct nlattr *param_value_attr;
+	if (!param->get_default)
+		return -EOPNOTSUPP;
 
-	param_value_attr = nla_nest_start_noflag(msg,
-						 MLXDEVM_ATTR_PARAM_VALUE);
-	if (!param_value_attr)
-		goto nla_put_failure;
+	return param->get_default(mlxdevm, param->id, ctx, extack);
+}
 
-	if (nla_put_u8(msg, MLXDEVM_ATTR_PARAM_VALUE_CMODE, cmode))
-		goto value_nest_cancel;
+static int mlxdevm_param_reset_default(struct mlxdevm *mlxdevm,
+				       const struct mlxdevm_param *param,
+				       enum mlxdevm_param_cmode cmode,
+				       struct netlink_ext_ack *extack)
+{
+	if (!param->reset_default)
+		return -EOPNOTSUPP;
 
+	return param->reset_default(mlxdevm, param->id, cmode, extack);
+}
+
+static int
+mlxdevm_nl_param_value_put(struct sk_buff *msg, enum mlxdevm_param_type type,
+			   int nla_type, union mlxdevm_param_value val,
+			   bool flag_as_u8)
+{
 	switch (type) {
 	case MLXDEVM_PARAM_TYPE_U8:
-		if (nla_put_u8(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA, val.vu8))
-			goto value_nest_cancel;
+		if (nla_put_u8(msg, nla_type, val.vu8))
+			return -EMSGSIZE;
 		break;
 	case MLXDEVM_PARAM_TYPE_U16:
-		if (nla_put_u16(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA, val.vu16))
-			goto value_nest_cancel;
+		if (nla_put_u16(msg, nla_type, val.vu16))
+			return -EMSGSIZE;
 		break;
 	case MLXDEVM_PARAM_TYPE_U32:
-		if (nla_put_u32(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA, val.vu32))
-			goto value_nest_cancel;
+		if (nla_put_u32(msg, nla_type, val.vu32))
+			return -EMSGSIZE;
 		break;
 	case MLXDEVM_PARAM_TYPE_U64:
-		if (mlxdevm_nl_put_u64(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA,
-				       val.vu64))
-			goto value_nest_cancel;
+		if (mlxdevm_nl_put_u64(msg, nla_type, val.vu64))
+			return -EMSGSIZE;
 		break;
 	case MLXDEVM_PARAM_TYPE_STRING:
-		if (nla_put_string(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA,
-				   val.vstr))
-			goto value_nest_cancel;
+		if (nla_put_string(msg, nla_type, val.vstr))
+			return -EMSGSIZE;
 		break;
 	case MLXDEVM_PARAM_TYPE_BOOL:
-		if (val.vbool &&
-		    nla_put_flag(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA))
-			goto value_nest_cancel;
+		/* default values of type bool are encoded with u8, so that
+		 * false can be distinguished from not present
+		 */
+		if (flag_as_u8) {
+			if (nla_put_u8(msg, nla_type, val.vbool))
+				return -EMSGSIZE;
+		} else {
+			if (val.vbool && nla_put_flag(msg, nla_type))
+				return -EMSGSIZE;
+		}
 		break;
 	case MLXDEVM_PARAM_TYPE_NESTED:
 		if (nla_put_u8(msg, MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE,
 			       sizeof(u16)))
-			goto value_nest_cancel;
-		if (nla_put(msg, MLXDEVM_ATTR_PARAM_VALUE_DATA,
+			return -EMSGSIZE;
+		if (nla_put(msg, nla_type,
 			    val.vu16arr.array_len * sizeof(u16),
 			    val.vu16arr.data))
-			goto value_nest_cancel;
+			return -EMSGSIZE;
 		break;
+	}
+	return 0;
+}
+
+static int
+mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
+				enum mlxdevm_param_type type,
+				enum mlxdevm_param_cmode cmode,
+				union mlxdevm_param_value val,
+				union mlxdevm_param_value default_val,
+				bool has_default)
+{
+	struct nlattr *param_value_attr;
+	int err = -EMSGSIZE;
+
+	param_value_attr = nla_nest_start_noflag(msg,
+						 MLXDEVM_ATTR_PARAM_VALUE);
+	if (!param_value_attr)
+		return -EMSGSIZE;
+
+	if (nla_put_u8(msg, MLXDEVM_ATTR_PARAM_VALUE_CMODE, cmode))
+		goto value_nest_cancel;
+
+	err = mlxdevm_nl_param_value_put(msg, type,
+					 MLXDEVM_ATTR_PARAM_VALUE_DATA,
+					 val, false);
+	if (err)
+		goto value_nest_cancel;
+
+	if (has_default) {
+		err = mlxdevm_nl_param_value_put(msg, type,
+						 MLXDEVM_ATTR_PARAM_VALUE_DEFAULT,
+						 default_val, true);
+		if (err)
+			goto value_nest_cancel;
 	}
 
 	nla_nest_end(msg, param_value_attr);
@@ -246,17 +303,19 @@ mlxdevm_nl_param_value_fill_one(struct sk_buff *msg,
 
 value_nest_cancel:
 	nla_nest_cancel(msg, param_value_attr);
-nla_put_failure:
-	return -EMSGSIZE;
+	return err;
 }
 
 static int mlxdevm_nl_param_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 				 unsigned int port_index,
 				 struct mlxdevm_param_item *param_item,
 				 enum mlxdevm_command cmd,
-				 u32 portid, u32 seq, int flags)
+				 u32 portid, u32 seq, int flags,
+				 struct netlink_ext_ack *extack)
 {
+	union mlxdevm_param_value default_value[MLXDEVM_PARAM_CMODE_MAX + 1];
 	union mlxdevm_param_value param_value[MLXDEVM_PARAM_CMODE_MAX + 1];
+	bool default_value_set[MLXDEVM_PARAM_CMODE_MAX + 1] = {};
 	bool param_value_set[MLXDEVM_PARAM_CMODE_MAX + 1] = {};
 	const struct mlxdevm_param *param = param_item->param;
 	struct mlxdevm_param_gset_ctx ctx;
@@ -277,12 +336,26 @@ static int mlxdevm_nl_param_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 				param_value[i] = param_item->driverinit_value;
 			else
 				return -EOPNOTSUPP;
+
+			if (param_item->driverinit_value_valid) {
+				default_value[i] = param_item->driverinit_default;
+				default_value_set[i] = true;
+			}
 		} else {
 			ctx.cmode = i;
-			err = mlxdevm_param_get(mlxdevm, param, &ctx);
+			err = mlxdevm_param_get(mlxdevm, param, &ctx, extack);
 			if (err)
 				return err;
 			param_value[i] = ctx.val;
+
+			err = mlxdevm_param_get_default(mlxdevm, param, &ctx,
+							extack);
+			if (!err) {
+				default_value[i] = ctx.val;
+				default_value_set[i] = true;
+			} else if (err != -EOPNOTSUPP) {
+				return err;
+			}
 		}
 		param_value_set[i] = true;
 	}
@@ -319,7 +392,9 @@ static int mlxdevm_nl_param_fill(struct sk_buff *msg, struct mlxdevm *mlxdevm,
 		if (!param_value_set[i])
 			continue;
 		err = mlxdevm_nl_param_value_fill_one(msg, param->type,
-						      i, param_value[i]);
+						      i, param_value[i],
+						      default_value[i],
+						      default_value_set[i]);
 		if (err)
 			goto values_list_nest_cancel;
 	}
@@ -361,7 +436,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
 	if (!msg)
 		return;
 	err = mlxdevm_nl_param_fill(msg, mlxdevm, port_index, param_item, cmd,
-				    0, 0, 0);
+				    0, 0, 0, NULL);
 	if (err) {
 		nlmsg_free(msg);
 		return;
@@ -406,7 +481,8 @@ static int mlxdevm_nl_param_get_dump_one(struct sk_buff *msg,
 		err = mlxdevm_nl_param_fill(msg, mlxdevm, 0, param_item,
 					    MLXDEVM_CMD_PARAM_GET,
 					    NETLINK_CB(cb->skb).portid,
-					    cb->nlh->nlmsg_seq, flags);
+					    cb->nlh->nlmsg_seq, flags,
+					    cb->extack);
 		if (err == -EOPNOTSUPP) {
 			err = 0;
 		} else if (err) {
@@ -510,7 +586,7 @@ mlxdevm_param_get_from_info(struct xarray *params, struct genl_info *info)
 int mlxdevm_nl_param_get_doit(struct sk_buff *skb,
 			      struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+        struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 	struct mlxdevm_param_item *param_item;
 	struct sk_buff *msg;
 	int err;
@@ -524,8 +600,8 @@ int mlxdevm_nl_param_get_doit(struct sk_buff *skb,
 		return -ENOMEM;
 
 	err = mlxdevm_nl_param_fill(msg, mlxdevm, 0, param_item,
-				    MLXDEVM_CMD_PARAM_GET,
-				    info->snd_portid, info->snd_seq, 0);
+				    MLXDEVM_CMD_PARAM_GET, info->snd_portid,
+				    info->snd_seq, 0, info->extack);
 	if (err) {
 		nlmsg_free(msg);
 		return err;
@@ -546,6 +622,7 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
 	struct mlxdevm_param_item *param_item;
 	const struct mlxdevm_param *param;
 	union mlxdevm_param_value value;
+	bool reset_default;
 	int err = 0;
 
 	param_item = mlxdevm_param_get_from_info(params, info);
@@ -557,13 +634,18 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
 		return err;
 	if (param_type != param->type)
 		return -EINVAL;
-	err = mlxdevm_param_value_get_from_info(param, info, &value);
-	if (err)
-		return err;
-	if (param->validate) {
-		err = param->validate(mlxdevm, param->id, value, info->extack);
+
+	reset_default = info->attrs[MLXDEVM_ATTR_PARAM_RESET_DEFAULT];
+	if (!reset_default) {
+		err = mlxdevm_param_value_get_from_info(param, info, &value);
 		if (err)
 			return err;
+		if (param->validate) {
+			err = param->validate(mlxdevm, param->id, value,
+					      info->extack);
+			if (err)
+				return err;
+		}
 	}
 
 	if (GENL_REQ_ATTR_CHECK(info, MLXDEVM_ATTR_PARAM_VALUE_CMODE))
@@ -573,6 +655,15 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
 		return -EOPNOTSUPP;
 
 	if (cmode == MLXDEVM_PARAM_CMODE_DRIVERINIT) {
+		if (reset_default) {
+			if (!param_item->driverinit_value_valid) {
+				NL_SET_ERR_MSG(info->extack,
+					       "Default value not available");
+				return -EOPNOTSUPP;
+			}
+			value = param_item->driverinit_default;
+		}
+
 		param_item->driverinit_value_new = value;
 		param_item->driverinit_value_new_valid = true;
 	} else {
@@ -580,7 +671,12 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
 			return -EOPNOTSUPP;
 		ctx.val = value;
 		ctx.cmode = cmode;
-		err = mlxdevm_param_set(mlxdevm, param, &ctx, info->extack);
+		if (reset_default)
+			err = mlxdevm_param_reset_default(mlxdevm, param, cmode,
+							  info->extack);
+		else
+			err = mlxdevm_param_set(mlxdevm, param, &ctx,
+						info->extack);
 		if (err)
 			return err;
 	}
@@ -591,7 +687,7 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
 
 int mlxdevm_nl_param_set_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	struct mlxdevm *mlxdevm = info->user_ptr[0];
+	struct mlxdevm *mlxdevm = mlxdevm_nl_ctx(info)->mlxdevm;
 
 	return __mlxdevm_nl_cmd_param_set_doit(mlxdevm, 0, &mlxdevm->params,
 					       info, MLXDEVM_CMD_PARAM_NEW);
@@ -644,7 +740,7 @@ static int mlxdevm_param_register(struct mlxdevm *mlxdevm,
 	else
 		WARN_ON(!param->get || !param->set);
 
-	param_item = kzalloc(sizeof(*param_item), GFP_KERNEL);
+	param_item = kzalloc_obj(*param_item);
 	if (!param_item)
 		return -ENOMEM;
 
@@ -691,7 +787,7 @@ int devm_params_register(struct mlxdevm *mlxdevm,
 	const struct mlxdevm_param *param = params;
 	int i, err;
 
-	lockdep_assert_held(&mlxdevm->lock);
+	devm_assert_locked(mlxdevm);
 
 	for (i = 0; i < params_count; i++, param++) {
 		err = mlxdevm_param_register(mlxdevm, param);
@@ -736,7 +832,7 @@ void devm_params_unregister(struct mlxdevm *mlxdevm,
 	const struct mlxdevm_param *param = params;
 	int i;
 
-	lockdep_assert_held(&mlxdevm->lock);
+	devm_assert_locked(mlxdevm);
 
 	for (i = 0; i < params_count; i++, param++)
 		mlxdevm_param_unregister(mlxdevm, param);
@@ -827,6 +923,7 @@ void devm_param_driverinit_value_set(struct mlxdevm *mlxdevm, u32 param_id,
 
 	param_item->driverinit_value = init_val;
 	param_item->driverinit_value_valid = true;
+	param_item->driverinit_default = init_val;
 
 	mlxdevm_param_notify(mlxdevm, 0, param_item, MLXDEVM_CMD_PARAM_NEW);
 }

@@ -75,7 +75,7 @@ irq_pool_request_irq(struct mlx5_irq_pool *pool, struct irq_affinity_desc *af_de
 	u32 irq_index;
 	int err;
 
-	auto_desc = kvzalloc(sizeof(*auto_desc), GFP_KERNEL);
+	auto_desc = kvzalloc_obj(*auto_desc);
 	if (!auto_desc)
 		return ERR_PTR(-ENOMEM);
 
@@ -131,9 +131,18 @@ irq_pool_find_least_loaded(struct mlx5_irq_pool *pool, const struct cpumask *req
 
 	lockdep_assert_held(&pool->lock);
 	xa_for_each_range(&pool->irqs, index, iter, start, end) {
-		struct cpumask *iter_mask = mlx5_irq_get_affinity_mask(iter);
 		int iter_refcount = mlx5_irq_read_locked(iter);
+		const struct cpumask *iter_mask;
+		int dyn_msix;
 
+		dyn_msix = pci_msix_can_alloc_dyn(pool->dev->pdev);
+		if (dyn_msix)
+			iter_mask = irq_get_effective_affinity_mask(mlx5_irq_get_irq(iter));
+		else
+			iter_mask = mlx5_irq_get_affinity_mask(iter);
+
+		if (!iter_mask)
+			continue;
 		if (!cpumask_subset(iter_mask, req_mask))
 			/* skip IRQs with a mask which is not subset of req_mask */
 			continue;

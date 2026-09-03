@@ -1,0 +1,17 @@
+sep=;
+Change-Id=Idb6d82dbb412eddb25a45cdeafb472213d3388a8; subject=net/mlx5: expose sysfs to force local loopback disablement; feature=disable_local_lb; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I3505bbe8797fca11a06d22565c602c72f374cbc3; subject=net/mlx5e: Fix wrong namespace usage in NIC tc rules; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I1ed555a4c56dbc07e162031be8c577875eee33eb; subject=net/mlx5e: Introduce representor miss metering; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I8be7e5d7735c927015ca9483d172d7d7ee644876; subject=net/mlx5e: Add representors miss metering sysfs; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I75f1f9fee5dee39865d46d923bfc2cd2838402fe; subject=net/mlx5: Expose api to query and clear a flow counter; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If68ca16f33d9fb31726e123f413806a0dbc33d8e; subject=net/mlx5e: Add sysfs which allows clearing rep miss meter stats; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I3bc723c56c976c9551304550b28345c5b54fd8b9; subject=net/mlx5: E-Switch, Create and Init miss meter fdb tables; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib453a115c82b1d4e08341f391e82f7dd8642adb0; subject=net/mlx5: Add support for miss meter on sf reps; feature=metering; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I091b250b5e4212ac88ec03f1de900bcad8d9917b; subject=net/mlx5e: Fix ct label match masking; feature=mlx5_asap_bugs; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I8c7e998674e7c1dfd6db2810e7f898c7fe60a197; subject=net/mlx5e: Introduce priority hairpin select api; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I2464d64fa7f66b9ad4d77f34b64dffb23a89a4eb; subject=net/mlx5e: Support action skbedit prio offload; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ic795de37f93840b09dab09decd53ed8492aa33bb; subject=net/mlx5e: Support packet pacing setting on priority hairpin queues; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=Ib0ea7bc86ce942352a6a5172248e8a8de6a9e977; subject=net/mlx5e: Expose sysfs to configure hairpin packet pacing burst size; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=I25bfae4eaf2823bd17c68f52a8e316392d92ae53; subject=net/mlx5: Get next phy device based on guid; feature=hairpin_packet_pacing; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If9a194baacda9e5845c281fa3902552bde13333e; subject=net/mlx5e: Implement hairpin oob per device counter; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;
+Change-Id=If46e70203fd69e39424e7d8435e98e8d52b00d77; subject=net/mlx5e: Add hairpin oob counter sysfs; feature=hairpin_oob_cnt; upstream_status=NA; upstream_issue=; general=;

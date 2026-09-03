@@ -293,6 +293,7 @@ enum {
 	MLX5_UMR_INLINE			= (1 << 7),
 };
 
+#define MLX5_UMR_ALIGN (2048)
 #define MLX5_UMR_FLEX_ALIGNMENT 0x40
 #define MLX5_UMR_MTT_NUM_ENTRIES_ALIGNMENT (MLX5_UMR_FLEX_ALIGNMENT / sizeof(struct mlx5_mtt))
 #define MLX5_UMR_KLM_NUM_ENTRIES_ALIGNMENT (MLX5_UMR_FLEX_ALIGNMENT / sizeof(struct mlx5_klm))
@@ -384,6 +385,7 @@ enum mlx5_driver_event {
 	MLX5_DRIVER_EVENT_AFFILIATION_DONE,
 	MLX5_DRIVER_EVENT_AFFILIATION_REMOVED,
 	MLX5_DRIVER_EVENT_ACTIVE_BACKUP_LAG_CHANGE_LOWERSTATE,
+	MLX5_DRIVER_EVENT_SF_PEER_MLXDEVM,
 };
 
 enum {
@@ -978,6 +980,11 @@ static inline u64 get_cqe_ts(struct mlx5_cqe64 *cqe)
 static inline u16 get_cqe_flow_tag(struct mlx5_cqe64 *cqe)
 {
 	return be32_to_cpu(cqe->sop_drop_qpn) & 0xFFF;
+}
+
+static inline u8 get_cqe_lro_num_seg(struct mlx5_cqe64 *cqe)
+{
+	return be32_to_cpu(cqe->srqn) >> 24;
 }
 
 #define MLX5_MPWQE_LOG_NUM_STRIDES_EXT_BASE	3

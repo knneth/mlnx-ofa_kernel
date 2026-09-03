@@ -1,0 +1,2 @@
+sep=;
+Change-Id=I4559cb3ba65507f21f75e46405cebb86410ad432; subject=net/mlx5: Fix VF's sysfs policy attribute; feature=sriov_sysfs; upstream_status=NA; upstream_issue=; general=;

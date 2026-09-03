@@ -1,0 +1,24 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc.c
+@@ -6,7 +6,11 @@
+ static u16 hws_bwc_gen_queue_idx(struct mlx5hws_context *ctx)
+ {
+ 	/* assign random queue */
++#ifdef HAVE_GET_RANDOM_U8
+ 	return get_random_u8() % mlx5hws_bwc_queues(ctx);
++#else
++	return (u8)(get_random_u32() & 0xffU) % mlx5hws_bwc_queues(ctx);
++#endif
+ }
+ 
+ static u16

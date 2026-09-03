@@ -261,7 +261,7 @@ static ssize_t esw_compat_write(struct kobject *kobj,
 						       struct compat_devlink,
 						       devlink_kobj);
 	struct mlx5_core_dev *dev = cdevlink->mdev;
-	static struct netlink_ext_ack ack = { ._msg = NULL };
+	struct netlink_ext_ack ack = {};
 	const char *entname = attr->attr.name;
 	struct devlink_compat_op *op = 0;
 	int ret = 0, i = 0, map_size;

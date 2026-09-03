@@ -19,7 +19,7 @@ index xxxxxxx..xxxxxxx 100644
  #define CREATE_TRACE_POINTS
  
  #include "fs_tracepoint.h"
-@@ -297,3 +299,4 @@ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_fte);
+@@ -300,3 +302,4 @@ EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_fte);
  EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_add_rule);
  EXPORT_TRACEPOINT_SYMBOL(mlx5_fs_del_rule);
  

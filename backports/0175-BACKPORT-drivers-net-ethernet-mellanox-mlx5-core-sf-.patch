@@ -1,0 +1,37 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT:
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+
+---
+ drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/sf/dev/dev.c
+@@ -82,6 +82,9 @@ static void mlx5_sf_dev_remove_aux(struct mlx5_core_dev *dev,
+ 	trace_mlx5_sf_dev_del(dev, sf_dev, id);
+ 
+ 	auxiliary_device_delete(&sf_dev->adev);
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
++	mutex_destroy(&sf_dev->sysfs.lock);
++#endif
+ 	auxiliary_device_uninit(&sf_dev->adev);
+ }
+ 
+@@ -126,8 +129,14 @@ static void mlx5_sf_dev_add(struct mlx5_core_dev *dev, u16 sf_index, u16 fn_id,
+ 		goto add_err;
+ 	}
+ 
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
++	mutex_init(&sf_dev->sysfs.lock);
++#endif
+ 	err = auxiliary_device_add(&sf_dev->adev);
+ 	if (err) {
++#if !defined(HAVE_AUX_DEV_IRQS_SYSFS_UNBIND_BIND_FIX) && !defined(CONFIG_AUXILIARY_BUS)
++		mutex_destroy(&sf_dev->sysfs.lock);
++#endif
+ 		auxiliary_device_uninit(&sf_dev->adev);
+ 		goto add_err;
+ 	}

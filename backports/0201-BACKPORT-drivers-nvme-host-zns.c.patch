@@ -1,0 +1,107 @@
+From: Valentine Fatiev <valentinef@nvidia.com>
+Subject: [PATCH] BACKPORT: drivers/nvme/host/zns.c
+
+---
+ drivers/nvme/host/zns.c | 42 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/nvme/host/zns.c b/drivers/nvme/host/zns.c
+index xxxxxxx..xxxxxxx 100644
+--- a/drivers/nvme/host/zns.c
++++ b/drivers/nvme/host/zns.c
+@@ -3,6 +3,8 @@
+  * Copyright (C) 2020 Western Digital Corporation or its affiliates.
+  */
+ 
++#ifdef HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES
++
+ #include <linux/blkdev.h>
+ #include <linux/vmalloc.h>
+ #include "nvme.h"
+@@ -108,12 +110,28 @@ free_data:
+ void nvme_update_zone_info(struct nvme_ns *ns, struct queue_limits *lim,
+ 		struct nvme_zone_info *zi)
+ {
++#ifdef HAVE_QUEUE_LIMITS_COMMIT_UPDATE
++#ifdef HAVE_BLK_FEAT_ZONED
+ 	lim->features |= BLK_FEAT_ZONED;
++#else
++	lim->zoned = 1;
++#endif
+ 	lim->max_open_zones = zi->max_open_zones;
+ 	lim->max_active_zones = zi->max_active_zones;
+ 	lim->max_hw_zone_append_sectors = ns->ctrl->max_zone_append;
+ 	lim->chunk_sectors = ns->head->zsze =
+ 		nvme_lba_to_sect(ns->head, zi->zone_size);
++#elif defined(HAVE_DISK_SET_ZONED)
++	disk_set_zoned(ns->disk, BLK_ZONED_HM);
++	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
++	disk_set_max_open_zones(ns->disk, zi->max_open_zones);
++	disk_set_max_active_zones(ns->disk, zi->max_active_zones);
++#else
++	blk_queue_set_zoned(ns->disk, BLK_ZONED_HM);
++	blk_queue_flag_set(QUEUE_FLAG_ZONE_RESETALL, ns->queue);
++	blk_queue_max_open_zones(ns->queue, zi->max_open_zones);
++	blk_queue_max_active_zones(ns->queue, zi->max_active_zones);
++#endif
+ }
+ 
+ static void *nvme_zns_alloc_report_buffer(struct nvme_ns *ns,
+@@ -146,10 +164,17 @@ static void *nvme_zns_alloc_report_buffer(struct nvme_ns *ns,
+ 	return NULL;
+ }
+ 
++#ifdef HAVE_BLK_REPORT_ZONES_ARGS
+ static int nvme_zone_parse_entry(struct nvme_ns *ns,
+ 				 struct nvme_zone_descriptor *entry,
+ 				 unsigned int idx,
+ 				 struct blk_report_zones_args *args)
++#else
++static int nvme_zone_parse_entry(struct nvme_ns *ns,
++				 struct nvme_zone_descriptor *entry,
++				 unsigned int idx,
++				 report_zones_cb cb, void *data)
++#endif
+ {
+ 	struct nvme_ns_head *head = ns->head;
+ 	struct blk_zone zone = { };
+@@ -169,11 +194,20 @@ static int nvme_zone_parse_entry(struct nvme_ns *ns,
+ 	else
+ 		zone.wp = nvme_lba_to_sect(head, le64_to_cpu(entry->wp));
+ 
++#ifdef HAVE_BLK_REPORT_ZONES_ARGS
+ 	return disk_report_zone(ns->disk, &zone, idx, args);
++#else
++	return cb(&zone, idx, data);
++#endif
+ }
+ 
++#ifdef HAVE_BLK_REPORT_ZONES_ARGS
+ int nvme_ns_report_zones(struct nvme_ns *ns, sector_t sector,
+ 		unsigned int nr_zones, struct blk_report_zones_args *args)
++#else
++int nvme_ns_report_zones(struct nvme_ns *ns, sector_t sector,
++		unsigned int nr_zones, report_zones_cb cb, void *data)
++#endif
+ {
+ 	struct nvme_zone_report *report;
+ 	struct nvme_command c = { };
+@@ -213,7 +247,12 @@ int nvme_ns_report_zones(struct nvme_ns *ns, sector_t sector,
+ 
+ 		for (i = 0; i < nz && zone_idx < nr_zones; i++) {
+ 			ret = nvme_zone_parse_entry(ns, &report->entries[i],
+-						    zone_idx, args);
++						    zone_idx,
++#ifdef HAVE_BLK_REPORT_ZONES_ARGS
++						    args);
++#else
++						    cb, data);
++#endif
+ 			if (ret)
+ 				goto out_free;
+ 			zone_idx++;
+@@ -246,3 +285,4 @@ blk_status_t nvme_setup_zone_mgmt_send(struct nvme_ns *ns, struct request *req,
+ 
+ 	return BLK_STS_OK;
+ }
++#endif /* HAVE_BLK_QUEUE_MAX_ACTIVE_ZONES */

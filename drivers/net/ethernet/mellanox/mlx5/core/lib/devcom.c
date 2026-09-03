@@ -3,6 +3,7 @@
 
 #include <linux/mlx5/vport.h>
 #include <linux/list.h>
+#include <linux/lockdep.h>
 #include "lib/devcom.h"
 #include "lib/mlx5.h"
 #include "mlx5_core.h"
@@ -64,7 +65,7 @@ mlx5_devcom_dev_alloc(struct mlx5_core_dev *dev)
 {
 	struct mlx5_devcom_dev *devc;
 
-	devc = kzalloc(sizeof(*devc), GFP_KERNEL);
+	devc = kzalloc_obj(*devc);
 	if (!devc)
 		return NULL;
 
@@ -120,7 +121,7 @@ mlx5_devcom_comp_alloc(u64 id, const struct mlx5_devcom_match_attr *attr,
 {
 	struct mlx5_devcom_comp *comp;
 
-	comp = kzalloc(sizeof(*comp), GFP_KERNEL);
+	comp = kzalloc_obj(*comp);
 	if (!comp)
 		return NULL;
 
@@ -158,7 +159,7 @@ devcom_alloc_comp_dev(struct mlx5_devcom_dev *devc,
 {
 	struct mlx5_devcom_comp_dev *devcom;
 
-	devcom = kzalloc(sizeof(*devcom), GFP_KERNEL);
+	devcom = kzalloc_obj(*devcom);
 	if (!devcom)
 		return NULL;
 
@@ -439,4 +440,11 @@ int mlx5_devcom_comp_trylock(struct mlx5_devcom_comp_dev *devcom)
 	if (!devcom)
 		return 0;
 	return down_write_trylock(&devcom->comp->sem);
+}
+
+void mlx5_devcom_comp_assert_locked(struct mlx5_devcom_comp_dev *devcom)
+{
+	if (!devcom)
+		return;
+	lockdep_assert_held_write(&devcom->comp->sem);
 }
