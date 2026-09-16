@@ -6,6 +6,8 @@ Change-Id: Id1b8bf73488c44b7fc4b6dc3e906091cd497bcbc
  drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c | 11 +++++++++++
  1 file changed, 11 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/lag/mpesw.c
 @@ -2,7 +2,9 @@
@@ -18,7 +20,7 @@ Change-Id: Id1b8bf73488c44b7fc4b6dc3e906091cd497bcbc
  #include "lag/lag.h"
  #include "eswitch.h"
  #include "esw/acl/ofld.h"
-@@ -14,6 +16,9 @@ static void mlx5_mpesw_metadata_cleanup(
+@@ -14,6 +16,9 @@ static void mlx5_mpesw_metadata_cleanup(struct mlx5_lag *ldev)
  	struct mlx5_eswitch *esw;
  	u32 pf_metadata;
  	int i;
@@ -28,7 +30,7 @@ Change-Id: Id1b8bf73488c44b7fc4b6dc3e906091cd497bcbc
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		dev = ldev->pf[i].dev;
-@@ -35,6 +40,9 @@ static int mlx5_mpesw_metadata_set(struc
+@@ -35,6 +40,9 @@ static int mlx5_mpesw_metadata_set(struct mlx5_lag *ldev)
  	struct mlx5_eswitch *esw;
  	u32 pf_metadata;
  	int i, err;
@@ -38,7 +40,7 @@ Change-Id: Id1b8bf73488c44b7fc4b6dc3e906091cd497bcbc
  
  	mlx5_ldev_for_each(i, 0, ldev) {
  		dev = ldev->pf[i].dev;
-@@ -71,6 +79,9 @@ static int enable_mpesw(struct mlx5_lag
+@@ -71,6 +79,9 @@ static int enable_mpesw(struct mlx5_lag *ldev)
  	struct mlx5_core_dev *dev0;
  	int err;
  	int i;

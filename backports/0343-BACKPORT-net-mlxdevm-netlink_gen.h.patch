@@ -6,9 +6,11 @@ Change-Id: I681f2f4dba8715461e6634774a1a0d3fd71b4e72
  net/mlxdevm/netlink_gen.h | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/net/mlxdevm/netlink_gen.h b/net/mlxdevm/netlink_gen.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/netlink_gen.h
 +++ b/net/mlxdevm/netlink_gen.h
-@@ -21,9 +21,17 @@ extern const struct nla_policy devlink_d
+@@ -18,9 +18,17 @@ extern const struct nla_policy devlink_dl_selftest_id_nl_policy[DEVLINK_ATTR_SEL
  #endif
  
  /* Ops table for mlxdevm */
@@ -26,7 +28,7 @@ Change-Id: I681f2f4dba8715461e6634774a1a0d3fd71b4e72
  			struct genl_info *info);
  int mlxdevm_nl_pre_doit_port(const struct genl_split_ops *ops,
  			     struct sk_buff *skb, struct genl_info *info);
-@@ -36,7 +44,11 @@ int devlink_nl_pre_doit_port_optional(co
+@@ -33,7 +41,11 @@ int devlink_nl_pre_doit_port_optional(const struct genl_split_ops *ops,
  #endif
  
  void

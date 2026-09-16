@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
  .../net/ethernet/mellanox/mlx5/core/en_tc.h   | 42 ++++++++++++++++++-
  1 file changed, 41 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
-@@ -198,6 +198,8 @@ int mlx5e_delete_flower(struct net_devic
+@@ -198,6 +198,8 @@ int mlx5e_delete_flower(struct net_device *dev, struct mlx5e_priv *priv,
  
  int mlx5e_stats_flower(struct net_device *dev, struct mlx5e_priv *priv,
  		       struct flow_cls_offload *f, unsigned long flags);
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
  int mlx5e_tc_fill_action_stats(struct mlx5e_priv *priv,
  			       struct flow_offload_action *fl_act);
  
-@@ -301,6 +303,15 @@ void mlx5e_tc_set_ethertype(struct mlx5_
+@@ -301,6 +303,15 @@ void mlx5e_tc_set_ethertype(struct mlx5_core_dev *mdev,
  			    struct flow_match_basic *match, bool outer,
  			    void *headers_c, void *headers_v);
  
@@ -32,7 +34,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
  int mlx5e_tc_nic_init(struct mlx5e_priv *priv);
  void mlx5e_tc_nic_cleanup(struct mlx5e_priv *priv);
  
-@@ -342,7 +353,21 @@ static inline void mlx5e_tc_ht_cleanup(s
+@@ -342,7 +353,21 @@ static inline void mlx5e_tc_ht_cleanup(struct rhashtable *tc_ht) {}
  static inline int
  mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
  { return -EOPNOTSUPP; }
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tc.h
  #endif /* CONFIG_MLX5_CLS_ACT */
  
  struct mlx5_flow_attr *mlx5_alloc_flow_attr(enum mlx5_flow_namespace_type type);
-@@ -367,6 +392,21 @@ static inline int  mlx5e_tc_num_filters(
+@@ -367,6 +392,21 @@ static inline int  mlx5e_tc_num_filters(struct mlx5e_priv *priv,
  static inline int
  mlx5e_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
  { return -EOPNOTSUPP; }

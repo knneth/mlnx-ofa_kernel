@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../net/ethernet/mellanox/mlx5/core/en/tc/int_port.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc/int_port.c
 @@ -30,8 +30,12 @@ struct mlx5e_tc_int_port_priv {
@@ -21,7 +23,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  u32 mlx5e_tc_int_port_get_metadata(struct mlx5e_tc_int_port *int_port)
-@@ -242,7 +246,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_in
+@@ -291,7 +295,11 @@ mlx5e_int_port_remove(struct mlx5e_tc_int_port_priv *priv,
  		mlx5_del_flow_rules(int_port->rx_rule);
  	mapping_remove(ctx, int_port->mapping);
  	mlx5e_int_port_metadata_free(priv, int_port->match_metadata);
@@ -33,7 +35,7 @@ Subject: [PATCH] BACKPORT:
  	priv->num_ports--;
  }
  
-@@ -446,12 +454,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_t
+@@ -493,12 +501,16 @@ mlx5e_tc_int_port_dev_fwd(struct mlx5e_tc_int_port_priv *priv,
  
  	if (fwd_type == MLX5E_TC_INT_PORT_INGRESS) {
  		skb->pkt_type = PACKET_HOST;

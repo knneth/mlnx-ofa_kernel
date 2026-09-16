@@ -6,6 +6,8 @@ Change-Id: I7abffb7500901f9efe355c7407d0bc2f202edddd
  drivers/nvme/host/zns.c | 19 +++++++++++++++++++
  1 file changed, 19 insertions(+)
 
+diff --git a/drivers/nvme/host/zns.c b/drivers/nvme/host/zns.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/zns.c
 +++ b/drivers/nvme/host/zns.c
 @@ -3,6 +3,8 @@
@@ -46,7 +48,7 @@ Change-Id: I7abffb7500901f9efe355c7407d0bc2f202edddd
  }
  
  static void *nvme_zns_alloc_report_buffer(struct nvme_ns *ns,
-@@ -246,3 +264,4 @@ blk_status_t nvme_setup_zone_mgmt_send(s
+@@ -246,3 +264,4 @@ blk_status_t nvme_setup_zone_mgmt_send(struct nvme_ns *ns, struct request *req,
  
  	return BLK_STS_OK;
  }

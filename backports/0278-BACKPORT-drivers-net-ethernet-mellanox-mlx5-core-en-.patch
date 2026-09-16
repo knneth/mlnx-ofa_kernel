@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en/reporter_rx.c       | 576 ++++++++++++++++--
  1 file changed, 530 insertions(+), 46 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_rx.c
-@@ -21,6 +21,7 @@ static const char * const rq_sw_state_ty
+@@ -21,6 +21,7 @@ static const char * const rq_sw_state_type_name[] = {
  	[MLX5E_RQ_STATE_XSK] = "xsk",
  };
  
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT:
  
  static int mlx5e_wait_for_icosq_flush(struct mlx5e_icosq *icosq)
  {
-@@ -89,8 +91,10 @@ static int mlx5e_rx_reporter_err_icosq_c
+@@ -89,8 +91,10 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
  
  	/* mlx5e_close_rq cancels this work before RQ and ICOSQ are killed. */
  	rq = &icosq->channel->rq;
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT:
  	mdev = icosq->channel->mdev;
  	dev = icosq->channel->netdev;
  	err = mlx5_core_query_sq_state(mdev, icosq->sqn, &state);
-@@ -121,9 +125,17 @@ static int mlx5e_rx_reporter_err_icosq_c
+@@ -121,9 +125,17 @@ static int mlx5e_rx_reporter_err_icosq_cqe_recover(void *ctx)
  
  	mlx5e_reset_icosq_cc_pc(icosq);
  
@@ -53,7 +55,7 @@ Subject: [PATCH] BACKPORT:
  
  	clear_bit(MLX5E_SQ_STATE_RECOVERING, &icosq->state);
  	mlx5e_activate_icosq(icosq);
-@@ -190,32 +202,22 @@ static int mlx5e_rx_reporter_timeout_rec
+@@ -190,32 +202,22 @@ static int mlx5e_rx_reporter_timeout_recover(void *ctx)
  	return err;
  }
  
@@ -95,7 +97,7 @@ Subject: [PATCH] BACKPORT:
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "CQ");
  	devlink_fmsg_u32_pair_put(fmsg, "cqn", icosq->cq.mcq.cqn);
  	devlink_fmsg_u32_pair_put(fmsg, "cc", icosq->cq.wq.cc);
-@@ -223,21 +225,97 @@ static void mlx5e_reporter_icosq_diagnos
+@@ -223,21 +225,97 @@ static void mlx5e_reporter_icosq_diagnose(struct mlx5e_icosq *icosq, u8 hw_state
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
  
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -196,7 +198,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int
-@@ -258,6 +336,7 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -258,6 +336,7 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  	wq_head = mlx5e_rqwq_get_head(rq);
  	wqe_counter = mlx5e_rqwq_get_wqe_counter(rq);
  
@@ -204,7 +206,7 @@ Subject: [PATCH] BACKPORT:
  	devlink_fmsg_u32_pair_put(fmsg, "rqn", rq->rqn);
  	devlink_fmsg_u8_pair_put(fmsg, "HW state", hw_state);
  	devlink_fmsg_u32_pair_put(fmsg, "WQE counter", wqe_counter);
-@@ -266,7 +345,39 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -266,7 +345,39 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  	mlx5e_health_rq_put_sw_state(fmsg, rq);
  	mlx5e_health_cq_diag_fmsg(&rq->cq, fmsg);
  	mlx5e_health_eq_diag_fmsg(rq->cq.mcq.eq, fmsg);
@@ -244,7 +246,7 @@ Subject: [PATCH] BACKPORT:
  	if (rq->icosq) {
  		struct mlx5e_icosq *icosq = rq->icosq;
  		u8 icosq_hw_state;
-@@ -276,34 +387,90 @@ mlx5e_rx_reporter_build_diagnose_output_
+@@ -276,34 +387,90 @@ mlx5e_rx_reporter_build_diagnose_output_rq_common(struct mlx5e_rq *rq,
  		if (err)
  			return err;
  
@@ -340,7 +342,7 @@ Subject: [PATCH] BACKPORT:
  	mlx5e_health_fmsg_named_obj_nest_start(fmsg, "RQ");
  	devlink_fmsg_u8_pair_put(fmsg, "type", params->rq_wq_type);
  	devlink_fmsg_u64_pair_put(fmsg, "stride size", rq_stride);
-@@ -311,38 +478,139 @@ static void mlx5e_rx_reporter_diagnose_g
+@@ -311,38 +478,139 @@ static void mlx5e_rx_reporter_diagnose_generic_rq(struct mlx5e_rq *rq,
  	devlink_fmsg_string_pair_put(fmsg, "ts_format", real_time ? "RT" : "FRC");
  	mlx5e_health_cq_common_diag_fmsg(&rq->cq, fmsg);
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -482,7 +484,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static void mlx5e_rx_reporter_diagnose_rx_res_dir_tirns(struct mlx5e_rx_res *rx_res,
-@@ -445,9 +713,12 @@ static void mlx5e_rx_reporter_diagnose_r
+@@ -445,9 +713,12 @@ static void mlx5e_rx_reporter_diagnose_rqs(struct mlx5e_priv *priv, struct devli
  		struct mlx5e_channel *c = priv->channels.c[i];
  		struct mlx5e_rq *rq;
  
@@ -496,7 +498,7 @@ Subject: [PATCH] BACKPORT:
  		mlx5e_rx_reporter_build_diagnose_output(rq, fmsg);
  	}
  	if (ptp_ch && test_bit(MLX5E_PTP_STATE_RX, ptp_ch->state))
-@@ -457,8 +728,11 @@ static void mlx5e_rx_reporter_diagnose_r
+@@ -457,8 +728,11 @@ static void mlx5e_rx_reporter_diagnose_rqs(struct mlx5e_priv *priv, struct devli
  }
  
  static int mlx5e_rx_reporter_diagnose(struct devlink_health_reporter *reporter,
@@ -510,7 +512,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  
-@@ -467,6 +741,7 @@ static int mlx5e_rx_reporter_diagnose(st
+@@ -467,6 +741,7 @@ static int mlx5e_rx_reporter_diagnose(struct devlink_health_reporter *reporter,
  	if (!test_bit(MLX5E_STATE_OPENED, &priv->state))
  		goto unlock;
  
@@ -518,7 +520,7 @@ Subject: [PATCH] BACKPORT:
  	mlx5e_rx_reporter_diagnose_common_config(priv, fmsg);
  	mlx5e_rx_reporter_diagnose_rqs(priv, fmsg);
  	mlx5e_rx_reporter_diagnose_rx_res(priv, fmsg);
-@@ -480,34 +755,87 @@ static int mlx5e_rx_reporter_dump_icosq(
+@@ -480,34 +755,87 @@ static int mlx5e_rx_reporter_dump_icosq(struct mlx5e_priv *priv, struct devlink_
  {
  	struct mlx5e_txqsq *icosq = ctx;
  	struct mlx5_rsc_key key = {};
@@ -609,7 +611,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_rx_reporter_dump_rq(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
-@@ -515,34 +843,89 @@ static int mlx5e_rx_reporter_dump_rq(str
+@@ -515,34 +843,89 @@ static int mlx5e_rx_reporter_dump_rq(struct mlx5e_priv *priv, struct devlink_fms
  {
  	struct mlx5_rsc_key key = {};
  	struct mlx5e_rq *rq = ctx;
@@ -699,7 +701,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_rx_reporter_dump_all_rqs(struct mlx5e_priv *priv,
-@@ -550,28 +933,70 @@ static int mlx5e_rx_reporter_dump_all_rq
+@@ -550,28 +933,70 @@ static int mlx5e_rx_reporter_dump_all_rqs(struct mlx5e_priv *priv,
  {
  	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
  	struct mlx5_rsc_key key = {};
@@ -773,7 +775,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_rx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
-@@ -582,8 +1007,11 @@ static int mlx5e_rx_reporter_dump_from_c
+@@ -582,8 +1007,11 @@ static int mlx5e_rx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
  }
  
  static int mlx5e_rx_reporter_dump(struct devlink_health_reporter *reporter,
@@ -787,7 +789,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_err_ctx *err_ctx = context;
-@@ -591,6 +1019,7 @@ static int mlx5e_rx_reporter_dump(struct
+@@ -591,6 +1019,7 @@ static int mlx5e_rx_reporter_dump(struct devlink_health_reporter *reporter,
  	return err_ctx ? mlx5e_rx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
  			 mlx5e_rx_reporter_dump_all_rqs(priv, fmsg);
  }
@@ -795,7 +797,7 @@ Subject: [PATCH] BACKPORT:
  
  void mlx5e_reporter_rx_timeout(struct mlx5e_rq *rq)
  {
-@@ -602,7 +1031,9 @@ void mlx5e_reporter_rx_timeout(struct ml
+@@ -602,7 +1031,9 @@ void mlx5e_reporter_rx_timeout(struct mlx5e_rq *rq)
  
  	err_ctx.ctx = rq;
  	err_ctx.recover = mlx5e_rx_reporter_timeout_recover;
@@ -805,7 +807,7 @@ Subject: [PATCH] BACKPORT:
  
  	if (icosq)
  		snprintf(icosq_str, sizeof(icosq_str), "ICOSQ: 0x%x, ", icosq->sqn);
-@@ -621,7 +1052,9 @@ void mlx5e_reporter_rq_cqe_err(struct ml
+@@ -621,7 +1052,9 @@ void mlx5e_reporter_rq_cqe_err(struct mlx5e_rq *rq)
  
  	err_ctx.ctx = rq;
  	err_ctx.recover = mlx5e_rx_reporter_err_rq_cqe_recover;
@@ -815,7 +817,7 @@ Subject: [PATCH] BACKPORT:
  	snprintf(err_str, sizeof(err_str), "ERR CQE on RQ: 0x%x", rq->rqn);
  
  	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
-@@ -635,7 +1068,9 @@ void mlx5e_reporter_icosq_cqe_err(struct
+@@ -635,7 +1068,9 @@ void mlx5e_reporter_icosq_cqe_err(struct mlx5e_icosq *icosq)
  
  	err_ctx.ctx = icosq;
  	err_ctx.recover = mlx5e_rx_reporter_err_icosq_cqe_recover;
@@ -825,7 +827,7 @@ Subject: [PATCH] BACKPORT:
  	snprintf(err_str, sizeof(err_str), "ERR CQE on ICOSQ: 0x%x", icosq->sqn);
  
  	mlx5e_health_report(priv, priv->rx_reporter, err_str, &err_ctx);
-@@ -651,28 +1086,71 @@ void mlx5e_reporter_icosq_resume_recover
+@@ -651,28 +1086,71 @@ void mlx5e_reporter_icosq_resume_recovery(struct mlx5e_channel *c)
  	mutex_unlock(&c->icosq_recovery_lock);
  }
  
@@ -903,7 +905,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
-@@ -680,6 +1158,12 @@ void mlx5e_reporter_rx_destroy(struct ml
+@@ -680,6 +1158,12 @@ void mlx5e_reporter_rx_destroy(struct mlx5e_priv *priv)
  	if (!priv->rx_reporter)
  		return;
  

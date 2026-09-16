@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
  include/rdma/ib_umem_odp.h | 99 ++++++++++++++++++++++++++++++++++++++
  1 file changed, 99 insertions(+)
 
+diff --git a/include/rdma/ib_umem_odp.h b/include/rdma/ib_umem_odp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/ib_umem_odp.h
 +++ b/include/rdma/ib_umem_odp.h
 @@ -6,16 +6,29 @@
@@ -63,7 +65,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
  	unsigned int		page_shift;
  };
  
-@@ -52,13 +75,21 @@ static inline struct ib_umem_odp *to_ib_
+@@ -52,13 +75,21 @@ static inline struct ib_umem_odp *to_ib_umem_odp(struct ib_umem *umem)
  /* Returns the first page of an ODP umem. */
  static inline unsigned long ib_umem_start(struct ib_umem_odp *umem_odp)
  {
@@ -85,7 +87,7 @@ Subject: [PATCH] BACKPORT: include/rdma/ib_umem_odp.h
  }
  
  static inline size_t ib_umem_odp_num_pages(struct ib_umem_odp *umem_odp)
-@@ -82,28 +113,96 @@ static inline size_t ib_umem_odp_num_pag
+@@ -82,28 +113,96 @@ static inline size_t ib_umem_odp_num_pages(struct ib_umem_odp *umem_odp)
  
  #ifdef CONFIG_INFINIBAND_ON_DEMAND_PAGING
  

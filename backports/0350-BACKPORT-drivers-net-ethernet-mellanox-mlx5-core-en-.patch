@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
  drivers/net/ethernet/mellanox/mlx5/core/en/tir.h | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.h
 @@ -9,7 +9,9 @@

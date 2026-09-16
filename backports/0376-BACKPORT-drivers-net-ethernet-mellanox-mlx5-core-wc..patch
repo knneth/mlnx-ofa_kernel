@@ -6,9 +6,11 @@ Change-Id: Icdbe2ee72285a9454349597a75f3b2e3764119cb
  drivers/net/ethernet/mellanox/mlx5/core/wc.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/wc.c b/drivers/net/ethernet/mellanox/mlx5/core/wc.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/wc.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/wc.c
-@@ -264,7 +264,12 @@ static void mlx5_iowrite64_copy(struct m
+@@ -264,7 +264,12 @@ static void mlx5_iowrite64_copy(struct mlx5_wc_sq *sq, __be32 mmio_wqe[16],
  {
  #if IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && IS_ENABLED(CONFIG_ARM64)
  	if (cpu_has_neon()) {
@@ -21,7 +23,7 @@ Change-Id: Icdbe2ee72285a9454349597a75f3b2e3764119cb
  		asm volatile
  		(".arch_extension simd\n\t"
  		"ld1 {v0.16b, v1.16b, v2.16b, v3.16b}, [%0]\n\t"
-@@ -272,7 +277,11 @@ static void mlx5_iowrite64_copy(struct m
+@@ -272,7 +277,11 @@ static void mlx5_iowrite64_copy(struct mlx5_wc_sq *sq, __be32 mmio_wqe[16],
  		:
  		: "r"(mmio_wqe), "r"(sq->bfreg.map + offset)
  		: "memory", "v0", "v1", "v2", "v3");

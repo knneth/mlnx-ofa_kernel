@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/diag/fw_tracer_tracepoint.h       | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fw_tracer_tracepoint.h
 @@ -55,11 +55,20 @@ TRACE_EVENT(mlx5_fw,

@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
  drivers/net/ethernet/mellanox/mlx5/core/en/fs.h | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
 @@ -6,6 +6,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/fs.h
  
  struct mlx5_prio_hp {
  	u32 rate;
-@@ -278,10 +281,12 @@ void mlx5e_fs_set_state_destroy(struct m
+@@ -272,10 +275,12 @@ void mlx5e_fs_set_state_destroy(struct mlx5e_flow_steering *fs, bool state_destr
  void mlx5e_fs_set_vlan_strip_disable(struct mlx5e_flow_steering *fs, bool vlan_strip_disable);
  
  struct mlx5_core_dev *mlx5e_fs_get_mdev(struct mlx5e_flow_steering *fs);

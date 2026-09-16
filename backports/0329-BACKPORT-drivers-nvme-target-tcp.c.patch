@@ -6,6 +6,8 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  drivers/nvme/target/tcp.c | 144 ++++++++++++++++++++++++++++++++++++--
  1 file changed, 139 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/nvme/target/tcp.c b/drivers/nvme/target/tcp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/tcp.c
 +++ b/drivers/nvme/target/tcp.c
 @@ -3,18 +3,25 @@
@@ -34,7 +36,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  #include <linux/inet.h>
  #include <linux/llist.h>
  #include <crypto/hash.h>
-@@ -373,17 +380,28 @@ static void nvmet_tcp_build_pdu_iovec(st
+@@ -373,17 +380,28 @@ static void nvmet_tcp_build_pdu_iovec(struct nvmet_tcp_cmd *cmd)
  	while (length) {
  		u32 iov_len = min_t(u32, length, sg->length - sg_offset);
  
@@ -63,7 +65,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  }
  
  static void nvmet_tcp_fatal_error(struct nvmet_tcp_queue *queue)
-@@ -608,17 +626,25 @@ static void nvmet_tcp_execute_request(st
+@@ -608,17 +626,25 @@ static void nvmet_tcp_execute_request(struct nvmet_tcp_cmd *cmd)
  
  static int nvmet_try_send_data_pdu(struct nvmet_tcp_cmd *cmd)
  {
@@ -89,7 +91,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (ret <= 0)
  		return ret;
  
-@@ -639,21 +665,37 @@ static int nvmet_try_send_data(struct nv
+@@ -639,21 +665,37 @@ static int nvmet_try_send_data(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  	int ret;
  
  	while (cmd->cur_sg) {
@@ -127,7 +129,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  		if (ret <= 0)
  			return ret;
  
-@@ -689,13 +731,26 @@ static int nvmet_try_send_data(struct nv
+@@ -689,13 +731,26 @@ static int nvmet_try_send_data(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  		bool last_in_batch)
  {
@@ -154,7 +156,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  		msg.msg_flags |= MSG_MORE;
  	else
  		msg.msg_flags |= MSG_EOR;
-@@ -703,6 +758,7 @@ static int nvmet_try_send_response(struc
+@@ -703,6 +758,7 @@ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  	bvec_set_virt(&bvec, (void *)cmd->rsp_pdu + cmd->offset, left);
  	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
  	ret = sock_sendmsg(cmd->queue->sock, &msg);
@@ -162,7 +164,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (ret <= 0)
  		return ret;
  	cmd->offset += ret;
-@@ -719,13 +775,26 @@ static int nvmet_try_send_response(struc
+@@ -719,13 +775,26 @@ static int nvmet_try_send_response(struct nvmet_tcp_cmd *cmd,
  
  static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  {
@@ -189,7 +191,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  		msg.msg_flags |= MSG_MORE;
  	else
  		msg.msg_flags |= MSG_EOR;
-@@ -733,6 +802,7 @@ static int nvmet_try_send_r2t(struct nvm
+@@ -733,6 +802,7 @@ static int nvmet_try_send_r2t(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
  	bvec_set_virt(&bvec, (void *)cmd->r2t_pdu + cmd->offset, left);
  	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, left);
  	ret = sock_sendmsg(cmd->queue->sock, &msg);
@@ -197,7 +199,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (ret <= 0)
  		return ret;
  	cmd->offset += ret;
-@@ -1145,6 +1215,7 @@ static inline bool nvmet_tcp_pdu_valid(u
+@@ -1145,6 +1215,7 @@ static inline bool nvmet_tcp_pdu_valid(u8 type)
  	return false;
  }
  
@@ -205,7 +207,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  static int nvmet_tcp_tls_record_ok(struct nvmet_tcp_queue *queue,
  		struct msghdr *msg, char *cbuf)
  {
-@@ -1179,11 +1250,16 @@ static int nvmet_tcp_tls_record_ok(struc
+@@ -1179,11 +1250,16 @@ static int nvmet_tcp_tls_record_ok(struct nvmet_tcp_queue *queue,
  	}
  	return ret;
  }
@@ -237,7 +239,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	queue->offset += len;
  	queue->left -= len;
  	if (queue->left)
-@@ -1256,19 +1333,25 @@ static void nvmet_tcp_prep_recv_ddgst(st
+@@ -1256,19 +1333,25 @@ static void nvmet_tcp_prep_recv_ddgst(struct nvmet_tcp_cmd *cmd)
  static int nvmet_tcp_try_recv_data(struct nvmet_tcp_queue *queue)
  {
  	struct nvmet_tcp_cmd  *cmd = queue->cmd;
@@ -263,7 +265,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  
  		cmd->pdu_recv += len;
  		cmd->rbytes_done += len;
-@@ -1305,12 +1388,13 @@ static int nvmet_tcp_try_recv_ddgst(stru
+@@ -1305,12 +1388,13 @@ static int nvmet_tcp_try_recv_ddgst(struct nvmet_tcp_queue *queue)
  			iov.iov_len, msg.msg_flags);
  	if (unlikely(len < 0))
  		return len;
@@ -278,7 +280,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	queue->offset += len;
  	queue->left -= len;
  	if (queue->left)
-@@ -1402,10 +1486,12 @@ static void nvmet_tcp_release_queue(stru
+@@ -1402,10 +1486,12 @@ static void nvmet_tcp_release_queue(struct kref *kref)
  static void nvmet_tcp_schedule_release_queue(struct nvmet_tcp_queue *queue)
  {
  	spin_lock_bh(&queue->state_lock);
@@ -291,7 +293,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (queue->state != NVMET_TCP_Q_DISCONNECTING) {
  		queue->state = NVMET_TCP_Q_DISCONNECTING;
  		kref_put(&queue->kref, nvmet_tcp_release_queue);
-@@ -1599,6 +1685,9 @@ static void nvmet_tcp_free_cmd_data_in_b
+@@ -1599,6 +1685,9 @@ static void nvmet_tcp_free_cmd_data_in_buffers(struct nvmet_tcp_queue *queue)
  
  static void nvmet_tcp_release_queue_work(struct work_struct *w)
  {
@@ -301,7 +303,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	struct nvmet_tcp_queue *queue =
  		container_of(w, struct nvmet_tcp_queue, release_work);
  
-@@ -1623,7 +1712,12 @@ static void nvmet_tcp_release_queue_work
+@@ -1623,7 +1712,12 @@ static void nvmet_tcp_release_queue_work(struct work_struct *w)
  	if (queue->hdr_digest || queue->data_digest)
  		nvmet_tcp_free_crypto(queue);
  	ida_free(&nvmet_tcp_queue_ida, queue->idx);
@@ -314,7 +316,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	kfree(queue);
  }
  
-@@ -1631,7 +1725,9 @@ static void nvmet_tcp_data_ready(struct
+@@ -1631,7 +1725,9 @@ static void nvmet_tcp_data_ready(struct sock *sk)
  {
  	struct nvmet_tcp_queue *queue;
  
@@ -324,7 +326,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  
  	read_lock_bh(&sk->sk_callback_lock);
  	queue = sk->sk_user_data;
-@@ -1721,8 +1817,19 @@ static int nvmet_tcp_set_queue_sock(stru
+@@ -1721,8 +1817,19 @@ static int nvmet_tcp_set_queue_sock(struct nvmet_tcp_queue *queue)
  		sock_set_priority(sock->sk, so_priority);
  
  	/* Set socket type of service */
@@ -344,7 +346,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  
  	ret = 0;
  	write_lock_bh(&sock->sk->sk_callback_lock);
-@@ -2028,8 +2135,9 @@ static void nvmet_tcp_listen_data_ready(
+@@ -2028,8 +2135,9 @@ static void nvmet_tcp_listen_data_ready(struct sock *sk)
  {
  	struct nvmet_tcp_port *port;
  
@@ -355,7 +357,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	read_lock_bh(&sk->sk_callback_lock);
  	port = sk->sk_user_data;
  	if (!port)
-@@ -2046,6 +2154,9 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -2046,6 +2154,9 @@ static int nvmet_tcp_add_port(struct nvmet_port *nport)
  	struct nvmet_tcp_port *port;
  	__kernel_sa_family_t af;
  	int ret;
@@ -365,7 +367,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  
  	port = kzalloc(sizeof(*port), GFP_KERNEL);
  	if (!port)
-@@ -2089,12 +2200,29 @@ static int nvmet_tcp_add_port(struct nvm
+@@ -2089,12 +2200,29 @@ static int nvmet_tcp_add_port(struct nvmet_port *nport)
  	port->data_ready = port->sock->sk->sk_data_ready;
  	port->sock->sk->sk_data_ready = nvmet_tcp_listen_data_ready;
  	sock_set_reuseaddr(port->sock->sk);
@@ -397,7 +399,7 @@ Change-Id: Ic80a5013aab320e8ef469b369eb191042718f667
  	if (ret) {
  		pr_err("failed to bind port socket %d\n", ret);
  		goto err_sock;
-@@ -2194,7 +2322,13 @@ static void nvmet_tcp_disc_port_addr(str
+@@ -2194,7 +2322,13 @@ static void nvmet_tcp_disc_port_addr(struct nvmet_req *req,
  {
  	struct nvmet_tcp_port *port = nport->priv;
  

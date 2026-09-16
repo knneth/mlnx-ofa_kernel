@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/discovery.c
  drivers/nvme/target/discovery.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/target/discovery.c b/drivers/nvme/target/discovery.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/discovery.c
 +++ b/drivers/nvme/target/discovery.c
-@@ -256,6 +256,7 @@ static void nvmet_execute_disc_identify(
+@@ -256,6 +256,7 @@ static void nvmet_execute_disc_identify(struct nvmet_req *req)
  	struct nvmet_ctrl *ctrl = req->sq->ctrl;
  	struct nvme_id_ctrl *id;
  	u16 status = 0;
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/discovery.c
  
  	if (!nvmet_check_transfer_len(req, NVME_IDENTIFY_DATA_SIZE))
  		return;
-@@ -298,7 +299,7 @@ static void nvmet_execute_disc_identify(
+@@ -298,7 +299,7 @@ static void nvmet_execute_disc_identify(struct nvmet_req *req)
  
  	id->oaes = cpu_to_le32(NVMET_DISC_AEN_CFG_OPTIONAL);
  

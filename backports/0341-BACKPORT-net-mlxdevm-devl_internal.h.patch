@@ -6,6 +6,8 @@ Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
  net/mlxdevm/devl_internal.h | 33 ++++++++++++++++++++++++++++++++-
  1 file changed, 32 insertions(+), 1 deletion(-)
 
+diff --git a/net/mlxdevm/devl_internal.h b/net/mlxdevm/devl_internal.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/devl_internal.h
 +++ b/net/mlxdevm/devl_internal.h
 @@ -55,18 +55,27 @@ struct mlxdevm {
@@ -36,7 +38,7 @@ Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
  
  /* devlink instances are open to the access from the user space after
   * devlink_register() call. Such logical barrier allows us to have certain
-@@ -167,6 +176,13 @@ mlxdevm_get_from_attrs_lock(struct net *
+@@ -167,6 +176,13 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
  int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
  		      mlxdevm_nl_dump_one_func_t *dump_one);
  
@@ -50,7 +52,7 @@ Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
  static inline struct mlxdevm_nl_dump_state *
  mlxdevm_dump_state(struct netlink_callback *cb)
  {
-@@ -174,6 +190,19 @@ mlxdevm_dump_state(struct netlink_callba
+@@ -174,6 +190,19 @@ mlxdevm_dump_state(struct netlink_callback *cb)
  
  	return (struct mlxdevm_nl_dump_state *)cb->ctx;
  }
@@ -70,7 +72,7 @@ Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
  
  static inline int
  mlxdevm_nl_put_handle(struct sk_buff *msg, struct mlxdevm *mlxdevm)
-@@ -226,6 +255,7 @@ static inline void mlxdevm_nl_obj_desc_p
+@@ -226,6 +255,7 @@ static inline void mlxdevm_nl_obj_desc_port_set(struct mlxdevm_obj_desc *desc,
  
  int mlxdevm_nl_notify_filter(struct sock *dsk, struct sk_buff *skb, void *data);
  
@@ -78,7 +80,7 @@ Change-Id: I0ad96ecdda4b680a0b706922bba707c4d6a19a2e
  static inline void mlxdevm_nl_notify_send_desc(struct mlxdevm *mlxdevm,
  					       struct sk_buff *msg,
  					       struct mlxdevm_obj_desc *desc)
-@@ -245,8 +275,9 @@ static inline void mlxdevm_nl_notify_sen
+@@ -245,8 +275,9 @@ static inline void mlxdevm_nl_notify_send(struct mlxdevm *mlxdevm,
  	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
  	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
  }

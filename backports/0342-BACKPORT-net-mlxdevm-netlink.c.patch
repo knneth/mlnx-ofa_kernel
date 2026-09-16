@@ -6,6 +6,8 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  net/mlxdevm/netlink.c | 129 +++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 128 insertions(+), 1 deletion(-)
 
+diff --git a/net/mlxdevm/netlink.c b/net/mlxdevm/netlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/netlink.c
 +++ b/net/mlxdevm/netlink.c
 @@ -5,7 +5,9 @@
@@ -18,7 +20,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  
  #include "devl_internal.h"
  
-@@ -18,6 +20,7 @@ static const struct genl_multicast_group
+@@ -18,6 +20,7 @@ static const struct genl_multicast_group mlxdevm_nl_mcgrps[] = {
  	[MLXDEVM_MCGRP_CONFIG] = { .name = MLXDEVM_GENL_MCGRP_CONFIG_NAME },
  };
  
@@ -26,7 +28,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  struct mlxdevm_nl_sock_priv {
  	struct mlxdevm_obj_desc __rcu *flt;
  	spinlock_t flt_lock; /* Protects flt. */
-@@ -38,8 +41,9 @@ static void mlxdevm_nl_sock_priv_destroy
+@@ -38,8 +41,9 @@ static void mlxdevm_nl_sock_priv_destroy(void *priv)
  	flt = rcu_dereference_protected(sk_priv->flt, true);
  	kfree_rcu(flt, rcu);
  }
@@ -37,7 +39,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
  				      struct genl_info *info)
  {
-@@ -100,6 +104,7 @@ int devlink_nl_notify_filter_set_doit(st
+@@ -100,6 +104,7 @@ int devlink_nl_notify_filter_set_doit(struct sk_buff *skb,
  }
  #endif
  
@@ -45,7 +47,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  static bool mlxdevm_obj_desc_match(const struct mlxdevm_obj_desc *desc,
  				   const struct mlxdevm_obj_desc *flt)
  {
-@@ -128,6 +133,7 @@ static bool mlxdevm_obj_desc_match(const
+@@ -128,6 +133,7 @@ static bool mlxdevm_obj_desc_match(const struct mlxdevm_obj_desc *desc,
   * Return: valid pointer on success, otherwise negative error value
   * encoded by ERR_PTR(), NULL in case priv does not exist.
   */
@@ -53,7 +55,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  static void *mlxdevm__genl_sk_priv_get(struct genl_family *family, struct sock *sk)
  {
  	if (WARN_ON_ONCE(!family->sock_privs))
-@@ -152,12 +158,15 @@ int mlxdevm_nl_notify_filter(struct sock
+@@ -152,12 +158,15 @@ int mlxdevm_nl_notify_filter(struct sock *dsk, struct sk_buff *skb, void *data)
  	rcu_read_unlock();
  	return ret;
  }
@@ -69,7 +71,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  
  	nested_attr = nla_nest_start(msg, attrtype);
  	if (!nested_attr)
-@@ -165,16 +174,27 @@ int mlxdevm_nl_put_nested_handle(struct
+@@ -165,16 +174,27 @@ int mlxdevm_nl_put_nested_handle(struct sk_buff *msg, struct net *net,
  	if (mlxdevm_nl_put_handle(msg, mlxdevm))
  		goto nla_put_failure;
  
@@ -97,7 +99,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  	}
  
  	nla_nest_end(msg, nested_attr);
-@@ -205,7 +225,9 @@ mlxdevm_get_from_attrs_lock(struct net *
+@@ -205,7 +225,9 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
  			    bool dev_lock)
  {
  	struct mlxdevm *mlxdevm;
@@ -107,7 +109,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  	unsigned long index;
  	char *busname;
  	char *devname;
-@@ -219,17 +241,21 @@ mlxdevm_get_from_attrs_lock(struct net *
+@@ -219,17 +241,21 @@ mlxdevm_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
  	mlxdevms_xa_for_each_registered_get(net, index, mlxdevm) {
  		if (strcmp(mlxdevm->dev->bus->name, busname) == 0 &&
  		    strcmp(dev_name(mlxdevm->dev), devname) == 0) {
@@ -129,7 +131,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  		}
  		mlxdevm_put(mlxdevm);
  	}
-@@ -242,7 +268,9 @@ static int __mlxdevm_nl_pre_doit(struct
+@@ -242,7 +268,9 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
  {
  	bool dev_lock = flags & MLXDEVM_NL_FLAG_NEED_DEV_LOCK;
  	struct mlxdevm_port *mlxdevm_port;
@@ -139,7 +141,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  	struct mlxdevm *mlxdevm;
  	int err;
  
-@@ -268,14 +296,20 @@ static int __mlxdevm_nl_pre_doit(struct
+@@ -268,14 +296,20 @@ static int __mlxdevm_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,
  
  unlock:
  	devm_dev_unlock(mlxdevm, dev_lock);
@@ -160,7 +162,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  			struct sk_buff *skb, struct genl_info *info)
  {
  	return __mlxdevm_nl_pre_doit(skb, info, 0);
-@@ -307,18 +341,26 @@ static void __mlxdevm_nl_post_doit(struc
+@@ -307,18 +341,26 @@ static void __mlxdevm_nl_post_doit(struct sk_buff *skb, struct genl_info *info,
  {
  	bool dev_lock = flags & MLXDEVM_NL_FLAG_NEED_DEV_LOCK;
  	struct mlxdevm *mlxdevm;
@@ -187,7 +189,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  			  struct sk_buff *skb, struct genl_info *info)
  {
  	__mlxdevm_nl_post_doit(skb, info, 0);
-@@ -331,13 +373,16 @@ mlxdevm_nl_post_doit_dev_lock(const stru
+@@ -331,13 +373,16 @@ mlxdevm_nl_post_doit_dev_lock(const struct genl_split_ops *ops,
  	__mlxdevm_nl_post_doit(skb, info, MLXDEVM_NL_FLAG_NEED_DEV_LOCK);
  }
  
@@ -204,7 +206,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  	int err;
  
  	mlxdevm = mlxdevm_get_from_attrs_lock(sock_net(msg->sk), attrs, false);
-@@ -346,15 +391,18 @@ static int mlxdevm_nl_inst_single_dumpit
+@@ -346,15 +391,18 @@ static int mlxdevm_nl_inst_single_dumpit(struct sk_buff *msg,
  	err = dump_one(msg, mlxdevm, cb, flags | NLM_F_DUMP_FILTERED);
  
  	devm_unlock(mlxdevm);
@@ -223,7 +225,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  
  static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
  				       struct netlink_callback *cb, int flags,
-@@ -362,14 +410,18 @@ static int mlxdevm_nl_inst_iter_dumpit(s
+@@ -362,14 +410,18 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
  {
  	struct mlxdevm_nl_dump_state *state = mlxdevm_dump_state(cb);
  	struct mlxdevm *mlxdevm;
@@ -242,7 +244,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  		devm_lock(mlxdevm);
  
  		if (devm_is_registered(mlxdevm))
-@@ -378,8 +430,10 @@ static int mlxdevm_nl_inst_iter_dumpit(s
+@@ -378,8 +430,10 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
  			err = 0;
  
  		devm_unlock(mlxdevm);
@@ -253,7 +255,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  		mlxdevm_put(mlxdevm);
  
  		if (err)
-@@ -399,7 +453,13 @@ static int mlxdevm_nl_inst_iter_dumpit(s
+@@ -399,7 +453,13 @@ static int mlxdevm_nl_inst_iter_dumpit(struct sk_buff *msg,
  int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
  		      mlxdevm_nl_dump_one_func_t *dump_one)
  {
@@ -267,7 +269,7 @@ Change-Id: I8d05d84be7f2e5e2477878963c032a50d1ab56d8
  	struct nlattr **attrs = info->attrs;
  	int flags = NLM_F_MULTI;
  
-@@ -409,20 +469,87 @@ int mlxdevm_nl_dumpit(struct sk_buff *ms
+@@ -409,20 +469,87 @@ int mlxdevm_nl_dumpit(struct sk_buff *msg, struct netlink_callback *cb,
  						     attrs);
  	else
  		return mlxdevm_nl_inst_iter_dumpit(msg, cb, flags, dump_one);

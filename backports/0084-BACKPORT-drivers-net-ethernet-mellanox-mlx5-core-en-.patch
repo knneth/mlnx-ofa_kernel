@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  .../net/ethernet/mellanox/mlx5/core/en/ptp.c  | 28 +++++++++++++++++--
  1 file changed, 26 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
-@@ -141,11 +141,13 @@ mlx5e_ptp_metadata_map_remove(struct mlx
+@@ -141,11 +141,13 @@ mlx5e_ptp_metadata_map_remove(struct mlx5e_ptp_metadata_map *map, u16 metadata)
  	return skb;
  }
  
@@ -21,7 +23,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  
  static void mlx5e_ptpsq_mark_ts_cqes_undelivered(struct mlx5e_ptpsq *ptpsq,
  						 ktime_t port_tstamp)
-@@ -215,9 +217,11 @@ static void mlx5e_ptp_handle_ts_cqe(stru
+@@ -215,9 +217,11 @@ static void mlx5e_ptp_handle_ts_cqe(struct mlx5e_ptpsq *ptpsq,
  out:
  	napi_consume_skb(skb, budget);
  	md_buff[(*md_buff_sz)++] = metadata_id;
@@ -33,7 +35,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  }
  
  static bool mlx5e_ptp_poll_ts_cq(struct mlx5e_cq *cq, int napi_budget)
-@@ -295,7 +299,6 @@ static int mlx5e_ptp_napi_poll(struct na
+@@ -295,7 +299,6 @@ static int mlx5e_ptp_napi_poll(struct napi_struct *napi, int budget)
  
  	if (unlikely(!napi_complete_done(napi, work_done)))
  		goto out;
@@ -41,7 +43,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  	ch_stats->arm++;
  
  	if (test_bit(MLX5E_PTP_STATE_TX, c->state)) {
-@@ -446,6 +449,7 @@ static void mlx5e_ptp_free_traffic_db(st
+@@ -445,6 +448,7 @@ static void mlx5e_ptp_free_traffic_db(struct mlx5e_ptpsq *ptpsq)
  	kvfree(ptpsq->ts_cqe_pending_list);
  }
  
@@ -49,7 +51,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  static void mlx5e_ptpsq_unhealthy_work(struct work_struct *work)
  {
  	struct mlx5e_ptpsq *ptpsq =
-@@ -453,6 +457,7 @@ static void mlx5e_ptpsq_unhealthy_work(s
+@@ -452,6 +456,7 @@ static void mlx5e_ptpsq_unhealthy_work(struct work_struct *work)
  
  	mlx5e_reporter_tx_ptpsq_unhealthy(ptpsq);
  }
@@ -57,7 +59,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  
  static int mlx5e_ptp_open_txqsq(struct mlx5e_ptp *c, u32 tisn,
  				int txq_ix, struct mlx5e_ptp_params *cparams,
-@@ -483,7 +488,9 @@ static int mlx5e_ptp_open_txqsq(struct m
+@@ -482,7 +487,9 @@ static int mlx5e_ptp_open_txqsq(struct mlx5e_ptp *c, u32 tisn,
  	if (err)
  		goto err_free_txqsq;
  
@@ -67,7 +69,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  
  	return 0;
  
-@@ -498,8 +505,10 @@ static void mlx5e_ptp_close_txqsq(struct
+@@ -497,8 +504,10 @@ static void mlx5e_ptp_close_txqsq(struct mlx5e_ptpsq *ptpsq)
  	struct mlx5e_txqsq *sq = &ptpsq->txqsq;
  	struct mlx5_core_dev *mdev = sq->mdev;
  
@@ -78,7 +80,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  	mlx5e_ptp_free_traffic_db(ptpsq);
  	cancel_work_sync(&sq->recover_work);
  	mlx5e_ptp_destroy_sq(mdev, sq->sqn);
-@@ -710,7 +719,14 @@ static int mlx5e_init_ptp_rq(struct mlx5
+@@ -707,7 +716,14 @@ static int mlx5e_init_ptp_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
  	if (err)
  		return err;
  
@@ -94,7 +96,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  }
  
  static int mlx5e_ptp_open_rq(struct mlx5e_ptp *c, struct mlx5e_params *params,
-@@ -895,7 +911,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *pr
+@@ -892,7 +908,11 @@ int mlx5e_ptp_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
  	if (err)
  		goto err_free;
  
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  
  	mlx5e_ptp_build_params(c, cparams, params);
  
-@@ -941,7 +961,9 @@ void mlx5e_ptp_activate_channel(struct m
+@@ -938,7 +958,9 @@ void mlx5e_ptp_activate_channel(struct mlx5e_ptp *c)
  	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {
  		mlx5e_ptp_rx_set_fs(c->priv);
  		mlx5e_activate_rq(&c->rq);
@@ -116,7 +118,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/ptp.c
  	}
  	mlx5e_trigger_napi_sched(&c->napi);
  }
-@@ -951,7 +973,9 @@ void mlx5e_ptp_deactivate_channel(struct
+@@ -948,7 +970,9 @@ void mlx5e_ptp_deactivate_channel(struct mlx5e_ptp *c)
  	int tc;
  
  	if (test_bit(MLX5E_PTP_STATE_RX, c->state)) {

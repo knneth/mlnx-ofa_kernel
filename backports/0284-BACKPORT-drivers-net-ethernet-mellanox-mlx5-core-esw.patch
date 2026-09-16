@@ -6,9 +6,11 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
  .../net/ethernet/mellanox/mlx5/core/esw/qos.h | 58 ++++++++++++++-----
  1 file changed, 45 insertions(+), 13 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.h
-@@ -67,11 +67,6 @@ int mlx5_esw_qos_init(struct mlx5_eswitc
+@@ -67,11 +67,6 @@ int mlx5_esw_qos_init(struct mlx5_eswitch *esw);
  void mlx5_esw_qos_pre_cleanup(struct mlx5_core_dev *dev, int num_vfs);
  void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw);
  
@@ -20,7 +22,7 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
  void mlx5_esw_qos_vport_disable(struct mlx5_vport *vport);
  int mlx5_esw_qos_set_vport_min_rate(struct mlx5_vport *vport, u32 min_rate,
  				    struct netlink_ext_ack *extack);
-@@ -115,18 +110,48 @@ int mlx5_esw_qos_set_sysfs_node_min_rate
+@@ -115,18 +110,48 @@ int mlx5_esw_qos_set_sysfs_node_min_rate(struct mlx5_eswitch *esw,
  void sysfs_esw_qos_destroy_node(struct mlx5_esw_sched_node *node,
  				struct netlink_ext_ack *extack);
  
@@ -74,7 +76,7 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
  int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
  					  struct devlink_rate *parent,
  					  void *priv, void *parent_priv,
-@@ -135,11 +160,18 @@ int mlx5_esw_devlink_rate_node_parent_se
+@@ -135,11 +160,18 @@ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
  					  struct devlink_rate *parent,
  					  void *priv, void *parent_priv,
  					  struct netlink_ext_ack *extack);
@@ -95,7 +97,7 @@ Change-Id: I3d65ae1dbbbe743826fce66a7fd8f667cf72d928
  					 void *priv,
  					 u32 *tc_bw,
  					 struct netlink_ext_ack *extack);
-@@ -149,6 +181,6 @@ int mlx5_esw_common_rate_leaf_parent_set
+@@ -149,6 +181,6 @@ int mlx5_esw_common_rate_leaf_parent_set(struct mlx5_esw_sched_node *node,
  					 struct netlink_ext_ack *extack);
  int mlx5_esw_common_rate_node_new(struct mlx5_eswitch *esw, void **priv,
  				  struct netlink_ext_ack *extack);

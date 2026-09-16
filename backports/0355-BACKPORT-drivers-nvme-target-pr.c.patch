@@ -6,9 +6,11 @@ Change-Id: Ia1163fc3ef7c39143359b08349bcca6d9618d5dd
  drivers/nvme/target/pr.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/nvme/target/pr.c b/drivers/nvme/target/pr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/pr.c
 +++ b/drivers/nvme/target/pr.c
-@@ -607,7 +607,11 @@ static void nvmet_pr_do_abort(struct wor
+@@ -607,7 +607,11 @@ static void nvmet_pr_do_abort(struct work_struct *w)
  			wait_for_completion(&pc_ref->free_done);
  			reinit_completion(&pc_ref->confirm_done);
  			reinit_completion(&pc_ref->free_done);
@@ -20,7 +22,7 @@ Change-Id: Ia1163fc3ef7c39143359b08349bcca6d9618d5dd
  		}
  	}
  
-@@ -1022,7 +1026,11 @@ static int nvmet_pr_alloc_and_insert_pc_
+@@ -1022,7 +1026,11 @@ static int nvmet_pr_alloc_and_insert_pc_ref(struct nvmet_ns *ns,
  		return  -ENOMEM;
  
  	ret = percpu_ref_init(&pc_ref->ref, nvmet_pr_ctrl_ns_all_cmds_done,

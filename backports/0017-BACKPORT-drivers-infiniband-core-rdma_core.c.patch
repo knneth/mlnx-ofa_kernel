@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
  drivers/infiniband/core/rdma_core.c | 9 +++++++--
  1 file changed, 7 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/core/rdma_core.c b/drivers/infiniband/core/rdma_core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/rdma_core.c
 +++ b/drivers/infiniband/core/rdma_core.c
-@@ -74,7 +74,13 @@ int uverbs_try_lock_object(struct ib_uob
+@@ -74,7 +74,13 @@ int uverbs_try_lock_object(struct ib_uobject *uobj,
  	 */
  	switch (mode) {
  	case UVERBS_LOOKUP_READ:
@@ -21,7 +23,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
  			-EBUSY : 0;
  	case UVERBS_LOOKUP_WRITE:
  		/* lock is exclusive */
-@@ -525,7 +531,6 @@ static void alloc_abort_idr_uobject(stru
+@@ -525,7 +531,6 @@ static void alloc_abort_idr_uobject(struct ib_uobject *uobj)
  {
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/rdma_core.c
  	xa_erase(&uobj->ufile->idr, uobj->id);
  }
  
-@@ -546,13 +551,13 @@ static int __must_check destroy_hw_idr_u
+@@ -546,13 +551,13 @@ static int __must_check destroy_hw_idr_uobject(struct ib_uobject *uobj,
  
  	ib_rdmacg_uncharge(&uobj->cg_obj, uobj->context->device,
  			   RDMACG_RESOURCE_HCA_OBJECT);

@@ -6,6 +6,8 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  .../net/ethernet/mellanox/mlx5/core/en_txrx.c | 77 ++++++++++++++++++-
  1 file changed, 73 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_txrx.c
 @@ -31,11 +31,19 @@
@@ -28,7 +30,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  #include "en/xsk/tx.h"
  #include "en_accel/ktls_txrx.h"
  
-@@ -55,7 +63,11 @@ static void mlx5e_handle_tx_dim(struct m
+@@ -55,7 +63,11 @@ static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
  		return;
  
  	dim_update_sample(sq->cq.event_ctr, stats->packets, stats->bytes, &dim_sample);
@@ -40,7 +42,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  }
  
  static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
-@@ -67,7 +79,11 @@ static void mlx5e_handle_rx_dim(struct m
+@@ -67,7 +79,11 @@ static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
  		return;
  
  	dim_update_sample(rq->cq.event_ctr, stats->packets, stats->bytes, &dim_sample);
@@ -52,7 +54,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  }
  
  void mlx5e_trigger_irq(struct mlx5e_icosq *sq)
-@@ -85,9 +101,16 @@ void mlx5e_trigger_irq(struct mlx5e_icos
+@@ -85,9 +101,16 @@ void mlx5e_trigger_irq(struct mlx5e_icosq *sq)
  	mlx5e_notify_hw(wq, sq->pc, sq->uar_map, &nopwqe->ctrl);
  }
  
@@ -69,7 +71,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  	bool busy_xsk = false, xsk_rx_alloc_err;
  
  	/* If SQ is empty, there are no TX completions to trigger NAPI, so set
-@@ -95,17 +118,29 @@ static bool mlx5e_napi_xsk_post(struct m
+@@ -95,17 +118,29 @@ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskr
  	 * condition with userspace.
  	 */
  	if (need_wakeup && xsksq->pc == xsksq->cc)
@@ -99,7 +101,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  	xsk_rx_alloc_err = INDIRECT_CALL_2(xskrq->post_wqes,
  					   mlx5e_post_rx_mpwqes,
  					   mlx5e_post_rx_wqes,
-@@ -114,35 +149,58 @@ static bool mlx5e_napi_xsk_post(struct m
+@@ -114,35 +149,58 @@ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskr
  	if (!need_wakeup)
  		busy_xsk |= xsk_rx_alloc_err;
  	else if (xsk_rx_alloc_err)
@@ -161,7 +163,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  
  	ch_stats->poll++;
  
-@@ -165,14 +223,18 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -165,14 +223,18 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  	if (unlikely(!budget))
  		goto out;
  
@@ -180,7 +182,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  
  	if (likely(budget - work_done))
  		work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
-@@ -194,12 +256,14 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -194,12 +256,14 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  				mlx5e_post_rx_mpwqes,
  				mlx5e_post_rx_wqes,
  				rq);
@@ -195,7 +197,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  
  	if (busy) {
  		if (likely(mlx5e_channel_no_affinity_change(c))) {
-@@ -207,14 +271,15 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -207,14 +271,15 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  			goto out;
  		}
  		ch_stats->aff_change++;
@@ -212,7 +214,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  	ch_stats->arm++;
  
  	for (i = 0; i < c->num_tc; i++) {
-@@ -237,9 +302,12 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -237,9 +302,12 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  	mlx5e_cq_arm(&rq->cq);
  	mlx5e_cq_arm(&c->icosq.cq);
  	mlx5e_cq_arm(&c->async_icosq.cq);
@@ -225,7 +227,7 @@ Change-Id: I6062ef8cc547fabff1c7ccd465d235a26ba208a6
  	if (xsk_open) {
  		mlx5e_handle_rx_dim(xskrq);
  		mlx5e_cq_arm(&xsksq->cq);
-@@ -250,6 +318,7 @@ int mlx5e_napi_poll(struct napi_struct *
+@@ -250,6 +318,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
  		mlx5e_trigger_irq(&c->icosq);
  		ch_stats->force_irq++;
  	}

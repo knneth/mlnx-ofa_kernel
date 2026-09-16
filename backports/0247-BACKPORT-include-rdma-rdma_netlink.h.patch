@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/rdma/rdma_netlink.h
  include/rdma/rdma_netlink.h | 6 ++++--
  1 file changed, 4 insertions(+), 2 deletions(-)
 
+diff --git a/include/rdma/rdma_netlink.h b/include/rdma/rdma_netlink.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/rdma_netlink.h
 +++ b/include/rdma/rdma_netlink.h
 @@ -3,6 +3,8 @@

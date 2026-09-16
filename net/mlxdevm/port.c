@@ -1051,13 +1051,15 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		return err;
 
+	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
+	if (WARN_ON_ONCE(!mlxdevm_port))
+		return -ENODEV;
+
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg) {
 		err = -ENOMEM;
 		goto err_out_port_del;
 	}
-
-	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
 
 	err = mlxdevm_nl_port_fill(msg, mlxdevm_port, MLXDEVM_CMD_PORT_NEW,
 				   info->snd_portid, info->snd_seq, 0, NULL);

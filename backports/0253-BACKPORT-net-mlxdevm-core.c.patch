@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/core.c
  net/mlxdevm/core.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/net/mlxdevm/core.c b/net/mlxdevm/core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/core.c
 +++ b/net/mlxdevm/core.c
-@@ -347,7 +347,9 @@ static void mlxdevm_release(struct work_
+@@ -347,7 +347,9 @@ static void mlxdevm_release(struct work_struct *work)
  	mlxdevm = container_of(to_rcu_work(work), struct mlxdevm, rwork);
  
  	mutex_destroy(&mlxdevm->lock);
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/core.c
  	kfree(mlxdevm);
  }
  
-@@ -413,7 +415,13 @@ int devm_register(struct mlxdevm *mlxdev
+@@ -413,7 +415,13 @@ int devm_register(struct mlxdevm *mlxdevm)
  	INIT_LIST_HEAD(&mlxdevm->trap_group_list);
  	INIT_LIST_HEAD(&mlxdevm->trap_policer_list);
  	INIT_RCU_WORK(&mlxdevm->rwork, mlxdevm_release);

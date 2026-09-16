@@ -6,6 +6,8 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  drivers/infiniband/core/ucma.c | 51 ++++++++++++++++++++++++++++++++--
  1 file changed, 48 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/infiniband/core/ucma.c b/drivers/infiniband/core/ucma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/ucma.c
 +++ b/drivers/infiniband/core/ucma.c
 @@ -43,9 +43,10 @@
@@ -31,7 +33,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  
  static unsigned int max_backlog = 1024;
  
-@@ -70,9 +74,14 @@ static struct ctl_table ucma_ctl_table[]
+@@ -70,9 +74,14 @@ static struct ctl_table ucma_ctl_table[] = {
  		.maxlen		= sizeof max_backlog,
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec_minmax,
@@ -46,7 +48,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  };
  
  struct ucma_file {
-@@ -1618,23 +1627,49 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1618,23 +1627,49 @@ static ssize_t ucma_migrate_id(struct ucma_file *new_file,
  	struct ucma_context *ctx;
  	LIST_HEAD(event_list);
  	struct ucma_file *cur_file;
@@ -96,7 +98,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  
  	rdma_lock_handler(ctx->cm_id);
  	/*
-@@ -1675,6 +1710,10 @@ static ssize_t ucma_migrate_id(struct uc
+@@ -1675,6 +1710,10 @@ static ssize_t ucma_migrate_id(struct ucma_file *new_file,
  err_unlock:
  	rdma_unlock_handler(ctx->cm_id);
  	ucma_put_ctx(ctx);
@@ -107,7 +109,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  	return ret;
  }
  
-@@ -1728,7 +1767,6 @@ static ssize_t ucma_write(struct file *f
+@@ -1728,7 +1767,6 @@ static ssize_t ucma_write(struct file *filp, const char __user *buf,
  	if (hdr.cmd >= ARRAY_SIZE(ucma_cmd_table))
  		return -EINVAL;
  	hdr.cmd = array_index_nospec(hdr.cmd, ARRAY_SIZE(ucma_cmd_table));
@@ -115,7 +117,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  	if (hdr.in + sizeof(hdr) > len)
  		return -EINVAL;
  
-@@ -1779,7 +1817,11 @@ static int ucma_open(struct inode *inode
+@@ -1779,7 +1817,11 @@ static int ucma_open(struct inode *inode, struct file *filp)
  	filp->private_data = file;
  	file->filp = filp;
  
@@ -127,7 +129,7 @@ Change-Id: I4f212229aa1c26204dbd460105477913dd90e781
  }
  
  static int ucma_close(struct inode *inode, struct file *filp)
-@@ -1812,6 +1854,9 @@ static const struct file_operations ucma
+@@ -1812,6 +1854,9 @@ static const struct file_operations ucma_fops = {
  	.release = ucma_close,
  	.write	 = ucma_write,
  	.poll    = ucma_poll,

@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
  drivers/net/ethernet/mellanox/mlx5/core/ecpf.c | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c b/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
-@@ -531,11 +531,17 @@ static struct attribute *smart_nic_attrs
+@@ -531,11 +531,17 @@ static struct attribute *smart_nic_attrs[] = {
  	NULL,
  };
  
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/ecpf.c
  };
  
  void mlx5_smartnic_sysfs_init(struct net_device *dev)
-@@ -670,11 +676,17 @@ static struct attribute *regex_attrs[] =
+@@ -670,11 +676,17 @@ static struct attribute *regex_attrs[] = {
  	NULL,
  };
  

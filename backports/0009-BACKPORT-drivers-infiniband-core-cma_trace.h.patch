@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_trace.h
  drivers/infiniband/core/cma_trace.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/drivers/infiniband/core/cma_trace.h b/drivers/infiniband/core/cma_trace.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cma_trace.h
 +++ b/drivers/infiniband/core/cma_trace.h
 @@ -84,7 +84,11 @@ TRACE_EVENT(cm_id_attach,

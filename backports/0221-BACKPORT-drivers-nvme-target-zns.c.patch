@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  drivers/nvme/target/zns.c | 117 +++++++++++++++++++++++++++++++++++++-
  1 file changed, 116 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/target/zns.c b/drivers/nvme/target/zns.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/zns.c
 +++ b/drivers/nvme/target/zns.c
 @@ -3,11 +3,15 @@
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  /*
   * We set the Memory Page Size Minimum (MPSMIN) for target controller to 0
   * which gets added by 12 in the nvme_enable_ctrl() which results in 2^12 = 4k
-@@ -34,7 +38,12 @@ static int validate_conv_zones_cb(struct
+@@ -34,7 +38,12 @@ static int validate_conv_zones_cb(struct blk_zone *z,
  
  bool nvmet_bdev_zns_enable(struct nvmet_ns *ns)
  {
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	struct gendisk *bd_disk = ns->bdev->bd_disk;
  	int ret;
  
-@@ -56,8 +65,13 @@ bool nvmet_bdev_zns_enable(struct nvmet_
+@@ -56,8 +65,13 @@ bool nvmet_bdev_zns_enable(struct nvmet_ns *ns)
  	 * to detect if the device has conventional zones and reject it if
  	 * it does.
  	 */
@@ -50,7 +52,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	if (ret < 0)
  		return false;
  
-@@ -252,7 +266,16 @@ static unsigned long nvmet_req_nr_zones_
+@@ -252,7 +266,16 @@ static unsigned long nvmet_req_nr_zones_from_slba(struct nvmet_req *req)
  {
  	unsigned int sect = nvmet_lba_to_sect(req->ns, req->cmd->zmr.slba);
  
@@ -68,7 +70,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  }
  
  static unsigned long get_nr_zones_from_buf(struct nvmet_req *req, u32 bufsize)
-@@ -318,7 +341,11 @@ void nvmet_bdev_execute_zone_mgmt_recv(s
+@@ -318,7 +341,11 @@ void nvmet_bdev_execute_zone_mgmt_recv(struct nvmet_req *req)
  	queue_work(zbd_wq, &req->z.zmgmt_work);
  }
  
@@ -80,7 +82,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  {
  	switch (zsa) {
  	case NVME_ZONE_OPEN:
-@@ -393,10 +420,34 @@ static int zmgmt_send_scan_cb(struct blk
+@@ -393,10 +420,34 @@ static int zmgmt_send_scan_cb(struct blk_zone *z, unsigned i, void *d)
  	return 0;
  }
  
@@ -115,7 +117,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	struct bio *bio = NULL;
  	sector_t sector = 0;
  	int ret;
-@@ -422,16 +473,35 @@ static u16 nvmet_bdev_zone_mgmt_emulate_
+@@ -422,16 +473,35 @@ static u16 nvmet_bdev_zone_mgmt_emulate_all(struct nvmet_req *req)
  		ret = 0;
  	}
  
@@ -151,7 +153,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	}
  
  	if (bio) {
-@@ -451,8 +521,13 @@ static u16 nvmet_bdev_execute_zmgmt_send
+@@ -451,8 +521,13 @@ static u16 nvmet_bdev_execute_zmgmt_send_all(struct nvmet_req *req)
  
  	switch (zsa_req_op(req->cmd->zms.zsa)) {
  	case REQ_OP_ZONE_RESET:
@@ -165,7 +167,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  		if (ret < 0)
  			return blkdev_zone_mgmt_errno_to_nvme_status(ret);
  		break;
-@@ -473,7 +548,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+@@ -473,7 +548,11 @@ static void nvmet_bdev_zmgmt_send_work(struct work_struct *w)
  {
  	struct nvmet_req *req = container_of(w, struct nvmet_req, z.zmgmt_work);
  	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->zms.slba);
@@ -177,7 +179,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	struct block_device *bdev = req->ns->bdev;
  	sector_t zone_sectors = bdev_zone_sectors(bdev);
  	u16 status = NVME_SC_SUCCESS;
-@@ -503,7 +582,11 @@ static void nvmet_bdev_zmgmt_send_work(s
+@@ -503,7 +582,11 @@ static void nvmet_bdev_zmgmt_send_work(struct work_struct *w)
  		goto out;
  	}
  
@@ -189,7 +191,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	if (ret < 0)
  		status = blkdev_zone_mgmt_errno_to_nvme_status(ret);
  
-@@ -533,7 +616,13 @@ static void nvmet_bdev_zone_append_bio_d
+@@ -533,7 +616,13 @@ static void nvmet_bdev_zone_append_bio_done(struct bio *bio)
  void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
  {
  	sector_t sect = nvmet_lba_to_sect(req->ns, req->cmd->rw.slba);
@@ -203,7 +205,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	u16 status = NVME_SC_SUCCESS;
  	unsigned int total_len = 0;
  	struct scatterlist *sg;
-@@ -545,12 +634,14 @@ void nvmet_bdev_execute_zone_append(stru
+@@ -545,12 +634,14 @@ void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
  	if (!nvmet_check_transfer_len(req, nvmet_rw_data_len(req)))
  		return;
  
@@ -218,7 +220,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  
  	if (!req->sg_cnt) {
  		nvmet_req_complete(req, 0);
-@@ -571,13 +662,36 @@ void nvmet_bdev_execute_zone_append(stru
+@@ -571,13 +662,36 @@ void nvmet_bdev_execute_zone_append(struct nvmet_req *req)
  
  	if (nvmet_use_inline_bvec(req)) {
  		bio = &req->z.inline_bio;
@@ -255,7 +257,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/zns.c
  	bio->bi_iter.bi_sector = sect;
  	bio->bi_private = req;
  	if (req->cmd->rw.control & cpu_to_le16(NVME_RW_FUA))
-@@ -625,3 +739,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct n
+@@ -625,3 +739,4 @@ u16 nvmet_bdev_zns_parse_io_cmd(struct nvmet_req *req)
  		return nvmet_bdev_parse_io_cmd(req);
  	}
  }

@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
  include/linux/auxiliary_bus.h | 19 ++++++++++++++-----
  1 file changed, 14 insertions(+), 5 deletions(-)
 
+diff --git a/include/linux/auxiliary_bus.h b/include/linux/auxiliary_bus.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/auxiliary_bus.h
 +++ b/include/linux/auxiliary_bus.h
 @@ -8,8 +8,13 @@
@@ -35,7 +37,7 @@ Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
  };
  
  /**
-@@ -222,18 +229,17 @@ int __auxiliary_device_add(struct auxili
+@@ -222,18 +229,17 @@ int __auxiliary_device_add(struct auxiliary_device *auxdev, const char *modname)
  #define auxiliary_device_add(auxdev) __auxiliary_device_add(auxdev, KBUILD_MODNAME)
  
  #ifdef CONFIG_SYSFS
@@ -58,7 +60,7 @@ Subject: [PATCH] BACKPORT: include/linux/auxiliary_bus.h
  static inline int
  auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  {
-@@ -243,10 +249,13 @@ auxiliary_device_sysfs_irq_add(struct au
+@@ -243,10 +249,13 @@ auxiliary_device_sysfs_irq_add(struct auxiliary_device *auxdev, int irq)
  static inline void
  auxiliary_device_sysfs_irq_remove(struct auxiliary_device *auxdev, int irq) {}
  #endif

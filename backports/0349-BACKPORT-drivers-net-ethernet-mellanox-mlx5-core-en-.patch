@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
  drivers/net/ethernet/mellanox/mlx5/core/en/tir.c | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tir.c
-@@ -124,7 +124,13 @@ void mlx5e_tir_builder_build_rss(struct
+@@ -124,7 +124,13 @@ void mlx5e_tir_builder_build_rss(struct mlx5e_tir_builder *builder,
  		const size_t len = MLX5_FLD_SZ_BYTES(tirc, rx_hash_toeplitz_key);
  		void *rss_key = MLX5_ADDR_OF(tirc, tirc, rx_hash_toeplitz_key);
  

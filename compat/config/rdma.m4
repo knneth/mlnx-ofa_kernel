@@ -143,6 +143,24 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+         MLNX_RDMA_TEST_CASE(HAVE_DPLL_PIN_OPS_FFO_GET_PARAM, [struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param], [
+         #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         ],[
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_DPLL_NETDEV_PIN_SET, [dpll.h has dpll_netdev_pin_set], [
 	#include <linux/dpll.h>
 	],[
@@ -3730,6 +3748,21 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_NET_NAMESPACE_RETURNS_NS_COMMON, [class.namespace returns const struct ns_common *], [
+		#include <linux/device.h>
+		static const struct ns_common *test_namespace(const struct device *d);
+		static const struct ns_common *test_namespace(const struct device *d)
+		{
+			return NULL;
+		}
+	],[
+		struct class cm_class = {
+			.namespace = test_namespace,
+		};
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_CLASS_DEV_UEVENT_CONST_DEV, [dev_uevent get const struct device], [
 		#include <linux/device.h>
 		static int foo(const struct device *dev, struct kobj_uevent_env *env) {
@@ -5341,6 +5374,19 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
+	MLNX_RDMA_TEST_CASE(HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES, [check_add_overflow accepts mixed argument types], [
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	],[
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
+
+		return 0;
+	])
+
 	MLNX_RDMA_TEST_CASE(HAVE_KVFREE_CALL_RCU, [function kvfree_call_rcu is defined], [
 		#include <linux/rcupdate.h>
 	],[
@@ -5493,6 +5539,16 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 	],[
 		struct vfio_device_ops vfio_ops;
 		vfio_ops.match_token_uuid = NULL;
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS, [struct vfio_device_ops has get_region_info_caps], [
+		#include <linux/vfio.h>
+	],[
+		struct vfio_device_ops vfio_ops;
+
+		vfio_ops.get_region_info_caps = NULL;
+
 		return 0;
 	])
 
@@ -7936,10 +7992,18 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM, [include/linux/pci.h has pci_enable_ptm], [
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM_GET_2_PARAM, [include/linux/pci.h has pci_enable_ptm get 2 param], [
 		#include <linux/pci.h>
 	],[
 		pci_enable_ptm(NULL, NULL);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_PCI_ENABLE_PTM_GET_1_PARAM, [include/linux/pci.h has pci_enable_ptm get 1 param], [
+		#include <linux/pci.h>
+	],[
+		pci_enable_ptm(NULL);
 
 		return 0;
 	])
@@ -8726,10 +8790,19 @@ AC_DEFUN([MLNX_RDMA_CREATE_MODULES],
 		return 0;
 	])
 
-	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST, [nvme_auth_generate_digest is defined], [
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8, [nvme_auth_generate_digest is defined], [
 		#include <linux/nvme-auth.h>
 	],[
 		u8 *b;
+		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
+
+		return 0;
+	])
+
+	MLNX_RDMA_TEST_CASE(HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR, [nvme_auth_generate_digest is defined], [
+		#include <linux/nvme-auth.h>
+	],[
+		char *b;
 		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
 
 		return 0;

@@ -6,11 +6,13 @@ Change-Id: If1b22bfdcf38930de7428a59eeb1b005f6820d5f
  .../ethernet/mellanox/mlx5/core/mlx5_core.h   | 44 +++++++------------
  1 file changed, 16 insertions(+), 28 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.h
 @@ -45,6 +45,10 @@
  
- #define DRIVER_VERSION	"25.10-2.4.1"
+ #define DRIVER_VERSION	"25.10-3.1.6"
  
 +#ifndef BITS_TO_BYTES
 +#define BITS_TO_BYTES(nr) DIV_ROUND_UP(nr, BITS_PER_BYTE)
@@ -55,7 +57,7 @@ Change-Id: If1b22bfdcf38930de7428a59eeb1b005f6820d5f
  static inline struct device *mlx5_core_dma_dev(struct mlx5_core_dev *dev)
  {
  	return &dev->pdev->dev;
-@@ -365,7 +347,9 @@ int mlx5_attach_device(struct mlx5_core_
+@@ -365,7 +347,9 @@ int mlx5_attach_device(struct mlx5_core_dev *dev);
  void mlx5_detach_device(struct mlx5_core_dev *dev, bool suspend);
  int mlx5_register_device(struct mlx5_core_dev *dev);
  void mlx5_unregister_device(struct mlx5_core_dev *dev);
@@ -65,7 +67,7 @@ Change-Id: If1b22bfdcf38930de7428a59eeb1b005f6820d5f
  bool mlx5_dev_is_lightweight(struct mlx5_core_dev *dev);
  
  void mlx5_fw_reporters_create(struct mlx5_core_dev *dev);
-@@ -454,8 +438,8 @@ int mlx5_port_max_linkspeed(struct mlx5_
+@@ -454,8 +438,8 @@ int mlx5_port_max_linkspeed(struct mlx5_core_dev *mdev, u32 *speed);
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_fs) &&	\
  			    MLX5_CAP_MCAM_FEATURE((mdev), mtpps_enh_out_per_adj))
  
@@ -76,7 +78,7 @@ Change-Id: If1b22bfdcf38930de7428a59eeb1b005f6820d5f
  int mlx5_fw_version_query(struct mlx5_core_dev *dev,
  			  u32 *running_ver, u32 *stored_ver);
  
-@@ -547,15 +531,19 @@ mlx5_sf_coredev_to_adev(struct mlx5_core
+@@ -547,15 +531,19 @@ mlx5_sf_coredev_to_adev(struct mlx5_core_dev *mdev)
  int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx);
  void mlx5_mdev_uninit(struct mlx5_core_dev *dev);
  int mlx5_init_one(struct mlx5_core_dev *dev);

@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  fs/fuse/file.c | 239 +++++++++++++++++++++++++++++++++++++++++++++++--
  1 file changed, 233 insertions(+), 6 deletions(-)
 
+diff --git a/fs/fuse/file.c b/fs/fuse/file.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/file.c
 +++ b/fs/fuse/file.c
 @@ -21,6 +21,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  static int fuse_send_open(struct fuse_mount *fm, u64 nodeid,
  			  unsigned int open_flags, int opcode,
-@@ -485,7 +488,11 @@ static inline bool fuse_folio_is_writeba
+@@ -485,7 +488,11 @@ static inline bool fuse_folio_is_writeback(struct inode *inode,
  					   struct folio *folio)
  {
  	pgoff_t last = folio_next_index(folio) - 1;
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  }
  
  static void fuse_wait_on_folio_writeback(struct inode *inode,
-@@ -658,14 +665,38 @@ void fuse_read_args_fill(struct fuse_io_
+@@ -658,14 +665,38 @@ void fuse_read_args_fill(struct fuse_io_args *ia, struct file *file, loff_t pos,
  	args->out_args[0].size = count;
  }
  
@@ -69,7 +71,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  		if (ap->args.is_pinned)
  			unpin_folio(ap->folios[i]);
  	}
-@@ -890,7 +921,6 @@ static int fuse_do_readfolio(struct file
+@@ -890,7 +921,6 @@ static int fuse_do_readfolio(struct file *file, struct folio *folio)
  	 * make sure we read a properly synced folio.
  	 */
  	fuse_wait_on_folio_writeback(inode, folio);
@@ -77,7 +79,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	attr_ver = fuse_get_attr_version(fm->fc);
  
  	/* Don't overflow end offset */
-@@ -954,7 +984,13 @@ static void fuse_readpages_end(struct fu
+@@ -954,7 +984,13 @@ static void fuse_readpages_end(struct fuse_mount *fm, struct fuse_args *args,
  	}
  
  	for (i = 0; i < ap->num_folios; i++) {
@@ -91,7 +93,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  		folio_put(ap->folios[i]);
  	}
  	if (ia->ff)
-@@ -1511,7 +1547,9 @@ static int fuse_get_user_pages(struct fu
+@@ -1511,7 +1547,9 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
  			       bool use_pages_for_kvec_io,
  			       bool use_p2p_dma)
  {
@@ -101,7 +103,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	bool flush_or_invalidate = false;
  	unsigned int nr_pages = 0;
  	size_t nbytes = 0;  /* # bytes already packed in req */
-@@ -1563,7 +1601,11 @@ static int fuse_get_user_pages(struct fu
+@@ -1563,7 +1601,11 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
  		ret = iov_iter_extract_pages(ii, &pages,
  					     *nbytesp - nbytes,
  					     max_pages - nr_pages,
@@ -113,7 +115,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  					     &start);
  		if (ret < 0)
  			break;
-@@ -1853,11 +1895,18 @@ static void fuse_writepage_free(struct f
+@@ -1853,11 +1895,18 @@ static void fuse_writepage_free(struct fuse_writepage_args *wpa)
  
  static void fuse_writepage_finish_stat(struct inode *inode, struct folio *folio)
  {
@@ -132,7 +134,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  }
  
  static void fuse_writepage_finish(struct fuse_writepage_args *wpa)
-@@ -2080,6 +2129,7 @@ int fuse_write_inode(struct inode *inode
+@@ -2080,6 +2129,7 @@ int fuse_write_inode(struct inode *inode, struct writeback_control *wbc)
  	struct fuse_file *ff;
  	int err;
  
@@ -140,7 +142,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	/*
  	 * Inode is always written before the last reference is dropped and
  	 * hence this should not be reached from reclaim.
-@@ -2089,7 +2139,9 @@ int fuse_write_inode(struct inode *inode
+@@ -2089,7 +2139,9 @@ int fuse_write_inode(struct inode *inode, struct writeback_control *wbc)
  	 * reclaim while serving a request can't be prevented, because it can
  	 * involve any number of unrelated userspace processes.
  	 */
@@ -150,7 +152,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  	ff = __fuse_write_file_get(fi);
  	err = fuse_flush_times(inode, ff);
-@@ -2135,17 +2187,28 @@ static void fuse_writepage_add_to_bucket
+@@ -2135,17 +2187,28 @@ static void fuse_writepage_add_to_bucket(struct fuse_conn *fc,
  static void fuse_writepage_args_page_fill(struct fuse_writepage_args *wpa, struct folio *folio,
  					  struct folio *tmp_folio, uint32_t folio_index)
  {
@@ -179,7 +181,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  }
  
  static struct fuse_writepage_args *fuse_writepage_args_setup(struct folio *folio,
-@@ -2351,7 +2414,11 @@ static bool fuse_writepage_need_send(str
+@@ -2351,7 +2414,11 @@ static bool fuse_writepage_need_send(struct fuse_conn *fc, struct folio *folio,
  		return true;
  
  	/* Discontinuity */
@@ -383,7 +385,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  
  	return copied;
  }
-@@ -2566,10 +2758,19 @@ static int fuse_launder_folio(struct fol
+@@ -2566,10 +2758,19 @@ static int fuse_launder_folio(struct folio *folio)
  		struct inode *inode = folio->mapping->host;
  
  		/* Serialize with pending writeback for the same page */
@@ -403,7 +405,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	}
  	return err;
  }
-@@ -2706,14 +2907,22 @@ static int convert_fuse_file_lock(struct
+@@ -2706,14 +2907,22 @@ static int convert_fuse_file_lock(struct fuse_conn *fc,
  		 * translate it into the caller's pid namespace.
  		 */
  		rcu_read_lock();
@@ -426,7 +428,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	return 0;
  }
  
-@@ -2727,10 +2936,18 @@ static void fuse_lk_fill(struct fuse_arg
+@@ -2727,10 +2936,18 @@ static void fuse_lk_fill(struct fuse_args *args, struct file *file,
  
  	memset(inarg, 0, sizeof(*inarg));
  	inarg->fh = ff->fh;
@@ -445,7 +447,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	inarg->lk.pid = pid;
  	if (flock)
  		inarg->lk_flags |= FUSE_LK_FLOCK;
-@@ -2767,8 +2984,13 @@ static int fuse_setlk(struct file *file,
+@@ -2767,8 +2984,13 @@ static int fuse_setlk(struct file *file, struct file_lock *fl, int flock)
  	struct fuse_mount *fm = get_fuse_mount(inode);
  	FUSE_ARGS(args);
  	struct fuse_lk_in inarg;
@@ -459,7 +461,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/file.c
  	pid_t pid_nr = pid_nr_ns(pid, fm->fc->pid_ns);
  	int err;
  
-@@ -3388,8 +3610,13 @@ static ssize_t fuse_copy_file_range(stru
+@@ -3388,8 +3610,13 @@ static ssize_t fuse_copy_file_range(struct file *src_file, loff_t src_off,
  				     len, flags);
  
  	if (ret == -EOPNOTSUPP || ret == -EXDEV)

@@ -6,6 +6,8 @@ Change-Id: I2482b31a4ea9406d4b736d5191e6f76748cdd0ff
  drivers/net/ethernet/mellanox/mlx5/core/en_common.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_common.c
 @@ -229,12 +229,13 @@ err_dealloc_pd:

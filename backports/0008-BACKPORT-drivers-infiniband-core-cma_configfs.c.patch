@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  drivers/infiniband/core/cma_configfs.c | 23 +++++++++++++++--------
  1 file changed, 15 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/infiniband/core/cma_configfs.c b/drivers/infiniband/core/cma_configfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cma_configfs.c
 +++ b/drivers/infiniband/core/cma_configfs.c
 @@ -54,6 +54,8 @@ struct cma_dev_group {
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  static struct cma_dev_port_group *to_dev_port_group(struct config_item *item)
  {
  	struct config_group *group;
-@@ -70,6 +72,7 @@ static bool filter_by_name(struct ib_dev
+@@ -70,6 +72,7 @@ static bool filter_by_name(struct ib_device *ib_dev, void *cookie)
  	return !strcmp(dev_name(&ib_dev->dev), cookie);
  }
  
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  static int cma_configfs_params_get(struct config_item *item,
  				   struct cma_device **pcma_dev,
  				   struct cma_dev_port_group **pgroup)
-@@ -186,12 +189,16 @@ static ssize_t default_roce_tos_store(st
+@@ -186,12 +189,16 @@ static ssize_t default_roce_tos_store(struct config_item *item,
  CONFIGFS_ATTR(, default_roce_tos);
  
  static struct configfs_attribute *cma_configfs_attributes[] = {
@@ -44,7 +46,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  	.ct_attrs	= cma_configfs_attributes,
  	.ct_owner	= THIS_MODULE
  };
-@@ -260,7 +267,7 @@ static struct configfs_item_operations c
+@@ -260,7 +267,7 @@ static struct configfs_item_operations cma_ports_item_ops = {
  	.release = release_cma_ports_group
  };
  
@@ -53,7 +55,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  	.ct_item_ops	= &cma_ports_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -269,7 +276,7 @@ static struct configfs_item_operations c
+@@ -269,7 +276,7 @@ static struct configfs_item_operations cma_device_item_ops = {
  	.release = release_cma_dev
  };
  
@@ -62,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  	.ct_item_ops	= &cma_device_item_ops,
  	.ct_owner	= THIS_MODULE
  };
-@@ -303,8 +310,8 @@ static struct config_group *make_cma_dev
+@@ -303,8 +310,8 @@ static struct config_group *make_cma_dev(struct config_group *group,
  
  	config_group_init_type_name(&cma_dev_group->device_group, name,
  				    &cma_device_group_type);
@@ -73,7 +75,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cma_configfs.c
  
  	cma_dev_put(cma_dev);
  	return &cma_dev_group->device_group;
-@@ -333,7 +340,7 @@ static struct configfs_group_operations
+@@ -333,7 +340,7 @@ static struct configfs_group_operations cma_subsys_group_ops = {
  	.drop_item	= drop_cma_dev,
  };
  

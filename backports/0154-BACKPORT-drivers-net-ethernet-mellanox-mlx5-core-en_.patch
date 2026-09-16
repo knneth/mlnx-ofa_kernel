@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
  .../ethernet/mellanox/mlx5/core/en_stats.h    | 55 ++++++++++++++++++-
  1 file changed, 53 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
 @@ -33,6 +33,10 @@
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
  #define MLX5E_READ_CTR64_CPU(ptr, dsc, i) \
  	(*(u64 *)((char *)ptr + dsc[i].offset))
  #define MLX5E_READ_CTR64_BE(ptr, dsc, i) \
-@@ -116,9 +120,11 @@ void mlx5e_stats_update_ndo_stats(struct
+@@ -116,9 +120,11 @@ void mlx5e_stats_update_ndo_stats(struct mlx5e_priv *priv);
  
  void mlx5e_stats_pause_get(struct mlx5e_priv *priv,
  			   struct ethtool_pause_stats *pause_stats);
@@ -31,7 +33,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_stats.h
  void mlx5e_stats_eth_phy_get(struct mlx5e_priv *priv,
  			     struct ethtool_eth_phy_stats *phy_stats);
  void mlx5e_stats_eth_mac_get(struct mlx5e_priv *priv,
-@@ -128,10 +134,15 @@ void mlx5e_stats_eth_ctrl_get(struct mlx
+@@ -128,10 +134,15 @@ void mlx5e_stats_eth_ctrl_get(struct mlx5e_priv *priv,
  void mlx5e_stats_rmon_get(struct mlx5e_priv *priv,
  			  struct ethtool_rmon_stats *rmon,
  			  const struct ethtool_rmon_hist_range **ranges);

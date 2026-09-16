@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
  drivers/infiniband/core/umem_dmabuf.c | 31 +++++++++++++++++++++++++++
  1 file changed, 31 insertions(+)
 
+diff --git a/drivers/infiniband/core/umem_dmabuf.c b/drivers/infiniband/core/umem_dmabuf.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/umem_dmabuf.c
 +++ b/drivers/infiniband/core/umem_dmabuf.c
 @@ -3,6 +3,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
  #include <linux/dma-buf.h>
  #include <linux/dma-resv.h>
  #include <linux/dma-mapping.h>
-@@ -16,9 +17,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+@@ -16,9 +17,14 @@ int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
  {
  	struct sg_table *sgt;
  	struct scatterlist *sg;
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
  	int i;
  
  	dma_resv_assert_held(umem_dmabuf->attach->dmabuf->resv);
-@@ -62,8 +68,14 @@ int ib_umem_dmabuf_map_pages(struct ib_u
+@@ -62,8 +68,14 @@ int ib_umem_dmabuf_map_pages(struct ib_umem_dmabuf *umem_dmabuf)
  		cur += sg_dma_len(sg);
  	}
  
@@ -76,7 +78,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
  }
  EXPORT_SYMBOL(ib_umem_dmabuf_map_pages);
  
-@@ -194,7 +222,9 @@ ib_umem_dmabuf_unsupported_move_notify(s
+@@ -194,7 +222,9 @@ ib_umem_dmabuf_unsupported_move_notify(struct dma_buf_attachment *attach)
  }
  
  static struct dma_buf_attach_ops ib_umem_dmabuf_attach_pinned_ops = {
@@ -86,7 +88,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_dmabuf.c
  	.move_notify = ib_umem_dmabuf_unsupported_move_notify,
  };
  
-@@ -273,3 +303,4 @@ void ib_umem_dmabuf_release(struct ib_um
+@@ -273,3 +303,4 @@ void ib_umem_dmabuf_release(struct ib_umem_dmabuf *umem_dmabuf)
  	dma_buf_put(dmabuf);
  	kfree(umem_dmabuf);
  }

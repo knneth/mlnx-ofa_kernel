@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/iser/iser_verbs.c
  drivers/infiniband/ulp/iser/iser_verbs.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/iser/iser_verbs.c b/drivers/infiniband/ulp/iser/iser_verbs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/iser/iser_verbs.c
 +++ b/drivers/infiniband/ulp/iser/iser_verbs.c
-@@ -913,7 +913,11 @@ u8 iser_check_task_pi_status(struct iscs
+@@ -913,7 +913,11 @@ u8 iser_check_task_pi_status(struct iscsi_iser_task *iser_task,
  			sector_t sector_off = mr_status.sig_err.sig_err_offset;
  
  			sector_div(sector_off, sector_size + 8);

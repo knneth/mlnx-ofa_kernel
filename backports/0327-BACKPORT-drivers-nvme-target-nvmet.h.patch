@@ -6,6 +6,8 @@ Change-Id: I3b70df3c981104ae241ec55794daf59e3c38b069
  drivers/nvme/target/nvmet.h | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/nvme/target/nvmet.h b/drivers/nvme/target/nvmet.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/nvmet.h
 +++ b/drivers/nvme/target/nvmet.h
 @@ -23,6 +23,16 @@
@@ -37,7 +39,7 @@ Change-Id: I3b70df3c981104ae241ec55794daf59e3c38b069
  	struct block_device	*bdev;
  	struct pci_dev		*pdev;
  	struct file		*file;
-@@ -627,7 +641,9 @@ u32 nvmet_connect_cmd_data_len(struct nv
+@@ -627,7 +641,9 @@ u32 nvmet_connect_cmd_data_len(struct nvmet_req *req);
  void nvmet_bdev_set_limits(struct block_device *bdev, struct nvme_id_ns *id);
  u16 nvmet_bdev_parse_io_cmd(struct nvmet_req *req);
  u16 nvmet_file_parse_io_cmd(struct nvmet_req *req);
@@ -47,7 +49,7 @@ Change-Id: I3b70df3c981104ae241ec55794daf59e3c38b069
  u32 nvmet_admin_cmd_data_len(struct nvmet_req *req);
  u16 nvmet_parse_admin_cmd(struct nvmet_req *req);
  u32 nvmet_discovery_cmd_data_len(struct nvmet_req *req);
-@@ -795,9 +811,11 @@ void nvmet_file_ns_revalidate(struct nvm
+@@ -795,9 +811,11 @@ void nvmet_file_ns_revalidate(struct nvmet_ns *ns);
  bool nvmet_ns_revalidate(struct nvmet_ns *ns);
  u16 blk_to_nvme_status(struct nvmet_req *req, blk_status_t blk_sts);
  

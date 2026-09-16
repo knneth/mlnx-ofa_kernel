@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/channels.c | 9 +++++++++
  1 file changed, 9 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c b/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/channels.c
-@@ -19,9 +19,13 @@ static struct mlx5e_channel *mlx5e_chann
+@@ -19,9 +19,13 @@ static struct mlx5e_channel *mlx5e_channels_get(struct mlx5e_channels *chs, unsi
  
  bool mlx5e_channels_is_xsk(struct mlx5e_channels *chs, unsigned int ix)
  {
@@ -22,7 +24,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void mlx5e_channels_get_regular_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn,
-@@ -37,6 +41,7 @@ void mlx5e_channels_get_regular_rqn(stru
+@@ -37,6 +41,7 @@ void mlx5e_channels_get_regular_rqn(struct mlx5e_channels *chs, unsigned int ix,
  void mlx5e_channels_get_xsk_rqn(struct mlx5e_channels *chs, unsigned int ix, u32 *rqn,
  				u32 *vhca_id)
  {
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5e_channel *c = mlx5e_channels_get(chs, ix);
  
  	WARN_ON_ONCE(!test_bit(MLX5E_CHANNEL_STATE_XSK, c->state));
-@@ -44,6 +49,10 @@ void mlx5e_channels_get_xsk_rqn(struct m
+@@ -44,6 +49,10 @@ void mlx5e_channels_get_xsk_rqn(struct mlx5e_channels *chs, unsigned int ix, u32
  	*rqn = c->xskrq.rqn;
  	if (vhca_id)
  		*vhca_id = MLX5_CAP_GEN(c->mdev, vhca_id);

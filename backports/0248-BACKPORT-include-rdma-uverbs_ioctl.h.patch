@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/rdma/uverbs_ioctl.h
  include/rdma/uverbs_ioctl.h | 7 +++++++
  1 file changed, 7 insertions(+)
 
+diff --git a/include/rdma/uverbs_ioctl.h b/include/rdma/uverbs_ioctl.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/rdma/uverbs_ioctl.h
 +++ b/include/rdma/uverbs_ioctl.h
 @@ -12,6 +12,7 @@
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: include/rdma/uverbs_ioctl.h
  enum uapi_radix_data {
  	UVERBS_API_NS_FLAG = 1U << UVERBS_ID_NS_SHIFT,
  
-@@ -861,6 +863,11 @@ int uverbs_get_flags32(u32 *to, const st
+@@ -861,6 +863,11 @@ int uverbs_get_flags32(u32 *to, const struct uverbs_attr_bundle *attrs_bundle,
  		       size_t idx, u64 allowed_bits);
  int uverbs_copy_to(const struct uverbs_attr_bundle *attrs_bundle, size_t idx,
  		   const void *from, size_t size);

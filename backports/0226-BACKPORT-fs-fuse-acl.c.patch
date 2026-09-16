@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: fs/fuse/acl.c
  fs/fuse/acl.c | 21 ++++++++++++++++++++-
  1 file changed, 20 insertions(+), 1 deletion(-)
 
+diff --git a/fs/fuse/acl.c b/fs/fuse/acl.c
+index xxxxxxx..xxxxxxx 100644
 --- a/fs/fuse/acl.c
 +++ b/fs/fuse/acl.c
-@@ -122,6 +122,20 @@ int fuse_set_acl(struct mnt_idmap *idmap
+@@ -122,6 +122,20 @@ int fuse_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
  		 * them to be refreshed the next time they are used,
  		 * and it also updates i_ctime.
  		 */
@@ -28,7 +30,7 @@ Subject: [PATCH] BACKPORT: fs/fuse/acl.c
  		size_t size = posix_acl_xattr_size(acl->a_count);
  		void *value;
  
-@@ -137,15 +151,20 @@ int fuse_set_acl(struct mnt_idmap *idmap
+@@ -137,15 +151,20 @@ int fuse_set_acl(struct mnt_idmap *idmap, struct dentry *dentry,
  			kfree(value);
  			return ret;
  		}

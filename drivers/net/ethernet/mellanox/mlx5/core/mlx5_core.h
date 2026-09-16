@@ -43,7 +43,7 @@
 #include <linux/mlx5/driver.h>
 #include "lib/devcom.h"
 
-#define DRIVER_VERSION	"25.10-2.4.1"
+#define DRIVER_VERSION	"25.10-3.1.6"
 
 extern uint mlx5_core_debug_mask;
 

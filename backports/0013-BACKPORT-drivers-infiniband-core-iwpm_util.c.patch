@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwpm_util.c
  drivers/infiniband/core/iwpm_util.c | 10 +++++++++-
  1 file changed, 9 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/iwpm_util.c b/drivers/infiniband/core/iwpm_util.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/iwpm_util.c
 +++ b/drivers/infiniband/core/iwpm_util.c
-@@ -462,13 +462,21 @@ int iwpm_parse_nlmsg(struct netlink_call
+@@ -462,13 +462,21 @@ int iwpm_parse_nlmsg(struct netlink_callback *cb, int policy_max,
  	int ret;
  	const char *err_str = "";
  
@@ -29,7 +31,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwpm_util.c
  				     nlmsg_policy, NULL);
  	if (ret) {
  		err_str = "Unable to parse the nlmsg";
-@@ -644,7 +652,7 @@ int iwpm_send_mapinfo(u8 nl_client, int
+@@ -644,7 +652,7 @@ int iwpm_send_mapinfo(u8 nl_client, int iwpm_pid)
  	int i = 0, nlmsg_bytes = 0;
  	unsigned long flags;
  	const char *err_str = "";

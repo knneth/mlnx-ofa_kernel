@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/ipoib/ipoib.c | 63 +++++++++++++++++--
  1 file changed, 58 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ipoib.c
-@@ -44,14 +44,44 @@ static int mlx5i_open(struct net_device
+@@ -44,14 +44,44 @@ static int mlx5i_open(struct net_device *netdev);
  static int mlx5i_close(struct net_device *netdev);
  static int mlx5i_change_mtu(struct net_device *netdev, int new_mtu);
  
@@ -57,7 +59,7 @@ Subject: [PATCH] BACKPORT:
  };
  
  /* IPoIB mlx5 netdev profile */
-@@ -85,7 +115,12 @@ int mlx5i_init(struct mlx5_core_dev *mde
+@@ -85,7 +115,12 @@ int mlx5i_init(struct mlx5_core_dev *mdev, struct net_device *netdev)
  	mlx5e_set_netdev_mtu_boundaries(priv);
  	netdev->mtu = netdev->max_mtu;
  
@@ -71,7 +73,7 @@ Subject: [PATCH] BACKPORT:
  	mlx5i_build_nic_params(mdev, &priv->channels.params);
  
  	mlx5e_timestamp_init(priv);
-@@ -376,7 +411,9 @@ static int mlx5i_create_flow_steering(st
+@@ -376,7 +411,9 @@ static int mlx5i_create_flow_steering(struct mlx5e_priv *priv)
  	if (err) {
  		netdev_err(priv->netdev, "Failed to create arfs tables, err=%d\n",
  			   err);
@@ -81,7 +83,7 @@ Subject: [PATCH] BACKPORT:
  	}
  
  	err = mlx5e_create_ttc_table(priv->fs, priv->rx_res);
-@@ -540,13 +577,21 @@ int mlx5i_dev_init(struct net_device *de
+@@ -540,13 +577,21 @@ int mlx5i_dev_init(struct net_device *dev)
  {
  	struct mlx5e_priv    *priv   = mlx5i_epriv(dev);
  	struct mlx5i_priv    *ipriv  = priv->ppriv;
@@ -103,7 +105,7 @@ Subject: [PATCH] BACKPORT:
  
  	/* Add QPN to net-device mapping to HT */
  	mlx5i_pkey_add_qpn(dev, ipriv->qpn);
-@@ -554,6 +599,7 @@ int mlx5i_dev_init(struct net_device *de
+@@ -554,6 +599,7 @@ int mlx5i_dev_init(struct net_device *dev)
  	return 0;
  }
  
@@ -111,7 +113,7 @@ Subject: [PATCH] BACKPORT:
  int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
  {
  	struct mlx5e_priv *priv = mlx5i_epriv(dev);
-@@ -567,6 +613,7 @@ int mlx5i_ioctl(struct net_device *dev,
+@@ -567,6 +613,7 @@ int mlx5i_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
  		return -EOPNOTSUPP;
  	}
  }
@@ -119,7 +121,7 @@ Subject: [PATCH] BACKPORT:
  
  void mlx5i_dev_cleanup(struct net_device *dev)
  {
-@@ -706,7 +753,13 @@ static int mlx5i_xmit(struct net_device
+@@ -706,7 +753,13 @@ static int mlx5i_xmit(struct net_device *dev, struct sk_buff *skb,
  	struct mlx5_ib_ah *mah   = to_mah(address);
  	struct mlx5i_priv *ipriv = epriv->ppriv;
  

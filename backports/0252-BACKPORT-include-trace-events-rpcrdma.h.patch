@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  include/trace/events/rpcrdma.h | 126 +++++++++++++++++++++++++++++++++
  1 file changed, 126 insertions(+)
 
+diff --git a/include/trace/events/rpcrdma.h b/include/trace/events/rpcrdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/trace/events/rpcrdma.h
 +++ b/include/trace/events/rpcrdma.h
 @@ -10,6 +10,8 @@
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  #include <linux/scatterlist.h>
  #include <linux/sunrpc/rpc_rdma_cid.h>
  #include <linux/tracepoint.h>
-@@ -304,8 +306,16 @@ DECLARE_EVENT_CLASS(xprtrdma_reply_class
+@@ -304,8 +306,16 @@ DECLARE_EVENT_CLASS(xprtrdma_reply_class,
  		__entry->xid = be32_to_cpu(rep->rr_xid);
  		__entry->version = be32_to_cpu(rep->rr_vers);
  		__entry->proc = be32_to_cpu(rep->rr_proc);
@@ -50,7 +52,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  	),
  
  	TP_printk("peer=[%s]:%s",
-@@ -369,8 +387,16 @@ DECLARE_EVENT_CLASS(xprtrdma_connect_cla
+@@ -369,8 +387,16 @@ DECLARE_EVENT_CLASS(xprtrdma_connect_class,
  	TP_fast_assign(
  		__entry->rc = rc;
  		__entry->connect_status = r_xprt->rx_ep->re_connect_status;
@@ -67,7 +69,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  	),
  
  	TP_printk("peer=[%s]:%s rc=%d connection status=%d",
-@@ -608,8 +634,16 @@ DECLARE_EVENT_CLASS(xprtrdma_callback_cl
+@@ -608,8 +634,16 @@ DECLARE_EVENT_CLASS(xprtrdma_callback_class,
  
  	TP_fast_assign(
  		__entry->xid = be32_to_cpu(rqst->rq_xid);
@@ -215,7 +217,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  	),
  
  	TP_printk("peer=[%s]:%s %u reqs",
-@@ -1499,7 +1593,11 @@ DECLARE_EVENT_CLASS(svcrdma_accept_class
+@@ -1499,7 +1593,11 @@ DECLARE_EVENT_CLASS(svcrdma_accept_class,
  
  	TP_fast_assign(
  		__entry->status = status;
@@ -291,7 +293,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  		memcpy(__entry->addr, &id->route.addr.dst_addr,
  		       sizeof(struct sockaddr_in6));
  	),
-@@ -2278,7 +2394,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_devic
+@@ -2278,7 +2394,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_device_class,
  	),
  
  	TP_fast_assign(
@@ -303,7 +305,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  	),
  
  	TP_printk("device=%s",
-@@ -2300,6 +2420,7 @@ DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_clien
+@@ -2300,6 +2420,7 @@ DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_client_remove_one);
  DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_client_wait_on);
  DEFINE_CLIENT_DEVICE_EVENT(rpcrdma_client_remove_one_done);
  
@@ -311,7 +313,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  DECLARE_EVENT_CLASS(rpcrdma_client_register_class,
  	TP_PROTO(
  		const struct ib_device *device,
-@@ -2315,7 +2436,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_regis
+@@ -2315,7 +2436,11 @@ DECLARE_EVENT_CLASS(rpcrdma_client_register_class,
  	),
  
  	TP_fast_assign(
@@ -323,7 +325,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/rpcrdma.h
  		__entry->callback = rn->rn_done;
  		__entry->index = rn->rn_index;
  	),
-@@ -2335,6 +2460,7 @@ DECLARE_EVENT_CLASS(rpcrdma_client_regis
+@@ -2335,6 +2460,7 @@ DECLARE_EVENT_CLASS(rpcrdma_client_register_class,
  
  DEFINE_CLIENT_REGISTER_EVENT(rpcrdma_client_register);
  DEFINE_CLIENT_REGISTER_EVENT(rpcrdma_client_unregister);

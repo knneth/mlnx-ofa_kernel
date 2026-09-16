@@ -282,6 +282,8 @@ static int mlx5_devm_sf_port_fn_hw_addr_get(struct mlxdevm_port *port,
 				     u8 *hw_addr, int *hw_addr_len,
 				     struct netlink_ext_ack *extack)
 {
+	if (!port->dl_port || !port->dl_port->devlink)
+		return -EOPNOTSUPP;
 	return mlx5_devlink_port_fn_hw_addr_get(port->dl_port, hw_addr,
 						hw_addr_len, extack);
 }
@@ -1473,6 +1475,7 @@ int mlx5_devm_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 		ops = NULL;
 
 	dl_port_index = mlx5_esw_vport_to_devlink_port_index(dev, vport_num);
+	devm_port->dl_port = &vport->dl_port->dl_port;
 	ret = devm_port_register_with_ops(&devm_dev->device, devm_port, dl_port_index, ops);
 	if (ret)
 		goto port_err;
@@ -1480,8 +1483,6 @@ int mlx5_devm_port_register(struct mlx5_eswitch *esw, struct mlx5_vport *vport)
 	ret = devm_rate_leaf_create(devm_port, vport, NULL);
 	if (ret)
 		goto rate_err;
-
-	devm_port->dl_port = &vport->dl_port->dl_port;
 
 	return 0;
 

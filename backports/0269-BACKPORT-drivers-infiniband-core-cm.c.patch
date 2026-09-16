@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  drivers/infiniband/core/cm.c | 73 ++++++++++++++++++++++++++++++++++++
  1 file changed, 73 insertions(+)
 
+diff --git a/drivers/infiniband/core/cm.c b/drivers/infiniband/core/cm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/cm.c
 +++ b/drivers/infiniband/core/cm.c
 @@ -33,6 +33,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  
  #define CM_DESTROY_ID_WAIT_TIMEOUT 10000 /* msecs */
  #define CM_DIRECT_RETRY_CTX ((void *) 1UL)
-@@ -1585,7 +1588,9 @@ int ib_send_cm_req(struct ib_cm_id *cm_i
+@@ -1573,7 +1576,9 @@ int ib_send_cm_req(struct ib_cm_id *cm_id,
  	cm_id_priv->local_qpn = cpu_to_be32(IBA_GET(CM_REQ_LOCAL_QPN, req_msg));
  	cm_id_priv->rq_psn = cpu_to_be32(IBA_GET(CM_REQ_STARTING_PSN, req_msg));
  
@@ -27,7 +29,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -1632,9 +1637,11 @@ static int cm_issue_rej(struct cm_port *
+@@ -1620,9 +1625,11 @@ static int cm_issue_rej(struct cm_port *port,
  		IBA_SET_MEM(CM_REJ_ARI, rej_msg, ari, ari_length);
  	}
  
@@ -39,7 +41,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -1986,7 +1993,9 @@ static void cm_dup_req_handler(struct cm
+@@ -1974,7 +1981,9 @@ static void cm_dup_req_handler(struct cm_work *work,
  	}
  	spin_unlock_irq(&cm_id_priv->lock);
  
@@ -49,7 +51,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto free;
-@@ -2150,7 +2159,9 @@ static int cm_req_handler(struct cm_work
+@@ -2138,7 +2147,9 @@ static int cm_req_handler(struct cm_work *work)
  
  	listen_cm_id_priv = cm_match_req(work, cm_id_priv);
  	if (!listen_cm_id_priv) {
@@ -59,7 +61,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		cm_id_priv->id.state = IB_CM_IDLE;
  		ret = -EINVAL;
  		goto destroy;
-@@ -2302,7 +2313,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+@@ -2290,7 +2301,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_id,
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id->state != IB_CM_REQ_RCVD &&
  	    cm_id->state != IB_CM_MRA_REQ_SENT) {
@@ -69,7 +71,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		goto out;
  	}
-@@ -2316,7 +2329,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_i
+@@ -2304,7 +2317,9 @@ int ib_send_cm_rep(struct ib_cm_id *cm_id,
  	rep_msg = (struct cm_rep_msg *) msg->mad;
  	cm_format_rep(rep_msg, cm_id_priv, param);
  
@@ -79,7 +81,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -2377,7 +2392,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+@@ -2365,7 +2380,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_id,
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id->state != IB_CM_REP_RCVD &&
  	    cm_id->state != IB_CM_MRA_REP_SENT) {
@@ -89,7 +91,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		goto error;
  	}
-@@ -2391,7 +2408,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_i
+@@ -2379,7 +2396,9 @@ int ib_send_cm_rtu(struct ib_cm_id *cm_id,
  	cm_format_rtu((struct cm_rtu_msg *) msg->mad, cm_id_priv,
  		      private_data, private_data_len);
  
@@ -99,7 +101,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		spin_unlock_irqrestore(&cm_id_priv->lock, flags);
-@@ -2473,7 +2492,9 @@ static void cm_dup_rep_handler(struct cm
+@@ -2461,7 +2480,9 @@ static void cm_dup_rep_handler(struct cm_work *work)
  		goto unlock;
  	spin_unlock_irq(&cm_id_priv->lock);
  
@@ -109,7 +111,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto free;
-@@ -2497,8 +2518,10 @@ static int cm_rep_handler(struct cm_work
+@@ -2485,8 +2506,10 @@ static int cm_rep_handler(struct cm_work *work)
  		cpu_to_be32(IBA_GET(CM_REP_REMOTE_COMM_ID, rep_msg)), 0);
  	if (!cm_id_priv) {
  		cm_dup_rep_handler(work);
@@ -120,7 +122,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		return -EINVAL;
  	}
  
-@@ -2511,10 +2534,12 @@ static int cm_rep_handler(struct cm_work
+@@ -2499,10 +2522,12 @@ static int cm_rep_handler(struct cm_work *work)
  		break;
  	default:
  		ret = -EINVAL;
@@ -133,7 +135,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		spin_unlock_irq(&cm_id_priv->lock);
  		goto error;
  	}
-@@ -2531,8 +2556,10 @@ static int cm_rep_handler(struct cm_work
+@@ -2519,8 +2544,10 @@ static int cm_rep_handler(struct cm_work *work)
  		spin_unlock(&cm.lock);
  		spin_unlock_irq(&cm_id_priv->lock);
  		ret = -EINVAL;
@@ -144,7 +146,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		goto error;
  	}
  	/* Check for a stale connection. */
-@@ -2548,9 +2575,11 @@ static int cm_rep_handler(struct cm_work
+@@ -2536,9 +2563,11 @@ static int cm_rep_handler(struct cm_work *work)
  			     IB_CM_REJ_STALE_CONN, CM_MSG_RESPONSE_REP,
  			     NULL, 0);
  		ret = -EINVAL;
@@ -156,7 +158,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  
  		if (cur_cm_id_priv) {
  			ib_send_cm_dreq(&cur_cm_id_priv->id, NULL, 0);
-@@ -2677,7 +2706,9 @@ static void cm_issue_dreq(struct cm_id_p
+@@ -2665,7 +2694,9 @@ static void cm_issue_dreq(struct cm_id_private *cm_id_priv)
  
  	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv, NULL, 0);
  
@@ -166,7 +168,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -2697,7 +2728,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+@@ -2685,7 +2716,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_id, const void *private_data,
  
  	spin_lock_irqsave(&cm_id_priv->lock, flags);
  	if (cm_id_priv->id.state != IB_CM_ESTABLISHED) {
@@ -176,7 +178,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		goto unlock;
  	}
-@@ -2716,7 +2749,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_
+@@ -2704,7 +2737,9 @@ int ib_send_cm_dreq(struct ib_cm_id *cm_id, const void *private_data,
  	cm_format_dreq((struct cm_dreq_msg *) msg->mad, cm_id_priv,
  		       private_data, private_data_len);
  
@@ -186,7 +188,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_enter_timewait(cm_id_priv);
-@@ -2759,7 +2794,9 @@ static int cm_send_drep_locked(struct cm
+@@ -2747,7 +2782,9 @@ static int cm_send_drep_locked(struct cm_id_private *cm_id_priv,
  		return -EINVAL;
  
  	if (cm_id_priv->id.state != IB_CM_DREQ_RCVD) {
@@ -196,7 +198,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		kfree(private_data);
  		return -EINVAL;
  	}
-@@ -2774,7 +2811,9 @@ static int cm_send_drep_locked(struct cm
+@@ -2762,7 +2799,9 @@ static int cm_send_drep_locked(struct cm_id_private *cm_id_priv,
  	cm_format_drep((struct cm_drep_msg *) msg->mad, cm_id_priv,
  		       private_data, private_data_len);
  
@@ -206,7 +208,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -2824,9 +2863,11 @@ static int cm_issue_drep(struct cm_port
+@@ -2812,9 +2851,11 @@ static int cm_issue_drep(struct cm_port *port,
  	IBA_SET(CM_DREP_LOCAL_COMM_ID, drep_msg,
  		IBA_GET(CM_DREQ_REMOTE_COMM_ID, dreq_msg));
  
@@ -218,7 +220,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		cm_free_msg(msg);
-@@ -2848,9 +2889,11 @@ static int cm_dreq_handler(struct cm_wor
+@@ -2836,9 +2877,11 @@ static int cm_dreq_handler(struct cm_work *work)
  		atomic_long_inc(&work->port->counters[CM_RECV_DUPLICATES]
  						     [CM_DREQ_COUNTER]);
  		cm_issue_drep(work->port, work->mad_recv_wc);
@@ -230,7 +232,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		return -EINVAL;
  	}
  
-@@ -2895,7 +2938,9 @@ static int cm_dreq_handler(struct cm_wor
+@@ -2883,7 +2926,9 @@ static int cm_dreq_handler(struct cm_work *work)
  						     [CM_DREQ_COUNTER]);
  		goto unlock;
  	default:
@@ -240,7 +242,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		goto unlock;
  	}
  	cm_id_priv->id.state = IB_CM_DREQ_RCVD;
-@@ -2954,7 +2999,9 @@ static int cm_send_rej_locked(struct cm_
+@@ -2942,7 +2987,9 @@ static int cm_send_rej_locked(struct cm_id_private *cm_id_priv,
  	    (ari && ari_length > IB_CM_REJ_ARI_LENGTH))
  		return -EINVAL;
  
@@ -250,7 +252,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  
  	switch (state) {
  	case IB_CM_REQ_SENT:
-@@ -2982,7 +3029,9 @@ static int cm_send_rej_locked(struct cm_
+@@ -2970,7 +3017,9 @@ static int cm_send_rej_locked(struct cm_id_private *cm_id_priv,
  			      state);
  		break;
  	default:
@@ -260,7 +262,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		return -EINVAL;
  	}
  
-@@ -3094,7 +3143,9 @@ static int cm_rej_handler(struct cm_work
+@@ -3082,7 +3131,9 @@ static int cm_rej_handler(struct cm_work *work)
  		}
  		fallthrough;
  	default:
@@ -270,7 +272,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		spin_unlock_irq(&cm_id_priv->lock);
  		goto out;
  	}
-@@ -3150,7 +3201,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+@@ -3138,7 +3189,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_id,
  		}
  		fallthrough;
  	default:
@@ -280,7 +282,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		goto error_unlock;
  	}
-@@ -3165,7 +3218,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_i
+@@ -3153,7 +3206,9 @@ int ib_send_cm_mra(struct ib_cm_id *cm_id,
  		cm_format_mra((struct cm_mra_msg *) msg->mad, cm_id_priv,
  			      msg_response, service_timeout,
  			      private_data, private_data_len);
@@ -290,7 +292,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = ib_post_send_mad(msg, NULL);
  		if (ret)
  			goto error_free_msg;
-@@ -3257,7 +3312,9 @@ static int cm_mra_handler(struct cm_work
+@@ -3245,7 +3300,9 @@ static int cm_mra_handler(struct cm_work *work)
  						     [CM_MRA_COUNTER]);
  		fallthrough;
  	default:
@@ -300,7 +302,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		goto out;
  	}
  
-@@ -3544,7 +3601,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id
+@@ -3532,7 +3589,9 @@ int ib_send_cm_sidr_req(struct ib_cm_id *cm_id,
  	cm_format_sidr_req((struct cm_sidr_req_msg *)msg->mad, cm_id_priv,
  			   param);
  
@@ -310,7 +312,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret)
  		goto out_free;
-@@ -3705,7 +3764,9 @@ static int cm_send_sidr_rep_locked(struc
+@@ -3693,7 +3752,9 @@ static int cm_send_sidr_rep_locked(struct cm_id_private *cm_id_priv,
  
  	cm_format_sidr_rep((struct cm_sidr_rep_msg *) msg->mad, cm_id_priv,
  			   param);
@@ -320,7 +322,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	ret = ib_post_send_mad(msg, NULL);
  	if (ret) {
  		cm_free_msg(msg);
-@@ -3808,7 +3869,9 @@ static void cm_process_send_error(struct
+@@ -3795,7 +3856,9 @@ static void cm_process_send_error(struct cm_id_private *cm_id_priv,
  	    wc_status == IB_WC_WR_FLUSH_ERR)
  		goto out_unlock;
  
@@ -330,7 +332,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  	switch (state) {
  	case IB_CM_REQ_SENT:
  	case IB_CM_MRA_REQ_RCVD:
-@@ -3919,7 +3982,9 @@ static void cm_work_handler(struct work_
+@@ -3906,7 +3969,9 @@ static void cm_work_handler(struct work_struct *_work)
  		ret = cm_timewait_handler(work);
  		break;
  	default:
@@ -340,7 +342,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		break;
  	}
-@@ -3954,7 +4019,9 @@ static int cm_establish(struct ib_cm_id
+@@ -3941,7 +4006,9 @@ static int cm_establish(struct ib_cm_id *cm_id)
  		ret = -EISCONN;
  		break;
  	default:
@@ -350,7 +352,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		break;
  	}
-@@ -4151,7 +4218,9 @@ static int cm_init_qp_init_attr(struct c
+@@ -4138,7 +4205,9 @@ static int cm_init_qp_init_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:
@@ -360,7 +362,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		break;
  	}
-@@ -4204,7 +4273,9 @@ static int cm_init_qp_rtr_attr(struct cm
+@@ -4191,7 +4260,9 @@ static int cm_init_qp_rtr_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:
@@ -370,7 +372,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/cm.c
  		ret = -EINVAL;
  		break;
  	}
-@@ -4266,7 +4337,9 @@ static int cm_init_qp_rts_attr(struct cm
+@@ -4253,7 +4324,9 @@ static int cm_init_qp_rts_attr(struct cm_id_private *cm_id_priv,
  		ret = 0;
  		break;
  	default:

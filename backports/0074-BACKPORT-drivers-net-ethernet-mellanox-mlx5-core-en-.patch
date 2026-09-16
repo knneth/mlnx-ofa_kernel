@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en/devlink.c  | 138 +++++++++++++++++-
  1 file changed, 135 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.c
-@@ -12,20 +12,36 @@ struct mlx5e_dev *mlx5e_create_devlink(s
+@@ -12,20 +12,36 @@ struct mlx5e_dev *mlx5e_create_devlink(struct device *dev,
  {
  	struct mlx5e_dev *mlx5e_dev;
  	struct devlink *devlink;
@@ -46,7 +48,7 @@ Subject: [PATCH] BACKPORT:
  	return devlink_priv(devlink);
  }
  
-@@ -37,21 +53,40 @@ void mlx5e_destroy_devlink(struct mlx5e_
+@@ -37,21 +53,40 @@ void mlx5e_destroy_devlink(struct mlx5e_dev *mlx5e_dev)
  	devlink_free(devlink);
  }
  
@@ -89,7 +91,7 @@ Subject: [PATCH] BACKPORT:
  	if (mlx5_core_is_pf(mdev)) {
  		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
  		attrs.phys.port_number = mlx5_get_dev_index(mdev);
-@@ -67,13 +102,110 @@ int mlx5e_devlink_port_register(struct m
+@@ -67,13 +102,110 @@ int mlx5e_devlink_port_register(struct mlx5e_dev *mlx5e_dev,
  		dl_port_index = mlx5_esw_vport_to_devlink_port_index(mdev, 0);
  	}
  
@@ -106,7 +108,7 @@ Subject: [PATCH] BACKPORT:
 +	if (mlx5_core_is_pf(priv->mdev)) {
 +#ifdef HAVE_DEVLINK_PORT_ATRRS_SET_GET_7_PARAMS
 +		struct netdev_phys_item_id ppid = {};
-+
+ 
 +		if (MLX5_ESWITCH_MANAGER(priv->mdev))
 +			mlx5e_devlink_get_port_parent_id(priv->mdev, &ppid);
 +#endif
@@ -131,7 +133,7 @@ Subject: [PATCH] BACKPORT:
 +		);
 +	}
 +#endif /* HAVE_DEVLINK_PORT_ATRRS_SET_GET_2_PARAMS */ 
- 
++
 +#ifdef HAVE_DEVLINK_PER_AUXDEV
  	return devlink_port_register(devlink, &mlx5e_dev->dl_port,
  				     dl_port_index);

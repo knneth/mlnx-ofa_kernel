@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  drivers/infiniband/core/umem_odp.c | 985 ++++++++++++++++++++++++++++-
  1 file changed, 984 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/umem_odp.c b/drivers/infiniband/core/umem_odp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/umem_odp.c
 +++ b/drivers/infiniband/core/umem_odp.c
 @@ -40,34 +40,438 @@
@@ -306,7 +308,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 +}
 +
 +static struct ib_ucontext_per_mm *get_per_mm(struct ib_umem_odp *umem_odp)
- {
++{
 +	struct ib_ucontext *ctx = umem_odp->umem.context;
 +	struct ib_ucontext_per_mm *per_mm;
 +
@@ -392,7 +394,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
 +static inline int ib_init_umem_odp(struct ib_umem_odp *umem_odp,
 +				   struct ib_ucontext_per_mm *per_mm)
 +#endif
-+{
+ {
 +#ifdef HAVE_MMU_NOTIFIER_OPS_HAS_FREE_NOTIFIER
 +	struct ib_ucontext_per_mm *per_mm;
 +	struct mmu_notifier *mn;
@@ -446,7 +448,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  			return -EOVERFLOW;
  
  		/*
-@@ -82,6 +486,7 @@ static inline int ib_init_umem_odp(struc
+@@ -82,6 +486,7 @@ static inline int ib_init_umem_odp(struct ib_umem_odp *umem_odp,
  			fs_reclaim_release(GFP_KERNEL);
  		}
  
@@ -573,7 +575,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  	struct ib_umem *umem;
  	struct ib_umem_odp *umem_odp;
  	int ret;
-@@ -137,20 +644,44 @@ struct ib_umem_odp *ib_umem_odp_alloc_im
+@@ -137,20 +644,44 @@ struct ib_umem_odp *ib_umem_odp_alloc_implicit(struct ib_device *device,
  	if (access & IB_ACCESS_HUGETLB)
  		return ERR_PTR(-EINVAL);
  
@@ -618,7 +620,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  		kfree(umem_odp);
  		return ERR_PTR(ret);
  	}
-@@ -168,10 +699,15 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_implicit
+@@ -168,10 +699,15 @@ EXPORT_SYMBOL(ib_umem_odp_alloc_implicit);
   * @size: The length of the userspace VA
   * @ops: MMU interval ops, currently only @invalidate
   */
@@ -634,7 +636,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  {
  	/*
  	 * Caller must ensure that root cannot be freed during the call to
-@@ -188,13 +724,19 @@ ib_umem_odp_alloc_child(struct ib_umem_o
+@@ -188,13 +724,19 @@ ib_umem_odp_alloc_child(struct ib_umem_odp *root, unsigned long addr,
  	if (!odp_data)
  		return ERR_PTR(-ENOMEM);
  	umem = &odp_data->umem;
@@ -654,7 +656,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  
  	/*
  	 * A mmget must be held when registering a notifier, the owming_mm only
-@@ -204,16 +746,25 @@ ib_umem_odp_alloc_child(struct ib_umem_o
+@@ -204,16 +746,25 @@ ib_umem_odp_alloc_child(struct ib_umem_odp *root, unsigned long addr,
  		ret = -EFAULT;
  		goto out_free;
  	}
@@ -788,7 +790,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  	/*
  	 * Ensure that no more pages are mapped in the umem.
  	 *
-@@ -287,11 +896,47 @@ void ib_umem_odp_release(struct ib_umem_
+@@ -287,11 +896,47 @@ void ib_umem_odp_release(struct ib_umem_odp *umem_odp)
  		ib_umem_odp_unmap_dma_pages(umem_odp, ib_umem_start(umem_odp),
  					    ib_umem_end(umem_odp));
  		mutex_unlock(&umem_odp->umem_mutex);
@@ -844,7 +846,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  static int ib_umem_odp_map_dma_single_page(
  		struct ib_umem_odp *umem_odp,
  		unsigned int dma_index,
-@@ -384,7 +1030,11 @@ int ib_umem_odp_map_dma_and_lock(struct
+@@ -384,7 +1030,11 @@ int ib_umem_odp_map_dma_and_lock(struct ib_umem_odp *umem_odp, u64 user_virt,
  	 * mmget_not_zero will fail in this case.
  	 */
  	owning_process = get_pid_task(umem_odp->tgid, PIDTYPE_PID);
@@ -1178,7 +1180,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  
  	lockdep_assert_held(&umem_odp->umem_mutex);
  
-@@ -497,6 +1434,7 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -497,6 +1434,7 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem_odp *umem_odp, u64 virt,
  	bound = min_t(u64, bound, ib_umem_end(umem_odp));
  	for (addr = virt; addr < bound; addr += BIT(umem_odp->page_shift)) {
  		idx = (addr - ib_umem_start(umem_odp)) >> umem_odp->page_shift;
@@ -1186,7 +1188,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  		dma = umem_odp->dma_list[idx];
  
  		/* The access flags guaranteed a valid DMA address in case was NULL */
-@@ -505,6 +1443,13 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -505,6 +1443,13 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem_odp *umem_odp, u64 virt,
  			struct page *page = hmm_pfn_to_page(umem_odp->pfn_list[pfn_idx]);
  
  			dma_addr = dma & ODP_DMA_ADDR_MASK;
@@ -1200,7 +1202,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/umem_odp.c
  			ib_dma_unmap_page(dev, dma_addr,
  					  BIT(umem_odp->page_shift),
  					  DMA_BIDIRECTIONAL);
-@@ -521,9 +1466,47 @@ void ib_umem_odp_unmap_dma_pages(struct
+@@ -521,9 +1466,47 @@ void ib_umem_odp_unmap_dma_pages(struct ib_umem_odp *umem_odp, u64 virt,
  				 */
  				set_page_dirty(head_page);
  			}

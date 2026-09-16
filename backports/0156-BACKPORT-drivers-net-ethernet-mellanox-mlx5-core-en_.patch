@@ -2,9 +2,11 @@ From: Valentine Fatiev <valentinef@nvidia.com>
 Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 
 ---
- .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 211 +++++++++++++++++-
- 1 file changed, 207 insertions(+), 4 deletions(-)
+ .../net/ethernet/mellanox/mlx5/core/en_tx.c   | 225 +++++++++++++++++-
+ 1 file changed, 221 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 @@ -42,6 +42,71 @@
@@ -79,7 +81,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  static void mlx5e_dma_unmap_wqe_err(struct mlx5e_txqsq *sq, u8 num_dma)
  {
-@@ -59,7 +124,17 @@ static inline int mlx5e_skb_l2_header_of
+@@ -59,7 +124,17 @@ static inline int mlx5e_skb_l2_header_offset(struct sk_buff *skb)
  {
  #define MLX5E_MIN_INLINE (ETH_HLEN + VLAN_HLEN)
  
@@ -97,7 +99,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  }
  
  static inline int mlx5e_skb_l3_header_offset(struct sk_buff *skb)
-@@ -79,12 +154,25 @@ static inline u16 mlx5e_calc_min_inline(
+@@ -79,12 +154,25 @@ static inline u16 mlx5e_calc_min_inline(enum mlx5_inline_modes mode,
  	case MLX5_INLINE_MODE_NONE:
  		return 0;
  	case MLX5_INLINE_MODE_TCP_UDP:
@@ -123,7 +125,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  		break;
  	case MLX5_INLINE_MODE_L2:
  	default:
-@@ -106,13 +194,21 @@ static inline void mlx5e_insert_vlan(voi
+@@ -106,13 +194,21 @@ static inline void mlx5e_insert_vlan(void *start, struct sk_buff *skb, u16 ihs)
  	int cpy1_sz = 2 * ETH_ALEN;
  	int cpy2_sz = ihs - cpy1_sz;
  
@@ -145,7 +147,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  }
  
  static inline void
-@@ -120,8 +216,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+@@ -120,8 +216,14 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  			    struct mlx5e_accel_tx_state *accel,
  			    struct mlx5_wqe_eth_seg *eseg)
  {
@@ -160,7 +162,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
  		eseg->cs_flags = MLX5_ETH_WQE_L3_CSUM;
-@@ -146,32 +248,52 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e
+@@ -146,32 +248,52 @@ mlx5e_txwqe_build_eseg_csum(struct mlx5e_txqsq *sq, struct sk_buff *skb,
   * to inline later in the transmit descriptor
   */
  static inline u16
@@ -213,7 +215,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  	}
  
  	return ihs;
-@@ -214,7 +336,13 @@ mlx5e_txwqe_build_dsegs(struct mlx5e_txq
+@@ -214,7 +336,13 @@ mlx5e_txwqe_build_dsegs(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		dseg->lkey       = sq->mkey_be;
  		dseg->byte_count = cpu_to_be32(fsz);
  
@@ -237,7 +239,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  };
  
  struct mlx5e_tx_wqe_attr {
-@@ -270,16 +400,24 @@ static void mlx5e_sq_xmit_prepare(struct
+@@ -270,16 +400,24 @@ static void mlx5e_sq_xmit_prepare(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	struct mlx5e_sq_stats *stats = sq->stats;
  
  	if (skb_is_gso(skb)) {
@@ -262,7 +264,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  		};
  
  		stats->packets += skb_shinfo(skb)->gso_segs;
-@@ -419,6 +557,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq
+@@ -419,6 +557,7 @@ mlx5e_txwqe_complete(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	}
  
  	send_doorbell = __netdev_tx_sent_queue(sq->txq, attr->num_bytes, xmit_more);
@@ -270,10 +272,13 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  	if (send_doorbell)
  		mlx5e_notify_hw(wq, sq->pc, sq->uar_map, cseg);
  }
-@@ -433,11 +572,15 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -432,12 +571,18 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
+ 	struct mlx5_wqe_eth_seg  *eseg;
  	struct mlx5_wqe_data_seg *dseg;
  	struct mlx5e_tx_wqe_info *wi;
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	u16 ihs = attr->ihs;
++#endif
 +#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) && !defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  	struct ipv6hdr *h6;
 +#endif
@@ -286,7 +291,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  	/* fill wqe */
  	wi   = &sq->db.wqe_info[pi];
-@@ -447,6 +590,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -447,6 +592,7 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  
  	eseg->mss = attr->mss;
  
@@ -294,15 +299,23 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  	if (ihs) {
  		u8 *start = eseg->inline_hdr.start;
  
-@@ -474,11 +618,21 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+@@ -474,13 +620,35 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		} else if (skb_vlan_tag_present(skb)) {
  			mlx5e_insert_vlan(start, skb, ihs);
  			ihs += VLAN_HLEN;
 +#else
 +	if (attr->ihs) {
 +		if (skb_vlan_tag_present(skb)) {
++			/* k7+: local ihs tracks inline size; single sz |= at end (like hop_jumbo path).
++			 * Older kernels without ihs: set sz before insert (no second |= below).
++			 */
++#if defined(HAVE_SKB_IPV6_PAYLOAD_LEN) && !defined(HAVE_STRUCT_HOP_JUMBO_HDR)
++			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, attr->ihs);
++			ihs += VLAN_HLEN;
++#else
 +			eseg->inline_hdr.sz |= cpu_to_be16(attr->ihs + VLAN_HLEN);
 +			mlx5e_insert_vlan(eseg->inline_hdr.start, skb, attr->ihs);
++#endif
 +#endif
  			stats->added_vlan_packets++;
  		} else {
@@ -313,12 +326,18 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
 +					attr->ihs,
 +					MLX5_UNSAFE_MEMCPY_DISCLAIMER);
 +#else
++			eseg->inline_hdr.sz |= cpu_to_be16(attr->ihs);
 +			memcpy(eseg->inline_hdr.start, skb->data, attr->ihs);
 +#endif
  		}
++
++#if defined(HAVE_STRUCT_HOP_JUMBO_HDR) || defined(HAVE_SKB_IPV6_PAYLOAD_LEN)
  		eseg->inline_hdr.sz |= cpu_to_be16(ihs);
++#endif
  		dseg += wqe_attr->ds_cnt_inl;
-@@ -491,7 +645,11 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq
+ 	} else if (skb_vlan_tag_present(skb)) {
+ 		eseg->insert.type = cpu_to_be16(MLX5_ETH_WQE_INSERT_VLAN);
+@@ -491,7 +659,11 @@ mlx5e_sq_xmit_wqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	}
  
  	dseg += wqe_attr->ds_cnt_ids;
@@ -330,7 +349,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  					  attr->headlen, dseg);
  	if (unlikely(num_dma < 0))
  		goto err_drop;
-@@ -620,7 +778,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *
+@@ -620,7 +792,9 @@ mlx5e_sq_xmit_mpwqe(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  		mlx5e_tx_mpwqe_session_start(sq, eseg);
  	}
  
@@ -340,7 +359,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  	mlx5e_dma_push_single(sq, txd.dma_addr, txd.len);
  	mlx5e_skb_fifo_push(&sq->db.skb_fifo, skb);
-@@ -667,7 +827,12 @@ static void mlx5e_txwqe_build_eseg(struc
+@@ -667,7 +841,12 @@ static void mlx5e_txwqe_build_eseg(struct mlx5e_priv *priv, struct mlx5e_txqsq *
  				   struct sk_buff *skb, struct mlx5e_accel_tx_state *accel,
  				   struct mlx5_wqe_eth_seg *eseg, u16 ihs)
  {
@@ -354,7 +373,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  	mlx5e_txwqe_build_eseg_csum(sq, skb, accel, eseg);
  	if (unlikely(sq->ptpsq))
  		mlx5e_cqe_ts_id_eseg(sq->ptpsq, skb, eseg);
-@@ -713,7 +878,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -713,7 +892,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
  			struct mlx5_wqe_eth_seg eseg = {};
  
  			mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &eseg, attr.ihs);
@@ -368,7 +387,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  			return NETDEV_TX_OK;
  		}
  
-@@ -728,7 +899,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *s
+@@ -728,7 +913,13 @@ netdev_tx_t mlx5e_xmit(struct sk_buff *skb, struct net_device *dev)
  	mlx5e_accel_tx_finish(sq, wqe, &accel,
  			      (struct mlx5_wqe_inline_seg *)(wqe->data + wqe_attr.ds_cnt_inl));
  	mlx5e_txwqe_build_eseg(priv, sq, skb, &accel, &wqe->eth, attr.ihs);
@@ -382,7 +401,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  	return NETDEV_TX_OK;
  }
-@@ -828,6 +1005,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -828,6 +1019,11 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
  		bool last_wqe;
  		u16 ci;
  
@@ -394,7 +413,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  		mlx5_cqwq_pop(&cq->wq);
  
  		wqe_counter = be16_to_cpu(cqe->wqe_counter);
-@@ -848,7 +1030,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *c
+@@ -848,7 +1044,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
  				nbytes += wi->num_bytes;
  				continue;
  			}
@@ -402,7 +421,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  			if (unlikely(mlx5e_ktls_tx_try_handle_resync_dump_comp(sq, wi,
  									       &dma_fifo_cc)))
  				continue;
-@@ -976,7 +1157,11 @@ static void mlx5i_sq_calc_wqe_attr(struc
+@@ -976,7 +1171,11 @@ static void mlx5i_sq_calc_wqe_attr(struct sk_buff *skb,
  }
  
  void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
@@ -414,7 +433,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  {
  	struct mlx5e_tx_wqe_attr wqe_attr;
  	struct mlx5e_tx_attr attr;
-@@ -998,7 +1183,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -998,7 +1197,9 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	pi = mlx5e_txqsq_get_next_pi(sq, wqe_attr.num_wqebbs);
  	wqe = MLX5I_SQ_FETCH_WQE(sq, pi);
  
@@ -424,7 +443,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  
  	/* fill wqe */
  	wi       = &sq->db.wqe_info[pi];
-@@ -1014,6 +1201,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1014,6 +1215,7 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  	eseg->mss = attr.mss;
  
  	if (attr.ihs) {
@@ -432,7 +451,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en_tx.c
  		if (unlikely(attr.hopbyhop)) {
  			struct ipv6hdr *h6;
  
-@@ -1037,16 +1225,31 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *s
+@@ -1037,16 +1239,31 @@ void mlx5i_sq_xmit(struct mlx5e_txqsq *sq, struct sk_buff *skb,
  				      attr.ihs,
  				      MLX5_UNSAFE_MEMCPY_DISCLAIMER);
  		}

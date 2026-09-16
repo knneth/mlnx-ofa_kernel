@@ -7,9 +7,11 @@ Change-Id: Ie6ddaab5ac7117277163885cd5f6b96f748c3f74
  drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/send.c
-@@ -1071,7 +1071,9 @@ static void hws_send_queues_bwc_locks_de
+@@ -1077,7 +1077,9 @@ static void hws_send_queues_bwc_locks_destroy(struct mlx5hws_context *ctx)
  
  	for (i = 0; i < bwc_queues; i++) {
  		mutex_destroy(&ctx->bwc_send_queue_locks[i]);
@@ -19,7 +21,7 @@ Change-Id: Ie6ddaab5ac7117277163885cd5f6b96f748c3f74
  	}
  
  	kfree(ctx->bwc_lock_class_keys);
-@@ -1111,8 +1113,10 @@ static int hws_bwc_send_queues_init(stru
+@@ -1117,8 +1119,10 @@ static int hws_bwc_send_queues_init(struct mlx5hws_context *ctx)
  
  	for (i = 0; i < bwc_queues; i++) {
  		mutex_init(&ctx->bwc_send_queue_locks[i]);

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/fs_tracepoint.h
 @@ -30,6 +30,8 @@

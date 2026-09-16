@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  net/sunrpc/xprtrdma/transport.c | 132 +++++++++++++++++++++++++++++++-
  1 file changed, 129 insertions(+), 3 deletions(-)
 
+diff --git a/net/sunrpc/xprtrdma/transport.c b/net/sunrpc/xprtrdma/transport.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/transport.c
 +++ b/net/sunrpc/xprtrdma/transport.c
 @@ -58,8 +58,15 @@
@@ -23,7 +25,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  /*
   * tunables
   */
-@@ -69,7 +76,9 @@ unsigned int xprt_rdma_max_inline_read =
+@@ -69,7 +76,9 @@ unsigned int xprt_rdma_max_inline_read = RPCRDMA_DEF_INLINE;
  unsigned int xprt_rdma_max_inline_write = RPCRDMA_DEF_INLINE;
  unsigned int xprt_rdma_memreg_strategy		= RPCRDMA_FRWR;
  int xprt_rdma_pad_optimize;
@@ -33,7 +35,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  
  #if IS_ENABLED(CONFIG_SUNRPC_DEBUG)
  
-@@ -81,6 +90,9 @@ static unsigned int max_padding = PAGE_S
+@@ -81,6 +90,9 @@ static unsigned int max_padding = PAGE_SIZE;
  static unsigned int min_memreg = RPCRDMA_BOUNCEBUFFERS;
  static unsigned int max_memreg = RPCRDMA_LAST - 1;
  static unsigned int dummy;
@@ -43,7 +45,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  
  static struct ctl_table_header *sunrpc_table_header;
  
-@@ -118,7 +130,11 @@ static struct ctl_table xr_tunables_tabl
+@@ -118,7 +130,11 @@ static struct ctl_table xr_tunables_table[] = {
  		.maxlen		= sizeof(unsigned int),
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec_minmax,
@@ -55,7 +57,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  		.extra2		= &max_padding,
  	},
  	{
-@@ -137,8 +153,22 @@ static struct ctl_table xr_tunables_tabl
+@@ -137,8 +153,22 @@ static struct ctl_table xr_tunables_table[] = {
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec,
  	},
@@ -78,7 +80,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  #endif
  
  static const struct rpc_xprt_ops xprt_rdma_procs;
-@@ -225,11 +255,13 @@ xprt_rdma_connect_worker(struct work_str
+@@ -225,11 +255,13 @@ xprt_rdma_connect_worker(struct work_struct *work)
  	struct rpcrdma_xprt *r_xprt = container_of(work, struct rpcrdma_xprt,
  						   rx_connect_worker.work);
  	struct rpc_xprt *xprt = &r_xprt->rx_xprt;
@@ -93,7 +95,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	rc = rpcrdma_xprt_connect(r_xprt);
  	xprt_clear_connecting(xprt);
  	if (!rc) {
-@@ -239,11 +271,22 @@ xprt_rdma_connect_worker(struct work_str
+@@ -239,11 +271,22 @@ xprt_rdma_connect_worker(struct work_struct *work)
  					   xprt->stat.connect_start;
  		xprt_set_connected(xprt);
  		rc = -EAGAIN;
@@ -116,7 +118,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  }
  
  /**
-@@ -260,7 +303,9 @@ xprt_rdma_inject_disconnect(struct rpc_x
+@@ -260,7 +303,9 @@ xprt_rdma_inject_disconnect(struct rpc_xprt *xprt)
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -126,7 +128,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	rdma_disconnect(r_xprt->rx_ep->re_id);
  }
  
-@@ -320,8 +365,10 @@ xprt_setup_rdma(struct xprt_create *args
+@@ -320,8 +365,10 @@ xprt_setup_rdma(struct xprt_create *args)
  	}
  
  	xprt->timeout = &xprt_rdma_default_timeout;
@@ -137,7 +139,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	xprt->bind_timeout = RPCRDMA_BIND_TO;
  	xprt->reestablish_timeout = RPCRDMA_INIT_REEST_TO;
  	xprt->idle_timeout = RPCRDMA_IDLE_DISC_TO;
-@@ -337,7 +384,9 @@ xprt_setup_rdma(struct xprt_create *args
+@@ -337,7 +384,9 @@ xprt_setup_rdma(struct xprt_create *args)
  	/* Ensure xprt->addr holds valid server TCP (not RDMA)
  	 * address, for any side protocols which peek at it */
  	xprt->prot = IPPROTO_TCP;
@@ -147,7 +149,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	xprt->addrlen = args->addrlen;
  	memcpy(&xprt->addr, sap, xprt->addrlen);
  
-@@ -425,6 +474,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, s
+@@ -425,6 +474,7 @@ xprt_rdma_timer(struct rpc_xprt *xprt, struct rpc_task *task)
  	xprt_force_disconnect(xprt);
  }
  
@@ -155,7 +157,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  /**
   * xprt_rdma_set_connect_timeout - set timeouts for establishing a connection
   * @xprt: controlling transport instance
-@@ -438,7 +488,9 @@ static void xprt_rdma_set_connect_timeou
+@@ -438,7 +488,9 @@ static void xprt_rdma_set_connect_timeout(struct rpc_xprt *xprt,
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  
@@ -165,7 +167,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  
  	spin_lock(&xprt->transport_lock);
  
-@@ -462,6 +514,7 @@ static void xprt_rdma_set_connect_timeou
+@@ -462,6 +514,7 @@ static void xprt_rdma_set_connect_timeout(struct rpc_xprt *xprt,
  
  	spin_unlock(&xprt->transport_lock);
  }
@@ -173,7 +175,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  
  /**
   * xprt_rdma_connect - schedule an attempt to reconnect
-@@ -474,17 +527,39 @@ xprt_rdma_connect(struct rpc_xprt *xprt,
+@@ -474,17 +527,39 @@ xprt_rdma_connect(struct rpc_xprt *xprt, struct rpc_task *task)
  {
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
  	struct rpcrdma_ep *ep = r_xprt->rx_ep;
@@ -214,7 +216,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  }
  
  /**
-@@ -511,7 +586,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xp
+@@ -511,7 +586,12 @@ xprt_rdma_alloc_slot(struct rpc_xprt *xprt, struct rpc_task *task)
  
  out_sleep:
  	task->tk_status = -ENOMEM;
@@ -227,7 +229,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  }
  
  /**
-@@ -526,11 +606,18 @@ xprt_rdma_free_slot(struct rpc_xprt *xpr
+@@ -526,11 +606,18 @@ xprt_rdma_free_slot(struct rpc_xprt *xprt, struct rpc_rqst *rqst)
  	struct rpcrdma_xprt *r_xprt =
  		container_of(xprt, struct rpcrdma_xprt, rx_xprt);
  
@@ -246,7 +248,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  }
  
  static bool rpcrdma_check_regbuf(struct rpcrdma_xprt *r_xprt,
-@@ -560,7 +647,19 @@ xprt_rdma_allocate(struct rpc_task *task
+@@ -560,7 +647,19 @@ xprt_rdma_allocate(struct rpc_task *task)
  	struct rpc_rqst *rqst = task->tk_rqstp;
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(rqst->rq_xprt);
  	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
@@ -291,7 +293,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	struct rpc_xprt *xprt = rqst->rq_xprt;
  	struct rpcrdma_req *req = rpcr_to_rdmar(rqst);
  	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
-@@ -633,8 +740,10 @@ xprt_rdma_send_request(struct rpc_rqst *
+@@ -633,8 +740,10 @@ xprt_rdma_send_request(struct rpc_rqst *rqst)
  	if (!xprt_connected(xprt))
  		return -ENOTCONN;
  
@@ -302,7 +304,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  
  	rc = rpcrdma_marshal_req(r_xprt, rqst);
  	if (rc < 0)
-@@ -720,14 +829,18 @@ xprt_rdma_disable_swap(struct rpc_xprt *
+@@ -720,14 +829,18 @@ xprt_rdma_disable_swap(struct rpc_xprt *xprt)
  /*
   * Plumbing for rpc transport switch and kernel module
   */
@@ -322,7 +324,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
  	.timer			= xprt_rdma_timer,
  	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */
  	.set_port		= xprt_rdma_set_port,
-@@ -737,15 +850,22 @@ static const struct rpc_xprt_ops xprt_rd
+@@ -737,15 +850,22 @@ static const struct rpc_xprt_ops xprt_rdma_procs = {
  	.send_request		= xprt_rdma_send_request,
  	.close			= xprt_rdma_close,
  	.destroy		= xprt_rdma_destroy,
@@ -363,7 +365,7 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/transport.c
 +		sunrpc_table_header = register_sysctl_table(sunrpc_table);
 +#else
  		sunrpc_table_header = register_sysctl("sunrpc", xr_tunables_table);
- #endif
 +#endif
+ #endif
  	return 0;
  }

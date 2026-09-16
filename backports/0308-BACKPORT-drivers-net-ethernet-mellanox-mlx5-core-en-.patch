@@ -6,6 +6,8 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  .../ethernet/mellanox/mlx5/core/en/params.c   | 118 +++++++++++++++---
  1 file changed, 101 insertions(+), 17 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
 @@ -7,8 +7,21 @@
@@ -30,7 +32,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  #define MLX5_MPWRQ_MAX_LOG_WQE_SZ 18
  #define MLX5_REP_MPWRQ_MAX_LOG_WQE_SZ 17
-@@ -22,7 +35,13 @@ static u8 mlx5e_mpwrq_min_page_shift(str
+@@ -22,7 +35,13 @@ static u8 mlx5e_mpwrq_min_page_shift(struct mlx5_core_dev *mdev)
  
  u8 mlx5e_mpwrq_page_shift(struct mlx5_core_dev *mdev, struct mlx5e_xsk_param *xsk)
  {
@@ -45,7 +47,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	u8 min_page_shift = mlx5e_mpwrq_min_page_shift(mdev);
  
  	/* Regular RQ uses order-0 pages, the NIC must be able to map them. */
-@@ -226,16 +245,27 @@ u8 mlx5e_mpwrq_max_log_rq_pkts(struct ml
+@@ -226,16 +245,27 @@ u8 mlx5e_mpwrq_max_log_rq_pkts(struct mlx5_core_dev *mdev, u8 page_shift,
  u16 mlx5e_get_linear_rq_headroom(struct mlx5e_params *params,
  				 struct mlx5e_xsk_param *xsk)
  {
@@ -76,7 +78,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  	return headroom;
  }
-@@ -274,7 +304,11 @@ static u32 mlx5e_rx_get_linear_stride_sz
+@@ -274,7 +304,11 @@ static u32 mlx5e_rx_get_linear_stride_sz(struct mlx5_core_dev *mdev,
  	if (xsk)
  		return mpwqe ? 1 << mlx5e_mpwrq_page_shift(mdev, xsk) : PAGE_SIZE;
  
@@ -88,7 +90,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  	/* When no_head_tail_room is set, headroom and tailroom are excluded from skb calculations.
  	 * no_head_tail_room should be set in the case of XDP with Striding RQ
-@@ -285,7 +319,11 @@ static u32 mlx5e_rx_get_linear_stride_sz
+@@ -285,7 +319,11 @@ static u32 mlx5e_rx_get_linear_stride_sz(struct mlx5_core_dev *mdev,
  	/* XDP in mlx5e doesn't support multiple packets per page.
  	 * Do not assume sz <= PAGE_SIZE if params->xdp_prog is set.
  	 */
@@ -100,7 +102,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  }
  
  static u8 mlx5e_mpwqe_log_pkts_per_wqe(struct mlx5_core_dev *mdev,
-@@ -442,10 +480,12 @@ u8 mlx5e_mpwqe_get_log_stride_size(struc
+@@ -442,10 +480,12 @@ u8 mlx5e_mpwqe_get_log_stride_size(struct mlx5_core_dev *mdev,
  	if (mlx5e_rx_mpwqe_is_linear_skb(mdev, params, xsk))
  		return order_base_2(mlx5e_rx_get_linear_stride_sz(mdev, params, xsk, true));
  
@@ -114,7 +116,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	return MLX5_MPWRQ_DEF_LOG_STRIDE_SZ(mdev);
  }
  
-@@ -468,7 +508,11 @@ u8 mlx5e_mpwqe_get_log_num_strides(struc
+@@ -468,7 +508,11 @@ u8 mlx5e_mpwqe_get_log_num_strides(struct mlx5_core_dev *mdev,
  u8 mlx5e_mpwqe_get_min_wqe_bulk(unsigned int wq_sz)
  {
  #define UMR_WQE_BULK (2)
@@ -126,7 +128,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  }
  
  u16 mlx5e_get_rq_headroom(struct mlx5_core_dev *mdev,
-@@ -548,6 +592,7 @@ int mlx5e_mpwrq_validate_regular(struct
+@@ -548,6 +592,7 @@ int mlx5e_mpwrq_validate_regular(struct mlx5_core_dev *mdev, struct mlx5e_params
  	return 0;
  }
  
@@ -134,7 +136,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *params,
  			     struct mlx5e_xsk_param *xsk)
  {
-@@ -579,6 +624,7 @@ int mlx5e_mpwrq_validate_xsk(struct mlx5
+@@ -579,6 +624,7 @@ int mlx5e_mpwrq_validate_xsk(struct mlx5_core_dev *mdev, struct mlx5e_params *pa
  
  	return 0;
  }
@@ -142,7 +144,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
  			       struct mlx5e_params *params)
-@@ -586,6 +632,9 @@ void mlx5e_init_rq_type_params(struct ml
+@@ -586,6 +632,9 @@ void mlx5e_init_rq_type_params(struct mlx5_core_dev *mdev,
  	params->log_rq_mtu_frames = is_kdump_kernel() ?
  		MLX5E_PARAMS_MINIMUM_LOG_RQ_SIZE :
  		MLX5E_PARAMS_DEFAULT_LOG_RQ_SIZE;
@@ -152,7 +154,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  }
  
  void mlx5e_set_rq_type(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
-@@ -639,6 +688,7 @@ static int mlx5e_max_nonlinear_mtu(int f
+@@ -639,6 +688,7 @@ static int mlx5e_max_nonlinear_mtu(int first_frag_size, int frag_size, bool xdp)
  	return first_frag_size + (MLX5E_MAX_RX_FRAGS - 2) * frag_size + PAGE_SIZE;
  }
  
@@ -160,7 +162,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  static void mlx5e_rx_compute_wqe_bulk_params(struct mlx5e_params *params,
  					     struct mlx5e_rq_frags_info *info)
  {
-@@ -667,8 +717,13 @@ static void mlx5e_rx_compute_wqe_bulk_pa
+@@ -667,8 +717,13 @@ static void mlx5e_rx_compute_wqe_bulk_params(struct mlx5e_params *params,
  	 * keep bulk size smaller to avoid filling the page_pool cache on
  	 * every bulk refill.
  	 */
@@ -176,7 +178,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	wqe_bulk = DIV_ROUND_UP(wqe_bulk_in_bytes, sum_frag_strides);
  
  	/* Make sure that allocations don't start when the page is still used
-@@ -676,10 +731,16 @@ static void mlx5e_rx_compute_wqe_bulk_pa
+@@ -676,10 +731,16 @@ static void mlx5e_rx_compute_wqe_bulk_params(struct mlx5e_params *params,
  	 */
  	info->wqe_bulk = max_t(u16, info->wqe_index_mask + 1, wqe_bulk);
  
@@ -195,7 +197,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  #define DEFAULT_FRAG_SIZE (2048)
  
-@@ -692,6 +753,11 @@ static int mlx5e_build_rq_frags_info(str
+@@ -692,6 +753,11 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
  	u32 byte_count = MLX5E_SW2HW_MTU(params, params->sw_mtu);
  	int frag_size_max = DEFAULT_FRAG_SIZE;
  	int first_frag_size_max;
@@ -207,7 +209,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	u32 buf_size = 0;
  	u16 headroom;
  	int max_mtu;
-@@ -720,13 +786,13 @@ static int mlx5e_build_rq_frags_info(str
+@@ -720,13 +786,13 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
  	first_frag_size_max = SKB_WITH_OVERHEAD(frag_size_max - headroom);
  
  	max_mtu = mlx5e_max_nonlinear_mtu(first_frag_size_max, frag_size_max,
@@ -224,7 +226,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  		if (byte_count > max_mtu) {
  			mlx5_core_err(mdev, "MTU %u is too big for non-linear legacy RQ (max %d)\n",
  				      params->sw_mtu, max_mtu);
-@@ -746,7 +812,7 @@ static int mlx5e_build_rq_frags_info(str
+@@ -746,7 +812,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
  		info->arr[i].frag_size = frag_size;
  		buf_size += frag_size;
  
@@ -233,7 +235,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  			/* XDP multi buffer expects fragments of the same size. */
  			info->arr[i].frag_stride = frag_size_max;
  		} else {
-@@ -789,6 +855,7 @@ static int mlx5e_build_rq_frags_info(str
+@@ -789,6 +855,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
  	}
  
  out:
@@ -262,7 +264,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  	return 0;
  }
-@@ -887,10 +964,9 @@ static void mlx5e_build_rx_cq_param(stru
+@@ -887,10 +964,9 @@ static void mlx5e_build_rx_cq_param(struct mlx5_core_dev *mdev,
  
  static u8 rq_end_pad_mode(struct mlx5_core_dev *mdev, struct mlx5e_params *params)
  {
@@ -274,7 +276,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  		MLX5_WQ_END_PAD_MODE_NONE : MLX5_WQ_END_PAD_MODE_ALIGN;
  }
  
-@@ -990,6 +1066,10 @@ void mlx5e_build_tx_cq_param(struct mlx5
+@@ -990,6 +1066,10 @@ void mlx5e_build_tx_cq_param(struct mlx5_core_dev *mdev,
  	void *cqc = param->cqc;
  
  	MLX5_SET(cqc, cqc, log_cq_size, params->log_sq_size);
@@ -285,7 +287,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  	mlx5e_build_common_cq_param(mdev, param);
  	param->cq_period_mode = params->tx_cq_moderation.cq_period_mode;
-@@ -1139,6 +1219,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -1139,6 +1219,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(struct mlx5_core_dev *mdev,
  	/* UMR WQEs for the regular RQ. */
  	wqebbs = mlx5e_mpwrq_total_umr_wqebbs(mdev, params, NULL);
  
@@ -293,7 +295,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	/* If XDP program is attached, XSK may be turned on at any time without
  	 * restarting the channel. ICOSQ must be big enough to fit UMR WQEs of
  	 * both regular RQ and XSK RQ.
-@@ -1183,7 +1264,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(st
+@@ -1183,7 +1264,7 @@ static u8 mlx5e_build_icosq_log_wq_sz(struct mlx5_core_dev *mdev,
  
  		wqebbs += max_xsk_wqebbs;
  	}
@@ -302,7 +304,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	if (params->packet_merge.type == MLX5E_PACKET_MERGE_SHAMPO)
  		wqebbs += mlx5e_shampo_icosq_sz(mdev, params, rqp);
  
-@@ -1206,7 +1287,6 @@ static u8 mlx5e_build_async_icosq_log_wq
+@@ -1206,7 +1287,6 @@ static u8 mlx5e_build_async_icosq_log_wq_sz(struct mlx5_core_dev *mdev)
  {
  	if (mlx5e_is_ktls_rx(mdev))
  		return MLX5E_PARAMS_DEFAULT_LOG_SQ_SIZE;
@@ -310,7 +312,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  	return MLX5E_PARAMS_MINIMUM_LOG_SQ_SIZE;
  }
  
-@@ -1243,6 +1323,7 @@ static void mlx5e_build_async_icosq_para
+@@ -1243,6 +1323,7 @@ static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
  	mlx5e_build_ico_cq_param(mdev, log_wq_size, &param->cqp);
  }
  
@@ -318,7 +320,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
  			     struct mlx5e_params *params,
  			     unsigned int db_ix,
-@@ -1256,6 +1337,7 @@ void mlx5e_build_xdpsq_param(struct mlx5
+@@ -1256,6 +1337,7 @@ void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
  	param->is_mpw = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_XDP_TX_MPWQE);
  	mlx5e_build_tx_cq_param(mdev, params, &param->cqp);
  }
@@ -326,7 +328,7 @@ Change-Id: If264c53aef4b444dcc5737a519a06cb7b24f30ee
  
  unsigned int mlx5e_get_doorbell_index(struct mlx5_core_dev *mdev,
  				      unsigned int ch_ix)
-@@ -1289,7 +1371,9 @@ int mlx5e_build_channel_param(struct mlx
+@@ -1289,7 +1371,9 @@ int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
  	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
  
  	mlx5e_build_sq_param(mdev, params, db_ix, &cparam->txq_sq);

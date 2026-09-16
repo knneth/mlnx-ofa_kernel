@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/mlxdevm_ext.h
  net/mlxdevm/mlxdevm_ext.h | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/net/mlxdevm/mlxdevm_ext.h b/net/mlxdevm/mlxdevm_ext.h
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/mlxdevm_ext.h
 +++ b/net/mlxdevm/mlxdevm_ext.h
 @@ -1,6 +1,9 @@

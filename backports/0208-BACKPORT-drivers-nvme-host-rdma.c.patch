@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  drivers/nvme/host/rdma.c | 118 +++++++++++++++++++++++++++++++++++++--
  1 file changed, 113 insertions(+), 5 deletions(-)
 
+diff --git a/drivers/nvme/host/rdma.c b/drivers/nvme/host/rdma.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/rdma.c
 +++ b/drivers/nvme/host/rdma.c
 @@ -16,13 +16,16 @@
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  };
  
  static inline struct nvme_rdma_ctrl *to_rdma_ctrl(struct nvme_ctrl *ctrl)
-@@ -167,6 +172,15 @@ static void nvme_rdma_complete_rq(struct
+@@ -167,6 +172,15 @@ static void nvme_rdma_complete_rq(struct request *rq);
  static const struct blk_mq_ops nvme_rdma_mq_ops;
  static const struct blk_mq_ops nvme_rdma_admin_mq_ops;
  
@@ -50,7 +52,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  static inline int nvme_rdma_queue_idx(struct nvme_rdma_queue *queue)
  {
  	return queue - queue->ctrl->queues;
-@@ -174,9 +188,13 @@ static inline int nvme_rdma_queue_idx(st
+@@ -174,9 +188,13 @@ static inline int nvme_rdma_queue_idx(struct nvme_rdma_queue *queue)
  
  static bool nvme_rdma_poll_queue(struct nvme_rdma_queue *queue)
  {
@@ -64,7 +66,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  }
  
  static inline size_t nvme_rdma_inline_data_size(struct nvme_rdma_queue *queue)
-@@ -745,7 +763,9 @@ static int nvme_rdma_alloc_io_queues(str
+@@ -745,7 +763,9 @@ static int nvme_rdma_alloc_io_queues(struct nvme_rdma_ctrl *ctrl)
  	dev_info(ctrl->ctrl.device,
  		"creating %d I/O queues.\n", nr_io_queues);
  
@@ -74,7 +76,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  	for (i = 1; i < ctrl->ctrl.queue_count; i++) {
  		ret = nvme_rdma_alloc_queue(ctrl, i,
  				ctrl->ctrl.sqsize + 1);
-@@ -773,7 +793,11 @@ static int nvme_rdma_alloc_tag_set(struc
+@@ -773,7 +793,11 @@ static int nvme_rdma_alloc_tag_set(struct nvme_ctrl *ctrl)
  
  	return nvme_alloc_io_tag_set(ctrl, &to_rdma_ctrl(ctrl)->tag_set,
  			&nvme_rdma_mq_ops,
@@ -86,7 +88,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  			cmd_size);
  }
  
-@@ -801,11 +825,13 @@ static int nvme_rdma_configure_admin_que
+@@ -801,11 +825,13 @@ static int nvme_rdma_configure_admin_queue(struct nvme_rdma_ctrl *ctrl,
  	ctrl->device = ctrl->queues[0].device;
  	ctrl->ctrl.numa_node = ibdev_to_node(ctrl->device->dev);
  
@@ -100,7 +102,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  
  	ctrl->max_fr_pages = nvme_rdma_get_max_fr_pages(ctrl->device->dev,
  							pi_capable);
-@@ -1255,9 +1281,13 @@ static void nvme_rdma_dma_unmap_req(stru
+@@ -1255,9 +1281,13 @@ static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
  	if (blk_integrity_rq(rq)) {
  		ib_dma_unmap_sg(ibdev, req->metadata_sgl->sg_table.sgl,
  				req->metadata_sgl->nents, rq_dma_dir(rq));
@@ -115,7 +117,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  
  #ifdef CONFIG_NVFS
  	if (nvme_rdma_nvfs_unmap_data(ibdev, rq))
-@@ -1266,7 +1296,11 @@ static void nvme_rdma_dma_unmap_req(stru
+@@ -1266,7 +1296,11 @@ static void nvme_rdma_dma_unmap_req(struct ib_device *ibdev, struct request *rq)
  
  	ib_dma_unmap_sg(ibdev, req->data_sgl.sg_table.sgl, req->data_sgl.nents,
  			rq_dma_dir(rq));
@@ -127,7 +129,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  }
  
  
-@@ -1394,7 +1428,9 @@ static void nvme_rdma_set_sig_domain(str
+@@ -1394,7 +1428,9 @@ static void nvme_rdma_set_sig_domain(struct blk_integrity *bi,
  {
  	domain->sig_type = IB_SIG_TYPE_T10_DIF;
  	domain->sig.dif.bg_type = IB_T10DIF_CRC;
@@ -137,7 +139,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  	domain->sig.dif.ref_tag = le32_to_cpu(cmd->rw.reftag);
  	if (control & NVME_RW_PRINFO_PRCHK_REF)
  		domain->sig.dif.ref_remap = true;
-@@ -1456,9 +1492,12 @@ static int nvme_rdma_map_sg_pi(struct nv
+@@ -1456,9 +1492,12 @@ static int nvme_rdma_map_sg_pi(struct nvme_rdma_queue *queue,
  	struct ib_reg_wr *wr = &req->reg_wr;
  	struct request *rq = blk_mq_rq_from_pdu(req);
  	struct nvme_ns *ns = rq->q->queuedata;
@@ -152,7 +154,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  	u32 xfer_len;
  	int nr;
  
-@@ -1515,9 +1554,15 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1515,9 +1554,15 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  	int ret;
  
  	req->data_sgl.sg_table.sgl = (struct scatterlist *)(req + 1);
@@ -168,7 +170,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  	if (ret)
  		return -ENOMEM;
  
-@@ -1533,7 +1578,11 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1533,7 +1578,11 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
          }
  #endif
  
@@ -180,7 +182,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  
  	*count = ib_dma_map_sg(ibdev, req->data_sgl.sg_table.sgl,
  			       req->data_sgl.nents, rq_dma_dir(rq));
-@@ -1545,17 +1594,33 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1545,17 +1594,33 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  	if (blk_integrity_rq(rq)) {
  		req->metadata_sgl->sg_table.sgl =
  			(struct scatterlist *)(req->metadata_sgl + 1);
@@ -214,7 +216,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  		*pi_count = ib_dma_map_sg(ibdev,
  					  req->metadata_sgl->sg_table.sgl,
  					  req->metadata_sgl->nents,
-@@ -1569,13 +1634,21 @@ static int nvme_rdma_dma_map_req(struct
+@@ -1569,13 +1634,21 @@ static int nvme_rdma_dma_map_req(struct ib_device *ibdev, struct request *rq,
  	return 0;
  
  out_free_pi_table:
@@ -236,7 +238,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  	return ret;
  }
  
-@@ -1586,7 +1659,7 @@ static int nvme_rdma_map_data(struct nvm
+@@ -1586,7 +1659,7 @@ static int nvme_rdma_map_data(struct nvme_rdma_queue *queue,
  	struct nvme_rdma_device *dev = queue->device;
  	struct ib_device *ibdev = dev->dev;
  	int pi_count = 0;
@@ -245,7 +247,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  
  	req->num_sge = 1;
  	refcount_set(&req->ref, 2); /* send and recv completions */
-@@ -2026,7 +2099,12 @@ static void nvme_rdma_complete_timed_out
+@@ -2026,7 +2099,12 @@ static void nvme_rdma_complete_timed_out(struct request *rq)
  	nvmf_complete_timed_out_request(rq);
  }
  
@@ -283,7 +285,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  }
  
  static void nvme_rdma_check_pi_status(struct nvme_rdma_request *req)
-@@ -2199,12 +2289,25 @@ static void nvme_rdma_complete_rq(struct
+@@ -2199,12 +2289,25 @@ static void nvme_rdma_complete_rq(struct request *rq)
  	nvme_complete_rq(rq);
  }
  
@@ -309,7 +311,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/rdma.c
  
  static const struct blk_mq_ops nvme_rdma_mq_ops = {
  	.queue_rq	= nvme_rdma_queue_rq,
-@@ -2213,7 +2316,9 @@ static const struct blk_mq_ops nvme_rdma
+@@ -2213,7 +2316,9 @@ static const struct blk_mq_ops nvme_rdma_mq_ops = {
  	.exit_request	= nvme_rdma_exit_request,
  	.init_hctx	= nvme_rdma_init_hctx,
  	.timeout	= nvme_rdma_timeout,

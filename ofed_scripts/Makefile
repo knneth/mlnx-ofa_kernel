@@ -1,7 +1,6 @@
 ccflags-y += $(OPENIB_KERNEL_EXTRA_CFLAGS) \
 		$(KERNEL_MEMTRACK_CFLAGS) \
 		-I$(CWD)/include \
-		-I$(CWD)/drivers/infiniband/ulp/ipoib$(CONFIG_IPOIB_VERSION) \
 		-I$(CWD)/drivers/infiniband/debug \
 		-I$(CWD)/net/rds \
 		-I$(CWD)/drivers/net/ethernet/mellanox/mlx5/core \

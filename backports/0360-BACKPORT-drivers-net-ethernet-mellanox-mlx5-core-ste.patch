@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mlx5/core/steering/hws/action_ste_pool.c  | 19 +++++++++++++++++--
  1 file changed, 17 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/action_ste_pool.c
-@@ -139,7 +139,7 @@ hws_action_ste_table_alloc(struct mlx5hw
+@@ -139,7 +139,7 @@ hws_action_ste_table_alloc(struct mlx5hws_action_ste_pool_element *parent_elem)
  			     parent_elem->log_sz +
  				     MLX5HWS_ACTION_STE_TABLE_STEP_LOG_SZ :
  				   MLX5HWS_ACTION_STE_TABLE_INIT_LOG_SZ,
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT:
  
  	action_tbl = kzalloc(sizeof(*action_tbl), GFP_KERNEL);
  	if (!action_tbl)
-@@ -277,7 +277,12 @@ static void hws_action_ste_pool_element_
+@@ -277,7 +277,12 @@ static void hws_action_ste_pool_element_collect_stale(
  	struct mlx5hws_action_ste_table *action_tbl, *p;
  	unsigned long expire_time, now;
  
@@ -31,7 +33,7 @@ Subject: [PATCH] BACKPORT:
  	now = jiffies;
  
  	list_for_each_entry_safe(action_tbl, p, &elem->available, list_node) {
-@@ -319,8 +324,14 @@ static void hws_action_ste_pool_cleanup(
+@@ -319,8 +324,14 @@ static void hws_action_ste_pool_cleanup(struct work_struct *work)
  	hws_action_ste_table_cleanup_list(&cleanup);
  
  	schedule_delayed_work(&ctx->action_ste_cleanup,
@@ -46,7 +48,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  int mlx5hws_action_ste_pool_init(struct mlx5hws_context *ctx)
-@@ -345,7 +356,11 @@ int mlx5hws_action_ste_pool_init(struct
+@@ -345,7 +356,11 @@ int mlx5hws_action_ste_pool_init(struct mlx5hws_context *ctx)
  			  hws_action_ste_pool_cleanup);
  	schedule_delayed_work(
  		&ctx->action_ste_cleanup,

@@ -293,6 +293,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_PIN_OPS_HAS_FFO_
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_HAS_FFO_GET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_PIN_OPS_HAS_FFO_GET], [/* struct dpll_pin_ops has ffo_get */
 @%:@undef HAVE_DPLL_PIN_OPS_HAS_FFO_GET])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_PIN_OPS_FFO_GET_PARAM])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_PIN_OPS_FFO_GET_PARAM$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_PIN_OPS_FFO_GET_PARAM], [/* struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param */
+@%:@undef HAVE_DPLL_PIN_OPS_FFO_GET_PARAM])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_DPLL_NETDEV_PIN_SET])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DPLL_NETDEV_PIN_SET$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_DPLL_NETDEV_PIN_SET], [/* dpll.h has dpll_netdev_pin_set */
@@ -1881,6 +1885,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NET_NAMESPACE_GET_CON
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NET_NAMESPACE_GET_CONST_DEVICE$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NET_NAMESPACE_GET_CONST_DEVICE], [/* net_namespace get const struct device */
 @%:@undef HAVE_NET_NAMESPACE_GET_CONST_DEVICE])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NET_NAMESPACE_RETURNS_NS_COMMON])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NET_NAMESPACE_RETURNS_NS_COMMON$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NET_NAMESPACE_RETURNS_NS_COMMON], [/* class.namespace returns const struct ns_common * */
+@%:@undef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CLASS_DEV_UEVENT_CONST_DEV])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CLASS_DEV_UEVENT_CONST_DEV$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CLASS_DEV_UEVENT_CONST_DEV], [/* dev_uevent get const struct device */
@@ -2617,6 +2625,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_SIZE_MUL_SUB_ADD])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_SIZE_MUL_SUB_ADD$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_SIZE_MUL_SUB_ADD], [/* linux/overflow.h has size_add size_mul size_sub */
 @%:@undef HAVE_SIZE_MUL_SUB_ADD])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES], [/* check_add_overflow accepts mixed argument types */
+@%:@undef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_KVFREE_CALL_RCU])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_KVFREE_CALL_RCU$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_KVFREE_CALL_RCU], [/* function kvfree_call_rcu is defined */
@@ -2686,6 +2698,10 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_VFIO_DEVICE_OPS_MATCH
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID], [/* struct vfio_device_ops has match_token_uuid */
 @%:@undef HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS], [/* struct vfio_device_ops has get_region_info_caps */
+@%:@undef HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_VFIO_COMBINE_IOVA_RANGES])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_VFIO_COMBINE_IOVA_RANGES$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_VFIO_COMBINE_IOVA_RANGES], [/* has vfio_combine_iova_ranges exists */
@@ -3851,10 +3867,14 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCIE_CAPABILITY_CLEAR
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCIE_CAPABILITY_CLEAR_AND_SET_WORD_LOCKED$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCIE_CAPABILITY_CLEAR_AND_SET_WORD_LOCKED], [/* pci.h has pcie_capability_clear_and_set_word_locked */
 @%:@undef HAVE_PCIE_CAPABILITY_CLEAR_AND_SET_WORD_LOCKED])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCI_ENABLE_PTM])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCI_ENABLE_PTM$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCI_ENABLE_PTM], [/* include/linux/pci.h has pci_enable_ptm */
-@%:@undef HAVE_PCI_ENABLE_PTM])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCI_ENABLE_PTM_GET_2_PARAM])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCI_ENABLE_PTM_GET_2_PARAM$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCI_ENABLE_PTM_GET_2_PARAM], [/* include/linux/pci.h has pci_enable_ptm get 2 param */
+@%:@undef HAVE_PCI_ENABLE_PTM_GET_2_PARAM])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCI_ENABLE_PTM_GET_1_PARAM])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCI_ENABLE_PTM_GET_1_PARAM$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCI_ENABLE_PTM_GET_1_PARAM], [/* include/linux/pci.h has pci_enable_ptm get 1 param */
+@%:@undef HAVE_PCI_ENABLE_PTM_GET_1_PARAM])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_PCI_DISABLE_PTM])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_PCI_DISABLE_PTM$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_PCI_DISABLE_PTM], [/* include/linux/pci.h has pci_disable_ptm */
@@ -4228,10 +4248,14 @@ m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_BLK_FEAT_ROTATIONAL])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_BLK_FEAT_ROTATIONAL$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_BLK_FEAT_ROTATIONAL], [/* BLK_FEAT_ROTATIONAL is defined */
 @%:@undef HAVE_BLK_FEAT_ROTATIONAL])
-m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NVME_AUTH_GENERATE_DIGEST])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NVME_AUTH_GENERATE_DIGEST$])
-m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NVME_AUTH_GENERATE_DIGEST], [/* nvme_auth_generate_digest is defined */
-@%:@undef HAVE_NVME_AUTH_GENERATE_DIGEST])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8], [/* nvme_auth_generate_digest is defined */
+@%:@undef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8])
+m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR$])
+m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR], [/* nvme_auth_generate_digest is defined */
+@%:@undef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR])
 m4trace:configure.ac:23: -1- AC_DEFINE_TRACE_LITERAL([HAVE_NVME_AUTH_DERIVE_TLS_PSK])
 m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_NVME_AUTH_DERIVE_TLS_PSK$])
 m4trace:configure.ac:23: -1- AH_OUTPUT([HAVE_NVME_AUTH_DERIVE_TLS_PSK], [/* nvme_auth_derive_tls_psk is defined */

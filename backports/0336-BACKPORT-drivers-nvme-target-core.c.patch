@@ -6,6 +6,8 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  drivers/nvme/target/core.c | 34 ++++++++++++++++++++++++++++++++--
  1 file changed, 32 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/nvme/target/core.c b/drivers/nvme/target/core.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/core.c
 +++ b/drivers/nvme/target/core.c
 @@ -7,6 +7,9 @@
@@ -18,7 +20,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  #include <linux/module.h>
  #include <linux/random.h>
  #include <linux/rculist.h>
-@@ -686,7 +689,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns
+@@ -686,7 +689,6 @@ bool nvmet_ns_revalidate(struct nvmet_ns *ns)
  		nvmet_bdev_ns_revalidate(ns);
  	else
  		nvmet_file_ns_revalidate(ns);
@@ -35,7 +37,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  	if (subsys->offloadble) {
  		ns->pdev = nvme_find_pdev_from_bdev(ns->bdev);
  		if (!ns->pdev) {
-@@ -936,10 +938,20 @@ static void nvmet_update_sq_head(struct
+@@ -936,10 +938,20 @@ static void nvmet_update_sq_head(struct nvmet_req *req)
  	if (req->sq->size) {
  		u32 old_sqhd, new_sqhd;
  
@@ -56,7 +58,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  	}
  	req->cqe->sq_head = cpu_to_le16(req->sq->sqhd & 0x0000FFFF);
  }
-@@ -1279,9 +1291,11 @@ static u16 nvmet_parse_io_cmd(struct nvm
+@@ -1279,9 +1291,11 @@ static u16 nvmet_parse_io_cmd(struct nvmet_req *req)
  			ret = nvmet_bdev_parse_io_cmd(req);
  		break;
  	case NVME_CSI_ZNS:
@@ -68,7 +70,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  			ret = NVME_SC_INVALID_IO_CMD_SET;
  		break;
  	default:
-@@ -1804,7 +1818,11 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
+@@ -1804,7 +1818,11 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(struct nvmet_alloc_ctrl_args *args)
  	if (!ctrl->sqs)
  		goto out_free_changed_ns_list;
  
@@ -80,7 +82,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  			     subsys->cntlid_min, subsys->cntlid_max,
  			     GFP_KERNEL);
  	if (ret < 0) {
-@@ -1872,7 +1890,12 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(stru
+@@ -1872,7 +1890,12 @@ struct nvmet_ctrl *nvmet_alloc_ctrl(struct nvmet_alloc_ctrl_args *args)
  init_pr_fail:
  	mutex_unlock(&subsys->lock);
  	nvmet_stop_keep_alive_timer(ctrl);
@@ -93,7 +95,7 @@ Change-Id: I1b519fae005f906fea3d724e3c6aef890aa0900d
  out_free_sqs:
  	kfree(ctrl->sqs);
  out_free_changed_ns_list:
-@@ -1908,7 +1931,11 @@ static void nvmet_ctrl_free(struct kref
+@@ -1908,7 +1931,11 @@ static void nvmet_ctrl_free(struct kref *ref)
  
  	nvmet_debugfs_ctrl_free(ctrl);
  

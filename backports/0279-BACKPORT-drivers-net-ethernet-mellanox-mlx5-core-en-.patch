@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  .../net/ethernet/mellanox/mlx5/core/en/xdp.c  | 396 ++++++++++++++++--
  1 file changed, 357 insertions(+), 39 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 @@ -30,12 +30,25 @@
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk)
  {
-@@ -58,7 +71,11 @@ int mlx5e_xdp_max_mtu(struct mlx5e_param
+@@ -58,7 +71,11 @@ int mlx5e_xdp_max_mtu(struct mlx5e_params *params, struct mlx5e_xsk_param *xsk)
  }
  
  static inline bool
@@ -47,7 +49,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  		    struct xdp_buff *xdp)
  {
  	struct page *page = virt_to_page(xdp->data);
-@@ -68,15 +85,24 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -68,15 +85,24 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	dma_addr_t dma_addr;
  	int i;
  
@@ -72,7 +74,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	if (xdp->rxq->mem.type == MEM_TYPE_XSK_BUFF_POOL) {
  		/* The xdp_buff was in the UMEM and was copied into a newly
  		 * allocated page. The UMEM page was returned via the ZCA, and
-@@ -115,6 +141,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -115,6 +141,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  				     (union mlx5e_xdp_info) { .frame.dma_addr = dma_addr });
  		return true;
  	}
@@ -80,7 +82,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	/* Driver assumes that xdp_convert_buff_to_frame returns an xdp_frame
  	 * that points to the same memory region as the original xdp_buff. It
-@@ -122,9 +149,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -122,9 +149,18 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	 * mode.
  	 */
  
@@ -99,7 +101,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	if (xdptxd->has_frags) {
  		xdptxdf.sinfo = xdp_get_shared_info_from_frame(xdpf);
  		xdptxdf.dma_arr = NULL;
-@@ -141,6 +177,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -141,6 +177,7 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  						   DMA_BIDIRECTIONAL);
  		}
  	}
@@ -107,7 +109,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	xdptxd->dma_addr = dma_addr;
  
-@@ -152,29 +189,43 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *
+@@ -152,29 +189,43 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
  	mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
  			     (union mlx5e_xdp_info) { .mode = MLX5E_XDP_XMIT_MODE_PAGE });
  
@@ -154,7 +156,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  static int mlx5e_xdp_rx_timestamp(const struct xdp_md *ctx, u64 *timestamp)
  {
  	const struct mlx5e_xdp_buff *_ctx = (void *)ctx;
-@@ -256,6 +307,7 @@ static int mlx5e_xdp_rx_hash(const struc
+@@ -256,6 +307,7 @@ static int mlx5e_xdp_rx_hash(const struct xdp_md *ctx, u32 *hash,
  	return 0;
  }
  
@@ -162,7 +164,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  static int mlx5e_xdp_rx_vlan_tag(const struct xdp_md *ctx, __be16 *vlan_proto,
  				 u16 *vlan_tci)
  {
-@@ -269,13 +321,17 @@ static int mlx5e_xdp_rx_vlan_tag(const s
+@@ -269,13 +321,17 @@ static int mlx5e_xdp_rx_vlan_tag(const struct xdp_md *ctx, __be16 *vlan_proto,
  	*vlan_tci = be16_to_cpu(cqe->vlan_info);
  	return 0;
  }
@@ -180,7 +182,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  struct mlx5e_xsk_tx_complete {
  	struct mlx5_cqe64 *cqe;
  	struct mlx5e_cq *cq;
-@@ -306,24 +362,127 @@ const struct xsk_tx_metadata_ops mlx5e_x
+@@ -306,24 +362,55 @@ const struct xsk_tx_metadata_ops mlx5e_xsk_tx_metadata_ops = {
  	.tmo_fill_timestamp		= mlx5e_xsk_fill_timestamp,
  	.tmo_request_checksum		= mlx5e_xsk_request_checksum,
  };
@@ -229,17 +231,17 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +#else
 +		if (unlikely(!mlx5e_xmit_xdp_buff(rq->xdpsq, rq, au, xdp)))
 +#endif
-+			goto xdp_abort;
-+		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
-+		return true;
+ 			goto xdp_abort;
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
+ 		return true;
 +#ifdef HAVE_XDP_SUPPORT
-+	case XDP_REDIRECT:
-+		/* When XDP enabled then page-refcnt==1 here */
-+		err = xdp_do_redirect(rq->netdev, xdp, prog);
-+		if (unlikely(err))
-+			goto xdp_abort;
-+		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
-+		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
+ 	case XDP_REDIRECT:
+ 		/* When XDP enabled then page-refcnt==1 here */
+ 		err = xdp_do_redirect(rq->netdev, xdp, prog);
+@@ -331,21 +418,109 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *rq,
+ 			goto xdp_abort;
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
+ 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
 +#if !defined(HAVE_PAGE_POOL_DEFRAG_PAGE) && !defined(HAVE_PAGE_POOL_PUT_UNREFED_PAGE)
 +		if (au && xdp->rxq->mem.type != MEM_TYPE_XSK_BUFF_POOL) {
 +#ifdef HAVE_PAGE_DMA_ADDR
@@ -249,28 +251,28 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +#endif
 +	}
 +#endif
-+		rq->stats->xdp_redirect++;
-+		return true;
+ 		rq->stats->xdp_redirect++;
+ 		return true;
 +#endif
-+	default:
+ 	default:
 +#ifdef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
-+		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
+ 		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
 +#else
 +		bpf_warn_invalid_xdp_action(act);
 +#endif
-+		fallthrough;
-+	case XDP_ABORTED:
-+xdp_abort:
+ 		fallthrough;
+ 	case XDP_ABORTED:
+ xdp_abort:
 +#if !defined(MLX_DISABLE_TRACEPOINTS)
-+		trace_xdp_exception(rq->netdev, prog, act);
-+		fallthrough;
+ 		trace_xdp_exception(rq->netdev, prog, act);
+ 		fallthrough;
 +#endif
-+	case XDP_DROP:
-+		rq->stats->xdp_drop++;
-+		return true;
-+	}
-+}
-+
+ 	case XDP_DROP:
+ 		rq->stats->xdp_drop++;
+ 		return true;
+ 	}
+ }
+ 
 +#ifndef HAVE_XSK_BUFF_ALLOC
 +bool mlx5e_xdp_handle_old(struct mlx5e_rq *rq, struct mlx5e_alloc_unit *au,
 +		      struct bpf_prog *prog, struct xdp_buff *xdp)
@@ -301,17 +303,17 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +		return false;
 +	case XDP_TX:
 +		if (unlikely(!mlx5e_xmit_xdp_buff(rq->xdpsq, rq, au, xdp)))
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
- 		return true;
++			goto xdp_abort;
++		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags); /* non-atomic */
++		return true;
 +#ifdef HAVE_XDP_SUPPORT
- 	case XDP_REDIRECT:
- 		/* When XDP enabled then page-refcnt==1 here */
- 		err = xdp_do_redirect(rq->netdev, xdp, prog);
-@@ -331,20 +490,36 @@ bool mlx5e_xdp_handle(struct mlx5e_rq *r
- 			goto xdp_abort;
- 		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
- 		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
++	case XDP_REDIRECT:
++		/* When XDP enabled then page-refcnt==1 here */
++		err = xdp_do_redirect(rq->netdev, xdp, prog);
++		if (unlikely(err))
++			goto xdp_abort;
++		__set_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
++		__set_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
 +#ifdef HAVE_XSK_ZERO_COPY_SUPPORT
 +		if (xdp->rxq->mem.type != MEM_TYPE_XSK_BUFF_POOL)
 +#endif
@@ -320,32 +322,33 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
 +#else
 +			mlx5e_page_dma_unmap(rq, au);
 +#endif
- 		rq->stats->xdp_redirect++;
- 		return true;
++		rq->stats->xdp_redirect++;
++		return true;
 +#endif
- 	default:
++	default:
 +#ifdef HAVE_BPF_WARN_IVALID_XDP_ACTION_GET_3_PARAMS
- 		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
++		bpf_warn_invalid_xdp_action(rq->netdev, prog, act);
 +#else
 +		bpf_warn_invalid_xdp_action(act);
 +#endif
- 		fallthrough;
- 	case XDP_ABORTED:
- xdp_abort:
++		fallthrough;
++	case XDP_ABORTED:
++xdp_abort:
 +#if !defined(MLX_DISABLE_TRACEPOINTS)
- 		trace_xdp_exception(rq->netdev, prog, act);
- 		fallthrough;
++		trace_xdp_exception(rq->netdev, prog, act);
++		fallthrough;
 +#endif
- 	case XDP_DROP:
- 		rq->stats->xdp_drop++;
- 		return true;
- 	}
- }
++	case XDP_DROP:
++		rq->stats->xdp_drop++;
++		return true;
++	}
++}
 +#endif
- 
++
  static u16 mlx5e_xdpsq_get_next_pi(struct mlx5e_xdpsq *sq, u16 size)
  {
-@@ -459,6 +634,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+ 	struct mlx5_wq_cyc *wq = &sq->wq;
+@@ -459,6 +634,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  	struct mlx5e_tx_mpwqe *session = &sq->mpwqe;
  	struct mlx5e_xdpsq_stats *stats = sq->stats;
  	struct mlx5e_xmit_data *p = xdptxd;
@@ -353,7 +356,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	struct mlx5e_xmit_data tmp;
  
  	if (xdptxd->has_frags) {
-@@ -485,6 +661,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+@@ -485,6 +661,7 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  			p = &tmp;
  		}
  	}
@@ -361,7 +364,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	if (unlikely(p->len > sq->hw_mtu)) {
  		stats->err++;
-@@ -502,7 +679,9 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_
+@@ -502,7 +679,9 @@ mlx5e_xmit_xdp_frame_mpwqe(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptx
  		 * and it's safe to complete it at any time.
  		 */
  		mlx5e_xdp_mpwqe_session_start(sq);
@@ -433,7 +436,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	if (sq->min_inline_mode != MLX5_INLINE_MODE_NONE)
  		inline_hdr_sz = MLX5E_XDP_MIN_INLINE;
  
-@@ -588,9 +790,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -588,9 +790,15 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  
  		check_result = mlx5e_xmit_xdp_frame_check_stop_room(sq, stop_room);
  	}
@@ -449,7 +452,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	pi = mlx5e_xdpsq_get_next_pi(sq, num_wqebbs);
  	wqe = mlx5_wq_cyc_get_wqe(wq, pi);
  	net_prefetchw(wqe);
-@@ -598,6 +806,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -598,6 +806,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  	cseg = &wqe->ctrl;
  	eseg = &wqe->eth;
  	dseg = wqe->data;
@@ -459,7 +462,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	/* copy the inline part if required */
  	if (inline_hdr_sz) {
-@@ -607,18 +818,25 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -607,18 +818,25 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  		dma_len  -= inline_hdr_sz;
  		dma_addr += inline_hdr_sz;
  		dseg++;
@@ -485,7 +488,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	cseg->opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | MLX5_OPCODE_SEND);
  
-@@ -627,6 +845,7 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -627,6 +845,7 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  
  	eseg->inline_hdr.sz = cpu_to_be16(inline_hdr_sz);
  
@@ -493,7 +496,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  	for (i = 0; i < num_frags; i++) {
  		skb_frag_t *frag = &xdptxdf->sinfo->frags[i];
  		dma_addr_t addr;
-@@ -640,8 +859,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -640,8 +859,12 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  		dseg->lkey = sq->mkey_be;
  		dseg++;
  	}
@@ -506,7 +509,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	sq->db.wqe_info[pi] = (struct mlx5e_xdp_wqe_info) {
  		.num_wqebbs = num_wqebbs,
-@@ -650,7 +873,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -650,7 +873,9 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  
  	sq->pc += num_wqebbs;
  
@@ -516,7 +519,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	sq->doorbell_cseg = cseg;
  
-@@ -659,10 +884,17 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq
+@@ -659,10 +884,17 @@ mlx5e_xmit_xdp_frame(struct mlx5e_xdpsq *sq, struct mlx5e_xmit_data *xdptxd,
  }
  
  static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
@@ -538,7 +541,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  				  struct mlx5_cqe64 *cqe)
  {
  	struct mlx5e_xdp_info_fifo *xdpi_fifo = &sq->db.xdpi_fifo;
-@@ -684,6 +916,7 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -684,6 +916,7 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  			dma_unmap_single(sq->pdev, dma_addr,
  					 xdpf->len, DMA_TO_DEVICE);
@@ -546,7 +549,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  			if (xdp_frame_has_frags(xdpf)) {
  				struct skb_shared_info *sinfo;
  				int j;
-@@ -699,32 +932,47 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -699,32 +932,47 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  							 skb_frag_size(frag), DMA_TO_DEVICE);
  				}
  			}
@@ -598,7 +601,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  			struct xsk_tx_metadata_compl *compl = NULL;
  			struct mlx5e_xsk_tx_complete priv = {
  				.cqe = cqe,
-@@ -737,10 +985,12 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -737,10 +985,12 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  				xsk_tx_metadata_complete(compl, &mlx5e_xsk_tx_metadata_ops, &priv);
  			}
@@ -611,7 +614,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  		default:
  			WARN_ON_ONCE(true);
  		}
-@@ -749,14 +999,20 @@ static void mlx5e_free_xdpsq_desc(struct
+@@ -749,14 +999,20 @@ static void mlx5e_free_xdpsq_desc(struct mlx5e_xdpsq *sq,
  
  bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  {
@@ -632,7 +635,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	sq = container_of(cq, struct mlx5e_xdpsq, cq);
  
-@@ -789,7 +1045,17 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -789,7 +1045,17 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  
  			sqcc += wi->num_wqebbs;
  
@@ -651,7 +654,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  		} while (!last_wqe);
  
  		if (unlikely(get_cqe_opcode(cqe) != MLX5_CQE_REQ)) {
-@@ -802,10 +1068,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -802,10 +1068,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  		}
  	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
  
@@ -670,7 +673,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	sq->stats->cqes += i;
  
-@@ -820,12 +1094,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq
+@@ -820,12 +1094,18 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
  
  void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  {
@@ -689,7 +692,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  
  	while (sq->cc != sq->pc) {
  		struct mlx5e_xdp_wqe_info *wi;
-@@ -836,14 +1116,58 @@ void mlx5e_free_xdpsq_descs(struct mlx5e
+@@ -836,14 +1116,58 @@ void mlx5e_free_xdpsq_descs(struct mlx5e_xdpsq *sq)
  
  		sq->cc += wi->num_wqebbs;
  
@@ -749,7 +752,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  }
  
  int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
-@@ -872,20 +1196,27 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -872,20 +1196,27 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  	for (i = 0; i < n; i++) {
  		struct mlx5e_xmit_data_frags xdptxdf = {};
  		struct xdp_frame *xdpf = frames[i];
@@ -777,7 +780,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  		if (xdptxd->has_frags) {
  			int j;
  
-@@ -907,20 +1238,25 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -907,20 +1238,25 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  				goto out;
  			}
  		}
@@ -803,7 +806,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  			break;
  		}
  
-@@ -931,6 +1267,7 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -931,6 +1267,7 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  				     (union mlx5e_xdp_info) { .frame.xdpf = xdpf });
  		mlx5e_xdpi_fifo_push(&sq->db.xdpi_fifo,
  				     (union mlx5e_xdp_info) { .frame.dma_addr = xdptxd->dma_addr });
@@ -811,7 +814,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/xdp.c
  		if (xdptxd->has_frags) {
  			int j;
  
-@@ -939,10 +1276,12 @@ int mlx5e_xdp_xmit(struct net_device *de
+@@ -939,10 +1276,12 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
  						     (union mlx5e_xdp_info)
  						     { .frame.dma_addr = dma_arr[j] });
  		}

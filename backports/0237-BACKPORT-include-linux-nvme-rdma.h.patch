@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/linux/nvme-rdma.h
  include/linux/nvme-rdma.h | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/include/linux/nvme-rdma.h b/include/linux/nvme-rdma.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/nvme-rdma.h
 +++ b/include/linux/nvme-rdma.h
 @@ -3,6 +3,11 @@

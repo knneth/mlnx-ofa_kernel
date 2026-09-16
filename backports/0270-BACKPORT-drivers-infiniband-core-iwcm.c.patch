@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
  drivers/infiniband/core/iwcm.c | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
+diff --git a/drivers/infiniband/core/iwcm.c b/drivers/infiniband/core/iwcm.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/iwcm.c
 +++ b/drivers/infiniband/core/iwcm.c
 @@ -58,6 +58,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
  
  static const char * const iwcm_rej_reason_strs[] = {
  	[ECONNRESET]			= "reset by remote host",
-@@ -110,9 +113,14 @@ static struct ctl_table iwcm_ctl_table[]
+@@ -110,9 +113,14 @@ static struct ctl_table iwcm_ctl_table[] = {
  		.maxlen		= sizeof(default_backlog),
  		.mode		= 0644,
  		.proc_handler	= proc_dointvec_minmax,
@@ -32,7 +34,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
  };
  
  /*
-@@ -483,6 +491,7 @@ static void iw_cm_check_wildcard(struct
+@@ -484,6 +492,7 @@ static void iw_cm_check_wildcard(struct sockaddr_storage *pm_addr,
  			cm4_outaddr->sin_addr = cm4_addr->sin_addr;
  		}
  	} else {
@@ -40,7 +42,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/iwcm.c
  		struct sockaddr_in6 *pm6_addr = (struct sockaddr_in6 *)pm_addr;
  
  		if (ipv6_addr_type(&pm6_addr->sin6_addr) == IPV6_ADDR_ANY) {
-@@ -493,6 +502,7 @@ static void iw_cm_check_wildcard(struct
+@@ -494,6 +503,7 @@ static void iw_cm_check_wildcard(struct sockaddr_storage *pm_addr,
  
  			cm6_outaddr->sin6_addr = cm6_addr->sin6_addr;
  		}

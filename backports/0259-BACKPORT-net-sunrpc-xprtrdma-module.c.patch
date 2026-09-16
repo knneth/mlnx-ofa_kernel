@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: net/sunrpc/xprtrdma/module.c
  net/sunrpc/xprtrdma/module.c | 26 ++++++++++++++++++++++++++
  1 file changed, 26 insertions(+)
 
+diff --git a/net/sunrpc/xprtrdma/module.c b/net/sunrpc/xprtrdma/module.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/module.c
 +++ b/net/sunrpc/xprtrdma/module.c
 @@ -11,29 +11,38 @@

@@ -7,9 +7,11 @@ Change-Id: Ib813ba5c5b0eecd72212eb129d1b7679ad5e7fd7
  .../ethernet/mellanox/mlx5/core/sriov_sysfs.c | 30 +++++++++++++++++++
  1 file changed, 30 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/sriov_sysfs.c
-@@ -1221,25 +1221,43 @@ static struct attribute *vf_paging_attrs
+@@ -1162,25 +1162,43 @@ static struct attribute *vf_paging_attrs[] = {
  	NULL
  };
  
@@ -53,7 +55,7 @@ Change-Id: Ib813ba5c5b0eecd72212eb129d1b7679ad5e7fd7
  };
  
  VF_ATTR(rate);
-@@ -1255,11 +1273,17 @@ static struct attribute *vf_meters_eth_a
+@@ -1196,11 +1214,17 @@ static struct attribute *vf_meters_eth_attrs[] = {
  	NULL
  };
  
@@ -71,7 +73,7 @@ Change-Id: Ib813ba5c5b0eecd72212eb129d1b7679ad5e7fd7
  };
  #endif /* CONFIG_MLX5_ESWITCH */
  
-@@ -1270,11 +1294,17 @@ static struct attribute *vf_ib_attrs[] =
+@@ -1211,11 +1235,17 @@ static struct attribute *vf_ib_attrs[] = {
  	NULL
  };
  

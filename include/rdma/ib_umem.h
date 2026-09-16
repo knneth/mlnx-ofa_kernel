@@ -119,7 +119,7 @@ int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offset,
 		      size_t length);
 unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 				     unsigned long pgsz_bitmap,
-				     unsigned long virt);
+				     u64 virt);
 
 /**
  * ib_umem_find_best_pgoff - Find best HW page size
@@ -176,6 +176,8 @@ void ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 					   void *cookie);
 void ib_umem_stop_invalidation_notifier(struct ib_umem *umem);
 
+int ib_umem_check_rereg(struct ib_umem *umem, int flags, int new_access_flags);
+
 #else /* CONFIG_INFINIBAND_USER_MEM */
 
 #include <linux/err.h>
@@ -193,7 +195,7 @@ static inline int ib_umem_copy_from(void *dst, struct ib_umem *umem, size_t offs
 }
 static inline unsigned long ib_umem_find_best_pgsz(struct ib_umem *umem,
 						   unsigned long pgsz_bitmap,
-						   unsigned long virt)
+						   u64 virt)
 {
 	return 0;
 }
@@ -248,6 +250,12 @@ static inline void ib_umem_activate_invalidation_notifier(
 }
 static inline void ib_umem_stop_invalidation_notifier(struct ib_umem *umem)
 {
+}
+
+static inline int ib_umem_check_rereg(struct ib_umem *umem, int flags,
+				      int new_access_flags)
+{
+	return -EOPNOTSUPP;
 }
 
 #endif /* CONFIG_INFINIBAND_USER_MEM */

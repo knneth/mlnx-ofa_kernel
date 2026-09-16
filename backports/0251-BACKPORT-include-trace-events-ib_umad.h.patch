@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/trace/events/ib_umad.h
  include/trace/events/ib_umad.h | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/include/trace/events/ib_umad.h b/include/trace/events/ib_umad.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/trace/events/ib_umad.h
 +++ b/include/trace/events/ib_umad.h
 @@ -4,6 +4,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/ib_umad.h
  
  #undef TRACE_SYSTEM
  #define TRACE_SYSTEM ib_umad
-@@ -124,3 +125,4 @@ DEFINE_EVENT(ib_umad_template, ib_umad_r
+@@ -124,3 +125,4 @@ DEFINE_EVENT(ib_umad_template, ib_umad_read_send,
  #endif /* _TRACE_IB_UMAD_H */
  
  #include <trace/define_trace.h>

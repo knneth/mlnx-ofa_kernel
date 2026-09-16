@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
  drivers/nvme/host/sysfs.c | 24 ++++++++++++++++++++++++
  1 file changed, 24 insertions(+)
 
+diff --git a/drivers/nvme/host/sysfs.c b/drivers/nvme/host/sysfs.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/sysfs.c
 +++ b/drivers/nvme/host/sysfs.c
 @@ -5,7 +5,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
  
  #include "nvme.h"
  #include "fabrics.h"
-@@ -300,11 +302,16 @@ static umode_t nvme_ns_attrs_are_visible
+@@ -300,11 +302,16 @@ static umode_t nvme_ns_attrs_are_visible(struct kobject *kobj,
  	return a->mode;
  }
  
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
  #ifdef CONFIG_NVME_MULTIPATH
  /*
   * NOTE: The dummy attribute does not appear in sysfs. It exists solely to allow
-@@ -322,6 +329,7 @@ static struct attribute *nvme_ns_mpath_a
+@@ -322,6 +329,7 @@ static struct attribute *nvme_ns_mpath_attrs[] = {
  	NULL,
  };
  
@@ -42,7 +44,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
  static bool multipath_sysfs_group_visible(struct kobject *kobj)
  {
  	struct device *dev = container_of(kobj, struct device, kobj);
-@@ -336,19 +344,34 @@ static bool multipath_sysfs_attr_visible
+@@ -336,18 +344,33 @@ static bool multipath_sysfs_attr_visible(struct kobject *kobj,
  }
  
  DEFINE_SYSFS_GROUP_VISIBLE(multipath_sysfs)
@@ -72,12 +74,11 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/sysfs.c
 +#ifdef HAVE_GD_ADDED
  #ifdef CONFIG_NVME_MULTIPATH
  	&nvme_ns_mpath_attr_group,
- #endif
 +#endif
+ #endif
  	NULL,
  };
- 
-@@ -394,6 +417,7 @@ static ssize_t nvme_sysfs_delete(struct
+@@ -394,6 +417,7 @@ static ssize_t nvme_sysfs_delete(struct device *dev,
  		nvme_delete_ctrl_sync(ctrl);
  	return count;
  }

@@ -100,7 +100,7 @@
 
 %{!?_name: %global _name mlnx-ofa_kernel}
 %{!?_version: %global _version 25.10}
-%{!?_release: %global _release OFED.25.10.2.4.1.1}
+%{!?_release: %global _release OFED.25.10.3.1.6.1}
 %global _kmp_rel %{_release}%{?_kmp_build_num}%{?_dist}
 %global dkms_version %{version}-%{_release}
 
@@ -153,7 +153,7 @@ Requires: systemd-sysvcompat
 %description
 InfiniBand "verbs", Access Layer  and ULPs.
 Utilities rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-2.4.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-3.1.6.tgz
 
 
 %if %{with building_kmods}
@@ -199,7 +199,7 @@ Group: System Environment/Libraries
 %description -n %{non_kmp_pname}
 Core, HW and ULPs kernel modules
 Non-KMP format kernel modules rpm.
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-2.4.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-3.1.6.tgz
 %endif #end if "%{KMP}" == "1"
 
 %package -n %{devel_pname}
@@ -230,7 +230,7 @@ Summary: Infiniband Driver and ULPs kernel modules sources
 Group: System Environment/Libraries
 %description -n %{devel_pname}
 Core, HW and ULPs kernel modules sources
-The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-2.4.1.tgz
+The driver sources are located at: http://www.mellanox.com/downloads/ofed/mlnx-ofa_kernel-25.10-3.1.6.tgz
 %endif # end building_kmods
 
 %package source
@@ -417,11 +417,11 @@ mkdir -p %{buildroot}%{_datadir}/dkms/modules_to_force_install
 echo "%{name}" > %{buildroot}%{_datadir}/dkms/modules_to_force_install/%{name}.force
 
 # copy sources
-mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}
-cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{version}/source
-ln -s ofa_kernel-%{version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{dkms_version}
+mkdir -p %{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}
+cp -a %{_builddir}/%{name}-%{version}/source %{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}/source
+ln -s ofa_kernel-%{dkms_version}/source %{buildroot}/%{_prefix}/src/mlnx-ofa_kernel-%{dkms_version}
 sed -i -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
-	%{buildroot}/%{_prefix}/src/ofa_kernel-%{version}/source/dkms.conf
+	%{buildroot}/%{_prefix}/src/ofa_kernel-%{dkms_version}/source/dkms.conf
 # Fix path of BACKPORT_INCLUDES
 sed -i -e "s@=-I.*backport_includes@=-I/usr/src/ofa_kernel-$VERSION/backport_includes@" %{buildroot}/%{_prefix}/src/ofa_kernel/%{_arch}/%{KVERSION}/configure.mk.kernel || true
 rm -rf %{_builddir}/src
@@ -633,13 +633,13 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ "${old_ver}" != "%{dkms_version}" ] || continue
 	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms add     %{name}/%{dkms_version} && \
-/usr/sbin/dkms build   %{name}/%{dkms_version} && \
-/usr/sbin/dkms install %{name}/%{dkms_version} || :
+dkms add     %{name}/%{dkms_version} && \
+dkms build   %{name}/%{dkms_version} && \
+dkms install %{name}/%{dkms_version} || :
 
 %preun dkms
 if [ $1 -eq 0 ]; then
-	/usr/sbin/dkms remove %{name}/%{dkms_version} --all || :
+	dkms remove %{name}/%{dkms_version} --all || :
 fi
 
 %postun dkms
@@ -728,8 +728,8 @@ done
 
 %files source
 %defattr(-,root,root,-)
-%dir %{_prefix}/src/ofa_kernel-%{version}
-%{_prefix}/src/ofa_kernel-%version/source
+%dir %{_prefix}/src/ofa_kernel-%{dkms_version}
+%{_prefix}/src/ofa_kernel-%{dkms_version}/source
 %{_prefix}/src/mlnx-ofa_kernel-%{dkms_version}
 
 %files dkms

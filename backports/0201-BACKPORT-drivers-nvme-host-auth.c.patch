@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/host/auth.c
  drivers/nvme/host/auth.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/nvme/host/auth.c b/drivers/nvme/host/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/host/auth.c
 +++ b/drivers/nvme/host/auth.c
 @@ -2,7 +2,7 @@

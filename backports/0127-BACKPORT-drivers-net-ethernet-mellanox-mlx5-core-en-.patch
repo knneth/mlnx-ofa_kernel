@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en/xsk/pool.h | 27 ++++++++++++++++++-
  1 file changed, 26 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/xsk/pool.h
 @@ -4,8 +4,10 @@
@@ -19,7 +21,7 @@ Subject: [PATCH] BACKPORT:
  static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *params,
  						       struct mlx5e_xsk *xsk, u16 ix)
  {
-@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5
+@@ -17,11 +19,34 @@ static inline struct xsk_buff_pool *mlx5e_xsk_get_pool(struct mlx5e_params *para
  
  	return xsk->pools[ix];
  }

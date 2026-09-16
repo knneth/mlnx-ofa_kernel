@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en/tc_tun_geneve.c     | 20 +++++++++++++++++++
  1 file changed, 20 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_geneve.c
-@@ -21,6 +21,7 @@ static int mlx5e_tc_tun_calc_hlen_geneve
+@@ -21,6 +21,7 @@ static int mlx5e_tc_tun_calc_hlen_geneve(struct mlx5e_encap_entry *e)
  
  static int mlx5e_tc_tun_check_udp_dport_geneve(struct mlx5e_priv *priv,
  					       struct flow_cls_offload *f)
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
  	struct netlink_ext_ack *extack = f->common.extack;
-@@ -55,6 +56,7 @@ static int mlx5e_tc_tun_parse_udp_ports_
+@@ -55,6 +56,7 @@ static int mlx5e_tc_tun_parse_udp_ports_geneve(struct mlx5e_priv *priv,
  	int err;
  
  	err = mlx5e_tc_tun_parse_udp_ports(priv, spec, f, headers_c, headers_v);
@@ -24,7 +26,7 @@ Subject: [PATCH] BACKPORT:
  	if (err)
  		return err;
  
-@@ -106,13 +108,22 @@ static int mlx5e_gen_ip_tunnel_header_ge
+@@ -106,13 +108,22 @@ static int mlx5e_gen_ip_tunnel_header_geneve(char buf[],
  	memset(geneveh, 0, sizeof(*geneveh));
  	geneveh->ver = MLX5E_GENEVE_VER;
  	geneveh->opt_len = tun_info->options_len / 4;
@@ -47,7 +49,7 @@ Subject: [PATCH] BACKPORT:
  		if (!geneveh->opt_len)
  			return -EOPNOTSUPP;
  		ip_tunnel_info_opts_get(geneveh->options, tun_info);
-@@ -189,7 +200,11 @@ static int mlx5e_tc_tun_parse_geneve_opt
+@@ -189,7 +200,11 @@ static int mlx5e_tc_tun_parse_geneve_options(struct mlx5e_priv *priv,
  
  	/* make sure that we're talking about GENEVE options */
  
@@ -59,7 +61,7 @@ Subject: [PATCH] BACKPORT:
  		NL_SET_ERR_MSG_MOD(extack,
  				   "Matching on GENEVE options: option type is not GENEVE");
  		netdev_warn(priv->netdev,
-@@ -338,8 +353,12 @@ static int mlx5e_tc_tun_parse_geneve(str
+@@ -338,8 +353,12 @@ static int mlx5e_tc_tun_parse_geneve(struct mlx5e_priv *priv,
  static bool mlx5e_tc_tun_encap_info_equal_geneve(struct mlx5e_encap_key *a,
  						 struct mlx5e_encap_key *b)
  {

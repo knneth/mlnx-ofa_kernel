@@ -6,6 +6,8 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  drivers/nvme/common/auth.c | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/nvme/common/auth.c b/drivers/nvme/common/auth.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/common/auth.c
 +++ b/drivers/nvme/common/auth.c
 @@ -3,6 +3,7 @@
@@ -26,7 +28,7 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  #include <linux/nvme.h>
  #include <linux/nvme-auth.h>
  
-@@ -178,7 +181,13 @@ struct nvme_dhchap_key *nvme_auth_extrac
+@@ -178,7 +181,13 @@ struct nvme_dhchap_key *nvme_auth_extract_key(unsigned char *secret,
  	if (!key)
  		return ERR_PTR(-ENOMEM);
  
@@ -40,7 +42,7 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  	if (key_len < 0) {
  		pr_debug("base64 key decoding error %d\n",
  			 key_len);
-@@ -674,7 +683,13 @@ int nvme_auth_generate_digest(u8 hmac_id
+@@ -674,7 +683,13 @@ int nvme_auth_generate_digest(u8 hmac_id, u8 *psk, size_t psk_len,
  	if (ret)
  		goto out_free_digest;
  
@@ -54,7 +56,7 @@ Change-Id: I515cf08be2c55c262f6b560be9d2dc32d81a6713
  	if (ret < hmac_len) {
  		ret = -ENOKEY;
  		goto out_free_digest;
-@@ -721,6 +736,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_dig
+@@ -721,6 +736,7 @@ EXPORT_SYMBOL_GPL(nvme_auth_generate_digest);
   * Returns 0 on success with a valid psk pointer in @ret_psk or a negative
   * error number otherwise.
   */

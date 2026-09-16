@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma_offload.c
  drivers/nvme/target/rdma_offload.c | 37 ++++++++++++++++++++++++++++++
  1 file changed, 37 insertions(+)
 
+diff --git a/drivers/nvme/target/rdma_offload.c b/drivers/nvme/target/rdma_offload.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/nvme/target/rdma_offload.c
 +++ b/drivers/nvme/target/rdma_offload.c
 @@ -16,6 +16,10 @@
@@ -18,7 +20,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma_offload.c
  
  static unsigned int
  __nvmet_rdma_peer_to_peer_sqe_inline_size(struct ib_nvmf_caps *nvmf_caps,
-@@ -428,7 +432,17 @@ static void nvmet_rdma_free_be_ctrl(stru
+@@ -428,7 +432,17 @@ static void nvmet_rdma_free_be_ctrl(struct nvmet_rdma_backend_ctrl *be_ctrl)
  	bool has_err = false;
  	int ret;
  
@@ -36,7 +38,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma_offload.c
  	nvmet_offload_ctx_configfs_del(&be_ctrl->offload_ctx);
  
  	if (be_ctrl->ibns) {
-@@ -629,6 +643,15 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
+@@ -629,6 +643,15 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
  	}
  	mutex_unlock(&xrq->be_mutex);
  
@@ -52,7 +54,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma_offload.c
  	be_ctrl = kzalloc(sizeof(*be_ctrl), GFP_KERNEL);
  	if (!be_ctrl) {
  		err = -ENOMEM;
-@@ -693,8 +716,13 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
+@@ -693,8 +716,13 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
  	be_ctrl->offload_ctx.ctx = be_ctrl;
  	be_ctrl->offload_ctx.port = xrq->port;
  	be_ctrl->offload_ctx.ns = ns;
@@ -66,7 +68,7 @@ Subject: [PATCH] BACKPORT: drivers/nvme/target/rdma_offload.c
  	if (be_ctrl->offload_ctx.id < 0) {
  		err = -ENOMEM;
  		goto out_detach_ns;
-@@ -712,7 +740,11 @@ nvmet_rdma_create_be_ctrl(struct nvmet_r
+@@ -712,7 +740,11 @@ nvmet_rdma_create_be_ctrl(struct nvmet_rdma_xrq *xrq,
  	return be_ctrl;
  
  out_ida_remove:

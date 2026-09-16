@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en/reporter_tx.c       | 445 +++++++++++++++++-
  1 file changed, 420 insertions(+), 25 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/reporter_tx.c
-@@ -50,20 +50,48 @@ static void mlx5e_reset_txqsq_cc_pc(stru
+@@ -50,20 +50,48 @@ static void mlx5e_reset_txqsq_cc_pc(struct mlx5e_txqsq *sq)
  	sq->pc = 0;
  }
  
@@ -60,7 +62,7 @@ Subject: [PATCH] BACKPORT:
  
  static int mlx5e_tx_reporter_err_cqe_recover(void *ctx)
  {
-@@ -111,7 +139,6 @@ static int mlx5e_tx_reporter_err_cqe_rec
+@@ -111,7 +139,6 @@ static int mlx5e_tx_reporter_err_cqe_recover(void *ctx)
  	rtnl_lock();
  	mlx5e_activate_txqsq(sq);
  	rtnl_unlock();
@@ -68,7 +70,7 @@ Subject: [PATCH] BACKPORT:
  	if (sq->channel)
  		mlx5e_trigger_napi_icosq(sq->channel);
  	else
-@@ -163,6 +190,7 @@ static int mlx5e_tx_reporter_timeout_rec
+@@ -163,6 +190,7 @@ static int mlx5e_tx_reporter_timeout_recover(void *ctx)
  	return err;
  }
  
@@ -76,7 +78,7 @@ Subject: [PATCH] BACKPORT:
  static int mlx5e_tx_reporter_ptpsq_unhealthy_recover(void *ctx)
  {
  	struct mlx5e_ptpsq *ptpsq = ctx;
-@@ -211,8 +239,11 @@ static int mlx5e_tx_reporter_recover_fro
+@@ -211,8 +239,11 @@ static int mlx5e_tx_reporter_recover_from_ctx(struct mlx5e_err_ctx *err_ctx)
  }
  
  static int mlx5e_tx_reporter_recover(struct devlink_health_reporter *reporter,
@@ -90,7 +92,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_err_ctx *err_ctx = context;
-@@ -220,8 +251,11 @@ static int mlx5e_tx_reporter_recover(str
+@@ -220,8 +251,11 @@ static int mlx5e_tx_reporter_recover(struct devlink_health_reporter *reporter,
  	return err_ctx ? mlx5e_tx_reporter_recover_from_ctx(err_ctx) :
  			 mlx5e_health_recover_channels(priv);
  }
@@ -103,7 +105,7 @@ Subject: [PATCH] BACKPORT:
  mlx5e_tx_reporter_build_diagnose_output_sq_common(struct devlink_fmsg *fmsg,
  						  struct mlx5e_txqsq *sq, int tc)
  {
-@@ -229,6 +263,7 @@ mlx5e_tx_reporter_build_diagnose_output_
+@@ -229,6 +263,7 @@ mlx5e_tx_reporter_build_diagnose_output_sq_common(struct devlink_fmsg *fmsg,
  	u8 state;
  	int err;
  
@@ -111,7 +113,7 @@ Subject: [PATCH] BACKPORT:
  	devlink_fmsg_u32_pair_put(fmsg, "tc", tc);
  	devlink_fmsg_u32_pair_put(fmsg, "txq ix", sq->txq_ix);
  	devlink_fmsg_u32_pair_put(fmsg, "sqn", sq->sqn);
-@@ -243,22 +278,96 @@ mlx5e_tx_reporter_build_diagnose_output_
+@@ -243,22 +278,96 @@ mlx5e_tx_reporter_build_diagnose_output_sq_common(struct devlink_fmsg *fmsg,
  	mlx5e_health_sq_put_sw_state(fmsg, sq);
  	mlx5e_health_cq_diag_fmsg(&sq->cq, fmsg);
  	mlx5e_health_eq_diag_fmsg(sq->cq.mcq.eq, fmsg);
@@ -208,7 +210,7 @@ Subject: [PATCH] BACKPORT:
  	devlink_fmsg_obj_nest_start(fmsg);
  	devlink_fmsg_string_pair_put(fmsg, "channel", "ptp");
  	mlx5e_tx_reporter_build_diagnose_output_sq_common(fmsg, &ptpsq->txqsq, tc);
-@@ -266,12 +375,50 @@ mlx5e_tx_reporter_build_diagnose_output_
+@@ -266,12 +375,50 @@ mlx5e_tx_reporter_build_diagnose_output_ptpsq(struct devlink_fmsg *fmsg,
  	mlx5e_health_cq_diag_fmsg(&ptpsq->ts_cq, fmsg);
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
  	devlink_fmsg_obj_nest_end(fmsg);
@@ -259,7 +261,7 @@ Subject: [PATCH] BACKPORT:
  	bool real_time =  mlx5_is_real_time_sq(txqsq->mdev);
  	u32 sq_sz = mlx5_wq_cyc_get_size(&txqsq->wq);
  	u32 sq_stride = MLX5_SEND_WQE_BB;
-@@ -282,18 +429,71 @@ mlx5e_tx_reporter_diagnose_generic_txqsq
+@@ -282,18 +429,71 @@ mlx5e_tx_reporter_diagnose_generic_txqsq(struct devlink_fmsg *fmsg,
  	devlink_fmsg_string_pair_put(fmsg, "ts_format", real_time ? "RT" : "FRC");
  	mlx5e_health_cq_common_diag_fmsg(&txqsq->cq, fmsg);
  	mlx5e_health_fmsg_named_obj_nest_end(fmsg);
@@ -331,7 +333,7 @@ Subject: [PATCH] BACKPORT:
  mlx5e_tx_reporter_diagnose_common_config(struct devlink_health_reporter *reporter,
  					 struct devlink_fmsg *fmsg)
  {
-@@ -301,62 +501,141 @@ mlx5e_tx_reporter_diagnose_common_config
+@@ -301,62 +501,141 @@ mlx5e_tx_reporter_diagnose_common_config(struct devlink_health_reporter *reporte
  	struct mlx5e_txqsq *generic_sq = priv->txq2sq[0];
  	struct mlx5e_ptp *ptp_ch = priv->channels.ptp;
  	struct mlx5e_ptpsq *generic_ptpsq;
@@ -479,7 +481,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_tx_reporter_dump_sq(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
-@@ -364,33 +643,85 @@ static int mlx5e_tx_reporter_dump_sq(str
+@@ -364,33 +643,85 @@ static int mlx5e_tx_reporter_dump_sq(struct mlx5e_priv *priv, struct devlink_fms
  {
  	struct mlx5_rsc_key key = {};
  	struct mlx5e_txqsq *sq = ctx;
@@ -567,7 +569,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5e_tx_reporter_timeout_dump(struct mlx5e_priv *priv, struct devlink_fmsg *fmsg,
-@@ -457,8 +788,11 @@ static int mlx5e_tx_reporter_dump_from_c
+@@ -457,8 +788,11 @@ static int mlx5e_tx_reporter_dump_from_ctx(struct mlx5e_priv *priv,
  }
  
  static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
@@ -581,7 +583,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = devlink_health_reporter_priv(reporter);
  	struct mlx5e_err_ctx *err_ctx = context;
-@@ -466,6 +800,7 @@ static int mlx5e_tx_reporter_dump(struct
+@@ -466,6 +800,7 @@ static int mlx5e_tx_reporter_dump(struct devlink_health_reporter *reporter,
  	return err_ctx ? mlx5e_tx_reporter_dump_from_ctx(priv, err_ctx, fmsg) :
  			 mlx5e_tx_reporter_dump_all_sqs(priv, fmsg);
  }
@@ -589,7 +591,7 @@ Subject: [PATCH] BACKPORT:
  
  void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq)
  {
-@@ -475,7 +810,9 @@ void mlx5e_reporter_tx_err_cqe(struct ml
+@@ -475,7 +810,9 @@ void mlx5e_reporter_tx_err_cqe(struct mlx5e_txqsq *sq)
  
  	err_ctx.ctx = sq;
  	err_ctx.recover = mlx5e_tx_reporter_err_cqe_recover;
@@ -600,7 +602,7 @@ Subject: [PATCH] BACKPORT:
  	snprintf(err_str, sizeof(err_str), "ERR CQE on SQ: 0x%x", sq->sqn);
  
  	mlx5e_health_report(priv, priv->tx_reporter, err_str, &err_ctx);
-@@ -491,7 +828,9 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -491,7 +828,9 @@ int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq)
  	to_ctx.sq = sq;
  	err_ctx.ctx = &to_ctx;
  	err_ctx.recover = mlx5e_tx_reporter_timeout_recover;
@@ -610,7 +612,7 @@ Subject: [PATCH] BACKPORT:
  	snprintf(err_str, sizeof(err_str),
  		 "TX timeout on queue: %d, SQ: 0x%x, CQ: 0x%x, SQ Cons: 0x%x SQ Prod: 0x%x, usecs since last trans: %u",
  		 sq->ch_ix, sq->sqn, sq->cq.mcq.cqn, sq->cc, sq->pc,
-@@ -501,6 +840,7 @@ int mlx5e_reporter_tx_timeout(struct mlx
+@@ -501,6 +840,7 @@ int mlx5e_reporter_tx_timeout(struct mlx5e_txqsq *sq)
  	return to_ctx.status;
  }
  
@@ -618,7 +620,7 @@ Subject: [PATCH] BACKPORT:
  void mlx5e_reporter_tx_ptpsq_unhealthy(struct mlx5e_ptpsq *ptpsq)
  {
  	struct mlx5e_ptp_metadata_map *map = &ptpsq->metadata_map;
-@@ -520,29 +860,76 @@ void mlx5e_reporter_tx_ptpsq_unhealthy(s
+@@ -520,29 +860,76 @@ void mlx5e_reporter_tx_ptpsq_unhealthy(struct mlx5e_ptpsq *ptpsq)
  	mlx5e_health_report(priv, priv->tx_reporter, err_str, &err_ctx);
  }
  
@@ -702,7 +704,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
-@@ -550,6 +937,14 @@ void mlx5e_reporter_tx_destroy(struct ml
+@@ -550,6 +937,14 @@ void mlx5e_reporter_tx_destroy(struct mlx5e_priv *priv)
  	if (!priv->tx_reporter)
  		return;
  

@@ -7,9 +7,11 @@ Change-Id: Ica54b6a62fd97072179a1fabb3f7f4ad77928f7d
  .../mellanox/mlx5/core/steering/hws/bwc_complex.c    | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/hws/bwc_complex.c
-@@ -675,7 +675,11 @@ __must_hold(&subm->hash_lock)
+@@ -622,7 +622,11 @@ __must_hold(&subm->hash_lock)
  	if (!sr_data)
  		return -ENOMEM;
  
@@ -21,7 +23,7 @@ Change-Id: Ica54b6a62fd97072179a1fabb3f7f4ad77928f7d
  	if (ret < 0)
  		goto free_sr_data;
  	sr_data->chain_id = ret;
-@@ -714,7 +718,11 @@ __must_hold(&subm->hash_lock)
+@@ -661,7 +665,11 @@ __must_hold(&subm->hash_lock)
  	return 0;
  
  free_ida:
@@ -33,7 +35,7 @@ Change-Id: Ica54b6a62fd97072179a1fabb3f7f4ad77928f7d
  free_sr_data:
  	kfree(sr_data);
  
-@@ -737,7 +745,11 @@ __must_hold(&subm->hash_lock)
+@@ -684,7 +692,11 @@ __must_hold(&subm->hash_lock)
  		rhashtable_remove_fast(&subm->rules_hash,
  				       &sr_data->hash_node,
  				       hws_rules_hash_params);

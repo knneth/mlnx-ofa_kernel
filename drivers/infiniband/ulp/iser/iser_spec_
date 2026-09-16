@@ -202,7 +202,6 @@ for flavor in %flavors_to_build; do
 done
 sed -e '/^PACKAGE_VERSION=/s/=.*/="%{dkms_version}"/' \
 	-e 's/AUTOINSTALL=.*/AUTOINSTALL="yes"/' \
-	-e '$aBUILD_DEPENDS="mlnx-ofa_kernel"' \
 	-e '$aBUILD_DEPENDS_REBUILD="yes"' \
 	<source/dkms.conf \
 	> %{buildroot}%{_usrsrc}/%{name}-%{dkms_version}/dkms.conf
@@ -261,11 +260,11 @@ for ver_dir in /var/lib/dkms/%{name}/*/; do
 	[ "${old_ver}" != "%{dkms_version}" ] || continue
 	[ -e "${ver_dir}/source" ] || rm -rf "${ver_dir}"
 done
-/usr/sbin/dkms install %{name}/%{dkms_version} || :
+dkms install %{name}/%{dkms_version} || :
 
 %preun dkms
 if [ $1 -eq 0 ]; then
-	/usr/sbin/dkms remove %{name}/%{dkms_version} --all || :
+	dkms remove %{name}/%{dkms_version} --all || :
 fi
 
 %if %{with building_kmods}

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/en_accel/ktls_rx.c     | 137 +++++++++++++++++-
  1 file changed, 136 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_rx.c
 @@ -1,6 +1,7 @@
@@ -38,7 +40,7 @@ Subject: [PATCH] BACKPORT:
  	u32 rxq;
  	DECLARE_BITMAP(flags, MLX5E_NUM_PRIV_RX_FLAGS);
  
-@@ -148,7 +155,11 @@ post_static_params(struct mlx5e_icosq *s
+@@ -148,7 +155,11 @@ post_static_params(struct mlx5e_icosq *sq,
  	wqe = MLX5E_TLS_FETCH_SET_STATIC_PARAMS_WQE(sq, pi);
  	mlx5e_ktls_build_static_params(wqe, sq->pc, sq->sqn, &priv_rx->crypto_info,
  				       mlx5e_tir_get_tirn(&priv_rx->tir),
@@ -60,7 +62,7 @@ Subject: [PATCH] BACKPORT:
  	return err;
  }
  
-@@ -339,14 +352,26 @@ static void resync_handle_work(struct wo
+@@ -339,14 +352,26 @@ static void resync_handle_work(struct work_struct *work)
  
  	if (unlikely(test_bit(MLX5E_PRIV_RX_FLAG_DELETING, priv_rx->flags))) {
  		mlx5e_ktls_priv_rx_put(priv_rx);
@@ -87,7 +89,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static void resync_init(struct mlx5e_ktls_rx_resync_ctx *resync,
-@@ -382,6 +407,7 @@ static void resync_handle_seq_match(stru
+@@ -382,6 +407,7 @@ static void resync_handle_seq_match(struct mlx5e_ktls_offload_context_rx *priv_r
  		       sizeof(info->rec_seq));
  		break;
  	}
@@ -95,7 +97,7 @@ Subject: [PATCH] BACKPORT:
  	case TLS_CIPHER_AES_GCM_256: {
  		struct tls12_crypto_info_aes_gcm_256 *info =
  			&priv_rx->crypto_info.crypto_info_256;
-@@ -390,6 +416,7 @@ static void resync_handle_seq_match(stru
+@@ -390,6 +416,7 @@ static void resync_handle_seq_match(struct mlx5e_ktls_offload_context_rx *priv_r
  		       sizeof(info->rec_seq));
  		break;
  	}
@@ -103,7 +105,7 @@ Subject: [PATCH] BACKPORT:
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  priv_rx->crypto_info.crypto_info.cipher_type);
-@@ -425,14 +452,30 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -425,14 +452,30 @@ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
  {
  	struct mlx5e_ktls_rx_resync_buf *buf = wi->tls_get_params.buf;
  	struct mlx5e_ktls_offload_context_rx *priv_rx;
@@ -134,7 +136,7 @@ Subject: [PATCH] BACKPORT:
  
  	dma_sync_single_for_cpu(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE,
  				DMA_FROM_DEVICE);
-@@ -443,12 +486,25 @@ void mlx5e_ktls_handle_get_psv_completio
+@@ -443,12 +486,25 @@ void mlx5e_ktls_handle_get_psv_completion(struct mlx5e_icosq_wqe_info *wi,
  	if (tracker_state != MLX5E_TLS_PROGRESS_PARAMS_RECORD_TRACKER_STATE_TRACKING ||
  	    auth_state != MLX5E_TLS_PROGRESS_PARAMS_AUTH_STATE_NO_OFFLOAD) {
  		priv_rx->rq_stats->tls_resync_req_skip++;
@@ -160,7 +162,7 @@ Subject: [PATCH] BACKPORT:
  out:
  	mlx5e_ktls_priv_rx_put(priv_rx);
  	dma_unmap_single(dev, buf->dma_addr, PROGRESS_PARAMS_PADDED_SIZE, DMA_FROM_DEVICE);
-@@ -472,8 +528,15 @@ static bool resync_queue_get_psv(struct
+@@ -472,8 +528,15 @@ static bool resync_queue_get_psv(struct sock *sk)
  
  	resync = &priv_rx->resync;
  	mlx5e_ktls_priv_rx_get(priv_rx);
@@ -176,7 +178,7 @@ Subject: [PATCH] BACKPORT:
  
  	return true;
  }
-@@ -482,13 +545,18 @@ static bool resync_queue_get_psv(struct
+@@ -482,13 +545,18 @@ static bool resync_queue_get_psv(struct sock *sk)
  static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  {
  	struct ethhdr *eth = (struct ethhdr *)(skb->data);
@@ -196,7 +198,7 @@ Subject: [PATCH] BACKPORT:
  	int depth = 0;
  
  	__vlan_get_protocol(skb, eth->h_proto, &depth);
-@@ -498,9 +566,20 @@ static void resync_update_sn(struct mlx5
+@@ -498,9 +566,20 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  		depth += sizeof(struct iphdr);
  		th = (void *)iph + sizeof(struct iphdr);
  
@@ -217,7 +219,7 @@ Subject: [PATCH] BACKPORT:
  #if IS_ENABLED(CONFIG_IPV6)
  	} else {
  		struct ipv6hdr *ipv6h = (struct ipv6hdr *)iph;
-@@ -508,10 +587,21 @@ static void resync_update_sn(struct mlx5
+@@ -508,10 +587,21 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  		depth += sizeof(struct ipv6hdr);
  		th = (void *)ipv6h + sizeof(struct ipv6hdr);
  
@@ -239,7 +241,7 @@ Subject: [PATCH] BACKPORT:
  #endif
  	}
  
-@@ -526,10 +616,19 @@ static void resync_update_sn(struct mlx5
+@@ -526,10 +616,19 @@ static void resync_update_sn(struct mlx5e_rq *rq, struct sk_buff *skb)
  	if (unlikely(!resync_queue_get_psv(sk)))
  		goto unref;
  
@@ -259,7 +261,7 @@ Subject: [PATCH] BACKPORT:
  
  unref:
  	sock_gen_put(sk);
-@@ -557,6 +656,20 @@ void mlx5e_ktls_rx_resync(struct net_dev
+@@ -557,6 +656,20 @@ void mlx5e_ktls_rx_resync(struct net_device *netdev, struct sock *sk,
  	resync_handle_seq_match(priv_rx, c);
  }
  
@@ -280,7 +282,7 @@ Subject: [PATCH] BACKPORT:
  /* End of resync section */
  
  void mlx5e_ktls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
-@@ -609,7 +722,9 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -609,7 +722,9 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  	struct mlx5e_ktls_offload_context_rx *priv_rx;
  	struct mlx5e_ktls_rx_resync_ctx *resync;
  	struct tls_context *tls_ctx;
@@ -290,7 +292,7 @@ Subject: [PATCH] BACKPORT:
  	struct mlx5e_priv *priv;
  	int rxq, err;
  
-@@ -624,10 +739,12 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -624,10 +739,12 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  		priv_rx->crypto_info.crypto_info_128 =
  			*(struct tls12_crypto_info_aes_gcm_128 *)crypto_info;
  		break;
@@ -303,7 +305,7 @@ Subject: [PATCH] BACKPORT:
  	default:
  		WARN_ONCE(1, "Unsupported cipher type %u\n",
  			  crypto_info->cipher_type);
-@@ -635,12 +752,19 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -635,12 +752,19 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  		goto err_cipher_type;
  	}
  
@@ -323,7 +325,7 @@ Subject: [PATCH] BACKPORT:
  
  	INIT_LIST_HEAD(&priv_rx->list);
  	spin_lock_init(&priv_rx->lock);
-@@ -662,8 +786,10 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -662,8 +786,10 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  	accel_rule_init(&priv_rx->rule, priv);
  	resync = &priv_rx->resync;
  	resync_init(resync, priv);
@@ -334,7 +336,7 @@ Subject: [PATCH] BACKPORT:
  
  	err = post_rx_param_wqes(priv->channels.c[rxq], priv_rx, start_offload_tcp_sn);
  	if (err)
-@@ -676,7 +802,11 @@ int mlx5e_ktls_add_rx(struct net_device
+@@ -676,7 +802,11 @@ int mlx5e_ktls_add_rx(struct net_device *netdev, struct sock *sk,
  err_post_wqes:
  	mlx5e_tir_destroy(&priv_rx->tir);
  err_create_tir:
@@ -346,7 +348,7 @@ Subject: [PATCH] BACKPORT:
  err_cipher_type:
  	kfree(priv_rx);
  	return err;
-@@ -708,7 +838,11 @@ void mlx5e_ktls_del_rx(struct net_device
+@@ -708,7 +838,11 @@ void mlx5e_ktls_del_rx(struct net_device *netdev, struct tls_context *tls_ctx)
  		mlx5e_accel_fs_del_sk(priv_rx->rule.rule);
  
  	mlx5e_tir_destroy(&priv_rx->tir);
@@ -358,7 +360,7 @@ Subject: [PATCH] BACKPORT:
  	/* priv_rx should normally be freed here, but if there is an outstanding
  	 * GET_PSV, deallocation will be delayed until the CQE for GET_PSV is
  	 * processed.
-@@ -781,3 +915,4 @@ bool mlx5e_ktls_rx_handle_resync_list(st
+@@ -781,3 +915,4 @@ bool mlx5e_ktls_rx_handle_resync_list(struct mlx5e_channel *c, int budget)
  
  	return i == budget;
  }

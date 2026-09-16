@@ -184,7 +184,7 @@ endif
 	install -m 0755 source/ofed_scripts/auxdev-sf-netdev-rename	debian/$(putils)/lib/udev
 	install -m 0755 source/ofed_scripts/net-interfaces		debian/$(putils)/usr/sbin
 	install -m 0755 source/ofed_scripts/ibdev2netdev		debian/$(putils)/usr/sbin
-	install -m 0755 source/ofed_scripts/mlnx-ofed-kernel-utils.openibd.init	debian/$(putils)/etc/init.d/openibd
+	install -m 0755 source/ofed_scripts/openibd			debian/$(putils)/etc/init.d/openibd
 	install -m 0644 source/ofed_scripts/mlnx.conf			debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/mlnx-bf.conf	debian/$(putils)/etc/modprobe.d
 	install -m 0644 source/ofed_scripts/ib_ipoib.conf		debian/$(putils)/etc/modprobe.d

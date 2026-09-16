@@ -420,6 +420,9 @@
 /* __cgroup_bpf_run_filter_sysctl have 7 parameters */
 #undef HAVE_CGROUP_BPF_RUN_FILTER_SYSCTL_7_PARAMETERS
 
+/* check_add_overflow accepts mixed argument types */
+#undef HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+
 /* vxlan_build_gbp_hdr is defined */
 #undef HAVE_CHECK_VXLAN_BUILD_GBP_HDR
 
@@ -866,6 +869,9 @@
 
 /* dpll.h has dpll_netdev_pin_set */
 #undef HAVE_DPLL_NETDEV_PIN_SET
+
+/* struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param */
+#undef HAVE_DPLL_PIN_OPS_FFO_GET_PARAM
 
 /* struct dpll_pin_ops has ffo_get */
 #undef HAVE_DPLL_PIN_OPS_HAS_FFO_GET
@@ -1747,6 +1753,9 @@
 /* net_namespace get const struct device */
 #undef HAVE_NET_NAMESPACE_GET_CONST_DEVICE
 
+/* class.namespace returns const struct ns_common * */
+#undef HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
+
 /* net/netdev_lock.h header exists */
 #undef HAVE_NET_NETDEV_LOCK_H
 
@@ -1836,7 +1845,10 @@
 #undef HAVE_NVME_AUTH_DERIVE_TLS_PSK
 
 /* nvme_auth_generate_digest is defined */
-#undef HAVE_NVME_AUTH_GENERATE_DIGEST
+#undef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
+
+/* nvme_auth_generate_digest is defined */
+#undef HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8
 
 /* nvme_auth_generate_psk is defined */
 #undef HAVE_NVME_AUTH_GENERATE_PSK
@@ -1934,8 +1946,11 @@
 /* linux/aer.h has pci_enable_pcie_error_reporting */
 #undef HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING
 
-/* include/linux/pci.h has pci_enable_ptm */
-#undef HAVE_PCI_ENABLE_PTM
+/* include/linux/pci.h has pci_enable_ptm get 1 param */
+#undef HAVE_PCI_ENABLE_PTM_GET_1_PARAM
+
+/* include/linux/pci.h has pci_enable_ptm get 2 param */
+#undef HAVE_PCI_ENABLE_PTM_GET_2_PARAM
 
 /* desc */
 #undef HAVE_PCI_EPC_FEATURES_INTX_CAPABLE
@@ -2681,6 +2696,9 @@
 
 /* has vfio_combine_iova_ranges exists */
 #undef HAVE_VFIO_COMBINE_IOVA_RANGES
+
+/* struct vfio_device_ops has get_region_info_caps */
+#undef HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS
 
 /* struct vfio_device_ops has match_token_uuid */
 #undef HAVE_VFIO_DEVICE_OPS_MATCH_TOKEN_UUID

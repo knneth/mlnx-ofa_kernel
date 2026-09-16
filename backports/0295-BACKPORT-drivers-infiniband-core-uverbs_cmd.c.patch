@@ -6,9 +6,11 @@ Change-Id: I0d566178cb032d1aca59edc33798046899827fb6
  drivers/infiniband/core/uverbs_cmd.c | 28 +++++++++++++++++++++++++++-
  1 file changed, 27 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/core/uverbs_cmd.c b/drivers/infiniband/core/uverbs_cmd.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/uverbs_cmd.c
 +++ b/drivers/infiniband/core/uverbs_cmd.c
-@@ -218,6 +218,10 @@ int ib_alloc_ucontext(struct uverbs_attr
+@@ -218,6 +218,10 @@ int ib_alloc_ucontext(struct uverbs_attr_bundle *attrs)
  	ucontext = rdma_zalloc_drv_obj(ib_dev, ib_ucontext);
  	if (!ucontext)
  		return -ENOMEM;
@@ -19,7 +21,7 @@ Change-Id: I0d566178cb032d1aca59edc33798046899827fb6
  
  	ucontext->device = ib_dev;
  	ucontext->ufile = ufile;
-@@ -591,7 +595,11 @@ static int ib_uverbs_open_xrcd(struct uv
+@@ -591,7 +595,11 @@ static int ib_uverbs_open_xrcd(struct uverbs_attr_bundle *attrs)
  	struct inode                   *inode = NULL;
  	int				new_xrcd = 0;
  	struct ib_device *ib_dev;
@@ -31,7 +33,7 @@ Change-Id: I0d566178cb032d1aca59edc33798046899827fb6
  	int ret;
  
  	ret = uverbs_request(attrs, &cmd, sizeof(cmd));
-@@ -603,12 +611,20 @@ static int ib_uverbs_open_xrcd(struct uv
+@@ -603,12 +611,20 @@ static int ib_uverbs_open_xrcd(struct uverbs_attr_bundle *attrs)
  	if (cmd.fd != -1) {
  		/* search for file descriptor */
  		f = fdget(cmd.fd);
@@ -52,7 +54,7 @@ Change-Id: I0d566178cb032d1aca59edc33798046899827fb6
  		xrcd = find_xrcd(ibudev, inode);
  		if (!xrcd && !(cmd.oflags & O_CREAT)) {
  			/* no file descriptor. Need CREATE flag */
-@@ -651,6 +667,9 @@ static int ib_uverbs_open_xrcd(struct uv
+@@ -651,6 +667,9 @@ static int ib_uverbs_open_xrcd(struct uverbs_attr_bundle *attrs)
  		atomic_inc(&xrcd->usecnt);
  	}
  
@@ -72,7 +74,7 @@ Change-Id: I0d566178cb032d1aca59edc33798046899827fb6
  	fdput(f);
  
  	mutex_unlock(&ibudev->xrcd_tree_mutex);
-@@ -3394,7 +3416,11 @@ static int __uverbs_create_xsrq(struct u
+@@ -3393,7 +3415,11 @@ static int __uverbs_create_xsrq(struct uverbs_attr_bundle *attrs,
  	struct ib_srq                   *srq;
  	struct ib_srq_init_attr          attr;
  	int ret;

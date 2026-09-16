@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/srp/ib_srp.h
  drivers/infiniband/ulp/srp/ib_srp.h | 6 ++++++
  1 file changed, 6 insertions(+)
 
+diff --git a/drivers/infiniband/ulp/srp/ib_srp.h b/drivers/infiniband/ulp/srp/ib_srp.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/srp/ib_srp.h
 +++ b/drivers/infiniband/ulp/srp/ib_srp.h
 @@ -184,6 +184,9 @@ struct srp_rdma_ch {

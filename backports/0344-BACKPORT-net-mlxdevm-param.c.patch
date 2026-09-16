@@ -6,9 +6,11 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  net/mlxdevm/param.c | 20 ++++++++++++++++++++
  1 file changed, 20 insertions(+)
 
+diff --git a/net/mlxdevm/param.c b/net/mlxdevm/param.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/param.c
 +++ b/net/mlxdevm/param.c
-@@ -344,8 +344,10 @@ static void mlxdevm_param_notify(struct
+@@ -344,8 +344,10 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  				 struct mlxdevm_param_item *param_item,
  				 enum mlxdevm_command cmd)
  {
@@ -19,7 +21,7 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  
  	WARN_ON(cmd != MLXDEVM_CMD_PARAM_NEW && cmd != MLXDEVM_CMD_PARAM_DEL &&
  		cmd != MLXDEVM_CMD_PORT_PARAM_NEW &&
-@@ -358,6 +360,7 @@ static void mlxdevm_param_notify(struct
+@@ -358,6 +360,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  	if (!devm_is_registered(mlxdevm) || !mlxdevm_nl_notify_need(mlxdevm))
  		return;
  
@@ -27,7 +29,7 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -369,6 +372,7 @@ static void mlxdevm_param_notify(struct
+@@ -369,6 +372,7 @@ static void mlxdevm_param_notify(struct mlxdevm *mlxdevm,
  	}
  
  	mlxdevm_nl_notify_send(mlxdevm, msg);
@@ -47,7 +49,7 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  		return -EINVAL;
  
  	switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_PARAM_TYPE])) {
-@@ -449,7 +457,11 @@ mlxdevm_param_type_get_from_info(struct
+@@ -449,7 +457,11 @@ mlxdevm_param_type_get_from_info(struct genl_info *info,
  		*param_type = MLXDEVM_PARAM_TYPE_BOOL;
  		break;
  	case NLA_NESTED:
@@ -59,7 +61,7 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  			return -EINVAL;
  
  		switch (nla_get_u8(info->attrs[MLXDEVM_ATTR_EXT_PARAM_ARRAY_TYPE])) {
-@@ -526,7 +538,11 @@ mlxdevm_param_get_from_info(struct xarra
+@@ -526,7 +538,11 @@ mlxdevm_param_get_from_info(struct xarray *params, struct genl_info *info)
  {
  	char *param_name;
  
@@ -71,7 +73,7 @@ Change-Id: I81afbc215e751b47d4a719a7753146cdb468d815
  		return NULL;
  
  	param_name = nla_data(info->attrs[MLXDEVM_ATTR_PARAM_NAME]);
-@@ -592,7 +608,11 @@ static int __mlxdevm_nl_cmd_param_set_do
+@@ -592,7 +608,11 @@ static int __mlxdevm_nl_cmd_param_set_doit(struct mlxdevm *mlxdevm,
  			return err;
  	}
  

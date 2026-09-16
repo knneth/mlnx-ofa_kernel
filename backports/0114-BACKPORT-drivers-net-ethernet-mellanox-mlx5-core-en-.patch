@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
  drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
 @@ -15,6 +15,9 @@ struct mlx5e_tc_mod_hdr_acts;
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/tc_ct.h
  
  struct mlx5_fs_chains;
  struct mlx5_tc_ct_priv;
-@@ -143,6 +146,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(cons
+@@ -143,6 +146,8 @@ bool mlx5e_tc_ct_is_valid_flow_rule(const struct net_device *dev, struct flow_ru
  
  #else /* CONFIG_MLX5_TC_CT */
  

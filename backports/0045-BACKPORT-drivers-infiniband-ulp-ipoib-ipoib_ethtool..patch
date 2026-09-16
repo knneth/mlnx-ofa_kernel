@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
  drivers/infiniband/ulp/ipoib/ipoib_ethtool.c | 15 +++++++++++++--
  1 file changed, 13 insertions(+), 2 deletions(-)
 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
 +++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
-@@ -65,16 +65,20 @@ static void ipoib_get_drvinfo(struct net
+@@ -65,16 +65,20 @@ static void ipoib_get_drvinfo(struct net_device *netdev,
  
  	ib_get_device_fw_str(priv->ca, drvinfo->fw_version);
  
@@ -30,7 +32,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  
-@@ -85,9 +89,13 @@ static int ipoib_get_coalesce(struct net
+@@ -85,9 +89,13 @@ static int ipoib_get_coalesce(struct net_device *dev,
  }
  
  static int ipoib_set_coalesce(struct net_device *dev,
@@ -44,7 +46,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
  {
  	struct ipoib_dev_priv *priv = ipoib_priv(dev);
  	int ret;
-@@ -113,6 +121,7 @@ static int ipoib_set_coalesce(struct net
+@@ -113,6 +121,7 @@ static int ipoib_set_coalesce(struct net_device *dev,
  
  	return 0;
  }
@@ -52,7 +54,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
  static void ipoib_get_ethtool_stats(struct net_device *dev,
  				    struct ethtool_stats __always_unused *stats,
  				    u64 *data)
-@@ -217,8 +226,10 @@ static int ipoib_get_link_ksettings(stru
+@@ -217,8 +226,10 @@ static int ipoib_get_link_ksettings(struct net_device *netdev,
  }
  
  static const struct ethtool_ops ipoib_ethtool_ops = {

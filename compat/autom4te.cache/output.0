@@ -3053,6 +3053,56 @@ EOF
 	echo "struct dpll_pin_ops has ffo_get" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
+         
+	if false; then
+		
+printf "%s\n" "@%:@define HAVE_DPLL_PIN_OPS_FFO_GET_PARAM -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_DPLL_PIN_OPS_FFO_GET_PARAM
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+         #include <linux/dpll.h>
+
+         static int test_ffo_get(const struct dpll_pin *pin, void *pin_priv,
+                                 const struct dpll_device *dpll, void *dpll_priv,
+                                 struct dpll_ffo_param *ffo,
+                                 struct netlink_ext_ack *extack)
+         {
+                 return 0;
+         }
+         
+static int __maybe_unused test_func (void) {
+
+                 struct dpll_pin_ops pin_ops = {};
+
+                 pin_ops.ffo_get = test_ffo_get;
+
+                 return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "struct dpll_pin_ops .ffo_get takes struct dpll_ffo_param" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
 	
 	if false; then
 		
@@ -18846,6 +18896,53 @@ EOF
 	
 	if false; then
 		
+printf "%s\n" "@%:@define HAVE_NET_NAMESPACE_RETURNS_NS_COMMON -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_NET_NAMESPACE_RETURNS_NS_COMMON
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/device.h>
+		static const struct ns_common *test_namespace(const struct device *d);
+		static const struct ns_common *test_namespace(const struct device *d)
+		{
+			return NULL;
+		}
+	
+static int __maybe_unused test_func (void) {
+
+		struct class cm_class = {
+			.namespace = test_namespace,
+		};
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "class.namespace returns const struct ns_common *" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
 printf "%s\n" "@%:@define HAVE_CLASS_DEV_UEVENT_CONST_DEV -1" >>confdefs.h
 
 	fi
@@ -26057,6 +26154,51 @@ EOF
 	
 	if false; then
 		
+printf "%s\n" "@%:@define HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_CHECK_ADD_OVERFLOW_MIXED_TYPES
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/overflow.h>
+		#include <linux/types.h>
+	
+static int __maybe_unused test_func (void) {
+
+		size_t len = 5;
+		u64 virt = 6;
+		u64 res;
+
+		(void)check_add_overflow(len - 1, virt, &res);
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "check_add_overflow accepts mixed argument types" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
 printf "%s\n" "@%:@define HAVE_KVFREE_CALL_RCU -1" >>confdefs.h
 
 	fi
@@ -26751,6 +26893,48 @@ endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
 	echo "struct vfio_device_ops has match_token_uuid" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
+printf "%s\n" "@%:@define HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_VFIO_DEVICE_OPS_GET_REGION_INFO_CAPS
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/vfio.h>
+	
+static int __maybe_unused test_func (void) {
+
+		struct vfio_device_ops vfio_ops;
+
+		vfio_ops.get_region_info_caps = NULL;
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "struct vfio_device_ops has get_region_info_caps" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
 	
@@ -38220,10 +38404,10 @@ EOF
 	
 	if false; then
 		
-printf "%s\n" "@%:@define HAVE_PCI_ENABLE_PTM -1" >>confdefs.h
+printf "%s\n" "@%:@define HAVE_PCI_ENABLE_PTM_GET_2_PARAM -1" >>confdefs.h
 
 	fi
-	MLNX_RDMA_MOD_NAME=HAVE_PCI_ENABLE_PTM
+	MLNX_RDMA_MOD_NAME=HAVE_PCI_ENABLE_PTM_GET_2_PARAM
 	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
 	rm -rf "$MLNX_RDMA_MOD_DIR"
 	mkdir -p "$MLNX_RDMA_MOD_DIR"
@@ -38254,7 +38438,47 @@ ifeq (,\$(MLNX_RDMA_SILENT))
 endif
 EOF
 	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
-	echo "include/linux/pci.h has pci_enable_ptm" > "$MLNX_RDMA_MODULES_DIR/desc"
+	echo "include/linux/pci.h has pci_enable_ptm get 2 param" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
+printf "%s\n" "@%:@define HAVE_PCI_ENABLE_PTM_GET_1_PARAM -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_PCI_ENABLE_PTM_GET_1_PARAM
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/pci.h>
+	
+static int __maybe_unused test_func (void) {
+
+		pci_enable_ptm(NULL);
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "include/linux/pci.h has pci_enable_ptm get 1 param" > "$MLNX_RDMA_MODULES_DIR/desc"
 
 
 	
@@ -42018,10 +42242,10 @@ EOF
 	
 	if false; then
 		
-printf "%s\n" "@%:@define HAVE_NVME_AUTH_GENERATE_DIGEST -1" >>confdefs.h
+printf "%s\n" "@%:@define HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8 -1" >>confdefs.h
 
 	fi
-	MLNX_RDMA_MOD_NAME=HAVE_NVME_AUTH_GENERATE_DIGEST
+	MLNX_RDMA_MOD_NAME=HAVE_NVME_AUTH_GENERATE_DIGEST_GET_U8
 	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
 	rm -rf "$MLNX_RDMA_MOD_DIR"
 	mkdir -p "$MLNX_RDMA_MOD_DIR"
@@ -42035,6 +42259,47 @@ MODULE_LICENSE("GPL");
 static int __maybe_unused test_func (void) {
 
 		u8 *b;
+		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
+
+		return 0;
+	
+	return 0;
+}
+EOF
+		cat <<EOF >"$MLNX_RDMA_MOD_DIR/Makefile"
+obj-m += $MLNX_RDMA_TEST_MOD.o
+# The rest is for printing a single dot:
+ifeq (,\$(MLNX_RDMA_SILENT))
+\$(obj)/$MLNX_RDMA_TEST_MOD.o: \$(obj)/echo
+\$(obj)/echo:
+	@echo -n .
+.PHONY: \$(obj)/echo
+endif
+EOF
+	echo "obj-\$(MLNX_TEST)\$(MLNX_TEST_$MLNX_RDMA_MOD_NAME) += $MLNX_RDMA_MOD_NAME/" >>$MLNX_RDMA_MODULES_DIR/Makefile
+	echo "nvme_auth_generate_digest is defined" > "$MLNX_RDMA_MODULES_DIR/desc"
+
+
+	
+	if false; then
+		
+printf "%s\n" "@%:@define HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR -1" >>confdefs.h
+
+	fi
+	MLNX_RDMA_MOD_NAME=HAVE_NVME_AUTH_GENERATE_DIGEST_GET_CHAR
+	MLNX_RDMA_MOD_DIR="$MLNX_RDMA_MODULES_DIR/$MLNX_RDMA_MOD_NAME"
+	rm -rf "$MLNX_RDMA_MOD_DIR"
+	mkdir -p "$MLNX_RDMA_MOD_DIR"
+	cat <<'EOF' >"$MLNX_RDMA_MOD_DIR/$MLNX_RDMA_TEST_MOD.c"
+#include <linux/module.h>
+#include <linux/kernel.h>
+MODULE_LICENSE("GPL");
+
+		#include <linux/nvme-auth.h>
+	
+static int __maybe_unused test_func (void) {
+
+		char *b;
 		int x = nvme_auth_generate_digest(0, NULL, 0, NULL, NULL, &b);
 
 		return 0;

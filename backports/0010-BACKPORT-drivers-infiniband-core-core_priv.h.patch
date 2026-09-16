@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/core_priv.h
  drivers/infiniband/core/core_priv.h | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/infiniband/core/core_priv.h b/drivers/infiniband/core/core_priv.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/core_priv.h
 +++ b/drivers/infiniband/core/core_priv.h
 @@ -40,6 +40,9 @@

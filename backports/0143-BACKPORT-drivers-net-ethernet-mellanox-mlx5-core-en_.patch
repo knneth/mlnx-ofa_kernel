@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c | 2 ++
  1 file changed, 2 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/ktls_txrx.c
-@@ -40,6 +40,7 @@ fill_static_params(struct mlx5_wqe_tls_s
+@@ -40,6 +40,7 @@ fill_static_params(struct mlx5_wqe_tls_static_params_seg *params,
  		EXTRACT_INFO_FIELDS;
  		break;
  	}
@@ -16,7 +18,7 @@ Subject: [PATCH] BACKPORT:
  	case TLS_CIPHER_AES_GCM_256: {
  		struct tls12_crypto_info_aes_gcm_256 *info =
  			&crypto_info->crypto_info_256;
-@@ -47,6 +48,7 @@ fill_static_params(struct mlx5_wqe_tls_s
+@@ -47,6 +48,7 @@ fill_static_params(struct mlx5_wqe_tls_static_params_seg *params,
  		EXTRACT_INFO_FIELDS;
  		break;
  	}

@@ -7,6 +7,8 @@ Change-Id: I9dd848778bf9df41631bc31903edc4319920dd6d
  drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c b/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/steering/sws/dr_dbg.c
 @@ -5,6 +5,9 @@

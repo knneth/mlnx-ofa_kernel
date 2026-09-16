@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  drivers/infiniband/core/addr.c | 92 ++++++++++++++++++++++++++++++++--
  1 file changed, 88 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/infiniband/core/addr.c b/drivers/infiniband/core/addr.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/core/addr.c
 +++ b/drivers/infiniband/core/addr.c
 @@ -41,7 +41,9 @@
@@ -49,7 +51,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  };
  
  static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
-@@ -87,8 +102,11 @@ static inline bool ib_nl_is_good_ip_resp
+@@ -87,8 +102,11 @@ static inline bool ib_nl_is_good_ip_resp(const struct nlmsghdr *nlh)
  
  	if (nlh->nlmsg_flags & RDMA_NL_LS_F_ERR)
  		return false;
@@ -62,7 +64,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  				   nlmsg_len(nlh), ib_nl_addr_policy, NULL);
  	if (ret)
  		return false;
-@@ -178,7 +196,11 @@ static int ib_nl_ip_send_msg(struct rdma
+@@ -178,7 +196,11 @@ static int ib_nl_ip_send_msg(struct rdma_dev_addr *dev_addr,
  	}
  
  	/* Construct the family header first */
@@ -75,7 +77,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  	header->ifindex = dev_addr->bound_dev_if;
  	nla_put(skb, attrtype, size, daddr);
  
-@@ -250,11 +272,20 @@ rdma_find_ndev_for_src_ip_rcu(struct net
+@@ -250,11 +272,20 @@ rdma_find_ndev_for_src_ip_rcu(struct net *net, const struct sockaddr *src_in)
  
  	switch (src_in->sa_family) {
  	case AF_INET:
@@ -96,7 +98,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  		break;
  #if IS_ENABLED(CONFIG_IPV6)
  	case AF_INET6:
-@@ -346,10 +377,20 @@ static int dst_fetch_ha(const struct dst
+@@ -346,10 +377,20 @@ static int dst_fetch_ha(const struct dst_entry *dst,
  	return ret;
  }
  
@@ -117,7 +119,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  
  	return dst_rt6_info(dst)->rt6i_flags & RTF_GATEWAY;
  }
-@@ -368,8 +409,12 @@ static int fetch_ha(const struct dst_ent
+@@ -368,8 +409,12 @@ static int fetch_ha(const struct dst_entry *dst, struct rdma_dev_addr *dev_addr,
  
  	might_sleep();
  
@@ -130,7 +132,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  		return ib_nl_fetch_ha(dev_addr, daddr, seq, family);
  	else
  		return dst_fetch_ha(dst, dev_addr, daddr);
-@@ -418,15 +463,36 @@ static int addr6_resolve(struct sockaddr
+@@ -418,15 +463,36 @@ static int addr6_resolve(struct sockaddr *src_sock,
  				(const struct sockaddr_in6 *)dst_sock;
  	struct flowi6 fl6;
  	struct dst_entry *dst;
@@ -167,7 +169,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  
  	if (ipv6_addr_any(&src_in->sin6_addr))
  		src_in->sin6_addr = fl6.saddr;
-@@ -435,8 +501,13 @@ static int addr6_resolve(struct sockaddr
+@@ -435,8 +501,13 @@ static int addr6_resolve(struct sockaddr *src_sock,
  
  	*pdst = dst;
  	return 0;
@@ -182,7 +184,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  static int addr6_resolve(struct sockaddr *src_sock,
  			 const struct sockaddr *dst_sock,
  			 struct rdma_dev_addr *addr,
-@@ -444,7 +515,7 @@ static int addr6_resolve(struct sockaddr
+@@ -444,7 +515,7 @@ static int addr6_resolve(struct sockaddr *src_sock,
  {
  	return -EADDRNOTAVAIL;
  }
@@ -191,7 +193,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  
  static bool is_dst_local(const struct dst_entry *dst)
  {
-@@ -477,6 +548,15 @@ static int rdma_set_src_addr_rcu(struct
+@@ -477,6 +548,15 @@ static int rdma_set_src_addr_rcu(struct rdma_dev_addr *dev_addr,
  				 const struct dst_entry *dst)
  {
  	struct net_device *ndev = READ_ONCE(dst->dev);
@@ -207,7 +209,7 @@ Subject: [PATCH] BACKPORT: drivers/infiniband/core/addr.c
  
  	/* A physical device must be the RDMA device to use */
  	if (is_dst_local(dst)) {
-@@ -502,7 +582,11 @@ static int rdma_set_src_addr_rcu(struct
+@@ -502,7 +582,11 @@ static int rdma_set_src_addr_rcu(struct rdma_dev_addr *dev_addr,
  	 * we're definitely in RoCE v2 (as RoCE v1 isn't routable) set the
  	 * network type accordingly.
  	 */

@@ -81,7 +81,9 @@ ifeq ($(WITH_DKMS),1)
 	cp *.c debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
 	cp *.h debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
 	cp -r scsi debian/$(pdkms)/usr/src/$(pname)-$(dkms_version)
-	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(dkms_version)"/' <dkms.conf >debian/dkms.conf
+	sed -e '/^PACKAGE_VERSION=/s/=.*/="$(dkms_version)"/' \
+		-e 's/mlnx-ofa_kernel/mlnx-ofed-kernel/' \
+		<dkms.conf >debian/dkms.conf
 
 	# Force DKMS to install our modules.
 	# This is mostly needed for modules that do not have a version number info, as DKMS

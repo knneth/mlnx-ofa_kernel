@@ -6,6 +6,8 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  drivers/infiniband/hw/mlx5/devx.c | 26 +++++++++++++++++++++++++-
  1 file changed, 25 insertions(+), 1 deletion(-)
 
+diff --git a/drivers/infiniband/hw/mlx5/devx.c b/drivers/infiniband/hw/mlx5/devx.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/infiniband/hw/mlx5/devx.c
 +++ b/drivers/infiniband/hw/mlx5/devx.c
 @@ -17,6 +17,9 @@
@@ -18,7 +20,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  #include <linux/xarray.h>
  
  #define UVERBS_MODULE_NAME mlx5_ib
-@@ -2252,6 +2255,7 @@ static int devx_umem_get(struct mlx5_ib_
+@@ -2251,6 +2254,7 @@ static int devx_umem_get(struct mlx5_ib_dev *dev, struct ib_ucontext *ucontext,
  	if (err)
  		return err;
  
@@ -26,7 +28,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  	if (uverbs_attr_is_valid(attrs, MLX5_IB_ATTR_DEVX_UMEM_REG_DMABUF_FD)) {
  		struct ib_umem_dmabuf *umem_dmabuf;
  		int dmabuf_fd;
-@@ -2266,8 +2270,14 @@ static int devx_umem_get(struct mlx5_ib_
+@@ -2265,8 +2269,14 @@ static int devx_umem_get(struct mlx5_ib_dev *dev, struct ib_ucontext *ucontext,
  		if (IS_ERR(umem_dmabuf))
  			return PTR_ERR(umem_dmabuf);
  		obj->umem = &umem_dmabuf->umem;
@@ -42,7 +44,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  		if (IS_ERR(obj->umem))
  			return PTR_ERR(obj->umem);
  	}
-@@ -2557,7 +2567,11 @@ static void dispatch_event_fd(struct lis
+@@ -2556,7 +2566,11 @@ static void dispatch_event_fd(struct list_head *fd_list,
  
  	list_for_each_entry_rcu(item, fd_list, xa_list) {
  		if (item->eventfd)
@@ -54,7 +56,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  		else
  			deliver_event(item, data);
  	}
-@@ -2814,6 +2828,9 @@ static const struct file_operations devx
+@@ -2813,6 +2827,9 @@ static const struct file_operations devx_async_cmd_event_fops = {
  	.read	 = devx_async_cmd_event_read,
  	.poll    = devx_async_cmd_event_poll,
  	.release = uverbs_uobject_fd_release,
@@ -64,7 +66,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  };
  
  static ssize_t devx_async_event_read(struct file *filp, char __user *buf,
-@@ -2821,7 +2838,11 @@ static ssize_t devx_async_event_read(str
+@@ -2820,7 +2837,11 @@ static ssize_t devx_async_event_read(struct file *filp, char __user *buf,
  {
  	struct devx_async_event_file *ev_file = filp->private_data;
  	struct devx_event_subscription *event_sub;
@@ -76,7 +78,7 @@ Change-Id: I32706600158ee81196a203191a5adca89c65b898
  	int ret = 0;
  	size_t eventsz;
  	bool omit_data;
-@@ -2928,6 +2949,9 @@ static const struct file_operations devx
+@@ -2927,6 +2948,9 @@ static const struct file_operations devx_async_event_fops = {
  	.read	 = devx_async_event_read,
  	.poll    = devx_async_event_poll,
  	.release = uverbs_uobject_fd_release,

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h  | 4 ++++
  1 file changed, 4 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/diag/en_rep_tracepoint.h
 @@ -25,7 +25,11 @@ TRACE_EVENT(mlx5e_rep_neigh_update,

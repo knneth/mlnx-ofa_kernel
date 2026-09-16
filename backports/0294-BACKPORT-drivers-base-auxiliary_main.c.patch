@@ -6,6 +6,8 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  drivers/base/auxiliary_main.c | 37 +++++++++++++++++++++++++++++++----
  1 file changed, 33 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/base/auxiliary_main.c b/drivers/base/auxiliary_main.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/base/auxiliary_main.c
 +++ b/drivers/base/auxiliary_main.c
 @@ -18,7 +18,7 @@
@@ -17,7 +19,7 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  
  /**
   * DOC: PURPOSE
-@@ -190,7 +190,11 @@ static const struct auxiliary_device_id
+@@ -190,7 +190,11 @@ static const struct auxiliary_device_id *auxiliary_match_id(const struct auxilia
  	return NULL;
  }
  
@@ -29,7 +31,7 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  {
  	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
  	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(drv);
-@@ -198,7 +202,7 @@ static int auxiliary_match(struct device
+@@ -198,7 +202,7 @@ static int auxiliary_match(struct device *dev, const struct device_driver *drv)
  	return !!auxiliary_match_id(auxdrv->id_table, auxdev);
  }
  
@@ -38,7 +40,7 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  {
  	const char *name, *p;
  
-@@ -245,7 +249,11 @@ static int auxiliary_bus_probe(struct de
+@@ -244,7 +248,11 @@ static int auxiliary_bus_probe(struct device *dev)
  	return ret;
  }
  
@@ -50,7 +52,7 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  {
  	const struct auxiliary_driver *auxdrv = to_auxiliary_drv(dev->driver);
  	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
-@@ -254,6 +262,9 @@ static void auxiliary_bus_remove(struct
+@@ -253,6 +261,9 @@ static void auxiliary_bus_remove(struct device *dev)
  		auxdrv->remove(auxdev);
  	auxiliary_bus_sysfs_remove(auxdev);
  	dev_pm_domain_detach(dev, true);
@@ -60,7 +62,7 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  }
  
  static void auxiliary_bus_shutdown(struct device *dev)
-@@ -270,7 +281,11 @@ static void auxiliary_bus_shutdown(struc
+@@ -269,7 +280,11 @@ static void auxiliary_bus_shutdown(struct device *dev)
  		auxdrv->shutdown(auxdev);
  }
  
@@ -72,21 +74,21 @@ Change-Id: I8000ac15ad583b82fd751854264d657b921bb4c2
  	.name = "auxiliary",
  	.probe = auxiliary_bus_probe,
  	.remove = auxiliary_bus_remove,
-@@ -411,7 +426,21 @@ void auxiliary_driver_unregister(struct
+@@ -410,7 +425,21 @@ void auxiliary_driver_unregister(struct auxiliary_driver *auxdrv)
  }
  EXPORT_SYMBOL_GPL(auxiliary_driver_unregister);
  
 -void __init auxiliary_bus_init(void)
 +static int __init auxiliary_bus_init(void)
-+{
-+	return bus_register(&auxiliary_bus_type);
-+}
-+
-+static void __exit auxiliary_bus_exit(void)
  {
 -	WARN_ON(bus_register(&auxiliary_bus_type));
-+	bus_unregister(&auxiliary_bus_type);
++	return bus_register(&auxiliary_bus_type);
  }
++
++static void __exit auxiliary_bus_exit(void)
++{
++	bus_unregister(&auxiliary_bus_type);
++}
 +
 +module_init(auxiliary_bus_init);
 +module_exit(auxiliary_bus_exit);

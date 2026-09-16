@@ -5,9 +5,11 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/crdump.c
  .../net/ethernet/mellanox/mlx5/core/crdump.c   | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/crdump.c b/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/crdump.c
-@@ -163,17 +163,31 @@ static int mlx5_crdump_open(struct inode
+@@ -163,17 +163,31 @@ static int mlx5_crdump_open(struct inode *inode, struct file *file)
  		return ret;
  
  	seq = file->private_data;
@@ -39,7 +41,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/crdump.c
  
  int mlx5_cr_protected_capture(struct mlx5_core_dev *dev)
  {
-@@ -291,7 +305,11 @@ int mlx5_crdump_init(struct mlx5_core_de
+@@ -291,7 +305,11 @@ int mlx5_crdump_init(struct mlx5_core_dev *dev)
  
  	if (mlx5_crdump_dir)
  		if (!proc_create_data(pci_name(dev->pdev), S_IRUGO,

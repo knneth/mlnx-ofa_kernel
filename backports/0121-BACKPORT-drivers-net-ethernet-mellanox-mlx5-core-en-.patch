@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c | 3 +++
  1 file changed, 3 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/tc_tun_mplsoudp.c
 @@ -1,6 +1,8 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT:
  #include <net/bareudp.h>
  #include <net/mpls.h>
  #include "en/tc_tun.h"
-@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel =
+@@ -126,3 +128,4 @@ struct mlx5e_tc_tunnel mplsoudp_tunnel = {
  	.parse_tunnel         = parse_tunnel,
  	.encap_info_equal     = mlx5e_tc_tun_encap_info_equal_generic,
  };

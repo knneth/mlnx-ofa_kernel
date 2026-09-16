@@ -6,6 +6,8 @@ Change-Id: Ic6735978130e6cbcce71681fb661086f6389f196
  include/linux/nvme.h | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 
+diff --git a/include/linux/nvme.h b/include/linux/nvme.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/nvme.h
 +++ b/include/linux/nvme.h
 @@ -4,9 +4,16 @@

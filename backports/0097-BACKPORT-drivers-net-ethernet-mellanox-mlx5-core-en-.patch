@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
  drivers/net/ethernet/mellanox/mlx5/core/en/selq.h | 11 +++++++++++
  1 file changed, 11 insertions(+)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
 @@ -5,6 +5,7 @@
@@ -15,7 +17,7 @@ Subject: [PATCH] BACKPORT: drivers/net/ethernet/mellanox/mlx5/core/en/selq.h
  
  struct mlx5e_selq_params;
  
-@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb
+@@ -47,7 +48,17 @@ static inline u16 mlx5e_txq_to_ch_ix_htb(u16 txq, u16 num_channels)
  	return txq;
  }
  

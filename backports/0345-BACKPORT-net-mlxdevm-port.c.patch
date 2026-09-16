@@ -3,12 +3,14 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/port.c
 
 Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
 ---
- net/mlxdevm/port.c | 57 +++++++++++++++++++++++++++++++++++++++-------
- 1 file changed, 49 insertions(+), 8 deletions(-)
+ net/mlxdevm/port.c | 50 +++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 45 insertions(+), 5 deletions(-)
 
+diff --git a/net/mlxdevm/port.c b/net/mlxdevm/port.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/port.c
 +++ b/net/mlxdevm/port.c
-@@ -509,7 +509,11 @@ mlxdevm_nl_port_function_attrs_put(struc
+@@ -509,7 +509,11 @@ mlxdevm_nl_port_function_attrs_put(struct sk_buff *msg, struct mlxdevm_port *por
  	bool msg_updated = false;
  	int err;
  
@@ -20,7 +22,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  	if (!function_attr)
  		return -EMSGSIZE;
  
-@@ -609,15 +613,18 @@ static void mlxdevm_port_notify(struct m
+@@ -609,15 +613,18 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
  				enum mlxdevm_command cmd)
  {
  	struct mlxdevm *mlxdevm = mlxdevm_port->mlxdevm;
@@ -39,7 +41,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
  		return;
-@@ -631,9 +638,10 @@ static void mlxdevm_port_notify(struct m
+@@ -631,9 +638,10 @@ static void mlxdevm_port_notify(struct mlxdevm_port *mlxdevm_port,
  	mlxdevm_nl_obj_desc_init(&desc, mlxdevm);
  	mlxdevm_nl_obj_desc_port_set(&desc, mlxdevm_port);
  	mlxdevm_nl_notify_send_desc(mlxdevm, msg, &desc);
@@ -51,7 +53,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  static void devlink_ports_notify(struct devlink *devlink,
  				 enum devlink_command cmd)
  {
-@@ -657,9 +665,18 @@ void devlink_ports_notify_unregister(str
+@@ -657,9 +665,18 @@ void devlink_ports_notify_unregister(struct devlink *devlink)
  
  int mlxdevm_nl_port_get_doit(struct sk_buff *skb, struct genl_info *info)
  {
@@ -71,7 +73,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  
  	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
  	if (!msg)
-@@ -690,7 +707,11 @@ mlxdevm_nl_port_get_dump_one(struct sk_b
+@@ -690,7 +707,11 @@ mlxdevm_nl_port_get_dump_one(struct sk_buff *msg, struct mlxdevm *mlxdevm,
  					   MLXDEVM_CMD_PORT_NEW,
  					   NETLINK_CB(cb->skb).portid,
  					   cb->nlh->nlmsg_seq, flags,
@@ -83,7 +85,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  		if (err) {
  			state->idx = port_index;
  			break;
-@@ -940,8 +961,17 @@ static int mlxdevm_port_function_set(str
+@@ -940,8 +961,17 @@ static int mlxdevm_port_function_set(struct mlxdevm_port *port,
  
  int mlxdevm_nl_port_set_doit(struct sk_buff *skb, struct genl_info *info)
  {
@@ -102,7 +104,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  
  	if (info->attrs[MLXDEVM_ATTR_PORT_TYPE]) {
  		enum mlxdevm_port_type port_type;
-@@ -1012,7 +1042,7 @@ int mlxdevm_nl_port_new_doit(struct sk_b
+@@ -1012,7 +1042,7 @@ int mlxdevm_nl_port_new_doit(struct sk_buff *skb, struct genl_info *info)
  	struct netlink_ext_ack *extack = info->extack;
  	struct mlxdevm_port_new_attrs new_attrs = {};
  	struct mlxdevm *mlxdevm = info->user_ptr[0];
@@ -111,33 +113,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  	unsigned int new_index;
  	struct sk_buff *msg;
  	int err;
-@@ -1051,21 +1081,22 @@ int mlxdevm_nl_port_new_doit(struct sk_b
- 	if (err)
- 		return err;
- 
-+	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
-+
- 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
- 	if (!msg) {
- 		err = -ENOMEM;
- 		goto err_out_port_del;
- 	}
- 
--	mlxdevm_port = mlxdevm_port_get_by_index(mlxdevm, new_index);
--
- 	err = mlxdevm_nl_port_fill(msg, mlxdevm_port, MLXDEVM_CMD_PORT_NEW,
- 				   info->snd_portid, info->snd_seq, 0, NULL);
- 	if (WARN_ON_ONCE(err))
- 		goto err_out_msg_free;
-+
- 	err = genlmsg_reply(msg, info);
- 	if (err)
--		goto err_out_port_del;
-+		goto err_out_msg_free;
- 	return 0;
- 
- err_out_msg_free:
-@@ -1077,9 +1108,17 @@ err_out_port_del:
+@@ -1079,9 +1109,17 @@ err_out_port_del:
  
  int mlxdevm_nl_port_del_doit(struct sk_buff *skb, struct genl_info *info)
  {
@@ -156,7 +132,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  
  	if (!mlxdevm_port->ops->port_del)
  		return -EOPNOTSUPP;
-@@ -1304,6 +1343,7 @@ static void mlxdevm_port_type_netdev_che
+@@ -1306,6 +1344,7 @@ static void mlxdevm_port_type_netdev_checks(struct mlxdevm_port *mlxdevm_port,
  		err = ops->ndo_get_phys_port_name(netdev, name, sizeof(name));
  		WARN_ON(err != -EOPNOTSUPP);
  	}
@@ -164,7 +140,7 @@ Change-Id: I8b54f19cdb8475bb4620704fdbc3cee99e412e7e
  	if (ops->ndo_get_port_parent_id) {
  		/* Some drivers use the same set of ndos for netdevs
  		 * that have mlxdevm_port registered and also for
-@@ -1317,6 +1357,7 @@ static void mlxdevm_port_type_netdev_che
+@@ -1319,6 +1358,7 @@ static void mlxdevm_port_type_netdev_checks(struct mlxdevm_port *mlxdevm_port,
  		err = ops->ndo_get_port_parent_id(netdev, &ppid);
  		WARN_ON(err != -EOPNOTSUPP);
  	}

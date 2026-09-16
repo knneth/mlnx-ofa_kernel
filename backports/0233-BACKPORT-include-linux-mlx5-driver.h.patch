@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
  include/linux/mlx5/driver.h | 23 ++++++++++++++++++++++-
  1 file changed, 22 insertions(+), 1 deletion(-)
 
+diff --git a/include/linux/mlx5/driver.h b/include/linux/mlx5/driver.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/linux/mlx5/driver.h
 +++ b/include/linux/mlx5/driver.h
 @@ -33,6 +33,8 @@
@@ -72,7 +74,7 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
  	unsigned long		intf_state;
  	struct mlx5_priv	priv;
  	struct mlx5_profile	profile;
-@@ -1354,8 +1372,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_cor
+@@ -1353,8 +1371,10 @@ int mlx5_dm_sw_icm_alloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  int mlx5_dm_sw_icm_dealloc(struct mlx5_core_dev *dev, enum mlx5_sw_icm_type type,
  			   u64 length, u16 uid, phys_addr_t addr, u32 obj_id);
  
@@ -83,7 +85,7 @@ Subject: [PATCH] BACKPORT: include/linux/mlx5/driver.h
  
  int mlx5_sriov_blocking_notifier_register(struct mlx5_core_dev *mdev,
  					  int vf_id,
-@@ -1483,9 +1503,10 @@ bool mlx5_is_roce_on(struct mlx5_core_de
+@@ -1482,9 +1502,10 @@ bool mlx5_is_roce_on(struct mlx5_core_dev *dev);
  
  static inline bool mlx5_get_roce_state(struct mlx5_core_dev *dev)
  {

@@ -6,6 +6,8 @@ Subject: [PATCH] BACKPORT:
  .../ethernet/mellanox/mlx5/core/en/devlink.h  | 23 ++++++++++++++++---
  1 file changed, 20 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.h b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.h
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.h
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/en/devlink.h
 @@ -7,11 +7,28 @@

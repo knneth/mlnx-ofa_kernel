@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  net/mlxdevm/netlink_gen.c | 315 ++++++++++++++++++++++++++++++++++++++
  1 file changed, 315 insertions(+)
 
+diff --git a/net/mlxdevm/netlink_gen.c b/net/mlxdevm/netlink_gen.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/mlxdevm/netlink_gen.c
 +++ b/net/mlxdevm/netlink_gen.c
 @@ -7,6 +7,9 @@
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  
  #include <uapi/linux/devlink.h>
  
-@@ -590,6 +593,7 @@ static const struct nla_policy devlink_n
+@@ -590,6 +593,7 @@ static const struct nla_policy devlink_notify_filter_set_nl_policy[DEVLINK_ATTR_
  #endif
  
  /* Ops table for mlxdevm */
@@ -25,7 +27,7 @@ Subject: [PATCH] BACKPORT: net/mlxdevm/netlink_gen.c
  const struct genl_split_ops mlxdevm_nl_ops[29] = {
  	{
  		.cmd		= MLXDEVM_CMD_GET,
-@@ -1282,3 +1286,314 @@ const struct genl_split_ops mlxdevm_nl_o
+@@ -1282,3 +1286,314 @@ const struct genl_split_ops mlxdevm_nl_ops[29] = {
  	},
  #endif
  };

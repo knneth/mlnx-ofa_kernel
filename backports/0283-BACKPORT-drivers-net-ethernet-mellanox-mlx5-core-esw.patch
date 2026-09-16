@@ -6,6 +6,8 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  .../net/ethernet/mellanox/mlx5/core/esw/qos.c | 95 ++++++++++---------
  1 file changed, 52 insertions(+), 43 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/esw/qos.c
 @@ -8,6 +8,9 @@
@@ -18,7 +20,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  /* Minimum supported BW share value by the HW is 1 Mbit/sec */
  #define MLX5_MIN_BW_SHARE 1
-@@ -93,7 +96,6 @@ esw_qos_node_set_parent(struct mlx5_esw_
+@@ -93,7 +96,6 @@ esw_qos_node_set_parent(struct mlx5_esw_sched_node *node, struct mlx5_esw_sched_
  	esw_qos_node_attach_to_parent(node);
  }
  
@@ -26,7 +28,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  static void esw_qos_nodes_set_parent(struct list_head *nodes,
  				     struct mlx5_esw_sched_node *parent)
  {
-@@ -114,7 +116,6 @@ static void esw_qos_nodes_set_parent(str
+@@ -114,7 +116,6 @@ static void esw_qos_nodes_set_parent(struct list_head *nodes,
  		}
  	}
  }
@@ -34,7 +36,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  void mlx5_esw_qos_vport_qos_free(struct mlx5_vport *vport)
  {
-@@ -512,7 +513,10 @@ static void __esw_qos_free_node(struct m
+@@ -512,7 +513,10 @@ static void __esw_qos_free_node(struct mlx5_esw_sched_node *node)
  	kfree(node);
  }
  
@@ -46,7 +48,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	esw_qos_node_destroy_sched_element(node, extack);
  	__esw_qos_free_node(node);
-@@ -1294,7 +1298,6 @@ static int esw_qos_vport_update_parent(s
+@@ -1294,7 +1298,6 @@ static int esw_qos_vport_update_parent(struct mlx5_vport *vport, struct mlx5_esw
  	return esw_qos_vport_update(vport, type, parent, true, extack);
  }
  
@@ -86,7 +88,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  {
  	if (value > link_speed_max) {
  		pr_err("%s rate value %lluMbps exceed link maximum speed %u.\n",
-@@ -1584,8 +1586,8 @@ int mlx5_esw_qos_modify_vport_rate(struc
+@@ -1584,8 +1586,8 @@ int mlx5_esw_qos_modify_vport_rate(struct mlx5_eswitch *esw, u16 vport_num, u32
   * second, rewriting last. If converted rate exceed link speed or is not a
   * fraction of Mbps - returns error.
   */
@@ -127,7 +129,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  void esw_qos_destroy_sched_node(struct mlx5_esw_sched_node *node,
  			       struct netlink_ext_ack *extack)
  {
-@@ -1891,7 +1870,11 @@ void mlx5_esw_qos_cleanup(struct mlx5_es
+@@ -1891,7 +1870,11 @@ void mlx5_esw_qos_cleanup(struct mlx5_eswitch *esw)
  
  /* Eswitch devlink rate API */
  
@@ -192,7 +194,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  					    u64 tx_share, struct netlink_ext_ack *extack)
  {
  	struct mlx5_esw_sched_node *node = priv;
-@@ -2045,7 +2040,11 @@ int mlx5_esw_devlink_rate_node_tx_share_
+@@ -2045,7 +2040,11 @@ int mlx5_esw_devlink_rate_node_tx_share_set(struct devlink_rate *rate_node, void
  	return err;
  }
  
@@ -205,7 +207,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  					  u64 tx_max, struct netlink_ext_ack *extack)
  {
  	struct mlx5_esw_sched_node *node = priv;
-@@ -2062,6 +2061,7 @@ int mlx5_esw_devlink_rate_node_tx_max_se
+@@ -2062,6 +2061,7 @@ int mlx5_esw_devlink_rate_node_tx_max_set(struct devlink_rate *rate_node, void *
  	return err;
  }
  
@@ -213,7 +215,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
  				   struct netlink_ext_ack *extack)
  {
-@@ -2073,8 +2073,13 @@ int mlx5_esw_devlink_rate_node_new(struc
+@@ -2075,8 +2075,13 @@ int mlx5_esw_devlink_rate_node_new(struct devlink_rate *rate_node, void **priv,
  	
  	return mlx5_esw_common_rate_node_new(esw, priv, extack);
  }
@@ -228,7 +230,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  				   struct netlink_ext_ack *extack)
  {
  	struct mlx5_esw_sched_node *node = priv;
-@@ -2087,6 +2092,7 @@ int mlx5_esw_devlink_rate_node_del(struc
+@@ -2089,6 +2094,7 @@ int mlx5_esw_devlink_rate_node_del(struct devlink_rate *rate_node, void *priv,
  	return 0;
  }
  
@@ -236,7 +238,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
  					  struct devlink_rate *parent,
  					  void *priv, void *parent_priv,
-@@ -2097,6 +2103,7 @@ int mlx5_esw_devlink_rate_leaf_parent_se
+@@ -2099,6 +2105,7 @@ int mlx5_esw_devlink_rate_leaf_parent_set(struct devlink_rate *devlink_rate,
  
  	return mlx5_esw_common_rate_leaf_parent_set(node, vport, extack);
  }
@@ -244,7 +246,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  static bool esw_qos_is_node_empty(struct mlx5_esw_sched_node *node)
  {
-@@ -2245,6 +2252,7 @@ out:
+@@ -2247,6 +2254,7 @@ out:
  
  	return err;
  }
@@ -252,7 +254,7 @@ Change-Id: I179007dde9b18210e0adca79fded7dbd76d579eb
  
  int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
  					  struct devlink_rate *parent,
-@@ -2259,6 +2267,7 @@ int mlx5_esw_devlink_rate_node_parent_se
+@@ -2261,6 +2269,7 @@ int mlx5_esw_devlink_rate_node_parent_set(struct devlink_rate *devlink_rate,
  	parent_node = parent_priv;
  	return mlx5_esw_qos_node_update_parent(node, parent_node, extack);
  }

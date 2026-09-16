@@ -6,6 +6,8 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  net/sunrpc/xprtrdma/svc_rdma_transport.c | 118 ++++++++++++++++++++++-
  1 file changed, 116 insertions(+), 2 deletions(-)
 
+diff --git a/net/sunrpc/xprtrdma/svc_rdma_transport.c b/net/sunrpc/xprtrdma/svc_rdma_transport.c
+index xxxxxxx..xxxxxxx 100644
 --- a/net/sunrpc/xprtrdma/svc_rdma_transport.c
 +++ b/net/sunrpc/xprtrdma/svc_rdma_transport.c
 @@ -59,7 +59,9 @@
@@ -18,7 +20,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  
  #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
  
-@@ -72,21 +74,52 @@ static struct svc_xprt *svc_rdma_create(
+@@ -72,21 +74,52 @@ static struct svc_xprt *svc_rdma_create(struct svc_serv *serv,
  					struct sockaddr *sa, int salen,
  					int flags);
  static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt);
@@ -107,7 +109,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  	switch (event->event) {
  	/* These are considered benign events */
  	case IB_EVENT_PATH_MIG:
-@@ -119,7 +175,12 @@ static void qp_event_handler(struct ib_e
+@@ -119,7 +175,12 @@ static void qp_event_handler(struct ib_event *event, void *context)
  	case IB_EVENT_QP_ACCESS_ERR:
  	case IB_EVENT_DEVICE_FATAL:
  	default:
@@ -120,7 +122,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		break;
  	}
  }
-@@ -339,7 +400,15 @@ static int svc_rdma_cma_handler(struct r
+@@ -339,7 +400,15 @@ static int svc_rdma_cma_handler(struct rdma_cm_id *cma_id,
  		svc_xprt_enqueue(xprt);
  		break;
  	case RDMA_CM_EVENT_DISCONNECTED:
@@ -136,7 +138,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		break;
  	default:
  		break;
-@@ -383,15 +452,18 @@ static struct svc_xprt *svc_rdma_create(
+@@ -383,15 +452,18 @@ static struct svc_xprt *svc_rdma_create(struct svc_serv *serv,
  	return &cma_xprt->sc_xprt;
  }
  
@@ -156,7 +158,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  
  /*
   * This is the xpo_recvfrom function for listening endpoints. Its
-@@ -434,13 +506,14 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -434,13 +506,14 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	dev = newxprt->sc_cm_id->device;
  	newxprt->sc_port_num = newxprt->sc_cm_id->port_num;
  
@@ -172,7 +174,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  	newxprt->sc_fc_credits = cpu_to_be32(newxprt->sc_max_requests);
  
  	/* Qualify the transport's resource defaults with the
-@@ -453,11 +526,18 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -453,11 +526,18 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	newxprt->sc_max_send_sges += (svcrdma_max_req_size / PAGE_SIZE) + 1;
  	if (newxprt->sc_max_send_sges > dev->attrs.max_send_sge)
  		newxprt->sc_max_send_sges = dev->attrs.max_send_sge;
@@ -191,7 +193,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		newxprt->sc_max_requests = rq_depth - 2;
  		newxprt->sc_max_bc_requests = 2;
  	}
-@@ -475,7 +555,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -475,7 +555,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  
  	newxprt->sc_pd = ib_alloc_pd(dev, 0);
  	if (IS_ERR(newxprt->sc_pd)) {
@@ -201,7 +203,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		goto errout;
  	}
  	newxprt->sc_sq_cq = ib_alloc_cq_any(dev, newxprt, newxprt->sc_sq_depth,
-@@ -508,7 +590,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -508,7 +590,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_sq_depth, rq_depth);
  	ret = rdma_create_qp(newxprt->sc_cm_id, newxprt->sc_pd, &qp_attr);
  	if (ret) {
@@ -211,7 +213,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		goto errout;
  	}
  	newxprt->sc_max_send_sges = qp_attr.cap.max_send_sge;
-@@ -518,7 +602,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -518,7 +602,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  		newxprt->sc_snd_w_inv = false;
  	if (!rdma_protocol_iwarp(dev, newxprt->sc_port_num) &&
  	    !rdma_ib_or_roce(dev, newxprt->sc_port_num)) {
@@ -221,7 +223,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		goto errout;
  	}
  
-@@ -540,7 +626,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -540,7 +626,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  					   dev->attrs.max_qp_init_rd_atom);
  	if (!conn_param.initiator_depth) {
  		ret = -EINVAL;
@@ -231,7 +233,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		goto errout;
  	}
  	conn_param.private_data = &pmsg;
-@@ -550,7 +638,9 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -550,7 +638,9 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	ret = rdma_accept(newxprt->sc_cm_id, &conn_param);
  	rdma_unlock_handler(newxprt->sc_cm_id);
  	if (ret) {
@@ -241,7 +243,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  		goto errout;
  	}
  
-@@ -580,6 +670,12 @@ static struct svc_xprt *svc_rdma_accept(
+@@ -580,6 +670,12 @@ static struct svc_xprt *svc_rdma_accept(struct svc_xprt *xprt)
  	return NULL;
  }
  
@@ -254,7 +256,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  static void svc_rdma_detach(struct svc_xprt *xprt)
  {
  	struct svcxprt_rdma *rdma =
-@@ -592,7 +688,9 @@ static void __svc_rdma_free(struct work_
+@@ -592,7 +688,9 @@ static void __svc_rdma_free(struct work_struct *work)
  {
  	struct svcxprt_rdma *rdma =
  		container_of(work, struct svcxprt_rdma, sc_work);
@@ -264,7 +266,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  
  	/* This blocks until the Completion Queues are empty */
  	if (rdma->sc_qp && !IS_ERR(rdma->sc_qp))
-@@ -621,8 +719,10 @@ static void __svc_rdma_free(struct work_
+@@ -621,8 +719,10 @@ static void __svc_rdma_free(struct work_struct *work)
  	/* Destroy the CM ID */
  	rdma_destroy_id(rdma->sc_cm_id);
  
@@ -275,7 +277,7 @@ Change-Id: If0bb8e83a53d14c628dbd7646c9a1c16852174bd
  	kfree(rdma);
  }
  
-@@ -651,6 +751,20 @@ static int svc_rdma_has_wspace(struct sv
+@@ -651,6 +751,20 @@ static int svc_rdma_has_wspace(struct svc_xprt *xprt)
  	return 1;
  }
  

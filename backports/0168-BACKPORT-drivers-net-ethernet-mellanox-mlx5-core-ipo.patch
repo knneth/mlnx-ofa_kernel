@@ -6,9 +6,11 @@ Subject: [PATCH] BACKPORT:
  .../mellanox/mlx5/core/ipoib/ethtool.c        | 91 ++++++++++++++++++-
  1 file changed, 87 insertions(+), 4 deletions(-)
 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
+index xxxxxxx..xxxxxxx 100644
 --- a/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
 +++ b/drivers/net/ethernet/mellanox/mlx5/core/ipoib/ethtool.c
-@@ -40,7 +40,7 @@ static void mlx5i_get_drvinfo(struct net
+@@ -40,7 +40,7 @@ static void mlx5i_get_drvinfo(struct net_device *dev,
  	struct mlx5e_priv *priv = mlx5i_epriv(dev);
  
  	mlx5e_ethtool_get_drvinfo(priv, drvinfo);
@@ -17,7 +19,7 @@ Subject: [PATCH] BACKPORT:
  		sizeof(drvinfo->driver));
  }
  
-@@ -68,23 +68,42 @@ static void mlx5i_get_ethtool_stats(stru
+@@ -68,23 +68,42 @@ static void mlx5i_get_ethtool_stats(struct net_device *dev,
  }
  
  static int mlx5i_set_ringparam(struct net_device *dev,
@@ -61,7 +63,7 @@ Subject: [PATCH] BACKPORT:
  }
  
  static int mlx5i_set_channels(struct net_device *dev,
-@@ -116,27 +135,49 @@ static void mlx5i_get_channels(struct ne
+@@ -116,27 +135,49 @@ static void mlx5i_get_channels(struct net_device *dev,
  }
  
  static int mlx5i_set_coalesce(struct net_device *netdev,
@@ -113,7 +115,7 @@ Subject: [PATCH] BACKPORT:
  {
  	struct mlx5e_priv *priv = mlx5i_epriv(netdev);
  
-@@ -238,6 +279,25 @@ static u32 mlx5i_flow_type_mask(u32 flow
+@@ -238,6 +279,25 @@ static u32 mlx5i_flow_type_mask(u32 flow_type)
  	return flow_type & ~(FLOW_EXT | FLOW_MAC_EXT | FLOW_RSS);
  }
  
@@ -139,7 +141,7 @@ Subject: [PATCH] BACKPORT:
  static int mlx5i_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
  {
  	struct mlx5e_priv *priv = mlx5i_epriv(dev);
-@@ -249,11 +309,21 @@ static int mlx5i_set_rxnfc(struct net_de
+@@ -249,11 +309,21 @@ static int mlx5i_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
  	return mlx5e_ethtool_set_rxnfc(priv, cmd);
  }
  
@@ -161,7 +163,7 @@ Subject: [PATCH] BACKPORT:
  	/* ETHTOOL_GRXRINGS is needed by ethtool -x which is not part
  	 * of rxnfc. We keep this logic out of mlx5e_ethtool_get_rxnfc,
  	 * to avoid breaking "ethtool -x" when mlx5e_ethtool_get_rxnfc
-@@ -263,14 +333,17 @@ static int mlx5i_get_rxnfc(struct net_de
+@@ -263,14 +333,17 @@ static int mlx5i_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
  		info->data = priv->channels.params.num_channels;
  		return 0;
  	}
@@ -179,7 +181,7 @@ Subject: [PATCH] BACKPORT:
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_strings        = mlx5i_get_strings,
  	.get_sset_count     = mlx5i_get_sset_count,
-@@ -283,8 +356,17 @@ const struct ethtool_ops mlx5i_ethtool_o
+@@ -283,8 +356,17 @@ const struct ethtool_ops mlx5i_ethtool_ops = {
  	.get_coalesce       = mlx5i_get_coalesce,
  	.set_coalesce       = mlx5i_set_coalesce,
  	.get_ts_info        = mlx5i_get_ts_info,
@@ -197,7 +199,7 @@ Subject: [PATCH] BACKPORT:
  	.get_link_ksettings = mlx5i_get_link_ksettings,
  	.get_link           = ethtool_op_get_link,
  };
-@@ -293,4 +375,5 @@ const struct ethtool_ops mlx5i_pkey_etht
+@@ -293,4 +375,5 @@ const struct ethtool_ops mlx5i_pkey_ethtool_ops = {
  	.get_drvinfo        = mlx5i_get_drvinfo,
  	.get_link           = ethtool_op_get_link,
  	.get_ts_info        = mlx5i_get_ts_info,

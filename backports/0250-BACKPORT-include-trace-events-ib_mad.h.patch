@@ -5,6 +5,8 @@ Subject: [PATCH] BACKPORT: include/trace/events/ib_mad.h
  include/trace/events/ib_mad.h | 8 ++++++++
  1 file changed, 8 insertions(+)
 
+diff --git a/include/trace/events/ib_mad.h b/include/trace/events/ib_mad.h
+index xxxxxxx..xxxxxxx 100644
 --- a/include/trace/events/ib_mad.h
 +++ b/include/trace/events/ib_mad.h
 @@ -4,20 +4,26 @@
@@ -34,7 +36,7 @@ Subject: [PATCH] BACKPORT: include/trace/events/ib_mad.h
  #endif
  
  DECLARE_EVENT_CLASS(ib_mad_send_template,
-@@ -380,6 +386,8 @@ DEFINE_EVENT(ib_mad_opa_ib_template, ib_
+@@ -380,6 +386,8 @@ DEFINE_EVENT(ib_mad_opa_ib_template, ib_mad_handle_out_ib_smi,
  	TP_PROTO(struct ib_smp *smp),
  	TP_ARGS(smp));
  
