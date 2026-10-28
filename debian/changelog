@@ -1,3 +1,9 @@
+mlnx-ofed-kernel (25.10-3.1.6.btech2) noble; urgency=medium
+
+  * Build without XDP support to fix build on newer HWE 7.0 kernels
+
+ -- Kenneth Klette Jonassen <kenneth@bridgetech.tv>  Wed, 28 Oct 2026 13:17:41 +0100
+
 mlnx-ofed-kernel (25.10-3.1.6.btech1) noble; urgency=low
 
   * Rebase to OFED 25.10-3.1.6.1-1 for HWE 7.0 support
