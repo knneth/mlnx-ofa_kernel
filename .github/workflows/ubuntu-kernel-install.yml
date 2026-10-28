@@ -1,0 +1,245 @@
+# Build the mlnx-ofed-kernel DKMS packages and check that they install
+# (i.e. DKMS builds and installs the modules) on Ubuntu 24.04 LTS with:
+#   - the released GA kernel
+#   - the released HWE kernel
+#   - the GA and HWE kernels in noble-proposed, when newer
+#
+# Scheduled runs catch breakage from new kernels landing in -proposed or
+# -updates. A kernel that passed on a commit is not tested again on that
+# commit (each pass leaves a marker artifact), so runs only build and test
+# when the code or the available kernels have changed. Failures on non-PR
+# runs open (or comment on) a GitHub issue assigned to the repository owner;
+# the issue is closed once the tests pass again.
+
+name: Ubuntu 24.04 kernel install
+
+on:
+  push:
+    branches: [btech/25.10]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Test kernels that already passed on this commit
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  kernels:
+    name: Resolve kernels
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      count: ${{ steps.resolve.outputs.count }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable noble-proposed
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl jq
+          .github/scripts/enable-proposed.sh
+          apt-get update
+
+      - name: Resolve kernels
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          matrix=$(.github/scripts/resolve-kernels.sh | .github/scripts/skip-passed.sh)
+          echo "$matrix" | jq .
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$matrix" | jq '.include | length')" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build packages
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    needs: kernels
+    if: needs.kernels.outputs.count != '0'
+    timeout-minutes: 60
+    steps:
+      # git is deliberately not installed: without it checkout fetches a
+      # plain tarball and ofed_patch.sh applies the backports with patch(1)
+      # instead of committing them to a temporary git branch.
+      - uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential devscripts lsb-release autoconf automake libtool
+          apt-get build-dep -y ./
+
+      - name: Build
+        env:
+          WITH_GIT: "no"
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Collect packages
+        run: |
+          mkdir debs
+          mv ../*.deb debs/
+          ls -l debs
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: debs
+          path: debs/*.deb
+          if-no-files-found: error
+
+  install:
+    name: Install (${{ matrix.name }})
+    needs: [build, kernels]
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.kernels.outputs.matrix) }}
+    env:
+      KVER: ${{ matrix.kver }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: debs
+          path: debs
+
+      - name: Enable noble-proposed
+        if: matrix.proposed
+        run: .github/scripts/enable-proposed.sh
+
+      - name: Install kernel headers
+        run: |
+          apt-get update
+          apt-get install -y "linux-headers-$KVER"
+
+      # mlnx-tools is a dependency of mlnx-ofed-kernel-utils that only ships
+      # userspace scripts. Use a stub if the archive does not carry it.
+      - name: Provide mlnx-tools
+        run: |
+          if apt-cache show mlnx-tools > /dev/null 2>&1; then
+            echo "Using mlnx-tools from the archive"
+            exit 0
+          fi
+          apt-get install -y --no-install-recommends equivs
+          cat > mlnx-tools.ctl << EOF
+          Package: mlnx-tools
+          Version: 99.0-ci-stub
+          Architecture: all
+          Description: CI stub for mlnx-tools
+          EOF
+          equivs-build mlnx-tools.ctl
+          mv mlnx-tools_*.deb debs/
+
+      - name: Install packages
+        run: apt-get install -y ./debs/*.deb
+
+      - name: Verify modules
+        run: |
+          ver=$(dpkg-query -W -f='${Version}' mlnx-ofed-kernel-dkms)
+          dkms status
+          if ! dkms status -m mlnx-ofed-kernel -v "$ver" -k "$KVER" | grep ': installed'; then
+            echo "::error::DKMS did not install mlnx-ofed-kernel/$ver for $KVER"
+            # Run it again so the error ends up in this step's log
+            dkms install -m mlnx-ofed-kernel -v "$ver" -k "$KVER" || true
+            exit 1
+          fi
+
+          rc=0
+          for mod in ib_core ib_uverbs mlx5_core mlx5_ib; do
+            ko=$(find "/lib/modules/$KVER" -name "$mod.ko*" -print -quit)
+            if [ -z "$ko" ]; then
+              echo "::error::$mod was not installed for $KVER"
+              rc=1
+              continue
+            fi
+            vermagic=$(modinfo -F vermagic "$ko" | cut -d' ' -f1)
+            echo "$ko: $vermagic"
+            if [ "$vermagic" != "$KVER" ]; then
+              echo "::error::$mod vermagic $vermagic does not match $KVER"
+              rc=1
+            fi
+          done
+          exit $rc
+
+      - name: Upload DKMS logs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dkms-logs-${{ matrix.kver }}${{ matrix.proposed && '-proposed' || '' }}
+          path: /var/lib/dkms/mlnx-ofed-kernel/**/*.log
+          if-no-files-found: ignore
+
+      - name: Record pass
+        run: echo "$KVER ${{ matrix.version }} passed on $GITHUB_SHA" > pass.txt
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.marker }}
+          path: pass.txt
+          retention-days: 90
+
+  alert:
+    name: Alert on failure
+    needs: [build, kernels, install]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      LABEL: kernel-install-ci
+      FAILED: ${{ contains(needs.*.result, 'failure') }}
+      TESTED: ${{ needs.install.result == 'success' }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open, update or close the tracking issue
+        run: |
+          gh label create "$LABEL" --force --color B60205 \
+            --description "Ubuntu kernel install test failures"
+          issue=$(gh issue list --label "$LABEL" --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ "$FAILED" != "true" ]; then
+            # Nothing to report if this run had nothing new to test
+            if [ "$TESTED" = "true" ] && [ -n "$issue" ]; then
+              gh issue close "$issue" --comment "Passing again in $RUN_URL"
+            fi
+            exit 0
+          fi
+
+          failed_jobs=$(gh run view "${{ github.run_id }}" --json jobs \
+            --jq '.jobs[] | select(.conclusion == "failure") | "- " + .name')
+          body=$(printf 'Ubuntu 24.04 kernel install test failed in %s (%s on `%s`, %s).\n\nFailed jobs:\n%s\n' \
+            "$RUN_URL" "${{ github.event_name }}" "${{ github.ref_name }}" \
+            "${{ github.sha }}" "$failed_jobs")
+
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "Ubuntu 24.04 kernel install test failing" \
+              --label "$LABEL" --assignee "${{ github.repository_owner }}" \
+              --body "$body"
+          fi
