@@ -71,7 +71,7 @@ override_dh_auto_configure:
 ifneq ($(WITH_DKMS),1)
 	@echo Building for $(kernelver)
 	find compat -type f -exec touch -t 200012201010 '{}' \; || true
-	$(CURDIR)/configure --kernel-version=$(kernelver) --kernel-sources=$(kernel_source_dir) --default $$configure_options --with-njobs=$(NJOBS)
+	$(CURDIR)/configure --kernel-version=$(kernelver) --kernel-sources=$(kernel_source_dir) --default --without-xdp $$configure_options --with-njobs=$(NJOBS)
 endif
 
 mod_dev_dir = /usr/src/ofa_kernel/$(deb_arch)/$(kernelver)
