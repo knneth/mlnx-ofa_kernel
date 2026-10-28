@@ -1,0 +1,38 @@
+# File created by Claude Opus 5.5 (claude-opus-5-5) on behalf of Kenneth Klette Jonassen
+name: Build Debian packages
+
+on:
+  push:
+    branches: [btech/25.10]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Install build dependencies
+        working-directory: src
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends devscripts
+          sudo apt-get build-dep -y .
+
+      - name: Build packages
+        working-directory: src
+        env:
+          # Keep ofed_patch.sh from creating a backport branch and
+          # committing in the checkout; apply backports with patch instead.
+          WITH_GIT: "no"
+        run: dpkg-buildpackage -b -us -uc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: |
+            *.deb
+            *.buildinfo
+            *.changes
